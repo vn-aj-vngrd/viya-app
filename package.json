@@ -11,7 +11,8 @@
       "zod": "^4.1.13",
       "typescript": "^6",
       "convex": "^1.33.1",
-      "@convex-dev/agent": "^0.3.2"
+      "@convex-dev/agent": "^0.3.2",
+      "convex-helpers": "^0.1.118"
     }
   },
   "type": "module",

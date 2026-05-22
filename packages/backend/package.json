@@ -11,6 +11,7 @@
   "dependencies": {
     "@ai-sdk/google": "^2.0.52",
     "@convex-dev/agent": "catalog:",
+    "convex-helpers": "catalog:",
     "ai": "^5.0.117",
     "convex": "catalog:",
     "dotenv": "catalog:",
