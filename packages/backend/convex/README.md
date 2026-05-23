@@ -1,88 +1,25 @@
-# Welcome to your Convex functions directory!
+# Viya Convex Backend
 
-Write your Convex functions here.
-See https://docs.convex.dev/functions for more.
+Convex owns Viya's authenticated data boundary: users, trips, itinerary, readiness, risks, moments,
+bookings, travel documents, and Vault files.
 
-A query function that takes two arguments looks like:
+## Auth
 
-```ts
-// convex/myFunctions.ts
-import { query } from "./_generated/server";
-import { v } from "convex/values";
+Clerk identities are read through `ctx.auth.getUserIdentity()`. Use helpers in `convex/lib/auth.ts`
+for required identity, user synchronization, and trip ownership checks before returning or mutating
+trip-scoped data.
 
-export const myQueryFunction = query({
-  // Validators for arguments.
-  args: {
-    first: v.number(),
-    second: v.string(),
-  },
+## AI Provider
 
-  // Function implementation.
-  handler: async (ctx, args) => {
-    // Read the database as many times as you need here.
-    // See https://docs.convex.dev/database/reading-data.
-    const documents = await ctx.db.query("tablename").collect();
+The AI layer is centralized under `convex/ai`. Use `getLanguageModel()` for model selection and the
+structured helpers for itinerary, readiness, risk, and wrapped features. OpenRouter is the default
+provider when `OPENROUTER_API_KEY` is configured, with `AI_MODEL_*` environment variables available
+per feature.
 
-    // Arguments passed from the client are properties of the args object.
-    console.log(args.first, args.second);
+Streaming chat continues through `@convex-dev/agent`; structured feature generation uses the Vercel
+AI SDK so providers can be swapped without touching feature code.
 
-    // Write arbitrary JavaScript here: filter, aggregate, build derived data,
-    // remove non-public properties, or create new objects.
-    return documents;
-  },
-});
-```
+## Storage
 
-Using this query function in a React component looks like:
-
-```ts
-const data = useQuery(api.myFunctions.myQueryFunction, {
-  first: 10,
-  second: "hello",
-});
-```
-
-A mutation function looks like:
-
-```ts
-// convex/myFunctions.ts
-import { mutation } from "./_generated/server";
-import { v } from "convex/values";
-
-export const myMutationFunction = mutation({
-  // Validators for arguments.
-  args: {
-    first: v.string(),
-    second: v.string(),
-  },
-
-  // Function implementation.
-  handler: async (ctx, args) => {
-    // Insert or modify documents in the database here.
-    // Mutations can also read from the database like queries.
-    // See https://docs.convex.dev/database/writing-data.
-    const message = { body: args.first, author: args.second };
-    const id = await ctx.db.insert("messages", message);
-
-    // Optionally, return a value from your mutation.
-    return await ctx.db.get("messages", id);
-  },
-});
-```
-
-Using this mutation function in a React component looks like:
-
-```ts
-const mutation = useMutation(api.myFunctions.myMutationFunction);
-function handleButtonPress() {
-  // fire and forget, the most common way to use mutations
-  mutation({ first: "Hello!", second: "me" });
-  // OR
-  // use the result once the mutation has completed
-  mutation({ first: "Hello!", second: "me" }).then((result) => console.log(result));
-}
-```
-
-Use the Convex CLI to push your functions to a deployment. See everything
-the Convex CLI can do by running `npx convex -h` in your project root
-directory. To learn more, launch the docs with `npx convex docs`.
+Vault uploads use Convex storage. Clients request `vault.generateUploadUrl`, upload the file, then
+persist scoped metadata through `vault.saveVaultItem`.

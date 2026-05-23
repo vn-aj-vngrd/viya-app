@@ -9,9 +9,20 @@
  */
 
 import type * as agent from "../agent.js";
+import type * as ai_fallbacks from "../ai/fallbacks.js";
+import type * as ai_features from "../ai/features.js";
+import type * as ai_prompts from "../ai/prompts.js";
+import type * as ai_provider from "../ai/provider.js";
+import type * as ai_structured from "../ai/structured.js";
 import type * as chat from "../chat.js";
 import type * as healthCheck from "../healthCheck.js";
+import type * as lib_auth from "../lib/auth.js";
 import type * as privateData from "../privateData.js";
+import type * as readiness from "../readiness.js";
+import type * as risks from "../risks.js";
+import type * as trips from "../trips.js";
+import type * as users from "../users.js";
+import type * as vault from "../vault.js";
 
 import type {
   ApiFromModules,
@@ -21,9 +32,20 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   agent: typeof agent;
+  "ai/fallbacks": typeof ai_fallbacks;
+  "ai/features": typeof ai_features;
+  "ai/prompts": typeof ai_prompts;
+  "ai/provider": typeof ai_provider;
+  "ai/structured": typeof ai_structured;
   chat: typeof chat;
   healthCheck: typeof healthCheck;
+  "lib/auth": typeof lib_auth;
   privateData: typeof privateData;
+  readiness: typeof readiness;
+  risks: typeof risks;
+  trips: typeof trips;
+  users: typeof users;
+  vault: typeof vault;
 }>;
 
 /**

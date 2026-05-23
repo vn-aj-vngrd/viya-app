@@ -10,10 +10,12 @@
   },
   "dependencies": {
     "@ai-sdk/google": "^2.0.52",
+    "@ai-sdk/openai-compatible": "^1.0.25",
     "@convex-dev/agent": "catalog:",
-    "convex-helpers": "catalog:",
+    "@viya-app/domain": "workspace:*",
     "ai": "^5.0.117",
     "convex": "catalog:",
+    "convex-helpers": "catalog:",
     "dotenv": "catalog:",
     "zod": "catalog:"
   },
