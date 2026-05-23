@@ -2,13 +2,54 @@
 
 ## 0. Purpose
 
-This document is the design implementation guide for building **Viya**, an AI travel operations companion. It should be used as the source of truth for AI coding agents, Codex, Cursor, Claude Code, or any developer implementing the mobile UI.
+This document is the extended design implementation guide for building **Viya**, an AI travel operations companion. The root `DESIGN.md` file is the Stitch-style machine-readable design source of truth, with YAML tokens and concise design rationale. This file expands that guidance for AI coding agents, Codex, Cursor, Claude Code, or any developer implementing the mobile UI.
 
 The goal is to keep the Viya app visually consistent, simple, premium, and native-feeling while avoiding custom component overengineering.
 
-Viya should follow an **Apple-inspired design direction**: minimalist, elegant, high whitespace, calm typography, clear hierarchy, cinematic travel imagery, and subtle motion.
+Viya should follow the **HeroUI Pro-inspired island UI direction** defined in `/Users/vanajvanguardia/Downloads/viya_heroui_mobile_design.md` and summarized in the root `DESIGN.md`: soft non-white app canvas, white floating island cards, large rounded corners, subtle elevation, compact typography, and native mobile controls.
 
 Viya should use **HeroUI Native components** as the default component system. Do not rebuild standard UI primitives unless there is a strong product reason.
+
+Viya should also follow the public HeroUI Pro product language where possible: polished defaults, composable production-ready blocks, token-led styling, consistent spacing rhythm, and mobile surfaces that feel complete without custom visual noise. Do not import paid HeroUI Pro packages unless they are installed and licensed; approximate the pattern with HeroUI Native OSS primitives.
+
+---
+
+# 0.1 HeroUI Pro Island UI Direction
+
+Every mobile screen should follow this visual formula:
+
+```text
+Soft App Canvas
+  -> Floating Header / Search / Status Island
+    -> Content Cards
+      -> Compact Native Actions
+```
+
+Use these active tokens:
+
+- App canvas: `#F4F4F5`
+- Surface: `#FFFFFF`
+- Surface muted: `#FAFAFA`
+- Foreground: `#18181B`
+- Muted: `#71717A`
+- Subtle: `#A1A1AA`
+- Border: `rgba(24, 24, 27, 0.08)`
+- Viya blue/accent: `#0A84FF`
+- Success/mint: `#30D158`
+- Warning/orange: `#FF9F0A`
+- Danger/red: `#FF453A`
+- Insight/purple: `#BF5AF2`
+
+Rules:
+
+1. Do not use pure white as the full-screen background.
+2. Use white floating islands for primary content, forms, trip cards, AI suggestions, and bottom actions.
+3. Use 24-32px radii for major islands and 16-20px radii for nested content.
+4. Use very soft shadows on major islands; avoid thick borders.
+5. Put obvious next actions in sticky bottom action islands.
+6. Use circular icon buttons for header actions.
+7. Keep each screen focused on one main job.
+8. Viya AI should appear as proactive, action-oriented cards and bottom-sheet guidance, not only chat bubbles.
 
 ---
 
@@ -40,16 +81,15 @@ Viya should feel like:
 
 ## Visual Inspiration
 
-Follow an Apple-like visual language:
+Follow a HeroUI Pro mobile preview language:
 
-- Premium whitespace
-- Soft surfaces
-- Simple typography
-- Large clear titles
-- Minimal visual noise
-- Subtle depth
-- Cinematic imagery
-- Focused layouts
+- Soft gray app canvas
+- Floating white islands
+- Large rounded surfaces
+- Compact native typography
+- Circular icon actions
+- Sticky bottom action islands
+- Minimal accent color usage
 - Clear calls to action
 - Calm motion
 
@@ -63,6 +103,7 @@ Avoid:
 - Too many icons on screen
 - Complex custom controls
 - Decorative elements that do not support the task
+- Pure white full-screen backgrounds
 
 ---
 
@@ -119,6 +160,54 @@ Preferred components:
 - `ScrollShadow`
 - `PressableFeedback`
 
+## HeroUI Pro-Inspired Auth Pattern
+
+Auth and onboarding should be built as polished product surfaces, not plain forms.
+
+Use this structure:
+
+1. Product-first onboarding with a welcome/action screen followed by nine fixed-height lifecycle carousel screens.
+2. Social auth provider buttons before email.
+3. Email/password form inside a focused card.
+4. Quiet secondary links for sign-in/sign-up switching.
+5. Verification screens with the same shell and calmer copy.
+6. Auth and onboarding surfaces use the island pattern: soft canvas, white form/lifecycle island, large 28px radius, subtle shadow, compact copy, and a bottom action.
+
+Use HeroUI Native primitives for these surfaces:
+
+- `Card` for white island form panels and primary previews.
+- `Surface` for nested metrics, timeline rows, and AI callouts.
+- `Chip` for status labels like readiness, risks, and Vault.
+- `Button` with `outline` for Google and GitHub provider actions.
+- `Button` with `primary` for the single main CTA.
+
+Avoid:
+
+- Equal-weight feature grids on onboarding.
+- Long onboarding product tours before the user can act.
+- Fake dashboard previews or status badges before sign-in.
+- Icons before the auth wordmark; use plain `Viya` branding for now.
+- Large empty header regions.
+- Decorative gradients or blobs.
+- Multiple primary buttons in one section.
+- Form screens that omit the product promise.
+- Blue or purple gradients as background decoration.
+
+Onboarding screens should cover the full product lifecycle:
+
+1. Welcome: introduce Viya with `Travel, one step ahead`; primary `Start with Viya`, secondary `Sign in`.
+2. Dream: travel goal chat, mood, destination, budget, and timing.
+3. Plan: Trip Blueprint with route, dates, budget allocation, itinerary style, requirements, risks, and next actions.
+4. Book: guide what to book first using preferred external apps or sites.
+5. Sync: upload confirmations, receipts, screenshots, and documents into Trip Vault.
+6. Prepare: readiness checks for documents, bookings, packing, budget, weather, transport, local requirements, and emergency coverage.
+7. Travel: Now / Next / Watch Out guidance, reminders, alerts, document lookup, and ad-hoc answers.
+8. Track: budget, expenses, and pocket money.
+9. Capture: photos, notes, receipts, ratings, tips, and memories.
+10. Wrap Up: shareable trip story, insights, recap, and reusable template.
+
+The final screen primary CTA should be `Plan my first trip`; secondary should be `Explore demo trip`.
+
 ## Rule
 
 Do not rebuild buttons, cards, sheets, dialogs, alerts, chips, skeletons, tabs, or inputs from scratch.
@@ -174,43 +263,42 @@ This design system assumes:
 
 ## 6.1 Color Philosophy
 
-Viya should use a calm neutral base with a soft travel-inspired accent.
+Viya should use a soft gray app canvas with white floating islands and a restrained travel-ready accent.
 
 The app should feel premium, not playful.
 
 ### Preferred Palette Direction
 
-Use neutral surfaces:
+Use island UI surfaces:
 
-- Background: warm off-white or system background
-- Surface: white or subtle elevated neutral
-- Text primary: near-black
-- Text secondary: soft gray
-- Border: low-contrast gray
-- Accent: calm blue, indigo, or teal
-- Warning: amber
+- App canvas: soft gray, never pure white
+- Surface: white floating islands
+- Surface muted: near-white nested rows and chips
+- Text primary: zinc near-black
+- Text secondary: zinc muted gray
+- Border: translucent low-contrast zinc
+- Accent: Viya blue
+- Warning: orange
 - Danger: red
-- Success: green
+- Success: mint
+- Insight: purple for memories and wrap-up
 
 ### Suggested Tokens
 
 ```ts
 const colors = {
-  background: '#F7F7F8',
+  app: '#F4F4F5',
   surface: '#FFFFFF',
-  surfaceMuted: '#F1F2F4',
-  textPrimary: '#111111',
-  textSecondary: '#6B7280',
-  textTertiary: '#9CA3AF',
-  border: '#E5E7EB',
-  accent: '#2563EB',
-  accentSoft: '#EAF1FF',
-  success: '#16A34A',
-  successSoft: '#EAF7EE',
-  warning: '#D97706',
-  warningSoft: '#FFF4DE',
-  danger: '#DC2626',
-  dangerSoft: '#FEECEC'
+  surfaceMuted: '#FAFAFA',
+  textPrimary: '#18181B',
+  textSecondary: '#71717A',
+  textTertiary: '#A1A1AA',
+  border: 'rgba(24, 24, 27, 0.08)',
+  accent: '#0A84FF',
+  success: '#30D158',
+  warning: '#FF9F0A',
+  danger: '#FF453A',
+  insight: '#BF5AF2',
 };
 ```
 
@@ -219,7 +307,7 @@ const colors = {
 - Use accent color only for important actions and active states.
 - Use soft background tints for status cards.
 - Do not use bright gradients as default backgrounds.
-- Use travel imagery to add emotion instead of heavy decoration.
+- Use travel imagery only when it supports the island and does not overpower it.
 - Use color to communicate status, not to decorate every card.
 
 ---
@@ -281,17 +369,17 @@ const spacing = {
   sm: 8,
   md: 12,
   lg: 16,
-  xl: 24,
-  '2xl': 32,
-  '3xl': 40
+  xl: 20,
+  '2xl': 24,
+  '3xl': 32
 };
 ```
 
 ## Spacing Rules
 
-- Screen horizontal padding: `px-5` or `px-6`
-- Card padding: `p-4` to `p-5`
-- Section spacing: `gap-5` to `gap-8`
+- Screen horizontal padding: `px-4` or `px-5`
+- Island padding: `p-4` to `p-5`
+- Section spacing: `gap-4` to `gap-6`
 - List item spacing: `gap-3` to `gap-4`
 - Avoid tight stacked layouts.
 
@@ -305,17 +393,20 @@ Viya should feel soft and modern.
 
 ```ts
 const radius = {
-  sm: 10,
-  md: 14,
-  lg: 18,
+  sm: 12,
+  md: 16,
+  lg: 20,
   xl: 24,
-  full: 999
+  island: 28,
+  sheet: 32,
+  full: 999,
 };
 ```
 
 ## Rules
 
-- Main cards: rounded-2xl or rounded-3xl
+- Main islands: `rounded-[28px]` or `rounded-3xl`
+- Inner cards: `rounded-2xl`
 - Buttons: rounded-full or rounded-2xl depending on context
 - Chips: rounded-full
 - Sheets: rounded top corners
