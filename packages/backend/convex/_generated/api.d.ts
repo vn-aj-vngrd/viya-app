@@ -17,6 +17,7 @@ import type * as ai_structured from "../ai/structured.js";
 import type * as chat from "../chat.js";
 import type * as healthCheck from "../healthCheck.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as preferences from "../preferences.js";
 import type * as privateData from "../privateData.js";
 import type * as readiness from "../readiness.js";
 import type * as risks from "../risks.js";
@@ -40,6 +41,7 @@ declare const fullApi: ApiFromModules<{
   chat: typeof chat;
   healthCheck: typeof healthCheck;
   "lib/auth": typeof lib_auth;
+  preferences: typeof preferences;
   privateData: typeof privateData;
   readiness: typeof readiness;
   risks: typeof risks;

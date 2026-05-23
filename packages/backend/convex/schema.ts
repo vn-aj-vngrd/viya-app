@@ -10,6 +10,72 @@ export default defineSchema({
 		createdAt: v.number(),
 		updatedAt: v.number(),
 	}).index("by_clerk_subject", ["clerkSubject"]),
+	userPreferences: defineTable({
+		ownerId: v.string(),
+		travelStyle: v.union(
+			v.literal("relaxed"),
+			v.literal("balanced"),
+			v.literal("packed"),
+			v.literal("adventure"),
+			v.literal("luxury"),
+			v.literal("budget")
+		),
+		pacePreference: v.union(
+			v.literal("slow"),
+			v.literal("moderate"),
+			v.literal("fast")
+		),
+		budgetPreference: v.union(
+			v.literal("budget"),
+			v.literal("midRange"),
+			v.literal("premium")
+		),
+		interests: v.array(
+			v.union(
+				v.literal("nature"),
+				v.literal("food"),
+				v.literal("culture"),
+				v.literal("shopping"),
+				v.literal("nightlife"),
+				v.literal("wellness"),
+				v.literal("beaches"),
+				v.literal("hiddenGems")
+			)
+		),
+		foodPreference: v.union(
+			v.literal("localEats"),
+			v.literal("popularSpots"),
+			v.literal("dietaryAware"),
+			v.literal("flexible"),
+			v.literal("lowPriority")
+		),
+		groupPreference: v.union(
+			v.literal("solo"),
+			v.literal("couple"),
+			v.literal("family"),
+			v.literal("friends"),
+			v.literal("work"),
+			v.literal("varies")
+		),
+		planningStyle: v.union(
+			v.literal("decideForMe"),
+			v.literal("giveOptions"),
+			v.literal("flagRisks")
+		),
+		specialNeeds: v.array(
+			v.union(
+				v.literal("accessibility"),
+				v.literal("dietaryRestrictions"),
+				v.literal("earlyStarts"),
+				v.literal("restBreaks"),
+				v.literal("none")
+			)
+		),
+		specialNeedsNote: v.optional(v.string()),
+		onboardingCompletedAt: v.number(),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	}).index("by_owner", ["ownerId"]),
 	trips: defineTable({
 		ownerId: v.string(),
 		title: v.string(),

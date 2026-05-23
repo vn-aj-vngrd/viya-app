@@ -8,33 +8,22 @@
       "bundler": "metro",
       "favicon": "./assets/images/viya-favicon-v2.png"
     },
-    "name": "Viya",
+    "name": "",
     "slug": "viya-app",
-    "splash": {
-      "image": "./assets/images/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#000000"
-    },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/viya-android-foreground-v2.png",
         "backgroundImage": "./assets/images/viya-android-background-v2.png",
-        "backgroundColor": "#FFFFFF",
+        "backgroundColor": "#00000000",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       }
     },
-    "plugins": [
-      "expo-font",
-      [
-        "expo-splash-screen",
-        {
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 180,
-          "resizeMode": "contain",
-          "backgroundColor": "#000000"
-        }
-      ]
-    ],
+    "ios": {
+      "infoPlist": {
+        "CFBundleDisplayName": ""
+      }
+    },
+    "plugins": ["expo-font"],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true

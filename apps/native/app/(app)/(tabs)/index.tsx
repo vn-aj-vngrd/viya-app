@@ -1,5 +1,8 @@
 import { useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
+import { api } from "@viya-app/backend/convex/_generated/api";
+import { getPreferenceSuggestions } from "@viya-app/domain";
+import { useQuery } from "convex/react";
 import { Link } from "expo-router";
 import { Button, Surface, Text } from "heroui-native";
 import type { ComponentProps } from "react";
@@ -76,6 +79,11 @@ const exploreCards = [
 
 export default function HomeScreen() {
 	const { user } = useUser();
+	const preferences = useQuery(api.preferences.getCurrentPreferences);
+	const preferenceSuggestions = getPreferenceSuggestions(preferences ?? {});
+	const primaryPrompt =
+		preferenceSuggestions.prompts[0]?.prompt ??
+		"Help me shape a balanced trip plan.";
 	const firstName = user?.firstName ?? user?.fullName?.split(" ")[0] ?? "there";
 	const initials =
 		user?.firstName?.charAt(0) ?? user?.fullName?.charAt(0) ?? "V";
@@ -123,15 +131,14 @@ export default function HomeScreen() {
 									type="h2"
 									weight="semibold"
 								>
-									Where should we go next?
+									{preferenceSuggestions.home.title}
 								</Text.Heading>
 								<Text.Paragraph
 									className="leading-5"
 									color="muted"
 									type="body-sm"
 								>
-									Share a destination, mood, dates, or budget. Viya will shape
-									the first plan.
+									{preferenceSuggestions.home.subtitle}
 								</Text.Paragraph>
 							</View>
 							<View className="h-9 w-9 items-center justify-center overflow-hidden rounded-xl">
@@ -159,18 +166,18 @@ export default function HomeScreen() {
 										Try
 									</Text>
 									<Text type="body-sm" weight="semibold">
-										Plan a calm 5-day trip under budget
+										{primaryPrompt}
 									</Text>
 								</View>
 							</View>
 							<View className="flex-row flex-wrap gap-2">
-								{["Budget", "Readiness", "Vault"].map((item) => (
+								{preferenceSuggestions.prompts.slice(1).map((item) => (
 									<Surface
 										className="rounded-full bg-surface px-3 py-1.5"
-										key={item}
+										key={item.title}
 									>
 										<Text type="body-xs" weight="semibold">
-											{item}
+											{item.title}
 										</Text>
 									</Surface>
 								))}

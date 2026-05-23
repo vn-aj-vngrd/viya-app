@@ -7,6 +7,21 @@ export type TravelStyle =
 	| "budget";
 export type PacePreference = "slow" | "moderate" | "fast";
 export type BudgetPreference = "budget" | "midRange" | "premium";
+export type TravelInterest =
+	| "nature"
+	| "food"
+	| "culture"
+	| "shopping"
+	| "nightlife"
+	| "wellness"
+	| "beaches"
+	| "hiddenGems";
+export type FoodPreference =
+	| "localEats"
+	| "popularSpots"
+	| "dietaryAware"
+	| "flexible"
+	| "lowPriority";
 export type GroupType =
 	| "solo"
 	| "couple"
@@ -14,6 +29,14 @@ export type GroupType =
 	| "friends"
 	| "work"
 	| "custom";
+export type UserGroupPreference = Exclude<GroupType, "custom"> | "varies";
+export type PlanningStyle = "decideForMe" | "giveOptions" | "flagRisks";
+export type SpecialNeed =
+	| "accessibility"
+	| "dietaryRestrictions"
+	| "earlyStarts"
+	| "restBreaks"
+	| "none";
 export type TripStatus =
 	| "draft"
 	| "planning"
@@ -84,11 +107,16 @@ export interface User {
 export interface UserPreferences {
 	accessibilityNeeds: string;
 	budgetPreference: BudgetPreference;
-	foodPreference: string;
+	foodPreference: FoodPreference;
+	groupPreference: UserGroupPreference;
+	interests: TravelInterest[];
 	notificationPreference: string;
 	pacePreference: PacePreference;
+	planningStyle: PlanningStyle;
 	preferredRestLevel: string;
 	preferredStartTime: string;
+	specialNeeds: SpecialNeed[];
+	specialNeedsNote: string | null;
 	travelStyle: TravelStyle;
 }
 

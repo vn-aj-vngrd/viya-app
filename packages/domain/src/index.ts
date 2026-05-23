@@ -3,6 +3,7 @@
 export * from "./constants";
 export * from "./dashboard";
 export * from "./demo/palawan";
+export * from "./preferences";
 export * from "./readiness";
 export * from "./schemas/itinerary";
 export * from "./schemas/readiness";

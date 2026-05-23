@@ -1,7 +1,8 @@
 import { useSmoothText, useUIMessages } from "@convex-dev/agent/react";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
-import { useMutation } from "convex/react";
+import { getPreferenceSuggestions } from "@viya-app/domain";
+import { useMutation, useQuery } from "convex/react";
 import { type Href, useLocalSearchParams, useRouter } from "expo-router";
 import {
 	Button,
@@ -38,37 +39,6 @@ interface PromptSuggestion {
 	soft: string;
 	title: string;
 }
-
-const promptSuggestions = [
-	{
-		accent: "#0A84FF",
-		icon: "map-outline",
-		prompt: "Help me plan a calm 5-day beach trip under budget.",
-		soft: "#EAF2FF",
-		title: "Plan a trip",
-	},
-	{
-		accent: "#059669",
-		icon: "shield-checkmark-outline",
-		prompt: "Check what I need before I travel next month.",
-		soft: "#E4F8EF",
-		title: "Check readiness",
-	},
-	{
-		accent: "#E97816",
-		icon: "cash-outline",
-		prompt: "Build a travel budget with food, stay, transport, and buffer.",
-		soft: "#FFF1DA",
-		title: "Set a budget",
-	},
-	{
-		accent: "#DB2777",
-		icon: "images-outline",
-		prompt: "Help me turn a trip into a story and shareable recap.",
-		soft: "#FCE7F3",
-		title: "Create a recap",
-	},
-] as const satisfies readonly PromptSuggestion[];
 
 const returnTabRoutes = {
 	index: VIYA_ROUTES.home,
@@ -156,6 +126,13 @@ export function ViyaChatScreen() {
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const scrollViewRef = useRef<ScrollView>(null);
 	const mutedColor = useThemeColor("muted");
+	const preferences = useQuery(api.preferences.getCurrentPreferences);
+	const promptSuggestions = getPreferenceSuggestions(
+		preferences ?? {}
+	).prompts.map((suggestion) => ({
+		...suggestion,
+		icon: suggestion.icon as SuggestionIconName,
+	})) satisfies PromptSuggestion[];
 
 	const createThread = useMutation(api.chat.createNewThread);
 	const sendMessage = useMutation(api.chat.sendMessage);

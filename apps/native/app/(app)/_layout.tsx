@@ -1,12 +1,23 @@
 import { useAuth } from "@clerk/expo";
-import { Redirect, Stack } from "expo-router";
+import { api } from "@viya-app/backend/convex/_generated/api";
+import { useQuery } from "convex/react";
+import { Redirect, Stack, useSegments } from "expo-router";
 import { Spinner, useThemeColor } from "heroui-native";
 import { View } from "react-native";
 
 function AppLayout() {
 	const { isLoaded, isSignedIn } = useAuth();
+	const segments = useSegments();
+	const routeSegments = segments as readonly string[];
 	const themeColorForeground = useThemeColor("foreground");
 	const themeColorBackground = useThemeColor("background");
+	const preferences = useQuery(
+		api.preferences.getCurrentPreferences,
+		isLoaded && isSignedIn ? {} : "skip"
+	);
+	const isPreferenceOnboardingRoute =
+		routeSegments.includes("onboarding") &&
+		routeSegments.includes("preferences");
 
 	if (!isLoaded) {
 		return (
@@ -18,6 +29,18 @@ function AppLayout() {
 
 	if (!isSignedIn) {
 		return <Redirect href="/(auth)" />;
+	}
+
+	if (preferences === undefined) {
+		return (
+			<View className="flex-1 items-center justify-center bg-background">
+				<Spinner />
+			</View>
+		);
+	}
+
+	if (!(preferences || isPreferenceOnboardingRoute)) {
+		return <Redirect href="/(app)/onboarding/preferences" />;
 	}
 
 	return (
@@ -37,6 +60,10 @@ function AppLayout() {
 			<Stack.Screen name="index" options={{ headerShown: false }} />
 			<Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 			<Stack.Screen name="ai" options={{ title: "Viya" }} />
+			<Stack.Screen
+				name="onboarding/preferences"
+				options={{ headerShown: false }}
+			/>
 			<Stack.Screen name="trips/[tripId]/index" options={{ title: "Trip" }} />
 			<Stack.Screen
 				name="trips/[tripId]/itinerary"
