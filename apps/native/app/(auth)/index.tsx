@@ -1,6 +1,4 @@
-import { useAuth } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
 import { Spinner, Surface, Text } from "heroui-native";
 import type { ComponentProps, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -12,12 +10,18 @@ import {
 	useWindowDimensions,
 	View,
 } from "react-native";
-import Animated, { FadeInUp } from "react-native-reanimated";
+import Animated, {
+	cancelAnimation,
+	Easing,
+	FadeInUp,
+	useAnimatedStyle,
+	useSharedValue,
+	withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Container } from "@/components/container";
 import { ViyaMark } from "@/src/components/viya-mark";
-import { VIYA_ROUTES } from "@/src/constants/routes";
 import { AuthSignInSheet } from "@/src/features/auth/auth-sign-in-sheet";
 import {
 	getCompletedOnboarding,
@@ -139,8 +143,10 @@ const ONBOARDING_SLIDES = [
 ] as const satisfies readonly OnboardingSlide[];
 
 const WELCOME_INDEX = 0;
-const FIRST_LIFECYCLE_INDEX = 1;
 const FINAL_INDEX = ONBOARDING_SLIDES.length - 1;
+const AUTO_ADVANCE_MS = 4200;
+const PROGRESS_DOT_SIZE = 6;
+const ACTIVE_PROGRESS_DOT_WIDTH = 20;
 
 const previewShadow = {
 	elevation: 12,
@@ -975,7 +981,7 @@ function SlideView({ isCompact, slide, width }: SlideViewProps) {
 							</Text.Heading>
 							<Text.Paragraph
 								align="center"
-								className="max-w-[340px] leading-5"
+								className="max-w-85 leading-5"
 								color="muted"
 								type="body-sm"
 							>
@@ -993,49 +999,80 @@ interface ProgressDotsProps {
 	activeIndex: number;
 }
 
+interface ProgressDotProps {
+	isActive: boolean;
+}
+
+function ProgressDot({ isActive }: ProgressDotProps) {
+	const progress = useSharedValue(0);
+
+	useEffect(() => {
+		if (!isActive) {
+			cancelAnimation(progress);
+			progress.value = 0;
+			return;
+		}
+
+		progress.value = 0;
+		progress.value = withTiming(1, {
+			duration: AUTO_ADVANCE_MS,
+			easing: Easing.linear,
+		});
+
+		return () => cancelAnimation(progress);
+	}, [isActive, progress]);
+
+	const fillStyle = useAnimatedStyle(() => ({
+		width:
+			PROGRESS_DOT_SIZE +
+			(ACTIVE_PROGRESS_DOT_WIDTH - PROGRESS_DOT_SIZE) * progress.value,
+	}));
+
+	return (
+		<View
+			className="overflow-hidden rounded-full"
+			style={{
+				backgroundColor: "rgba(24, 24, 27, 0.2)",
+				height: PROGRESS_DOT_SIZE,
+				width: isActive ? ACTIVE_PROGRESS_DOT_WIDTH : PROGRESS_DOT_SIZE,
+			}}
+		>
+			{isActive ? (
+				<Animated.View
+					className="h-full rounded-full"
+					style={[
+						{
+							backgroundColor: "rgba(24, 24, 27, 0.82)",
+						},
+						fillStyle,
+					]}
+				/>
+			) : null}
+		</View>
+	);
+}
+
 function ProgressDots({ activeIndex }: ProgressDotsProps) {
 	return (
 		<View className="flex-row justify-center gap-1.5">
-			{ONBOARDING_SLIDES.slice(FIRST_LIFECYCLE_INDEX).map((slide, index) => {
-				const isActive = activeIndex - FIRST_LIFECYCLE_INDEX === index;
+			{ONBOARDING_SLIDES.map((slide, index) => {
+				const isActive = activeIndex === index;
 
-				return (
-					<View
-						className={
-							isActive
-								? "h-2 w-5 rounded-full"
-								: "h-2 w-2 rounded-full bg-border"
-						}
-						key={slide.id}
-						style={isActive ? { backgroundColor: "#0A84FF" } : undefined}
-					/>
-				);
+				return <ProgressDot isActive={isActive} key={slide.id} />;
 			})}
 		</View>
 	);
 }
 
 export default function AuthOnboardingScreen() {
-	const { isSignedIn } = useAuth();
-	const router = useRouter();
 	const insets = useSafeAreaInsets();
 	const { height, width } = useWindowDimensions();
 	const listRef = useRef<FlatList<OnboardingSlide>>(null);
+	const activeIndexRef = useRef(WELCOME_INDEX);
 	const [activeIndex, setActiveIndex] = useState(WELCOME_INDEX);
 	const [isCheckingCompletion, setIsCheckingCompletion] = useState(true);
 	const [isSignInSheetOpen, setIsSignInSheetOpen] = useState(false);
 	const isCompactHeight = height < 740;
-	const isWelcome = activeIndex === WELCOME_INDEX;
-	const isFinal = activeIndex === FINAL_INDEX;
-	const canSkip =
-		activeIndex >= FIRST_LIFECYCLE_INDEX && activeIndex < FINAL_INDEX;
-	let primaryActionLabel = "Next";
-
-	if (isWelcome) {
-		primaryActionLabel = "Get started";
-	} else if (isFinal) {
-		primaryActionLabel = "Start planning";
-	}
 
 	useEffect(() => {
 		let isMounted = true;
@@ -1048,7 +1085,6 @@ export default function AuthOnboardingScreen() {
 			}
 
 			if (hasCompleted) {
-				setIsSignInSheetOpen(true);
 				setIsCheckingCompletion(false);
 				return;
 			}
@@ -1065,6 +1101,7 @@ export default function AuthOnboardingScreen() {
 
 	const goToIndex = useCallback(
 		(nextIndex: number) => {
+			activeIndexRef.current = nextIndex;
 			listRef.current?.scrollToOffset({
 				animated: true,
 				offset: nextIndex * width,
@@ -1074,47 +1111,39 @@ export default function AuthOnboardingScreen() {
 		[width]
 	);
 
-	const handlePrimaryAction = useCallback(async () => {
-		if (isWelcome) {
-			goToIndex(FIRST_LIFECYCLE_INDEX);
+	useEffect(() => {
+		if (isCheckingCompletion || isSignInSheetOpen || width <= 0) {
 			return;
 		}
 
-		if (isFinal) {
-			await setCompletedOnboarding();
+		const timer = setInterval(() => {
+			const nextIndex =
+				activeIndexRef.current === FINAL_INDEX
+					? WELCOME_INDEX
+					: activeIndexRef.current + 1;
+			goToIndex(nextIndex);
+		}, AUTO_ADVANCE_MS);
 
-			if (isSignedIn) {
-				router.push(VIYA_ROUTES.viya);
-				return;
-			}
-
-			setIsSignInSheetOpen(true);
-			return;
-		}
-
-		goToIndex(activeIndex + 1);
-	}, [activeIndex, goToIndex, isFinal, isSignedIn, isWelcome, router]);
+		return () => clearInterval(timer);
+	}, [goToIndex, isCheckingCompletion, isSignInSheetOpen, width]);
 
 	const handleSignInPress = useCallback(() => {
 		setIsSignInSheetOpen(true);
+		setCompletedOnboarding().catch(() => undefined);
 	}, []);
-
-	const handleSkipPress = useCallback(async () => {
-		await setCompletedOnboarding();
-
-		if (isSignedIn) {
-			router.push(VIYA_ROUTES.home);
-			return;
-		}
-
-		setIsSignInSheetOpen(true);
-	}, [isSignedIn, router]);
 
 	const handleScrollEnd = useCallback(
 		(event: NativeSyntheticEvent<NativeScrollEvent>) => {
-			const nextIndex = Math.round(event.nativeEvent.contentOffset.x / width);
+			const nextIndex = Math.min(
+				FINAL_INDEX,
+				Math.max(
+					WELCOME_INDEX,
+					Math.round(event.nativeEvent.contentOffset.x / width)
+				)
+			);
 
 			if (nextIndex !== activeIndex) {
+				activeIndexRef.current = nextIndex;
 				setActiveIndex(nextIndex);
 			}
 		},
@@ -1147,23 +1176,14 @@ export default function AuthOnboardingScreen() {
 					paddingTop: insets.top + 4,
 				}}
 			>
-				{canSkip ? (
-					<Pressable
-						accessibilityLabel="Skip onboarding"
-						accessibilityRole="button"
-						className="absolute right-5 z-10 rounded-full px-3 py-2"
-						onPress={handleSkipPress}
-						style={{ top: insets.top + 8 }}
-					>
-						<Text color="muted" type="body-sm" weight="semibold">
-							Skip
-						</Text>
-					</Pressable>
-				) : null}
-
 				<FlatList
 					bounces={false}
 					data={ONBOARDING_SLIDES}
+					getItemLayout={(_, index) => ({
+						index,
+						length: width,
+						offset: width * index,
+					})}
 					horizontal={true}
 					keyExtractor={(item) => item.id}
 					onMomentumScrollEnd={handleScrollEnd}
@@ -1174,19 +1194,9 @@ export default function AuthOnboardingScreen() {
 					showsHorizontalScrollIndicator={false}
 				/>
 
-				<View className="gap-2 px-5" style={{ paddingBottom: 6 }}>
-					{isWelcome ? null : <ProgressDots activeIndex={activeIndex} />}
-					<OnboardingButton
-						label={primaryActionLabel}
-						onPress={handlePrimaryAction}
-					/>
-					{isWelcome ? (
-						<OnboardingButton
-							label="Sign in"
-							onPress={handleSignInPress}
-							variant="secondary"
-						/>
-					) : null}
+				<View className="gap-4 px-5" style={{ paddingBottom: 6 }}>
+					<ProgressDots activeIndex={activeIndex} />
+					<OnboardingButton label="Get started" onPress={handleSignInPress} />
 				</View>
 			</View>
 			<AuthSignInSheet

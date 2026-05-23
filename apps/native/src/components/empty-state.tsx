@@ -46,7 +46,7 @@ export function EmptyState({
 			</Text.Heading>
 			<Text.Paragraph
 				align="center"
-				className="mt-2 max-w-[270px] leading-5"
+				className="mt-2 max-w-67.5 leading-5"
 				color="muted"
 				type="body-sm"
 			>

@@ -3,26 +3,38 @@
     "scheme": "viya-app",
     "userInterfaceStyle": "automatic",
     "orientation": "default",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/viya-app-icon-v2.png",
     "web": {
       "bundler": "metro",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/viya-favicon-v2.png"
     },
     "name": "Viya",
     "slug": "viya-app",
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#F7F7F8"
+      "backgroundColor": "#000000"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundColor": "#0A84FF",
+        "foregroundImage": "./assets/images/viya-android-foreground-v2.png",
+        "backgroundImage": "./assets/images/viya-android-background-v2.png",
+        "backgroundColor": "#FFFFFF",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       }
     },
-    "plugins": ["expo-font"],
+    "plugins": [
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 180,
+          "resizeMode": "contain",
+          "backgroundColor": "#000000"
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
