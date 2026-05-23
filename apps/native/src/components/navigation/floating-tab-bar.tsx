@@ -65,12 +65,16 @@ export function FloatingTabBar({
 							key={route.key}
 							onLongPress={handleLongPress}
 							onPress={handlePress}
-							style={{
-								backgroundColor: isFocused ? ACTIVE_TAB_COLOR : "transparent",
-							}}
 							testID={options.tabBarButtonTestID}
 						>
-							{tabBarIcon?.({ color, focused: isFocused, size: 20 })}
+							<View
+								className="h-10 w-10 items-center justify-center rounded-full"
+								style={{
+									backgroundColor: isFocused ? ACTIVE_TAB_COLOR : "transparent",
+								}}
+							>
+								{tabBarIcon?.({ color, focused: isFocused, size: 20 })}
+							</View>
 						</Pressable>
 					);
 				})}

@@ -10,11 +10,23 @@ type TabIconName = ComponentProps<typeof Ionicons>["name"];
 interface FloatingTabIconProps {
 	color: ColorValue;
 	focused: boolean;
+	focusedIcon: TabIconName;
 	name: TabIconName;
 }
 
-function FloatingTabIcon({ color, focused, name }: FloatingTabIconProps) {
-	return <Ionicons color={focused ? "#FFFFFF" : color} name={name} size={20} />;
+function FloatingTabIcon({
+	color,
+	focused,
+	focusedIcon,
+	name,
+}: FloatingTabIconProps) {
+	return (
+		<Ionicons
+			color={focused ? "#FFFFFF" : color}
+			name={focused ? focusedIcon : name}
+			size={20}
+		/>
+	);
 }
 
 export default function TabLayout() {
@@ -31,7 +43,12 @@ export default function TabLayout() {
 				options={{
 					title: "Home",
 					tabBarIcon: ({ color, focused }) => (
-						<FloatingTabIcon color={color} focused={focused} name="home" />
+						<FloatingTabIcon
+							color={color}
+							focused={focused}
+							focusedIcon="home"
+							name="home-outline"
+						/>
 					),
 				}}
 			/>
@@ -40,7 +57,12 @@ export default function TabLayout() {
 				options={{
 					title: "Trips",
 					tabBarIcon: ({ color, focused }) => (
-						<FloatingTabIcon color={color} focused={focused} name="map" />
+						<FloatingTabIcon
+							color={color}
+							focused={focused}
+							focusedIcon="map"
+							name="map-outline"
+						/>
 					),
 				}}
 			/>
@@ -49,7 +71,12 @@ export default function TabLayout() {
 				options={{
 					title: "Viya",
 					tabBarIcon: ({ color, focused }) => (
-						<FloatingTabIcon color={color} focused={focused} name="sparkles" />
+						<FloatingTabIcon
+							color={color}
+							focused={focused}
+							focusedIcon="sparkles"
+							name="sparkles-outline"
+						/>
 					),
 				}}
 			/>
@@ -58,7 +85,12 @@ export default function TabLayout() {
 				options={{
 					title: "Moments",
 					tabBarIcon: ({ color, focused }) => (
-						<FloatingTabIcon color={color} focused={focused} name="images" />
+						<FloatingTabIcon
+							color={color}
+							focused={focused}
+							focusedIcon="images"
+							name="images-outline"
+						/>
 					),
 				}}
 			/>
@@ -67,7 +99,12 @@ export default function TabLayout() {
 				options={{
 					title: "Profile",
 					tabBarIcon: ({ color, focused }) => (
-						<FloatingTabIcon color={color} focused={focused} name="person" />
+						<FloatingTabIcon
+							color={color}
+							focused={focused}
+							focusedIcon="person"
+							name="person-outline"
+						/>
 					),
 				}}
 			/>
