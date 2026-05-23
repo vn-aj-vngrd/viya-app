@@ -1,38 +1,41 @@
-import { palawanDemoTrip } from "@viya-app/domain";
-import { ImageBackground, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { Surface, Text } from "heroui-native";
+import { View } from "react-native";
 
 import { Container } from "@/components/container";
 
 export function MomentsScreen() {
 	return (
-		<Container className="px-4 pb-4">
+		<Container className="px-4 pb-28">
 			<View className="gap-4 py-4">
 				<View>
-					<Text className="font-semibold text-3xl text-foreground">
+					<Text.Heading type="h2" weight="semibold">
 						Moments
-					</Text>
-					<Text className="mt-1 text-muted text-sm">
-						Trip memories and highlights.
-					</Text>
+					</Text.Heading>
+					<Text.Paragraph className="mt-1" color="muted" type="body-sm">
+						Photos, notes, ratings, receipts, and travel tips.
+					</Text.Paragraph>
 				</View>
-				{palawanDemoTrip.moments.map((moment) => (
-					<ImageBackground
-						className="min-h-72 justify-end overflow-hidden rounded-lg bg-content2"
-						imageStyle={{ borderRadius: 8 }}
-						key={moment.id}
-						source={{ uri: moment.photoUrl }}
-					>
-						<View className="gap-1 bg-background/80 p-4">
-							<Text className="font-semibold text-foreground text-xl">
-								{moment.title}
-							</Text>
-							<Text className="text-muted text-sm leading-5">
-								{moment.caption}
-							</Text>
-							<Text className="text-muted text-xs">{moment.locationName}</Text>
-						</View>
-					</ImageBackground>
-				))}
+
+				<Surface className="items-center gap-4 rounded-[30px] border border-border bg-surface p-6">
+					<View className="h-16 w-16 items-center justify-center rounded-3xl bg-secondary-soft">
+						<Ionicons color="#9333EA" name="images" size={30} />
+					</View>
+					<View className="items-center gap-2">
+						<Text.Heading align="center" type="h3" weight="semibold">
+							No memories yet
+						</Text.Heading>
+						<Text.Paragraph
+							align="center"
+							className="max-w-xs leading-5"
+							color="muted"
+							type="body-sm"
+						>
+							During a trip, Viya can attach photos, notes, receipts, ratings,
+							and tips to the right itinerary moment.
+						</Text.Paragraph>
+					</View>
+				</Surface>
 			</View>
 		</Container>
 	);

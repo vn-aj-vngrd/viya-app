@@ -2,8 +2,8 @@ import {
 	READINESS_CATEGORY_LABELS,
 	type ReadinessScore,
 } from "@viya-app/domain";
-import { Surface } from "heroui-native";
-import { Text, View } from "react-native";
+import { Surface, Text } from "heroui-native";
+import { View } from "react-native";
 
 interface ReadinessScoreCardProps {
 	readiness: ReadinessScore;
@@ -21,23 +21,28 @@ export function ReadinessScoreCard({ readiness }: ReadinessScoreCardProps) {
 		<Surface className="gap-4 rounded-lg p-4" variant="secondary">
 			<View className="flex-row items-end justify-between">
 				<View>
-					<Text className="font-semibold text-muted text-xs uppercase">
+					<Text
+						className="uppercase"
+						color="muted"
+						type="body-xs"
+						weight="semibold"
+					>
 						Readiness
 					</Text>
-					<Text className="mt-1 text-muted text-sm">{readiness.summary}</Text>
+					<Text.Paragraph className="mt-1" color="muted" type="body-sm">
+						{readiness.summary}
+					</Text.Paragraph>
 				</View>
-				<Text className="font-semibold text-5xl text-foreground">
+				<Text.Heading className="text-5xl" type="h1" weight="semibold">
 					{readiness.overallScore}
-				</Text>
+				</Text.Heading>
 			</View>
 			<View className="gap-3">
 				{visibleCategories.map((category) => (
 					<View className="gap-1" key={category}>
 						<View className="flex-row justify-between">
-							<Text className="text-foreground text-sm">
-								{READINESS_CATEGORY_LABELS[category]}
-							</Text>
-							<Text className="font-semibold text-foreground text-sm">
+							<Text type="body-sm">{READINESS_CATEGORY_LABELS[category]}</Text>
+							<Text type="body-sm" weight="semibold">
 								{readiness.categoryScores[category]}%
 							</Text>
 						</View>

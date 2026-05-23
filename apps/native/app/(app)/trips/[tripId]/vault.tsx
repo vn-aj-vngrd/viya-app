@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
 import { useQuery } from "convex/react";
-import { Button, Spinner, Surface } from "heroui-native";
-import { Text, View } from "react-native";
+import { Button, Spinner, Surface, Text } from "heroui-native";
+import { View } from "react-native";
 
 import { Container } from "@/components/container";
 import { useVaultUpload } from "@/src/features/vault/use-vault-upload";
@@ -32,41 +32,45 @@ export default function VaultScreen() {
 		);
 	const emptyFilesContent =
 		vaultItems?.length === 0 ? (
-			<Surface className="rounded-lg p-4" variant="secondary">
-				<Text className="font-semibold text-foreground">No files yet</Text>
-				<Text className="mt-1 text-muted text-sm leading-5">
-					Add a booking, travel document, receipt, or photo to exercise the
-					Vault pipeline.
-				</Text>
+			<Surface className="rounded-[24px] border border-border bg-surface p-4">
+				<Text weight="semibold">No files yet</Text>
+				<Text.Paragraph className="mt-1 leading-5" color="muted" type="body-sm">
+					Add a booking, travel document, receipt, or photo once your trip
+					starts taking shape.
+				</Text.Paragraph>
 			</Surface>
 		) : null;
 
 	return (
-		<Container className="px-4 pb-4">
+		<Container className="px-4 pb-28">
 			<View className="gap-4 py-4">
 				<View>
-					<Text className="font-semibold text-3xl text-foreground">
-						Viya Vault
-					</Text>
-					<Text className="mt-1 text-muted text-sm">
+					<Text.Heading type="h2" weight="semibold">
+						Vault
+					</Text.Heading>
+					<Text.Paragraph className="mt-1" color="muted" type="body-sm">
 						Secure storage for bookings, travel documents, receipts, and trip
 						photos.
-					</Text>
+					</Text.Paragraph>
 				</View>
 
-				<Surface className="gap-4 rounded-lg p-4" variant="secondary">
+				<Surface className="gap-4 rounded-[28px] border border-border bg-surface p-5">
 					<View className="flex-row items-start gap-3">
-						<View className="h-11 w-11 items-center justify-center rounded-lg bg-primary">
+						<View className="h-11 w-11 items-center justify-center rounded-2xl bg-primary">
 							<Ionicons color="white" name="lock-closed" size={20} />
 						</View>
 						<View className="flex-1">
-							<Text className="font-semibold text-foreground text-lg">
+							<Text.Heading type="h5" weight="semibold">
 								Upload to Vault
-							</Text>
-							<Text className="mt-1 text-muted text-sm leading-5">
+							</Text.Heading>
+							<Text.Paragraph
+								className="mt-1 leading-5"
+								color="muted"
+								type="body-sm"
+							>
 								Files are uploaded through Convex storage and saved with
 								auth-scoped metadata.
-							</Text>
+							</Text.Paragraph>
 						</View>
 					</View>
 					<View className="flex-row gap-3">
@@ -91,18 +95,22 @@ export default function VaultScreen() {
 					{isUploading ? (
 						<View className="flex-row items-center gap-2">
 							<Spinner size="sm" />
-							<Text className="text-muted text-sm">Uploading...</Text>
+							<Text color="muted" type="body-sm">
+								Uploading...
+							</Text>
 						</View>
 					) : null}
 					{errorMessage ? (
-						<Text className="text-danger text-sm">{errorMessage}</Text>
+						<Text className="text-danger" type="body-sm">
+							{errorMessage}
+						</Text>
 					) : null}
 				</Surface>
 
 				<View className="gap-3">
-					<Text className="font-semibold text-foreground text-lg">
+					<Text.Heading type="h5" weight="semibold">
 						Saved files
-					</Text>
+					</Text.Heading>
 					{emptyFilesContent ?? savedFilesContent}
 				</View>
 			</View>

@@ -1,4 +1,5 @@
-import { Text, View } from "react-native";
+import { Text } from "heroui-native";
+import { View } from "react-native";
 
 interface AuthBrandProps {
 	align?: "center" | "left";
@@ -10,17 +11,17 @@ export function AuthBrand({ align = "left", subtitle }: AuthBrandProps) {
 
 	return (
 		<View className={isCentered ? "items-center gap-2" : "items-start gap-2"}>
-			<Text className="font-semibold text-5xl text-foreground">Viya</Text>
+			<Text.Heading className="text-5xl" type="h1" weight="semibold">
+				Viya
+			</Text.Heading>
 			{subtitle ? (
-				<Text
-					className={
-						isCentered
-							? "max-w-xs text-center text-base text-muted leading-6"
-							: "text-base text-muted"
-					}
+				<Text.Paragraph
+					className={isCentered ? "max-w-xs text-center leading-6" : undefined}
+					color="muted"
+					type="body"
 				>
 					{subtitle}
-				</Text>
+				</Text.Paragraph>
 			) : null}
 		</View>
 	);

@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Card, Surface } from "heroui-native";
+import { Surface, Text } from "heroui-native";
 import type { PropsWithChildren } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 
 import { Container } from "@/components/container";
 import { AuthBrand } from "@/src/features/auth/auth-brand";
@@ -30,9 +30,14 @@ export function AuthStatusMessage({ message }: AuthStatusMessageProps) {
 			variant="secondary"
 		>
 			<Ionicons color="#71717A" name="information-circle" size={18} />
-			<Text className="flex-1 text-muted text-sm leading-5" selectable>
+			<Text.Paragraph
+				className="flex-1 leading-5"
+				color="muted"
+				selectable={true}
+				type="body-sm"
+			>
 				{message}
-			</Text>
+			</Text.Paragraph>
 		</Surface>
 	);
 }
@@ -55,24 +60,30 @@ export function AuthScreenShell({
 			<View className="min-h-full justify-center gap-8 py-10">
 				<AuthBrand align="center" subtitle={eyebrow} />
 
-				<Card className="gap-5 rounded-[28px] border border-border bg-surface p-5">
-					<Card.Header className="gap-2">
-						<Card.Title className="text-2xl">{title}</Card.Title>
+				<Surface className="gap-5 rounded-[28px] border border-border bg-surface p-5">
+					<View className="gap-2">
+						<Text.Heading type="h3" weight="semibold">
+							{title}
+						</Text.Heading>
 						{subtitle ? (
-							<Card.Description className="text-sm leading-5">
+							<Text.Paragraph
+								className="leading-5"
+								color="muted"
+								type="body-sm"
+							>
 								{subtitle}
-							</Card.Description>
+							</Text.Paragraph>
 						) : null}
-					</Card.Header>
+					</View>
 					{children}
-				</Card>
+				</Surface>
 				<Pressable
 					accessibilityLabel="View getting started"
 					accessibilityRole="button"
 					className="self-center rounded-full px-4 py-2"
 					onPress={handleGettingStartedPress}
 				>
-					<Text className="text-center font-semibold text-muted text-sm">
+					<Text align="center" color="muted" type="body-sm" weight="semibold">
 						View getting started
 					</Text>
 				</Pressable>

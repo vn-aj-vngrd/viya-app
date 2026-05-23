@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { Trip } from "@viya-app/domain";
-import { Chip, Surface, useThemeColor } from "heroui-native";
-import { ImageBackground, Text, View } from "react-native";
+import { Chip, Surface, Text, useThemeColor } from "heroui-native";
+import { ImageBackground, View } from "react-native";
 
 interface TripHeaderProps {
 	trip: Trip;
@@ -22,17 +22,17 @@ export function TripHeader({ trip }: TripHeaderProps) {
 						<Chip.Label>{trip.status.toUpperCase()}</Chip.Label>
 					</Chip>
 					<View>
-						<Text className="font-semibold text-4xl text-foreground">
+						<Text.Heading className="text-4xl" type="h1" weight="semibold">
 							{trip.title}
-						</Text>
+						</Text.Heading>
 						<View className="mt-2 flex-row items-center gap-2">
 							<Ionicons color={linkColor} name="location" size={16} />
-							<Text className="text-base text-foreground">
-								{trip.destination}
-							</Text>
+							<Text type="body">{trip.destination}</Text>
 						</View>
 					</View>
-					<Text className="text-muted text-sm leading-6">{trip.summary}</Text>
+					<Text.Paragraph className="leading-6" color="muted" type="body-sm">
+						{trip.summary}
+					</Text.Paragraph>
 				</View>
 			</ImageBackground>
 		</Surface>

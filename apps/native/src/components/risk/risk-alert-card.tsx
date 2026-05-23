@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { Risk } from "@viya-app/domain";
-import { Chip, Surface } from "heroui-native";
-import { Text, View } from "react-native";
+import { Chip, Surface, Text } from "heroui-native";
+import { View } from "react-native";
 
 interface RiskAlertCardProps {
 	risk: Risk;
@@ -23,7 +23,7 @@ export function RiskAlertCard({ risk }: RiskAlertCardProps) {
 				</View>
 				<View className="flex-1 gap-2">
 					<View className="flex-row items-center justify-between gap-2">
-						<Text className="flex-1 font-semibold text-base text-foreground">
+						<Text className="flex-1" weight="semibold">
 							{risk.title}
 						</Text>
 						<Chip
@@ -34,8 +34,10 @@ export function RiskAlertCard({ risk }: RiskAlertCardProps) {
 							<Chip.Label>{risk.severity}</Chip.Label>
 						</Chip>
 					</View>
-					<Text className="text-muted text-sm leading-5">{risk.message}</Text>
-					<Text className="font-semibold text-foreground text-sm">
+					<Text.Paragraph className="leading-5" color="muted" type="body-sm">
+						{risk.message}
+					</Text.Paragraph>
+					<Text type="body-sm" weight="semibold">
 						{risk.suggestedAction}
 					</Text>
 				</View>

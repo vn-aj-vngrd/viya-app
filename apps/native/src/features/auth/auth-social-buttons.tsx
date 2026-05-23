@@ -14,7 +14,7 @@ import {
 
 maybeCompleteAuthSession();
 
-const SIGNED_IN_HOME = "/(drawer)/(tabs)";
+const SIGNED_IN_HOME = "/(app)/(tabs)";
 const SOCIAL_ICON_COLOR = "#18181B";
 
 const SOCIAL_PROVIDERS = [

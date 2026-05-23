@@ -8,17 +8,12 @@ import {
 	Separator,
 	Spinner,
 	Surface,
+	Text,
 	TextField,
 	useThemeColor,
 } from "heroui-native";
 import { useEffect, useRef, useState } from "react";
-import {
-	KeyboardAvoidingView,
-	Platform,
-	ScrollView,
-	Text,
-	View,
-} from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
 
 import { Container } from "@/components/container";
 
@@ -34,9 +29,9 @@ function MessageContent({
 	});
 
 	return (
-		<Text className="text-foreground text-sm leading-relaxed">
+		<Text.Paragraph className="leading-relaxed" type="body-sm">
 			{visibleText}
-		</Text>
+		</Text.Paragraph>
 	);
 }
 
@@ -105,14 +100,14 @@ export function ViyaChatScreen() {
 				behavior={Platform.OS === "ios" ? "padding" : "height"}
 				className="flex-1"
 			>
-				<View className="flex-1 px-4 py-4">
+				<View className="flex-1 px-4 pt-4 pb-28">
 					<View className="mb-4 py-4">
-						<Text className="font-semibold text-3xl text-foreground">
+						<Text.Heading type="h2" weight="semibold">
 							Viya AI
-						</Text>
-						<Text className="mt-1 text-muted text-sm">
+						</Text.Heading>
+						<Text.Paragraph className="mt-1" color="muted" type="body-sm">
 							Ask about itinerary gaps, readiness, risk, or what to do next.
-						</Text>
+						</Text.Paragraph>
 					</View>
 
 					<ScrollView
@@ -128,9 +123,9 @@ export function ViyaChatScreen() {
 								variant="secondary"
 							>
 								<Ionicons color={mutedColor} name="sparkles" size={32} />
-								<Text className="mt-3 text-muted text-sm">
+								<Text.Paragraph className="mt-3" color="muted" type="body-sm">
 									Start with a travel planning question.
-								</Text>
+								</Text.Paragraph>
 							</Surface>
 						) : (
 							<View className="gap-3">
@@ -140,7 +135,12 @@ export function ViyaChatScreen() {
 										key={message.key}
 										variant={message.role === "user" ? "tertiary" : "secondary"}
 									>
-										<Text className="mb-1 font-medium text-muted text-xs">
+										<Text
+											className="mb-1"
+											color="muted"
+											type="body-xs"
+											weight="medium"
+										>
 											{message.role === "user" ? "You" : "Viya"}
 										</Text>
 										<MessageContent
@@ -153,12 +153,19 @@ export function ViyaChatScreen() {
 								))}
 								{isLoading && !hasStreamingMessage ? (
 									<Surface className="mr-10 rounded-lg p-3" variant="secondary">
-										<Text className="mb-1 font-medium text-muted text-xs">
+										<Text
+											className="mb-1"
+											color="muted"
+											type="body-xs"
+											weight="medium"
+										>
 											Viya
 										</Text>
 										<View className="flex-row items-center gap-2">
 											<Spinner size="sm" />
-											<Text className="text-muted text-sm">Thinking...</Text>
+											<Text color="muted" type="body-sm">
+												Thinking...
+											</Text>
 										</View>
 									</Surface>
 								) : null}
@@ -167,7 +174,9 @@ export function ViyaChatScreen() {
 					</ScrollView>
 
 					{errorMessage ? (
-						<Text className="mb-3 text-danger text-sm">{errorMessage}</Text>
+						<Text className="mb-3 text-danger" type="body-sm">
+							{errorMessage}
+						</Text>
 					) : null}
 					<Separator className="mb-3" />
 

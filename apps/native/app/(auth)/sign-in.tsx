@@ -1,8 +1,8 @@
 import { useSignIn } from "@clerk/expo";
 import { Link, useRouter } from "expo-router";
-import { Button, Input, TextField } from "heroui-native";
+import { Button, Input, Text, TextField } from "heroui-native";
 import React from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import {
 	getAuthErrorMessage,
 	pushDecoratedUrl,
@@ -33,7 +33,7 @@ export default function SignInScreen() {
 		await signIn.finalize({
 			navigate: ({ session, decorateUrl }) => {
 				if (!session?.currentTask) {
-					pushDecoratedUrl(router, decorateUrl, "/(drawer)/(tabs)");
+					pushDecoratedUrl(router, decorateUrl, "/(app)/(tabs)");
 				}
 			},
 		});
@@ -108,7 +108,7 @@ export default function SignInScreen() {
 					/>
 				</TextField>
 				{errors.fields.code ? (
-					<Text className="text-danger text-xs">
+					<Text className="text-danger" type="body-xs">
 						{errors.fields.code.message}
 					</Text>
 				) : null}
@@ -135,7 +135,9 @@ export default function SignInScreen() {
 			<AuthSocialButtons onStatusMessageChange={setStatusMessage} />
 			<View className="flex-row items-center gap-3">
 				<View className="h-px flex-1 bg-border" />
-				<Text className="text-muted text-xs">or use email</Text>
+				<Text color="muted" type="body-xs">
+					or use email
+				</Text>
 				<View className="h-px flex-1 bg-border" />
 			</View>
 			<View className="gap-3">
@@ -154,7 +156,7 @@ export default function SignInScreen() {
 					/>
 				</TextField>
 				{errors.fields.identifier ? (
-					<Text className="text-danger text-xs">
+					<Text className="text-danger" type="body-xs">
 						{errors.fields.identifier.message}
 					</Text>
 				) : null}
@@ -172,7 +174,7 @@ export default function SignInScreen() {
 					/>
 				</TextField>
 				{errors.fields.password ? (
-					<Text className="text-danger text-xs">
+					<Text className="text-danger" type="body-xs">
 						{errors.fields.password.message}
 					</Text>
 				) : null}
@@ -184,9 +186,11 @@ export default function SignInScreen() {
 				<Button.Label>Sign in</Button.Label>
 			</Button>
 			<View className="flex-row justify-center gap-1">
-				<Text className="text-muted">New to Viya?</Text>
+				<Text color="muted">New to Viya?</Text>
 				<Link href="/(auth)/sign-up">
-					<Text className="font-semibold text-accent">Create an account</Text>
+					<Text className="text-accent" weight="semibold">
+						Create an account
+					</Text>
 				</Link>
 			</View>
 		</AuthScreenShell>

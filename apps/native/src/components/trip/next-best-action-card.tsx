@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { NextBestAction } from "@viya-app/domain";
 import { Link } from "expo-router";
-import { Button, Surface } from "heroui-native";
-import { Text, View } from "react-native";
+import { Button, Surface, Text } from "heroui-native";
+import { View } from "react-native";
 
 import { VIYA_ROUTES } from "@/src/constants/routes";
 
@@ -26,15 +26,24 @@ export function NextBestActionCard({ action }: NextBestActionCardProps) {
 					<Ionicons color="white" name="flash" size={20} />
 				</View>
 				<View className="flex-1">
-					<Text className="font-semibold text-muted text-xs uppercase">
+					<Text
+						className="uppercase"
+						color="muted"
+						type="body-xs"
+						weight="semibold"
+					>
 						Next best action
 					</Text>
-					<Text className="mt-1 font-semibold text-foreground text-lg">
+					<Text.Heading className="mt-1" type="h5" weight="semibold">
 						{action.label}
-					</Text>
-					<Text className="mt-1 text-muted text-sm leading-5">
+					</Text.Heading>
+					<Text.Paragraph
+						className="mt-1 leading-5"
+						color="muted"
+						type="body-sm"
+					>
 						{action.reason}
-					</Text>
+					</Text.Paragraph>
 				</View>
 			</View>
 			<Link asChild href={targetRoute[action.target]}>

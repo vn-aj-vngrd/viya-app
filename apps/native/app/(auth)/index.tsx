@@ -1,7 +1,7 @@
 import { useAuth } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { type Href, useRouter } from "expo-router";
-import { Spinner } from "heroui-native";
+import { Spinner, Surface, Text } from "heroui-native";
 import type { ComponentProps, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -9,7 +9,6 @@ import {
 	type NativeScrollEvent,
 	type NativeSyntheticEvent,
 	Pressable,
-	Text,
 	useWindowDimensions,
 	View,
 } from "react-native";
@@ -163,7 +162,7 @@ function Pill({ accent = "#111827", children }: PillProps) {
 			className="rounded-full px-3 py-1.5"
 			style={{ backgroundColor: `${accent}18` }}
 		>
-			<Text className="font-semibold text-xs" style={{ color: accent }}>
+			<Text style={{ color: accent }} type="body-xs" weight="semibold">
 				{children}
 			</Text>
 		</View>
@@ -185,7 +184,9 @@ function MiniAction({ accent, icon, label }: MiniActionProps) {
 			>
 				<Ionicons color={accent} name={icon} size={16} />
 			</View>
-			<Text className="font-semibold text-foreground text-xs">{label}</Text>
+			<Text type="body-xs" weight="semibold">
+				{label}
+			</Text>
 		</View>
 	);
 }
@@ -237,12 +238,8 @@ function OnboardingButton({
 			}}
 		>
 			<Text
-				className={
-					isPrimary || isSecondary
-						? "font-semibold text-sm"
-						: "font-semibold text-sm"
-				}
 				style={{ color: isPrimary ? "#FFFFFF" : "#18181B" }}
+				weight="semibold"
 			>
 				{label}
 			</Text>
@@ -265,35 +262,36 @@ function PreviewFrame({ children, isCompact, slide }: PreviewFrameProps) {
 
 	return (
 		<Animated.View
-			className="overflow-hidden rounded-[36px] border border-border bg-surface p-4"
 			entering={FadeInUp.duration(380).springify().damping(20)}
 			style={[previewShadow, { height: cardHeight }]}
 		>
-			<View className="flex-row items-center justify-between">
-				<View className="flex-row items-center gap-2">
+			<Surface className="h-full overflow-hidden rounded-[36px] border border-border bg-surface p-4">
+				<View className="flex-row items-center justify-between">
+					<View className="flex-row items-center gap-2">
+						<View
+							className="h-3 w-3 rounded-full"
+							style={{ backgroundColor: "#FF5F57" }}
+						/>
+						<View
+							className="h-3 w-3 rounded-full"
+							style={{ backgroundColor: "#FEBC2E" }}
+						/>
+						<View
+							className="h-3 w-3 rounded-full"
+							style={{ backgroundColor: "#28C840" }}
+						/>
+					</View>
 					<View
-						className="h-3 w-3 rounded-full"
-						style={{ backgroundColor: "#FF5F57" }}
-					/>
-					<View
-						className="h-3 w-3 rounded-full"
-						style={{ backgroundColor: "#FEBC2E" }}
-					/>
-					<View
-						className="h-3 w-3 rounded-full"
-						style={{ backgroundColor: "#28C840" }}
-					/>
+						className="rounded-full px-3 py-1.5"
+						style={{ backgroundColor: "#F4F4F5" }}
+					>
+						<Text color="muted" type="body-xs" weight="semibold">
+							{slide.id === "welcome" ? "VIYA" : slide.title}
+						</Text>
+					</View>
 				</View>
-				<View
-					className="rounded-full px-3 py-1.5"
-					style={{ backgroundColor: "#F4F4F5" }}
-				>
-					<Text className="font-semibold text-xs" style={{ color: "#71717A" }}>
-						{slide.id === "welcome" ? "VIYA" : slide.title}
-					</Text>
-				</View>
-			</View>
-			<View className="flex-1 pt-4">{children}</View>
+				<View className="flex-1 pt-4">{children}</View>
+			</Surface>
 		</Animated.View>
 	);
 }
@@ -306,19 +304,19 @@ function WelcomeGraphic() {
 					className="absolute h-44 w-44 rounded-full"
 					style={{ backgroundColor: "#EAF2FF" }}
 				/>
-				<View
+				<Surface
 					className="absolute h-28 w-64 rotate-[-10deg] rounded-[36px] border border-border bg-surface p-4"
 					style={previewShadow}
 				>
 					<View className="flex-row items-center justify-between">
-						<Text className="font-semibold text-foreground">Palawan</Text>
+						<Text weight="semibold">Trip plan</Text>
 						<Pill accent="#059669">Ready</Pill>
 					</View>
 					<View className="mt-5 gap-2">
 						<ProgressBar accent="#0A84FF" value={78} />
 						<ProgressBar accent="#059669" value={62} />
 					</View>
-				</View>
+				</Surface>
 				<View
 					className="absolute bottom-2 left-8 h-20 w-20 items-center justify-center rounded-[28px]"
 					style={{ backgroundColor: "#F5E8FF" }}
@@ -339,12 +337,17 @@ function WelcomeGraphic() {
 				</View>
 			</View>
 			<View className="items-center gap-2">
-				<Text className="text-center font-semibold text-6xl text-foreground">
+				<Text.Heading
+					align="center"
+					className="text-6xl"
+					type="h1"
+					weight="semibold"
+				>
 					Viya
-				</Text>
-				<Text className="text-center font-medium text-muted">
+				</Text.Heading>
+				<Text.Paragraph align="center" color="muted" weight="medium">
 					Travel, one step ahead
-				</Text>
+				</Text.Paragraph>
 			</View>
 			<View className="flex-row gap-2">
 				<Pill accent="#0A84FF">Plan</Pill>
@@ -359,22 +362,24 @@ function DreamPreview({ accent }: { accent: string }) {
 	return (
 		<View className="flex-1 justify-between">
 			<View className="gap-3">
-				<View
-					className="max-w-[84%] rounded-[24px] rounded-bl-md px-4 py-3"
+				<Surface
+					className="max-w-[84%] rounded-3xl rounded-bl-md px-4 py-3"
 					style={{ backgroundColor: "#F4F4F5" }}
+					variant="secondary"
 				>
-					<Text className="font-medium text-foreground text-sm">
+					<Text type="body-sm" weight="medium">
 						I want a relaxing beach trip around ₱30k.
 					</Text>
-				</View>
-				<View
-					className="ml-auto max-w-[86%] rounded-[24px] rounded-br-md px-4 py-3"
+				</Surface>
+				<Surface
+					className="ml-auto max-w-[86%] rounded-3xl rounded-br-md px-4 py-3"
 					style={{ backgroundColor: `${accent}18` }}
+					variant="tertiary"
 				>
-					<Text className="font-semibold text-foreground text-sm">
+					<Text type="body-sm" weight="semibold">
 						Got it. Quiet islands, food spots, or activities?
 					</Text>
-				</View>
+				</Surface>
 				<View className="flex-row flex-wrap gap-2">
 					{["Quiet beach", "Food trip", "Adventure", "Family friendly"].map(
 						(item) => (
@@ -385,18 +390,21 @@ function DreamPreview({ accent }: { accent: string }) {
 					)}
 				</View>
 			</View>
-			<View
+			<Surface
 				className="flex-row items-center gap-3 rounded-[26px] border px-4 py-3"
 				style={{ backgroundColor: "#FAFAFA", borderColor: "#ECEEF2" }}
+				variant="secondary"
 			>
-				<Text className="flex-1 text-muted text-sm">Ask Viya anything...</Text>
+				<Text className="flex-1" color="muted" type="body-sm">
+					Ask Viya anything...
+				</Text>
 				<View
 					className="h-9 w-9 items-center justify-center rounded-full"
 					style={{ backgroundColor: accent }}
 				>
 					<Ionicons color="#FFFFFF" name="arrow-up" size={18} />
 				</View>
-			</View>
+			</Surface>
 		</View>
 	);
 }
@@ -404,23 +412,25 @@ function DreamPreview({ accent }: { accent: string }) {
 function PlanPreview({ accent }: { accent: string }) {
 	return (
 		<View className="flex-1 gap-3">
-			<View
+			<Surface
 				className="rounded-[30px] p-4"
 				style={{ backgroundColor: `${accent}10` }}
+				variant="secondary"
 			>
-				<Text className="font-semibold text-foreground text-xl">
-					Palawan Escape
-				</Text>
+				<Text.Heading type="h4" weight="semibold">
+					Island Escape
+				</Text.Heading>
 				<View className="mt-3 flex-row gap-2">
 					<Pill accent={accent}>June 10-15</Pill>
 					<Pill accent={accent}>Relaxed beach</Pill>
 				</View>
-			</View>
-			<View
+			</Surface>
+			<Surface
 				className="rounded-[26px] border p-4"
 				style={{ borderColor: "#ECEEF2" }}
+				variant="secondary"
 			>
-				<Text className="font-semibold text-foreground text-sm">
+				<Text type="body-sm" weight="semibold">
 					Budget allocation
 				</Text>
 				<View className="mt-3 gap-3">
@@ -429,13 +439,13 @@ function PlanPreview({ accent }: { accent: string }) {
 					<ProgressBar accent="#E97816" value={18} />
 					<ProgressBar accent="#DB2777" value={16} />
 				</View>
-			</View>
+			</Surface>
 			<View className="gap-2">
 				{["Pick hotel area", "Confirm island tour", "Add airport transfer"].map(
 					(action) => (
 						<View className="flex-row items-center gap-2" key={action}>
 							<Ionicons color={accent} name="checkmark-circle" size={18} />
-							<Text className="font-medium text-foreground text-sm">
+							<Text type="body-sm" weight="medium">
 								{action}
 							</Text>
 						</View>
@@ -473,15 +483,16 @@ function BookPreview({ accent }: { accent: string }) {
 	return (
 		<View className="flex-1 justify-between">
 			<View>
-				<Text className="font-semibold text-foreground text-xl">
+				<Text.Heading type="h4" weight="semibold">
 					Booking Targets
-				</Text>
+				</Text.Heading>
 				<View className="mt-3 gap-2">
 					{targets.map((target) => (
-						<View
+						<Surface
 							className="flex-row items-center justify-between rounded-2xl border px-3 py-2.5"
 							key={target.label}
 							style={{ borderColor: "#ECEEF2" }}
+							variant="secondary"
 						>
 							<View className="flex-row items-center gap-2">
 								<Ionicons
@@ -489,17 +500,18 @@ function BookPreview({ accent }: { accent: string }) {
 									name="checkmark-circle"
 									size={18}
 								/>
-								<Text className="font-semibold text-foreground text-sm">
+								<Text type="body-sm" weight="semibold">
 									{target.label}
 								</Text>
 							</View>
 							<Text
-								className="font-semibold text-xs"
 								style={{ color: target.tone }}
+								type="body-xs"
+								weight="semibold"
 							>
 								{target.status}
 							</Text>
-						</View>
+						</Surface>
 					))}
 				</View>
 			</View>
@@ -509,8 +521,10 @@ function BookPreview({ accent }: { accent: string }) {
 					style={{ backgroundColor: accent }}
 				>
 					<Text
-						className="text-center font-semibold text-xs"
+						align="center"
 						style={{ color: "#FFFFFF" }}
+						type="body-xs"
+						weight="semibold"
 					>
 						Open booking app
 					</Text>
@@ -519,7 +533,7 @@ function BookPreview({ accent }: { accent: string }) {
 					className="flex-1 rounded-2xl px-3 py-3"
 					style={{ backgroundColor: "#F4F4F5" }}
 				>
-					<Text className="text-center font-semibold text-foreground text-xs">
+					<Text align="center" type="body-xs" weight="semibold">
 						Save target
 					</Text>
 				</View>
@@ -538,37 +552,40 @@ function SyncPreview({ accent }: { accent: string }) {
 
 	return (
 		<View className="flex-1 gap-3">
-			<View
+			<Surface
 				className="items-center rounded-[28px] border border-dashed px-4 py-5"
 				style={{ borderColor: `${accent}66` }}
+				variant="secondary"
 			>
 				<Ionicons color={accent} name="cloud-upload" size={28} />
-				<Text className="mt-2 font-semibold text-foreground">
+				<Text className="mt-2" weight="semibold">
 					Drop confirmations here
 				</Text>
-			</View>
+			</Surface>
 			<View className="flex-row flex-wrap gap-2">
 				{documents.map((document) => (
-					<View
+					<Surface
 						className="w-[48%] rounded-2xl p-3"
 						key={document.label}
 						style={{ backgroundColor: "#F7F7F8" }}
+						variant="secondary"
 					>
 						<Ionicons color={accent} name={document.icon} size={16} />
-						<Text className="mt-2 font-semibold text-foreground text-xs">
+						<Text className="mt-2" type="body-xs" weight="semibold">
 							{document.label}
 						</Text>
-					</View>
+					</Surface>
 				))}
 			</View>
-			<View
+			<Surface
 				className="rounded-2xl px-4 py-3"
 				style={{ backgroundColor: "#111827" }}
+				variant="tertiary"
 			>
-				<Text className="font-semibold text-xs" style={{ color: "#FFFFFF" }}>
+				<Text style={{ color: "#FFFFFF" }} type="body-xs" weight="semibold">
 					Review: check-in, booking code, amount
 				</Text>
-			</View>
+			</Surface>
 		</View>
 	);
 }
@@ -576,13 +593,18 @@ function SyncPreview({ accent }: { accent: string }) {
 function PreparePreview({ accent }: { accent: string }) {
 	return (
 		<View className="flex-1 gap-3">
-			<View
+			<Surface
 				className="flex-row items-center justify-between rounded-[30px] p-4"
 				style={{ backgroundColor: "#F7F7F8" }}
+				variant="secondary"
 			>
 				<View>
-					<Text className="font-semibold text-5xl text-foreground">82%</Text>
-					<Text className="font-semibold text-muted text-xs">Almost ready</Text>
+					<Text.Heading className="text-5xl" type="h1" weight="semibold">
+						82%
+					</Text.Heading>
+					<Text color="muted" type="body-xs" weight="semibold">
+						Almost ready
+					</Text>
 				</View>
 				<View
 					className="h-24 w-24 items-center justify-center rounded-full"
@@ -590,7 +612,7 @@ function PreparePreview({ accent }: { accent: string }) {
 				>
 					<Ionicons color={accent} name="shield-checkmark" size={42} />
 				</View>
-			</View>
+			</Surface>
 			<View className="gap-2">
 				{[
 					"Add hotel confirmation",
@@ -599,7 +621,9 @@ function PreparePreview({ accent }: { accent: string }) {
 				].map((fix) => (
 					<View className="flex-row items-center gap-2" key={fix}>
 						<Ionicons color={accent} name="radio-button-on" size={15} />
-						<Text className="font-medium text-foreground text-sm">{fix}</Text>
+						<Text type="body-sm" weight="medium">
+							{fix}
+						</Text>
 					</View>
 				))}
 			</View>
@@ -608,15 +632,17 @@ function PreparePreview({ accent }: { accent: string }) {
 				style={{ backgroundColor: accent }}
 			>
 				<Text
-					className="text-center font-semibold text-sm"
+					align="center"
 					style={{ color: "#FFFFFF" }}
+					type="body-sm"
+					weight="semibold"
 				>
 					Fix my readiness
 				</Text>
 			</View>
 			<View className="flex-row justify-between">
 				{["Bookings", "Docs", "Budget", "Pack", "Safety"].map((item) => (
-					<Text className="font-semibold text-muted text-xs" key={item}>
+					<Text color="muted" key={item} type="body-xs" weight="semibold">
 						{item}
 					</Text>
 				))}
@@ -628,51 +654,61 @@ function PreparePreview({ accent }: { accent: string }) {
 function TravelPreview({ accent }: { accent: string }) {
 	return (
 		<View className="flex-1 gap-3">
-			<Text className="font-semibold text-foreground text-xl">Travel Mode</Text>
-			<View
+			<Text.Heading type="h4" weight="semibold">
+				Travel Mode
+			</Text.Heading>
+			<Surface
 				className="rounded-[28px] p-4"
 				style={{ backgroundColor: "#111827" }}
+				variant="tertiary"
 			>
-				<Text className="font-semibold text-xs" style={{ color: "#FFFFFF" }}>
+				<Text style={{ color: "#FFFFFF" }} type="body-xs" weight="semibold">
 					NOW
 				</Text>
 				<Text
-					className="mt-2 font-semibold text-lg"
+					className="mt-2"
 					style={{ color: "#FFFFFF" }}
+					type="h5"
+					weight="semibold"
 				>
 					Head to Puerto Princesa airport transfer
 				</Text>
-			</View>
+			</Surface>
 			<View className="flex-row gap-2">
-				<View
+				<Surface
 					className="flex-1 rounded-2xl p-3"
 					style={{ backgroundColor: "#F7F7F8" }}
+					variant="secondary"
 				>
-					<Text className="font-semibold text-foreground text-xs">NEXT</Text>
-					<Text className="mt-1 text-muted text-xs">
+					<Text type="body-xs" weight="semibold">
+						NEXT
+					</Text>
+					<Text className="mt-1" color="muted" type="body-xs">
 						Hotel check-in at 3:00 PM
 					</Text>
-				</View>
-				<View
+				</Surface>
+				<Surface
 					className="flex-1 rounded-2xl p-3"
 					style={{ backgroundColor: `${accent}18` }}
+					variant="tertiary"
 				>
-					<Text className="font-semibold text-foreground text-xs">
+					<Text type="body-xs" weight="semibold">
 						WATCH OUT
 					</Text>
-					<Text className="mt-1 text-muted text-xs">
+					<Text className="mt-1" color="muted" type="body-xs">
 						Rain later. Keep tour flexible.
 					</Text>
-				</View>
+				</Surface>
 			</View>
-			<View
+			<Surface
 				className="flex-row justify-around rounded-[26px] border p-3"
 				style={{ borderColor: "#ECEEF2" }}
+				variant="secondary"
 			>
 				<MiniAction accent={accent} icon="documents" label="Docs" />
 				<MiniAction accent={accent} icon="sparkles" label="Ask" />
 				<MiniAction accent={accent} icon="map" label="Itinerary" />
-			</View>
+			</Surface>
 		</View>
 	);
 }
@@ -680,49 +716,59 @@ function TravelPreview({ accent }: { accent: string }) {
 function TrackPreview({ accent }: { accent: string }) {
 	return (
 		<View className="flex-1 justify-between">
-			<View
+			<Surface
 				className="rounded-[30px] p-4"
 				style={{ backgroundColor: "#F7F7F8" }}
+				variant="secondary"
 			>
 				<View className="flex-row items-center justify-between">
 					<View>
-						<Text className="font-semibold text-foreground text-xl">
+						<Text.Heading type="h4" weight="semibold">
 							₱30,000
+						</Text.Heading>
+						<Text color="muted" type="body-xs">
+							planned budget
 						</Text>
-						<Text className="text-muted text-xs">planned budget</Text>
 					</View>
 					<View
 						className="h-20 w-20 items-center justify-center rounded-full"
 						style={{ borderColor: `${accent}66`, borderWidth: 10 }}
 					>
-						<Text className="font-semibold text-foreground text-xs">61%</Text>
+						<Text type="body-xs" weight="semibold">
+							61%
+						</Text>
 					</View>
 				</View>
 				<View className="mt-4 gap-3">
 					<ProgressBar accent={accent} value={61} />
 					<View className="flex-row justify-between">
-						<Text className="font-medium text-muted text-xs">
+						<Text color="muted" type="body-xs" weight="medium">
 							Spent ₱18,400
 						</Text>
-						<Text className="font-medium text-muted text-xs">Left ₱11,600</Text>
+						<Text color="muted" type="body-xs" weight="medium">
+							Left ₱11,600
+						</Text>
 					</View>
 				</View>
-			</View>
-			<View
-				className="rounded-[24px] border px-4 py-3"
+			</Surface>
+			<Surface
+				className="rounded-3xl border px-4 py-3"
 				style={{ borderColor: "#ECEEF2" }}
+				variant="secondary"
 			>
-				<Text className="font-semibold text-foreground text-sm">
+				<Text type="body-sm" weight="semibold">
 					You're spending faster on food, but still safe.
 				</Text>
-			</View>
+			</Surface>
 			<View
 				className="rounded-2xl px-4 py-3"
 				style={{ backgroundColor: accent }}
 			>
 				<Text
-					className="text-center font-semibold text-sm"
+					align="center"
 					style={{ color: "#FFFFFF" }}
+					type="body-sm"
+					weight="semibold"
 				>
 					Add expense
 				</Text>
@@ -757,28 +803,32 @@ function CapturePreview({ accent }: { accent: string }) {
 							style={{ backgroundColor: "#ECEEF2" }}
 						/>
 					</View>
-					<View
-						className="flex-1 rounded-[24px] p-4"
+					<Surface
+						className="flex-1 rounded-3xl p-4"
 						style={{ backgroundColor: "#F7F7F8" }}
+						variant="secondary"
 					>
 						<View className="flex-row items-center justify-between">
-							<Text className="font-semibold text-foreground">
-								{item.title}
+							<Text weight="semibold">{item.title}</Text>
+							<Text color="muted" type="body-xs">
+								{item.meta}
 							</Text>
-							<Text className="text-muted text-xs">{item.meta}</Text>
 						</View>
-						<Text className="mt-2 text-muted text-sm">{item.body}</Text>
-					</View>
+						<Text.Paragraph className="mt-2" color="muted" type="body-sm">
+							{item.body}
+						</Text.Paragraph>
+					</Surface>
 				</View>
 			))}
-			<View
-				className="rounded-[24px] px-4 py-3"
+			<Surface
+				className="rounded-3xl px-4 py-3"
 				style={{ backgroundColor: `${accent}18` }}
+				variant="tertiary"
 			>
-				<Text className="font-semibold text-foreground text-sm">
+				<Text type="body-sm" weight="semibold">
 					Want to save this as a travel tip?
 				</Text>
-			</View>
+			</Surface>
 		</View>
 	);
 }
@@ -786,52 +836,65 @@ function CapturePreview({ accent }: { accent: string }) {
 function WrapPreview({ accent }: { accent: string }) {
 	return (
 		<View className="flex-1 gap-3">
-			<View
-				className="flex-1 justify-between rounded-[32px] p-5"
+			<Surface
+				className="flex-1 justify-between rounded-4xl p-5"
 				style={{ backgroundColor: accent }}
+				variant="tertiary"
 			>
-				<Text className="font-semibold text-xs" style={{ color: "#FFFFFF" }}>
-					YOUR PALAWAN WRAP
+				<Text style={{ color: "#FFFFFF" }} type="body-xs" weight="semibold">
+					YOUR TRIP STORY
 				</Text>
 				<View>
-					<Text className="font-semibold text-4xl" style={{ color: "#FFFFFF" }}>
+					<Text.Heading
+						className="text-4xl"
+						style={{ color: "#FFFFFF" }}
+						type="h1"
+						weight="semibold"
+					>
 						5 days
-					</Text>
-					<Text className="mt-1 text-sm" style={{ color: "#FFFFFF" }}>
+					</Text.Heading>
+					<Text.Paragraph
+						className="mt-1"
+						style={{ color: "#FFFFFF" }}
+						type="body-sm"
+					>
 						Places, spend, favorites, and best discovery.
-					</Text>
+					</Text.Paragraph>
 				</View>
-			</View>
+			</Surface>
 			<View className="flex-row gap-2">
 				{["7 places", "₱28.4k", "Food lover"].map((item) => (
-					<View
+					<Surface
 						className="flex-1 rounded-2xl px-2 py-3"
 						key={item}
 						style={{ backgroundColor: "#F7F7F8" }}
+						variant="secondary"
 					>
-						<Text className="text-center font-semibold text-foreground text-xs">
+						<Text align="center" type="body-xs" weight="semibold">
 							{item}
 						</Text>
-					</View>
+					</Surface>
 				))}
 			</View>
 			<View className="flex-row gap-2">
-				<View
+				<Surface
 					className="flex-1 rounded-2xl border px-3 py-3"
 					style={{ borderColor: "#ECEEF2" }}
+					variant="secondary"
 				>
-					<Text className="text-center font-semibold text-foreground text-xs">
+					<Text align="center" type="body-xs" weight="semibold">
 						Share card
 					</Text>
-				</View>
-				<View
+				</Surface>
+				<Surface
 					className="flex-1 rounded-2xl border px-3 py-3"
 					style={{ borderColor: "#ECEEF2" }}
+					variant="secondary"
 				>
-					<Text className="text-center font-semibold text-foreground text-xs">
+					<Text align="center" type="body-xs" weight="semibold">
 						Copy guide
 					</Text>
-				</View>
+				</Surface>
 			</View>
 		</View>
 	);
@@ -885,9 +948,14 @@ function SlideView({ isCompact, slide, width }: SlideViewProps) {
 				{slide.id === "welcome" ? (
 					<View className="items-center gap-4">
 						<WelcomeGraphic />
-						<Text className="max-w-[320px] text-center text-muted text-sm leading-5">
+						<Text.Paragraph
+							align="center"
+							className="max-w-[320px] leading-5"
+							color="muted"
+							type="body-sm"
+						>
 							{slide.subtitle}
-						</Text>
+						</Text.Paragraph>
 					</View>
 				) : (
 					<>
@@ -895,18 +963,25 @@ function SlideView({ isCompact, slide, width }: SlideViewProps) {
 							<PreviewContent slide={slide} />
 						</PreviewFrame>
 						<View className="items-center gap-2 px-2">
-							<Text
+							<Text.Heading
 								className={
 									isCompact
-										? "text-center font-semibold text-foreground text-xl leading-6"
-										: "text-center font-semibold text-3xl text-foreground leading-9"
+										? "text-center leading-6"
+										: "text-center text-3xl leading-9"
 								}
+								type={isCompact ? "h4" : "h2"}
+								weight="semibold"
 							>
 								{slide.title}
-							</Text>
-							<Text className="max-w-[340px] text-center text-muted text-sm leading-5">
+							</Text.Heading>
+							<Text.Paragraph
+								align="center"
+								className="max-w-[340px] leading-5"
+								color="muted"
+								type="body-sm"
+							>
 								{slide.subtitle}
-							</Text>
+							</Text.Paragraph>
 						</View>
 					</>
 				)}
@@ -1080,7 +1155,9 @@ export default function AuthOnboardingScreen() {
 						onPress={handleSkipPress}
 						style={{ top: insets.top + 8 }}
 					>
-						<Text className="font-semibold text-muted text-sm">Skip</Text>
+						<Text color="muted" type="body-sm" weight="semibold">
+							Skip
+						</Text>
 					</Pressable>
 				) : null}
 
