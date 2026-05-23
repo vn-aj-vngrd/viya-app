@@ -5,7 +5,9 @@ import { Pressable, View } from "react-native";
 const ACTIVE_TAB_COLOR = "#0A84FF";
 const INACTIVE_TAB_COLOR = "#71717A";
 const AI_TAB_NAME = "viya";
-const FLOATING_TAB_WIDTH = 232;
+const TAB_SLOT_WIDTH = 52;
+const TAB_BAR_HORIZONTAL_PADDING = 16;
+const HIDDEN_TAB_NAMES = new Set(["moments", "profile", "vault"]);
 
 function emitTabPress({
 	isFocused,
@@ -49,10 +51,14 @@ export function FloatingTabBar({
 	insets,
 }: BottomTabBarProps) {
 	const focusedRoute = state.routes[state.index];
-	const mainRoutes = state.routes.filter((route) => route.name !== AI_TAB_NAME);
+	const mainRoutes = state.routes.filter(
+		(route) => route.name !== AI_TAB_NAME && !HIDDEN_TAB_NAMES.has(route.name)
+	);
 	const aiRoute = state.routes.find((route) => route.name === AI_TAB_NAME);
 	const aiDescriptor = aiRoute ? descriptors[aiRoute.key] : null;
 	const isAiFocused = focusedRoute.name === AI_TAB_NAME;
+	const floatingTabWidth =
+		mainRoutes.length * TAB_SLOT_WIDTH + TAB_BAR_HORIZONTAL_PADDING;
 
 	if (isAiFocused) {
 		return null;
@@ -76,7 +82,7 @@ export function FloatingTabBar({
 				className="flex-row items-center rounded-full border border-border bg-surface px-2 py-2"
 				style={{
 					boxShadow: "0 12px 30px rgba(17, 24, 39, 0.14)",
-					width: FLOATING_TAB_WIDTH,
+					width: floatingTabWidth,
 				}}
 			>
 				{mainRoutes.map((route) => {

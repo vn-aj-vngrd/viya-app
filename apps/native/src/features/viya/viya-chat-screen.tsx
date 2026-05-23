@@ -30,7 +30,7 @@ import { ViyaMark } from "@/src/components/viya-mark";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 
 type SuggestionIconName = ComponentProps<typeof Ionicons>["name"];
-type ReturnTabName = "index" | "moments" | "profile" | "trips";
+type ReturnTabName = "index" | "trips";
 
 interface PromptSuggestion {
 	accent: string;
@@ -42,8 +42,6 @@ interface PromptSuggestion {
 
 const returnTabRoutes = {
 	index: VIYA_ROUTES.home,
-	moments: VIYA_ROUTES.moments,
-	profile: VIYA_ROUTES.profile,
 	trips: VIYA_ROUTES.trips,
 } as const satisfies Record<ReturnTabName, Href>;
 

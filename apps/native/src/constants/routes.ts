@@ -4,8 +4,6 @@ const CURRENT_TRIP_ID = "current";
 
 export const VIYA_ROUTES = {
 	home: "/(app)/(tabs)",
-	moments: "/(app)/(tabs)/moments",
-	profile: "/(app)/(tabs)/profile",
 	trips: "/(app)/(tabs)/trips",
 	viya: "/(app)/(tabs)/viya",
 	tripDashboard: {

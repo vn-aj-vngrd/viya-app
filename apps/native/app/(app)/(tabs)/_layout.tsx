@@ -58,32 +58,22 @@ export default function TabLayout() {
 				}}
 			/>
 			<Tabs.Screen
-				name="moments"
-				options={{
-					title: "Moments",
-					tabBarIcon: ({ color, focused }) => (
-						<FloatingTabIcon color={color} focused={focused} name="image" />
-					),
-				}}
-			/>
-			<Tabs.Screen
-				name="profile"
-				options={{
-					title: "Profile",
-					tabBarIcon: ({ color, focused }) => (
-						<FloatingTabIcon color={color} focused={focused} name="user" />
-					),
-				}}
-			/>
-			<Tabs.Screen
 				name="viya"
 				options={{
-					title: "Viya",
+					title: "Ask Viya",
 					tabBarIcon: ({ color, focused }) => (
 						<FloatingAiIcon color={color} focused={focused} />
 					),
 				}}
 			/>
+			<Tabs.Screen
+				name="moments"
+				options={{
+					href: null,
+				}}
+			/>
+			<Tabs.Screen name="profile" options={{ href: null }} />
+			<Tabs.Screen name="vault" options={{ href: null }} />
 		</Tabs>
 	);
 }

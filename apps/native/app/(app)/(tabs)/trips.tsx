@@ -4,6 +4,7 @@ import { Text } from "heroui-native";
 import { View } from "react-native";
 
 import { Container } from "@/components/container";
+import { AccountAvatarButton } from "@/src/components/account/account-avatar-button";
 import { EmptyState } from "@/src/components/empty-state";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 
@@ -12,11 +13,17 @@ export default function TripsScreen() {
 
 	return (
 		<Container className="px-4 pb-28">
-			<View className="gap-4 py-4">
-				<View>
+			<View className="gap-4 py-4" style={{ alignSelf: "stretch" }}>
+				<View
+					className="flex-row items-center gap-4"
+					style={{ alignSelf: "stretch" }}
+				>
 					<Text.Heading type="h2" weight="semibold">
 						Trips
 					</Text.Heading>
+					<View style={{ marginLeft: "auto" }}>
+						<AccountAvatarButton size={44} />
+					</View>
 				</View>
 
 				<EmptyState
