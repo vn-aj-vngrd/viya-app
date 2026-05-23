@@ -1,6 +1,8 @@
 import { Text } from "heroui-native";
 import { View } from "react-native";
 
+import { ViyaMark } from "@/src/components/viya-mark";
+
 interface AuthBrandProps {
 	align?: "center" | "left";
 	subtitle?: string;
@@ -11,6 +13,7 @@ export function AuthBrand({ align = "left", subtitle }: AuthBrandProps) {
 
 	return (
 		<View className={isCentered ? "items-center gap-2" : "items-start gap-2"}>
+			<ViyaMark size={isCentered ? 68 : 48} />
 			<Text.Heading className="text-5xl" type="h1" weight="semibold">
 				Viya
 			</Text.Heading>

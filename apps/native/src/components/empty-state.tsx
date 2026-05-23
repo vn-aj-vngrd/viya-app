@@ -16,6 +16,7 @@ interface EmptyStateProps {
 	description: string;
 	icon?: EmptyStateIconName;
 	title: string;
+	visual?: ReactNode;
 }
 
 function EmptyStateIcon({ name }: { name: EmptyStateIconName }) {
@@ -32,12 +33,13 @@ export function EmptyState({
 	description,
 	icon = "search",
 	title,
+	visual,
 }: EmptyStateProps) {
 	return (
 		<View
 			className={cn("flex-1 items-center justify-center px-8 py-12", className)}
 		>
-			<EmptyStateIcon name={icon} />
+			{visual ?? <EmptyStateIcon name={icon} />}
 
 			<Text.Heading align="center" className="mt-3" type="h5" weight="semibold">
 				{title}

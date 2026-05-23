@@ -1,6 +1,6 @@
 import { useAuth } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
-import { type Href, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { Spinner, Surface, Text } from "heroui-native";
 import type { ComponentProps, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -16,7 +16,9 @@ import Animated, { FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Container } from "@/components/container";
+import { ViyaMark } from "@/src/components/viya-mark";
 import { VIYA_ROUTES } from "@/src/constants/routes";
+import { AuthSignInSheet } from "@/src/features/auth/auth-sign-in-sheet";
 import {
 	getCompletedOnboarding,
 	setCompletedOnboarding,
@@ -44,9 +46,6 @@ interface OnboardingSlide {
 	subtitle: string;
 	title: string;
 }
-
-const SIGN_IN_ROUTE = "/(auth)/sign-in" as const;
-const SIGN_UP_ROUTE = "/(auth)/sign-up" as const;
 
 const ONBOARDING_SLIDES = [
 	{
@@ -321,7 +320,7 @@ function WelcomeGraphic() {
 					className="absolute bottom-2 left-8 h-20 w-20 items-center justify-center rounded-[28px]"
 					style={{ backgroundColor: "#F5E8FF" }}
 				>
-					<Ionicons color="#9333EA" name="sparkles" size={28} />
+					<ViyaMark size={58} />
 				</View>
 				<View
 					className="absolute top-2 right-7 h-24 w-24 items-center justify-center rounded-full"
@@ -1024,6 +1023,7 @@ export default function AuthOnboardingScreen() {
 	const listRef = useRef<FlatList<OnboardingSlide>>(null);
 	const [activeIndex, setActiveIndex] = useState(WELCOME_INDEX);
 	const [isCheckingCompletion, setIsCheckingCompletion] = useState(true);
+	const [isSignInSheetOpen, setIsSignInSheetOpen] = useState(false);
 	const isCompactHeight = height < 740;
 	const isWelcome = activeIndex === WELCOME_INDEX;
 	const isFinal = activeIndex === FINAL_INDEX;
@@ -1048,7 +1048,8 @@ export default function AuthOnboardingScreen() {
 			}
 
 			if (hasCompleted) {
-				router.replace(SIGN_IN_ROUTE);
+				setIsSignInSheetOpen(true);
+				setIsCheckingCompletion(false);
 				return;
 			}
 
@@ -1060,7 +1061,7 @@ export default function AuthOnboardingScreen() {
 		return () => {
 			isMounted = false;
 		};
-	}, [router]);
+	}, []);
 
 	const goToIndex = useCallback(
 		(nextIndex: number) => {
@@ -1073,14 +1074,6 @@ export default function AuthOnboardingScreen() {
 		[width]
 	);
 
-	const completeAndNavigate = useCallback(
-		async (route: Href) => {
-			await setCompletedOnboarding();
-			router.push(route);
-		},
-		[router]
-	);
-
 	const handlePrimaryAction = useCallback(async () => {
 		if (isWelcome) {
 			goToIndex(FIRST_LIFECYCLE_INDEX);
@@ -1088,27 +1081,34 @@ export default function AuthOnboardingScreen() {
 		}
 
 		if (isFinal) {
-			await completeAndNavigate(isSignedIn ? VIYA_ROUTES.viya : SIGN_UP_ROUTE);
+			await setCompletedOnboarding();
+
+			if (isSignedIn) {
+				router.push(VIYA_ROUTES.viya);
+				return;
+			}
+
+			setIsSignInSheetOpen(true);
 			return;
 		}
 
 		goToIndex(activeIndex + 1);
-	}, [
-		activeIndex,
-		completeAndNavigate,
-		goToIndex,
-		isFinal,
-		isSignedIn,
-		isWelcome,
-	]);
+	}, [activeIndex, goToIndex, isFinal, isSignedIn, isWelcome, router]);
 
 	const handleSignInPress = useCallback(() => {
-		router.push(SIGN_IN_ROUTE);
-	}, [router]);
+		setIsSignInSheetOpen(true);
+	}, []);
 
 	const handleSkipPress = useCallback(async () => {
-		await completeAndNavigate(isSignedIn ? VIYA_ROUTES.home : SIGN_IN_ROUTE);
-	}, [completeAndNavigate, isSignedIn]);
+		await setCompletedOnboarding();
+
+		if (isSignedIn) {
+			router.push(VIYA_ROUTES.home);
+			return;
+		}
+
+		setIsSignInSheetOpen(true);
+	}, [isSignedIn, router]);
 
 	const handleScrollEnd = useCallback(
 		(event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -1189,6 +1189,10 @@ export default function AuthOnboardingScreen() {
 					) : null}
 				</View>
 			</View>
+			<AuthSignInSheet
+				isOpen={isSignInSheetOpen}
+				onOpenChange={setIsSignInSheetOpen}
+			/>
 		</Container>
 	);
 }

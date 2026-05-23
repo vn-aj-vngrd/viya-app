@@ -6,6 +6,7 @@ import type { ComponentProps } from "react";
 import { Image, Pressable, View } from "react-native";
 
 import { Container } from "@/components/container";
+import { ViyaMark } from "@/src/components/viya-mark";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
@@ -133,8 +134,8 @@ export default function HomeScreen() {
 									the first plan.
 								</Text.Paragraph>
 							</View>
-							<View className="h-9 w-9 items-center justify-center rounded-full border border-border bg-surface-secondary">
-								<Ionicons color="#0A84FF" name="sparkles" size={16} />
+							<View className="h-9 w-9 items-center justify-center overflow-hidden rounded-xl">
+								<ViyaMark size={36} />
 							</View>
 						</View>
 

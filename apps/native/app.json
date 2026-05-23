@@ -3,11 +3,25 @@
     "scheme": "viya-app",
     "userInterfaceStyle": "automatic",
     "orientation": "default",
+    "icon": "./assets/images/icon.png",
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "favicon": "./assets/images/favicon.png"
     },
-    "name": "viya-app",
+    "name": "Viya",
     "slug": "viya-app",
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F7F7F8"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundColor": "#0A84FF",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      }
+    },
     "plugins": ["expo-font"],
     "experiments": {
       "typedRoutes": true,

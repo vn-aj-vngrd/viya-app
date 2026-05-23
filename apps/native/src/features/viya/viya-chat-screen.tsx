@@ -25,6 +25,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Container } from "@/components/container";
 import { EmptyState } from "@/src/components/empty-state";
+import { ViyaMark } from "@/src/components/viya-mark";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 
 type SuggestionIconName = ComponentProps<typeof Ionicons>["name"];
@@ -94,15 +95,8 @@ const assistantBubbleStyle = {
 
 function ViyaAvatar() {
 	return (
-		<View className="mt-1 h-8 w-8 items-center justify-center rounded-full border border-border bg-surface">
-			<View className="absolute h-5 w-5 rounded-full bg-[#DDF0FF]" />
-			<View className="h-4 w-4 -translate-x-1 translate-y-1 rounded-full bg-[#CFF7E6]" />
-			<Ionicons
-				color="#0A84FF"
-				name="sparkles-outline"
-				size={14}
-				style={{ position: "absolute" }}
-			/>
+		<View className="mt-1 h-8 w-8 items-center justify-center overflow-hidden rounded-xl">
+			<ViyaMark size={32} />
 		</View>
 	);
 }
@@ -255,8 +249,8 @@ export function ViyaChatScreen() {
 								<EmptyState
 									className="flex-none py-4"
 									description="Ask Viya to dream, plan, prepare, track, or turn your trip into a story."
-									icon="sparkles-outline"
 									title="Where should we go next?"
+									visual={<ViyaMark size={56} />}
 								/>
 
 								<View className="gap-3">
