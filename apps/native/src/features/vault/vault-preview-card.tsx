@@ -1,0 +1,34 @@
+import { Ionicons } from "@expo/vector-icons";
+import { Surface } from "heroui-native";
+import { Text, View } from "react-native";
+
+interface VaultPreviewCardProps {
+	createdAt: number;
+	fileName: string;
+	kind: string;
+	title: string;
+}
+
+export function VaultPreviewCard({
+	createdAt,
+	fileName,
+	kind,
+	title,
+}: VaultPreviewCardProps) {
+	return (
+		<Surface className="rounded-lg p-4" variant="secondary">
+			<View className="flex-row items-center gap-3">
+				<View className="h-11 w-11 items-center justify-center rounded-lg bg-primary/15">
+					<Ionicons color="#2563eb" name="document-attach" size={22} />
+				</View>
+				<View className="flex-1">
+					<Text className="font-semibold text-foreground">{title}</Text>
+					<Text className="mt-1 text-muted text-xs">{fileName}</Text>
+					<Text className="mt-1 text-muted text-xs">
+						{kind} · {new Date(createdAt).toLocaleDateString()}
+					</Text>
+				</View>
+			</View>
+		</Surface>
+	);
+}

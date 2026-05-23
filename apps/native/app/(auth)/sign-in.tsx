@@ -1,248 +1,194 @@
 import { useSignIn } from "@clerk/expo";
-import { type Href, Link, useRouter } from "expo-router";
+import { Link, useRouter } from "expo-router";
+import { Button, Input, TextField } from "heroui-native";
 import React from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Text, View } from "react-native";
+import {
+	getAuthErrorMessage,
+	pushDecoratedUrl,
+} from "@/src/features/auth/auth-routing";
+import {
+	AuthScreenShell,
+	AuthStatusMessage,
+} from "@/src/features/auth/auth-screen-shell";
+import { AuthSocialButtons } from "@/src/features/auth/auth-social-buttons";
 
-function pushDecoratedUrl(
-  router: ReturnType<typeof useRouter>,
-  decorateUrl: (url: string) => string,
-  href: string,
-) {
-  const url = decorateUrl(href);
-  const nextHref = url.startsWith("http") ? new URL(url).pathname : url;
-  router.push(nextHref as Href);
+export default function SignInScreen() {
+	const { errors, fetchStatus, signIn } = useSignIn();
+	const router = useRouter();
+	const [emailAddress, setEmailAddress] = React.useState("");
+	const [password, setPassword] = React.useState("");
+	const [code, setCode] = React.useState("");
+	const [statusMessage, setStatusMessage] = React.useState<string | null>(null);
+
+	const emailCodeFactor = signIn.supportedSecondFactors.find(
+		(factor) => factor.strategy === "email_code"
+	);
+	const requiresEmailCode =
+		signIn.status === "needs_client_trust" ||
+		(signIn.status === "needs_second_factor" && !!emailCodeFactor);
+	const isFetching = fetchStatus === "fetching";
+
+	const finalizeSignIn = async () => {
+		await signIn.finalize({
+			navigate: ({ session, decorateUrl }) => {
+				if (!session?.currentTask) {
+					pushDecoratedUrl(router, decorateUrl, "/(drawer)/(tabs)");
+				}
+			},
+		});
+	};
+
+	const handleSubmit = async () => {
+		setStatusMessage(null);
+
+		const { error } = await signIn.password({
+			emailAddress,
+			password,
+		});
+
+		if (error) {
+			setStatusMessage(
+				getAuthErrorMessage(error, "Unable to sign in. Please try again.")
+			);
+			return;
+		}
+
+		if (signIn.status === "complete") {
+			await finalizeSignIn();
+			return;
+		}
+
+		if (
+			(signIn.status === "needs_second_factor" ||
+				signIn.status === "needs_client_trust") &&
+			emailCodeFactor
+		) {
+			await signIn.mfa.sendEmailCode();
+			setStatusMessage(
+				`We sent a verification code to ${emailCodeFactor.safeIdentifier}.`
+			);
+			return;
+		}
+
+		setStatusMessage("Sign-in could not be completed. Try again in a moment.");
+	};
+
+	const handleVerify = async () => {
+		setStatusMessage(null);
+
+		await signIn.mfa.verifyEmailCode({ code });
+
+		if (signIn.status === "complete") {
+			await finalizeSignIn();
+			return;
+		}
+
+		setStatusMessage("That code did not complete sign-in. Please try again.");
+	};
+
+	if (requiresEmailCode) {
+		return (
+			<AuthScreenShell
+				subtitle="Confirm it is really you before Viya opens your trips and saved travel files."
+				title="Verify your account"
+			>
+				<AuthStatusMessage message={statusMessage} />
+				<TextField>
+					<Input
+						keyboardType="numeric"
+						onChangeText={setCode}
+						placeholder="Verification code"
+						style={{
+							backgroundColor: "#FFFFFF",
+							borderColor: "#E5E7EB",
+							borderWidth: 1,
+						}}
+						value={code}
+					/>
+				</TextField>
+				{errors.fields.code ? (
+					<Text className="text-danger text-xs">
+						{errors.fields.code.message}
+					</Text>
+				) : null}
+				<Button isDisabled={isFetching || !code.trim()} onPress={handleVerify}>
+					<Button.Label>Verify</Button.Label>
+				</Button>
+				<Button
+					isDisabled={isFetching}
+					onPress={() => signIn.mfa.sendEmailCode()}
+					variant="ghost"
+				>
+					<Button.Label>Send a new code</Button.Label>
+				</Button>
+			</AuthScreenShell>
+		);
+	}
+
+	return (
+		<AuthScreenShell
+			subtitle="Continue with Google, GitHub, or email."
+			title="Welcome back"
+		>
+			<AuthStatusMessage message={statusMessage} />
+			<AuthSocialButtons onStatusMessageChange={setStatusMessage} />
+			<View className="flex-row items-center gap-3">
+				<View className="h-px flex-1 bg-border" />
+				<Text className="text-muted text-xs">or use email</Text>
+				<View className="h-px flex-1 bg-border" />
+			</View>
+			<View className="gap-3">
+				<TextField>
+					<Input
+						autoCapitalize="none"
+						keyboardType="email-address"
+						onChangeText={setEmailAddress}
+						placeholder="Email address"
+						style={{
+							backgroundColor: "#FFFFFF",
+							borderColor: "#E5E7EB",
+							borderWidth: 1,
+						}}
+						value={emailAddress}
+					/>
+				</TextField>
+				{errors.fields.identifier ? (
+					<Text className="text-danger text-xs">
+						{errors.fields.identifier.message}
+					</Text>
+				) : null}
+				<TextField>
+					<Input
+						onChangeText={setPassword}
+						placeholder="Password"
+						secureTextEntry={true}
+						style={{
+							backgroundColor: "#FFFFFF",
+							borderColor: "#E5E7EB",
+							borderWidth: 1,
+						}}
+						value={password}
+					/>
+				</TextField>
+				{errors.fields.password ? (
+					<Text className="text-danger text-xs">
+						{errors.fields.password.message}
+					</Text>
+				) : null}
+			</View>
+			<Button
+				isDisabled={!(emailAddress.trim() && password) || isFetching}
+				onPress={handleSubmit}
+			>
+				<Button.Label>Sign in</Button.Label>
+			</Button>
+			<View className="flex-row justify-center gap-1">
+				<Text className="text-muted">New to Viya?</Text>
+				<Link href="/(auth)/sign-up">
+					<Text className="font-semibold text-accent">Create an account</Text>
+				</Link>
+			</View>
+		</AuthScreenShell>
+	);
 }
-
-export default function Page() {
-  const { signIn, errors, fetchStatus } = useSignIn();
-  const router = useRouter();
-  const [emailAddress, setEmailAddress] = React.useState("");
-  const [password, setPassword] = React.useState("");
-  const [code, setCode] = React.useState("");
-  const [statusMessage, setStatusMessage] = React.useState<string | null>(null);
-
-  const emailCodeFactor = signIn.supportedSecondFactors.find(
-    (factor) => factor.strategy === "email_code",
-  );
-  const requiresEmailCode =
-    signIn.status === "needs_client_trust" ||
-    (signIn.status === "needs_second_factor" && !!emailCodeFactor);
-
-  const handleSubmit = async () => {
-    setStatusMessage(null);
-
-    const { error } = await signIn.password({
-      emailAddress,
-      password,
-    });
-
-    if (error) {
-      console.error(JSON.stringify(error, null, 2));
-      setStatusMessage(error.longMessage ?? "Unable to sign in. Please try again.");
-      return;
-    }
-
-    if (signIn.status === "complete") {
-      await signIn.finalize({
-        navigate: ({ session, decorateUrl }) => {
-          if (session?.currentTask) {
-            console.log(session.currentTask);
-            return;
-          }
-
-          pushDecoratedUrl(router, decorateUrl, "/");
-        },
-      });
-    } else if (signIn.status === "needs_second_factor" || signIn.status === "needs_client_trust") {
-      if (emailCodeFactor) {
-        await signIn.mfa.sendEmailCode();
-        setStatusMessage(`We sent a verification code to ${emailCodeFactor.safeIdentifier}.`);
-      } else {
-        console.error("Second factor is required, but email_code is not available:", signIn);
-        setStatusMessage(
-          "A second factor is required, but this screen only supports email codes right now.",
-        );
-      }
-    } else {
-      console.error("Sign-in attempt not complete:", signIn);
-      setStatusMessage("Sign-in could not be completed. Check the logs for more details.");
-    }
-  };
-
-  const handleVerify = async () => {
-    setStatusMessage(null);
-
-    await signIn.mfa.verifyEmailCode({ code });
-
-    if (signIn.status === "complete") {
-      await signIn.finalize({
-        navigate: ({ session, decorateUrl }) => {
-          if (session?.currentTask) {
-            console.log(session.currentTask);
-            return;
-          }
-
-          pushDecoratedUrl(router, decorateUrl, "/");
-        },
-      });
-    } else {
-      console.error("Sign-in attempt not complete:", signIn);
-      setStatusMessage("That code did not complete sign-in. Please try again.");
-    }
-  };
-
-  if (requiresEmailCode) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Verify your account</Text>
-        {statusMessage && <Text style={styles.helper}>{statusMessage}</Text>}
-        <TextInput
-          style={styles.input}
-          value={code}
-          placeholder="Enter your verification code"
-          placeholderTextColor="#666666"
-          onChangeText={(value) => setCode(value)}
-          keyboardType="numeric"
-        />
-        {errors.fields.code && <Text style={styles.error}>{errors.fields.code.message}</Text>}
-        <Pressable
-          style={({ pressed }) => [
-            styles.button,
-            fetchStatus === "fetching" && styles.buttonDisabled,
-            pressed && styles.buttonPressed,
-          ]}
-          onPress={handleVerify}
-          disabled={fetchStatus === "fetching"}
-        >
-          <Text style={styles.buttonText}>Verify</Text>
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
-          onPress={() => signIn.mfa.sendEmailCode()}
-        >
-          <Text style={styles.secondaryButtonText}>I need a new code</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Sign in</Text>
-      {statusMessage && <Text style={styles.helper}>{statusMessage}</Text>}
-      <Text style={styles.label}>Email address</Text>
-      <TextInput
-        style={styles.input}
-        autoCapitalize="none"
-        value={emailAddress}
-        placeholder="Enter email"
-        placeholderTextColor="#666666"
-        onChangeText={(value) => setEmailAddress(value)}
-        keyboardType="email-address"
-      />
-      {errors.fields.identifier && (
-        <Text style={styles.error}>{errors.fields.identifier.message}</Text>
-      )}
-      <Text style={styles.label}>Password</Text>
-      <TextInput
-        style={styles.input}
-        value={password}
-        placeholder="Enter password"
-        placeholderTextColor="#666666"
-        secureTextEntry={true}
-        onChangeText={(value) => setPassword(value)}
-      />
-      {errors.fields.password && <Text style={styles.error}>{errors.fields.password.message}</Text>}
-      <Pressable
-        style={({ pressed }) => [
-          styles.button,
-          (!emailAddress || !password || fetchStatus === "fetching") && styles.buttonDisabled,
-          pressed && styles.buttonPressed,
-        ]}
-        onPress={handleSubmit}
-        disabled={!emailAddress || !password || fetchStatus === "fetching"}
-      >
-        <Text style={styles.buttonText}>Sign in</Text>
-      </Pressable>
-      <View style={styles.linkContainer}>
-        <Text>Don't have an account? </Text>
-        <Link href="/sign-up">
-          <Text style={styles.linkText}>Sign up</Text>
-        </Link>
-      </View>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-    gap: 12,
-  },
-  title: {
-    marginBottom: 8,
-    fontSize: 24,
-    fontWeight: "700",
-  },
-  label: {
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: "#fff",
-  },
-  button: {
-    backgroundColor: "#0a7ea4",
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  buttonPressed: {
-    opacity: 0.7,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  buttonText: {
-    color: "#fff",
-    fontWeight: "600",
-  },
-  secondaryButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  secondaryButtonText: {
-    color: "#0a7ea4",
-    fontWeight: "600",
-  },
-  linkContainer: {
-    flexDirection: "row",
-    gap: 4,
-    marginTop: 12,
-    alignItems: "center",
-  },
-  linkText: {
-    color: "#0a7ea4",
-    fontWeight: "600",
-  },
-  error: {
-    color: "#d32f2f",
-    fontSize: 12,
-    marginTop: -8,
-  },
-  helper: {
-    color: "#555555",
-    fontSize: 13,
-  },
-});
