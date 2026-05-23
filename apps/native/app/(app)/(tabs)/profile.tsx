@@ -16,9 +16,6 @@ export default function ProfileScreen() {
 					<Text.Heading type="h2" weight="semibold">
 						Profile
 					</Text.Heading>
-					<Text.Paragraph className="mt-1" color="muted" type="body-sm">
-						Account and Viya preferences.
-					</Text.Paragraph>
 				</View>
 				<Surface className="gap-4 rounded-[28px] border border-border bg-surface p-5">
 					<View className="flex-row items-center gap-3">

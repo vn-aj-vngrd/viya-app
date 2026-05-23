@@ -5,6 +5,7 @@ import { Button, Spinner, Surface, Text } from "heroui-native";
 import { View } from "react-native";
 
 import { Container } from "@/components/container";
+import { EmptyState } from "@/src/components/empty-state";
 import { useVaultUpload } from "@/src/features/vault/use-vault-upload";
 import { VaultPreviewCard } from "@/src/features/vault/vault-preview-card";
 
@@ -32,13 +33,11 @@ export default function VaultScreen() {
 		);
 	const emptyFilesContent =
 		vaultItems?.length === 0 ? (
-			<Surface className="rounded-[24px] border border-border bg-surface p-4">
-				<Text weight="semibold">No files yet</Text>
-				<Text.Paragraph className="mt-1 leading-5" color="muted" type="body-sm">
-					Add a booking, travel document, receipt, or photo once your trip
-					starts taking shape.
-				</Text.Paragraph>
-			</Surface>
+			<EmptyState
+				description="Add a booking, travel document, receipt, or photo once your trip starts taking shape."
+				icon="folder-open-outline"
+				title="No files yet"
+			/>
 		) : null;
 
 	return (

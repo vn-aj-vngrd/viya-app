@@ -2,26 +2,138 @@ import { useSmoothText, useUIMessages } from "@convex-dev/agent/react";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
 import { useMutation } from "convex/react";
+import { type Href, useLocalSearchParams, useRouter } from "expo-router";
 import {
 	Button,
 	Input,
-	Separator,
-	Spinner,
 	Surface,
 	Text,
 	TextField,
 	useThemeColor,
 } from "heroui-native";
-import { useEffect, useRef, useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
+import { type ComponentProps, useEffect, useRef, useState } from "react";
+import {
+	KeyboardAvoidingView,
+	Platform,
+	Pressable,
+	ScrollView,
+	type StyleProp,
+	View,
+	type ViewStyle,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Container } from "@/components/container";
+import { EmptyState } from "@/src/components/empty-state";
+import { VIYA_ROUTES } from "@/src/constants/routes";
+
+type SuggestionIconName = ComponentProps<typeof Ionicons>["name"];
+type ReturnTabName = "index" | "moments" | "profile" | "trips";
+
+interface PromptSuggestion {
+	accent: string;
+	icon: SuggestionIconName;
+	prompt: string;
+	soft: string;
+	title: string;
+}
+
+const promptSuggestions = [
+	{
+		accent: "#0A84FF",
+		icon: "map-outline",
+		prompt: "Help me plan a calm 5-day beach trip under budget.",
+		soft: "#EAF2FF",
+		title: "Plan a trip",
+	},
+	{
+		accent: "#059669",
+		icon: "shield-checkmark-outline",
+		prompt: "Check what I need before I travel next month.",
+		soft: "#E4F8EF",
+		title: "Check readiness",
+	},
+	{
+		accent: "#E97816",
+		icon: "cash-outline",
+		prompt: "Build a travel budget with food, stay, transport, and buffer.",
+		soft: "#FFF1DA",
+		title: "Set a budget",
+	},
+	{
+		accent: "#DB2777",
+		icon: "images-outline",
+		prompt: "Help me turn a trip into a story and shareable recap.",
+		soft: "#FCE7F3",
+		title: "Create a recap",
+	},
+] as const satisfies readonly PromptSuggestion[];
+
+const returnTabRoutes = {
+	index: VIYA_ROUTES.home,
+	moments: VIYA_ROUTES.moments,
+	profile: VIYA_ROUTES.profile,
+	trips: VIYA_ROUTES.trips,
+} as const satisfies Record<ReturnTabName, Href>;
+
+const userBubbleStyle = {
+	backgroundColor: "#0A84FF",
+	borderBottomRightRadius: 8,
+	borderRadius: 24,
+	boxShadow: "0 12px 28px rgba(10, 132, 255, 0.22)",
+} satisfies StyleProp<ViewStyle>;
+
+const assistantBubbleStyle = {
+	backgroundColor: "#FFFFFF",
+	borderBottomLeftRadius: 8,
+	borderColor: "rgba(24, 24, 27, 0.08)",
+	borderRadius: 24,
+	borderWidth: 1,
+	boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)",
+} satisfies StyleProp<ViewStyle>;
+
+function ViyaAvatar() {
+	return (
+		<View className="mt-1 h-8 w-8 items-center justify-center rounded-full border border-border bg-surface">
+			<View className="absolute h-5 w-5 rounded-full bg-[#DDF0FF]" />
+			<View className="h-4 w-4 -translate-x-1 translate-y-1 rounded-full bg-[#CFF7E6]" />
+			<Ionicons
+				color="#0A84FF"
+				name="sparkles-outline"
+				size={14}
+				style={{ position: "absolute" }}
+			/>
+		</View>
+	);
+}
+
+function TypingBubble() {
+	return (
+		<View className="flex-row gap-2">
+			<ViyaAvatar />
+			<View
+				className="flex-row items-center gap-1 px-4 py-3"
+				style={assistantBubbleStyle}
+			>
+				{["dot-1", "dot-2", "dot-3"].map((dot) => (
+					<View
+						className="h-2 w-2 rounded-full bg-muted"
+						key={dot}
+						style={{ opacity: dot === "dot-2" ? 0.65 : 0.35 }}
+					/>
+				))}
+			</View>
+		</View>
+	);
+}
 
 function MessageContent({
 	isStreaming,
+	isUser,
 	text,
 }: {
 	isStreaming: boolean;
+	isUser: boolean;
 	text: string;
 }) {
 	const [visibleText] = useSmoothText(text, {
@@ -29,20 +141,27 @@ function MessageContent({
 	});
 
 	return (
-		<Text.Paragraph className="leading-relaxed" type="body-sm">
+		<Text.Paragraph
+			className="leading-relaxed"
+			style={{ color: isUser ? "#FFFFFF" : "#18181B" }}
+			type="body-sm"
+			weight="medium"
+		>
 			{visibleText}
 		</Text.Paragraph>
 	);
 }
 
 export function ViyaChatScreen() {
+	const router = useRouter();
+	const { fromTab } = useLocalSearchParams<{ fromTab?: string }>();
+	const insets = useSafeAreaInsets();
 	const [input, setInput] = useState("");
 	const [threadId, setThreadId] = useState<string | null>(null);
 	const [isLoading, setIsLoading] = useState(false);
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const scrollViewRef = useRef<ScrollView>(null);
 	const mutedColor = useThemeColor("muted");
-	const foregroundColor = useThemeColor("foreground");
 
 	const createThread = useMutation(api.chat.createNewThread);
 	const sendMessage = useMutation(api.chat.sendMessage);
@@ -63,8 +182,8 @@ export function ViyaChatScreen() {
 		scrollViewRef.current?.scrollToEnd({ animated: true });
 	}, [messageCount, hasStreamingMessage]);
 
-	const handleSubmit = async () => {
-		const value = input.trim();
+	const handleSubmit = async (prompt?: string) => {
+		const value = (prompt ?? input).trim();
 
 		if (!value || isLoading) {
 			return;
@@ -94,81 +213,121 @@ export function ViyaChatScreen() {
 		}
 	};
 
+	const handleBackPress = () => {
+		const targetRoute =
+			fromTab && fromTab in returnTabRoutes
+				? returnTabRoutes[fromTab as ReturnTabName]
+				: VIYA_ROUTES.home;
+
+		router.replace(targetRoute);
+	};
+
 	return (
 		<Container isScrollable={false}>
 			<KeyboardAvoidingView
 				behavior={Platform.OS === "ios" ? "padding" : "height"}
 				className="flex-1"
 			>
-				<View className="flex-1 px-4 pt-4 pb-28">
-					<View className="mb-4 py-4">
-						<Text.Heading type="h2" weight="semibold">
-							Viya AI
-						</Text.Heading>
-						<Text.Paragraph className="mt-1" color="muted" type="body-sm">
-							Ask about itinerary gaps, readiness, risk, or what to do next.
-						</Text.Paragraph>
+				<View
+					className="flex-1 px-5 pb-4"
+					style={{ paddingTop: insets.top + 10 }}
+				>
+					<View className="mb-5 flex-row items-center">
+						<Pressable
+							accessibilityLabel="Back to previous tab"
+							accessibilityRole="button"
+							className="h-10 w-10 items-center justify-center rounded-full border border-border bg-surface"
+							onPress={handleBackPress}
+						>
+							<Ionicons color="#18181B" name="chevron-back" size={20} />
+						</Pressable>
 					</View>
 
 					<ScrollView
-						className="mb-4 flex-1"
-						contentContainerStyle={{ flexGrow: 1, paddingBottom: 8 }}
+						className="flex-1"
+						contentContainerStyle={{ flexGrow: 1, paddingBottom: 18 }}
 						keyboardShouldPersistTaps="handled"
 						ref={scrollViewRef}
 						showsVerticalScrollIndicator={false}
 					>
 						{!messages || messages.length === 0 ? (
-							<Surface
-								className="flex-1 items-center justify-center rounded-lg py-8"
-								variant="secondary"
-							>
-								<Ionicons color={mutedColor} name="sparkles" size={32} />
-								<Text.Paragraph className="mt-3" color="muted" type="body-sm">
-									Start with a travel planning question.
-								</Text.Paragraph>
-							</Surface>
+							<View className="gap-5">
+								<EmptyState
+									className="flex-none py-4"
+									description="Ask Viya to dream, plan, prepare, track, or turn your trip into a story."
+									icon="sparkles-outline"
+									title="Where should we go next?"
+								/>
+
+								<View className="gap-3">
+									<Text color="muted" type="body-xs" weight="semibold">
+										TRY ASKING
+									</Text>
+									<View className="flex-row flex-wrap gap-3">
+										{promptSuggestions.map((suggestion) => (
+											<Pressable
+												className="w-[48%]"
+												key={suggestion.title}
+												onPress={() => handleSubmit(suggestion.prompt)}
+											>
+												<Surface className="gap-4 rounded-3xl border border-border bg-surface p-4">
+													<View
+														className="h-10 w-10 items-center justify-center rounded-full"
+														style={{ backgroundColor: suggestion.soft }}
+													>
+														<Ionicons
+															color={suggestion.accent}
+															name={suggestion.icon}
+															size={19}
+														/>
+													</View>
+													<View className="gap-1">
+														<Text type="body-sm" weight="semibold">
+															{suggestion.title}
+														</Text>
+														<Text.Paragraph color="muted" type="body-xs">
+															{suggestion.prompt}
+														</Text.Paragraph>
+													</View>
+												</Surface>
+											</Pressable>
+										))}
+									</View>
+								</View>
+							</View>
 						) : (
-							<View className="gap-3">
-								{messages.map((message) => (
-									<Surface
-										className={`rounded-lg p-3 ${message.role === "user" ? "ml-8" : "mr-8"}`}
-										key={message.key}
-										variant={message.role === "user" ? "tertiary" : "secondary"}
-									>
-										<Text
-											className="mb-1"
-											color="muted"
-											type="body-xs"
-											weight="medium"
+							<View className="gap-4">
+								{messages.map((message) => {
+									const isUser = message.role === "user";
+									const messageText = (message.parts ?? [])
+										.map((part) => (part.type === "text" ? part.text : ""))
+										.join("")
+										.trim();
+
+									if (!(isUser || messageText)) {
+										return <TypingBubble key={message.key} />;
+									}
+
+									return (
+										<View
+											className={`flex-row gap-2 ${isUser ? "justify-end" : "justify-start"}`}
+											key={message.key}
 										>
-											{message.role === "user" ? "You" : "Viya"}
-										</Text>
-										<MessageContent
-											isStreaming={message.status === "streaming"}
-											text={(message.parts ?? [])
-												.map((part) => (part.type === "text" ? part.text : ""))
-												.join("")}
-										/>
-									</Surface>
-								))}
-								{isLoading && !hasStreamingMessage ? (
-									<Surface className="mr-10 rounded-lg p-3" variant="secondary">
-										<Text
-											className="mb-1"
-											color="muted"
-											type="body-xs"
-											weight="medium"
-										>
-											Viya
-										</Text>
-										<View className="flex-row items-center gap-2">
-											<Spinner size="sm" />
-											<Text color="muted" type="body-sm">
-												Thinking...
-											</Text>
+											{isUser ? null : <ViyaAvatar />}
+											<View
+												className="max-w-[82%] px-4 py-3"
+												style={isUser ? userBubbleStyle : assistantBubbleStyle}
+											>
+												<MessageContent
+													isStreaming={message.status === "streaming"}
+													isUser={isUser}
+													text={messageText}
+												/>
+											</View>
 										</View>
-									</Surface>
-								) : null}
+									);
+								})}
+								{isLoading && !hasStreamingMessage ? <TypingBubble /> : null}
 							</View>
 						)}
 					</ScrollView>
@@ -178,17 +337,22 @@ export function ViyaChatScreen() {
 							{errorMessage}
 						</Text>
 					) : null}
-					<Separator className="mb-3" />
 
-					<View className="flex-row items-center gap-2">
+					<Surface className="mt-3 flex-row items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5">
 						<View className="flex-1">
 							<TextField>
 								<Input
 									editable={!isLoading}
 									onChangeText={setInput}
-									onSubmitEditing={handleSubmit}
-									placeholder="Ask Viya..."
+									onSubmitEditing={() => handleSubmit()}
+									placeholder="Message Viya"
 									returnKeyType="send"
+									style={{
+										backgroundColor: "transparent",
+										borderColor: "transparent",
+										borderWidth: 0,
+										minHeight: 42,
+									}}
 									value={input}
 								/>
 							</TextField>
@@ -196,19 +360,18 @@ export function ViyaChatScreen() {
 						<Button
 							isDisabled={!input.trim() || isLoading}
 							isIconOnly={true}
-							onPress={handleSubmit}
+							onPress={() => handleSubmit()}
 							size="sm"
+							style={{ height: 38, width: 38 }}
 							variant={input.trim() && !isLoading ? "primary" : "secondary"}
 						>
 							<Ionicons
-								color={
-									input.trim() && !isLoading ? foregroundColor : mutedColor
-								}
+								color={input.trim() && !isLoading ? "#FFFFFF" : mutedColor}
 								name="arrow-up"
 								size={18}
 							/>
 						</Button>
-					</View>
+					</Surface>
 				</View>
 			</KeyboardAvoidingView>
 		</Container>

@@ -45,19 +45,6 @@ export default function TabLayout() {
 				}}
 			/>
 			<Tabs.Screen
-				name="viya"
-				options={{
-					title: "Viya",
-					tabBarIcon: ({ color, focused }) => (
-						<Ionicons
-							color={focused ? "#FFFFFF" : color}
-							name="sparkles-outline"
-							size={20}
-						/>
-					),
-				}}
-			/>
-			<Tabs.Screen
 				name="moments"
 				options={{
 					title: "Moments",
@@ -72,6 +59,19 @@ export default function TabLayout() {
 					title: "Profile",
 					tabBarIcon: ({ color, focused }) => (
 						<FloatingTabIcon color={color} focused={focused} name="user" />
+					),
+				}}
+			/>
+			<Tabs.Screen
+				name="viya"
+				options={{
+					title: "Viya",
+					tabBarIcon: ({ color, focused }) => (
+						<Ionicons
+							color={focused ? "#FFFFFF" : color}
+							name="sparkles-outline"
+							size={20}
+						/>
 					),
 				}}
 			/>
