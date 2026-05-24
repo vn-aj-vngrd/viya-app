@@ -10,25 +10,43 @@ import {
 	Text,
 	useThemeColor,
 } from "heroui-native";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { Image, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { ViyaMark } from "@/src/components/viya-mark";
 
 interface AccountAvatarButtonProps {
 	size?: number;
 }
 
 interface AccountSheetRowProps {
+	description: string;
 	icon: keyof typeof Ionicons.glyphMap;
-	label: string;
-	value?: string;
+	isDisabled?: boolean;
+	isLoading?: boolean;
+	onPress?: () => void;
+	showChevron?: boolean;
+	title: string;
+	tone?: "danger" | "default";
 }
 
-const accountRows = [
-	{ icon: "person-outline", label: "Account info" },
-	{ icon: "options-outline", label: "Travel preferences" },
-	{ icon: "notifications-outline", label: "Notifications" },
-	{ icon: "help-circle-outline", label: "Help" },
+const preferenceRows = [
+	{
+		description: "Theme, font size, display",
+		icon: "color-palette-outline",
+		title: "Appearance",
+	},
+	{
+		description: "Pace, budget, food, travel style",
+		icon: "options-outline",
+		title: "Travel preferences",
+	},
+	{
+		description: "Alerts, reminders, trip updates",
+		icon: "notifications-outline",
+		title: "Notifications",
+	},
 ] as const satisfies readonly AccountSheetRowProps[];
 
 function getInitials(name?: string | null) {
@@ -77,24 +95,90 @@ function AccountAvatar({
 	);
 }
 
-function AccountSheetRow({ icon, label, value }: AccountSheetRowProps) {
-	const [accentColor, mutedColor] = useThemeColor(["accent", "muted"]);
+function AccountSheetSection({
+	children,
+	title,
+}: {
+	children: ReactNode;
+	title: string;
+}) {
+	return (
+		<View className="gap-2">
+			<Text className="ml-2" color="muted" type="body-xs" weight="medium">
+				{title}
+			</Text>
+			<ListGroup>{children}</ListGroup>
+		</View>
+	);
+}
+
+function AccountSheetRow({
+	description,
+	icon,
+	isDisabled,
+	isLoading,
+	onPress,
+	showChevron = true,
+	title,
+	tone = "default",
+}: AccountSheetRowProps) {
+	const [dangerColor, foregroundColor, mutedColor] = useThemeColor([
+		"danger",
+		"foreground",
+		"muted",
+	]);
+	const isDanger = tone === "danger";
+	const iconColor = isDanger ? dangerColor : foregroundColor;
 
 	return (
-		<ListGroup.Item accessibilityRole="button" className="px-5 py-4">
+		<ListGroup.Item
+			accessibilityRole="button"
+			className="px-4 py-4"
+			disabled={isDisabled}
+			onPress={onPress}
+		>
 			<ListGroup.ItemPrefix>
-				<View className="h-8 w-8 items-center justify-center rounded-full bg-accent-soft">
-					<Ionicons color={accentColor} name={icon} size={17} />
+				<View className="h-8 w-8 items-center justify-center">
+					{isLoading ? (
+						<Spinner color={iconColor} size="sm" />
+					) : (
+						<Ionicons color={iconColor} name={icon} size={18} />
+					)}
 				</View>
 			</ListGroup.ItemPrefix>
 			<ListGroup.ItemContent>
-				<ListGroup.ItemTitle>{label}</ListGroup.ItemTitle>
+				<ListGroup.ItemTitle className={isDanger ? "text-danger" : undefined}>
+					{title}
+				</ListGroup.ItemTitle>
+				<ListGroup.ItemDescription>{description}</ListGroup.ItemDescription>
 			</ListGroup.ItemContent>
-			{value ? (
-				<Text color="muted" type="body-sm">
-					{value}
-				</Text>
+			{showChevron ? (
+				<ListGroup.ItemSuffix iconProps={{ color: mutedColor, size: 18 }} />
 			) : null}
+		</ListGroup.Item>
+	);
+}
+
+function AccountProfileRow({
+	displayName,
+	imageUrl,
+	primaryEmail,
+}: {
+	displayName: string;
+	imageUrl?: string;
+	primaryEmail: string;
+}) {
+	const mutedColor = useThemeColor("muted");
+
+	return (
+		<ListGroup.Item accessibilityRole="button" className="px-4 py-4">
+			<ListGroup.ItemPrefix>
+				<AccountAvatar imageUrl={imageUrl} name={displayName} size={40} />
+			</ListGroup.ItemPrefix>
+			<ListGroup.ItemContent>
+				<ListGroup.ItemTitle>{displayName}</ListGroup.ItemTitle>
+				<ListGroup.ItemDescription>{primaryEmail}</ListGroup.ItemDescription>
+			</ListGroup.ItemContent>
 			<ListGroup.ItemSuffix iconProps={{ color: mutedColor, size: 18 }} />
 		</ListGroup.Item>
 	);
@@ -105,7 +189,6 @@ export function AccountAvatarButton({ size = 48 }: AccountAvatarButtonProps) {
 	const { user } = useUser();
 	const router = useRouter();
 	const insets = useSafeAreaInsets();
-	const [dangerColor, mutedColor] = useThemeColor(["danger", "muted"]);
 	const [isOpen, setIsOpen] = useState(false);
 	const [isSigningOut, setIsSigningOut] = useState(false);
 	const displayName = user?.fullName ?? "Viya traveler";
@@ -159,77 +242,57 @@ export function AccountAvatarButton({ size = 48 }: AccountAvatarButtonProps) {
 							style={{ paddingBottom: Math.max(insets.bottom, 18) }}
 						>
 							<View className="flex-row items-center justify-between">
-								<BottomSheet.Title>Account</BottomSheet.Title>
+								<View className="flex-row items-center gap-3">
+									<ViyaMark size={28} />
+									<BottomSheet.Title>Viya Account</BottomSheet.Title>
+								</View>
 								<CloseButton
 									accessibilityLabel="Close account"
-									className="bg-default"
+									className="bg-surface"
 									onPress={() => setIsOpen(false)}
 								/>
 							</View>
 
-							<ListGroup className="rounded-[30px] border border-border bg-surface shadow-none">
-								<ListGroup.Item
-									accessibilityRole="button"
-									className="px-5 py-4"
-								>
-									<ListGroup.ItemPrefix>
-										<AccountAvatar
-											imageUrl={user?.imageUrl}
-											name={displayName}
-											size={64}
-										/>
-									</ListGroup.ItemPrefix>
-									<ListGroup.ItemContent>
-										<ListGroup.ItemTitle className="font-semibold text-xl">
-											{displayName}
-										</ListGroup.ItemTitle>
-										<ListGroup.ItemDescription>
-											{primaryEmail}
-										</ListGroup.ItemDescription>
-									</ListGroup.ItemContent>
-									<ListGroup.ItemSuffix
-										iconProps={{ color: mutedColor, size: 22 }}
-									/>
-								</ListGroup.Item>
-							</ListGroup>
+							<AccountSheetSection title="Account">
+								<AccountProfileRow
+									displayName={displayName}
+									imageUrl={user?.imageUrl}
+									primaryEmail={primaryEmail}
+								/>
+								<Separator className="mx-4" />
+								<AccountSheetRow
+									description="FAQs, contact support, app feedback"
+									icon="help-circle-outline"
+									title="Help"
+								/>
+							</AccountSheetSection>
 
-							<ListGroup className="rounded-[30px] border border-border bg-surface shadow-none">
-								{accountRows.map((row, index) => (
-									<View key={row.label}>
+							<AccountSheetSection title="Preferences">
+								{preferenceRows.map((row, index) => (
+									<View key={row.title}>
 										<AccountSheetRow {...row} />
-										{index < accountRows.length - 1 ? (
-											<Separator className="ml-16 bg-border" />
+										{index < preferenceRows.length - 1 ? (
+											<Separator className="mx-4" />
 										) : null}
 									</View>
 								))}
-							</ListGroup>
+							</AccountSheetSection>
 
-							<ListGroup className="rounded-[30px] border border-border bg-surface shadow-none">
-								<ListGroup.Item
-									accessibilityRole="button"
-									className="px-5 py-4"
-									disabled={isSigningOut}
+							<ListGroup>
+								<AccountSheetRow
+									description={
+										isSigningOut
+											? "Ending this session..."
+											: "End this session on this device"
+									}
+									icon="log-out-outline"
+									isDisabled={isSigningOut}
+									isLoading={isSigningOut}
 									onPress={handleSignOutPress}
-								>
-									<ListGroup.ItemPrefix>
-										<View className="h-8 w-8 items-center justify-center rounded-full bg-danger-soft">
-											{isSigningOut ? (
-												<Spinner color={dangerColor} size="sm" />
-											) : (
-												<Ionicons
-													color={dangerColor}
-													name="log-out-outline"
-													size={17}
-												/>
-											)}
-										</View>
-									</ListGroup.ItemPrefix>
-									<ListGroup.ItemContent>
-										<ListGroup.ItemTitle className="text-danger">
-											{isSigningOut ? "Signing out..." : "Sign out"}
-										</ListGroup.ItemTitle>
-									</ListGroup.ItemContent>
-								</ListGroup.Item>
+									showChevron={false}
+									title={isSigningOut ? "Signing out..." : "Sign out"}
+									tone="danger"
+								/>
 							</ListGroup>
 						</View>
 					</BottomSheet.Content>
