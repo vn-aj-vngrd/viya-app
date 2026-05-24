@@ -132,15 +132,10 @@ export function AuthSocialButtons({
 		<View className="gap-2">
 			{SOCIAL_PROVIDERS.map((provider) => (
 				<Button
-					className="rounded-full"
+					className="rounded-full border border-border bg-surface"
 					isDisabled={activeStrategy !== null}
 					key={provider.strategy}
 					onPress={() => handleSocialSignIn(provider.strategy)}
-					style={{
-						backgroundColor: "#FFFFFF",
-						borderColor: "#E5E7EB",
-						borderWidth: 1,
-					}}
 					variant="secondary"
 				>
 					<View className="flex-row items-center justify-center gap-2">

@@ -1,7 +1,14 @@
 import { useClerk, useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { BottomSheet, Text } from "heroui-native";
+import {
+	BottomSheet,
+	CloseButton,
+	ListGroup,
+	Separator,
+	Text,
+	useThemeColor,
+} from "heroui-native";
 import { useState } from "react";
 import { Image, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -70,24 +77,25 @@ function AccountAvatar({
 }
 
 function AccountSheetRow({ icon, label, value }: AccountSheetRowProps) {
+	const [accentColor, mutedColor] = useThemeColor(["accent", "muted"]);
+
 	return (
-		<Pressable
-			accessibilityRole="button"
-			className="flex-row items-center gap-3 px-1 py-4"
-		>
-			<View className="h-8 w-8 items-center justify-center rounded-full bg-surface-secondary">
-				<Ionicons color="#0A84FF" name={icon} size={17} />
-			</View>
-			<Text className="flex-1" type="body" weight="medium">
-				{label}
-			</Text>
+		<ListGroup.Item accessibilityRole="button" className="px-5 py-4">
+			<ListGroup.ItemPrefix>
+				<View className="h-8 w-8 items-center justify-center rounded-full bg-accent-soft">
+					<Ionicons color={accentColor} name={icon} size={17} />
+				</View>
+			</ListGroup.ItemPrefix>
+			<ListGroup.ItemContent>
+				<ListGroup.ItemTitle>{label}</ListGroup.ItemTitle>
+			</ListGroup.ItemContent>
 			{value ? (
 				<Text color="muted" type="body-sm">
 					{value}
 				</Text>
 			) : null}
-			<Ionicons color="#C7C7CC" name="chevron-forward" size={18} />
-		</Pressable>
+			<ListGroup.ItemSuffix iconProps={{ color: mutedColor, size: 18 }} />
+		</ListGroup.Item>
 	);
 }
 
@@ -96,6 +104,7 @@ export function AccountAvatarButton({ size = 48 }: AccountAvatarButtonProps) {
 	const { user } = useUser();
 	const router = useRouter();
 	const insets = useSafeAreaInsets();
+	const [dangerColor, mutedColor] = useThemeColor(["danger", "muted"]);
 	const [isOpen, setIsOpen] = useState(false);
 	const displayName = user?.fullName ?? "Viya traveler";
 	const primaryEmail = user?.emailAddresses[0]?.emailAddress ?? "Signed in";
@@ -130,81 +139,81 @@ export function AccountAvatarButton({ size = 48 }: AccountAvatarButtonProps) {
 				<BottomSheet.Portal>
 					<BottomSheet.Overlay />
 					<BottomSheet.Content
-						backgroundClassName="rounded-t-[40px] bg-[#F2F2F7]"
+						backgroundClassName="rounded-t-[36px] bg-background"
 						enablePanDownToClose={true}
 					>
 						<View
-							className="gap-6 px-5 pt-4"
-							style={{ paddingBottom: Math.max(insets.bottom, 22) }}
+							className="gap-5 px-5 pt-2"
+							style={{ paddingBottom: Math.max(insets.bottom, 18) }}
 						>
 							<View className="flex-row items-center justify-between">
-								<View className="flex-row items-center gap-3">
-									<View className="h-8 w-8 items-center justify-center rounded-full bg-white">
-										<Ionicons color="#0A84FF" name="sparkles" size={17} />
-									</View>
-									<Text.Heading type="h3" weight="semibold">
-										Viya Account
-									</Text.Heading>
-								</View>
-								<Pressable
+								<BottomSheet.Title>Account</BottomSheet.Title>
+								<CloseButton
 									accessibilityLabel="Close account"
-									accessibilityRole="button"
-									className="h-14 w-14 items-center justify-center rounded-full bg-white"
+									className="bg-default"
 									onPress={() => setIsOpen(false)}
-									style={{ boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)" }}
+								/>
+							</View>
+
+							<ListGroup className="rounded-[30px] border border-border bg-surface shadow-none">
+								<ListGroup.Item
+									accessibilityRole="button"
+									className="px-5 py-4"
 								>
-									<Ionicons color="#18181B" name="close" size={28} />
-								</Pressable>
-							</View>
-
-							<View className="overflow-hidden rounded-[30px] bg-white px-5 py-4">
-								<View className="flex-row items-center gap-4 py-1">
-									<AccountAvatar
-										imageUrl={user?.imageUrl}
-										name={displayName}
-										size={64}
-									/>
-									<View className="flex-1">
-										<Text.Heading type="h4" weight="semibold">
+									<ListGroup.ItemPrefix>
+										<AccountAvatar
+											imageUrl={user?.imageUrl}
+											name={displayName}
+											size={64}
+										/>
+									</ListGroup.ItemPrefix>
+									<ListGroup.ItemContent>
+										<ListGroup.ItemTitle className="font-semibold text-xl">
 											{displayName}
-										</Text.Heading>
-										<Text color="muted" type="body-sm">
+										</ListGroup.ItemTitle>
+										<ListGroup.ItemDescription>
 											{primaryEmail}
-										</Text>
-									</View>
-									<Ionicons color="#C7C7CC" name="chevron-forward" size={22} />
-								</View>
-							</View>
+										</ListGroup.ItemDescription>
+									</ListGroup.ItemContent>
+									<ListGroup.ItemSuffix
+										iconProps={{ color: mutedColor, size: 22 }}
+									/>
+								</ListGroup.Item>
+							</ListGroup>
 
-							<View className="overflow-hidden rounded-[30px] bg-white px-5">
+							<ListGroup className="rounded-[30px] border border-border bg-surface shadow-none">
 								{accountRows.map((row, index) => (
 									<View key={row.label}>
 										<AccountSheetRow {...row} />
 										{index < accountRows.length - 1 ? (
-											<View className="ml-11 h-px bg-border" />
+											<Separator className="ml-16 bg-border" />
 										) : null}
 									</View>
 								))}
-							</View>
+							</ListGroup>
 
-							<View className="overflow-hidden rounded-[30px] bg-white px-5">
-								<Pressable
+							<ListGroup className="rounded-[30px] border border-border bg-surface shadow-none">
+								<ListGroup.Item
 									accessibilityRole="button"
-									className="flex-row items-center gap-3 py-4"
+									className="px-5 py-4"
 									onPress={handleSignOutPress}
 								>
-									<View className="h-8 w-8 items-center justify-center rounded-full bg-red-50">
-										<Ionicons
-											color="#DC2626"
-											name="log-out-outline"
-											size={17}
-										/>
-									</View>
-									<Text className="text-red-600" type="body" weight="medium">
-										Sign out
-									</Text>
-								</Pressable>
-							</View>
+									<ListGroup.ItemPrefix>
+										<View className="h-8 w-8 items-center justify-center rounded-full bg-danger-soft">
+											<Ionicons
+												color={dangerColor}
+												name="log-out-outline"
+												size={17}
+											/>
+										</View>
+									</ListGroup.ItemPrefix>
+									<ListGroup.ItemContent>
+										<ListGroup.ItemTitle className="text-danger">
+											Sign out
+										</ListGroup.ItemTitle>
+									</ListGroup.ItemContent>
+								</ListGroup.Item>
+							</ListGroup>
 						</View>
 					</BottomSheet.Content>
 				</BottomSheet.Portal>

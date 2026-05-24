@@ -239,7 +239,7 @@ function OnboardingButton({
 				backgroundColor: isPrimary ? "#0A84FF" : "#FFFFFF",
 				borderColor: isSecondary ? "#E5E7EB" : "transparent",
 				borderWidth: isSecondary ? 1 : 0,
-				height: isPrimary || isSecondary ? 46 : 34,
+				height: isPrimary || isSecondary ? 48 : 34,
 			}}
 		>
 			<Text

@@ -1,4 +1,3 @@
-import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Surface, Text } from "heroui-native";
 import type { PropsWithChildren } from "react";
@@ -14,33 +13,6 @@ interface AuthScreenShellProps
 		subtitle?: string;
 		eyebrow?: string;
 	}> {}
-
-interface AuthStatusMessageProps {
-	message: string | null;
-}
-
-export function AuthStatusMessage({ message }: AuthStatusMessageProps) {
-	if (!message) {
-		return null;
-	}
-
-	return (
-		<Surface
-			className="flex-row items-start gap-2 rounded-2xl bg-surface-secondary p-3"
-			variant="secondary"
-		>
-			<Ionicons color="#71717A" name="information-circle" size={18} />
-			<Text.Paragraph
-				className="flex-1 leading-5"
-				color="muted"
-				selectable={true}
-				type="body-sm"
-			>
-				{message}
-			</Text.Paragraph>
-		</Surface>
-	);
-}
 
 export function AuthScreenShell({
 	children,

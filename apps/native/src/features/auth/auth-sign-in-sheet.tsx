@@ -2,17 +2,16 @@ import { useSignIn, useSignUp } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
+	Alert,
 	BottomSheet,
 	Button,
 	Input,
-	InputOTP,
-	REGEXP_ONLY_DIGITS,
 	Text,
 	TextField,
 	useBottomSheetAwareHandlers,
 } from "heroui-native";
 import React from "react";
-import { View } from "react-native";
+import { Pressable, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ViyaMark } from "@/src/components/viya-mark";
@@ -20,13 +19,17 @@ import {
 	getAuthErrorMessage,
 	pushDecoratedUrl,
 } from "@/src/features/auth/auth-routing";
-import { AuthStatusMessage } from "@/src/features/auth/auth-screen-shell";
 import { AuthSocialButtons } from "@/src/features/auth/auth-social-buttons";
 
 const OAUTH_SHEET_DISMISS_DELAY_MS = 320;
 const EMAIL_CODE_LENGTH = 6;
-const OTP_ROW_WIDTH = 304;
+const OTP_ROW_WIDTH = 320;
 const OTP_SLOT_SIZE = 44;
+const OTP_SLOT_GAP = 8;
+const OTP_SEPARATOR_WIDTH = 8;
+const DIGITS_ONLY_PATTERN = /\D/g;
+const RESEND_CODE_COOLDOWN_SECONDS = 30;
+const OTP_SLOT_INDEXES = [0, 1, 2, 3, 4, 5] as const;
 
 type EmailAuthFlow = "sign-in" | "sign-up";
 
@@ -93,17 +96,13 @@ function SheetInput({
 		<TextField>
 			<Input
 				autoCapitalize={autoCapitalize}
+				className="border border-border bg-surface"
 				keyboardType={keyboardType}
 				onBlur={onBlur}
 				onChangeText={onChangeText}
 				onFocus={onFocus}
 				placeholder={placeholder}
 				secureTextEntry={secureTextEntry}
-				style={{
-					backgroundColor: "#FFFFFF",
-					borderColor: "#E5E7EB",
-					borderWidth: 1,
-				}}
 				value={value}
 			/>
 		</TextField>
@@ -117,48 +116,92 @@ interface SheetOtpInputProps {
 
 function SheetOtpInput({ onChange, value }: SheetOtpInputProps) {
 	const { onBlur, onFocus } = useBottomSheetAwareHandlers();
+	const inputRef = React.useRef<TextInput>(null);
+	const [isFocused, setIsFocused] = React.useState(false);
+
+	const activeSlotIndex = Math.min(value.length, EMAIL_CODE_LENGTH - 1);
+
+	const handleChangeText = (nextValue: string) => {
+		onChange(
+			nextValue.replace(DIGITS_ONLY_PATTERN, "").slice(0, EMAIL_CODE_LENGTH)
+		);
+	};
 
 	return (
 		<View className="items-center">
-			<InputOTP
-				className="justify-center"
-				inputMode="numeric"
-				maxLength={EMAIL_CODE_LENGTH}
-				onBlur={onBlur}
-				onChange={onChange}
-				onFocus={onFocus}
-				pattern={REGEXP_ONLY_DIGITS}
-				style={{ width: OTP_ROW_WIDTH }}
-				value={value}
-				variant="primary"
+			<Pressable
+				accessibilityHint={`Enter ${EMAIL_CODE_LENGTH} digit verification code`}
+				accessibilityLabel="One-time passcode input"
+				accessibilityRole="button"
+				onPress={() => inputRef.current?.focus()}
+				style={{ height: OTP_SLOT_SIZE, width: OTP_ROW_WIDTH }}
 			>
-				<InputOTP.Group className="w-full flex-row items-center justify-between gap-0">
-					{({ slots }) =>
-						slots.map((slot) => (
-							<React.Fragment key={slot.index}>
+				<View
+					className="flex-row items-center"
+					style={{ gap: OTP_SLOT_GAP, width: OTP_ROW_WIDTH }}
+				>
+					{OTP_SLOT_INDEXES.map((slotIndex) => {
+						const char = value[slotIndex];
+						const isActive = isFocused && slotIndex === activeSlotIndex;
+						const isCaretVisible =
+							isFocused && !char && slotIndex === value.length;
+
+						return (
+							<React.Fragment key={`otp-slot-${slotIndex}`}>
 								<View
-									className="items-center justify-center rounded-2xl border bg-white shadow-sm"
+									className="items-center justify-center rounded-2xl border bg-surface shadow-sm"
 									style={{
-										borderColor: slot.isActive ? "#0A84FF" : "#E5E7EB",
+										borderColor: isActive ? "#0A84FF" : "#E5E7EB",
 										height: OTP_SLOT_SIZE,
 										width: OTP_SLOT_SIZE,
 									}}
 								>
-									{slot.char ? (
-										<Text weight="semibold">{slot.char}</Text>
+									{char ? (
+										<Text className="absolute" weight="semibold">
+											{char}
+										</Text>
 									) : null}
-									{!slot.char && slot.isCaretVisible ? (
-										<View className="h-5 w-0.5 rounded-full bg-muted-foreground" />
+									{isCaretVisible ? (
+										<View className="absolute h-5 w-0.5 rounded-full bg-muted-foreground" />
 									) : null}
 								</View>
-								{slot.index === 2 ? (
-									<View className="h-px w-2 rounded-full bg-border" />
+								{slotIndex === 2 ? (
+									<View
+										className="h-px rounded-full bg-border"
+										style={{ width: OTP_SEPARATOR_WIDTH }}
+									/>
 								) : null}
 							</React.Fragment>
-						))
-					}
-				</InputOTP.Group>
-			</InputOTP>
+						);
+					})}
+				</View>
+				<TextInput
+					autoCapitalize="none"
+					autoComplete="one-time-code"
+					autoCorrect={false}
+					caretHidden={true}
+					inputMode="numeric"
+					keyboardType="number-pad"
+					onBlur={(event) => {
+						setIsFocused(false);
+						onBlur(event);
+					}}
+					onChangeText={handleChangeText}
+					onFocus={(event) => {
+						setIsFocused(true);
+						onFocus(event);
+					}}
+					ref={inputRef}
+					style={{
+						height: 1,
+						opacity: 0,
+						position: "absolute",
+						width: 1,
+					}}
+					textContentType="oneTimeCode"
+					value={value}
+				/>
+			</Pressable>
 		</View>
 	);
 }
@@ -176,6 +219,7 @@ export function AuthSignInSheet({
 	const [emailAuthFlow, setEmailAuthFlow] =
 		React.useState<EmailAuthFlow>("sign-in");
 	const [isEmailCodeSent, setIsEmailCodeSent] = React.useState(false);
+	const [resendCooldownSeconds, setResendCooldownSeconds] = React.useState(0);
 	const [statusMessage, setStatusMessage] = React.useState<string | null>(null);
 
 	const emailCodeFactor = signIn.supportedSecondFactors.find(
@@ -188,6 +232,31 @@ export function AuthSignInSheet({
 	const isFetching =
 		signInFetchStatus === "fetching" || signUpFetchStatus === "fetching";
 	const codeDeliveryAddress = emailCodeFactor?.safeIdentifier ?? emailAddress;
+	const isResendDisabled = isFetching || resendCooldownSeconds > 0;
+	const resendCodeLabel =
+		resendCooldownSeconds > 0
+			? `Send a new code in ${resendCooldownSeconds}s`
+			: "Send a new code";
+
+	React.useEffect(() => {
+		if (resendCooldownSeconds <= 0) {
+			return;
+		}
+
+		const timerId = setTimeout(() => {
+			setResendCooldownSeconds((currentSeconds) =>
+				Math.max(currentSeconds - 1, 0)
+			);
+		}, 1000);
+
+		return () => {
+			clearTimeout(timerId);
+		};
+	}, [resendCooldownSeconds]);
+
+	const startResendCooldown = () => {
+		setResendCooldownSeconds(RESEND_CODE_COOLDOWN_SECONDS);
+	};
 
 	const finalizeSignIn = async () => {
 		await signIn.finalize({
@@ -258,6 +327,7 @@ export function AuthSignInSheet({
 
 			setEmailAuthFlow("sign-up");
 			setIsEmailCodeSent(true);
+			startResendCooldown();
 			return;
 		}
 
@@ -268,9 +338,14 @@ export function AuthSignInSheet({
 
 		setEmailAuthFlow("sign-in");
 		setIsEmailCodeSent(true);
+		startResendCooldown();
 	};
 
 	const handleResendEmailCode = async () => {
+		if (isResendDisabled) {
+			return;
+		}
+
 		setStatusMessage(null);
 		setCode("");
 
@@ -281,8 +356,10 @@ export function AuthSignInSheet({
 				setStatusMessage(
 					getAuthErrorMessage(error, "Unable to send a new code.")
 				);
+				return;
 			}
 
+			startResendCooldown();
 			return;
 		}
 
@@ -293,8 +370,10 @@ export function AuthSignInSheet({
 				setStatusMessage(
 					getAuthErrorMessage(error, "Unable to send a new code.")
 				);
+				return;
 			}
 
+			startResendCooldown();
 			return;
 		}
 
@@ -304,7 +383,10 @@ export function AuthSignInSheet({
 			setStatusMessage(
 				getAuthErrorMessage(error, "Unable to send a new code.")
 			);
+			return;
 		}
+
+		startResendCooldown();
 	};
 
 	const handleVerify = async () => {
@@ -350,6 +432,7 @@ export function AuthSignInSheet({
 		) {
 			await signIn.mfa.sendEmailCode();
 			setCode("");
+			startResendCooldown();
 			return;
 		}
 
@@ -363,6 +446,7 @@ export function AuthSignInSheet({
 			setCode("");
 			setEmailAuthFlow("sign-in");
 			setIsEmailCodeSent(false);
+			setResendCooldownSeconds(0);
 			setStatusMessage(null);
 		}
 	};
@@ -383,7 +467,7 @@ export function AuthSignInSheet({
 			<BottomSheet.Portal>
 				<BottomSheet.Overlay />
 				<BottomSheet.Content
-					backgroundClassName="rounded-t-[36px]"
+					backgroundClassName="rounded-t-[36px] bg-background"
 					enablePanDownToClose={true}
 					keyboardBehavior="extend"
 				>
@@ -399,12 +483,23 @@ export function AuthSignInSheet({
 							<BottomSheet.Title className="text-center">
 								Sign in to Viya
 							</BottomSheet.Title>
-							<BottomSheet.Description className="max-w-72.5 text-center">
-								Use Google, GitHub, or your email to continue.
-							</BottomSheet.Description>
+							{isCodeStep ? null : (
+								<BottomSheet.Description className="max-w-72.5 text-center">
+									Use Google, GitHub, or your email to continue.
+								</BottomSheet.Description>
+							)}
 						</View>
 
-						<AuthStatusMessage message={statusMessage} />
+						{statusMessage ? (
+							<Alert className="items-center rounded-2xl" status="danger">
+								<Alert.Indicator className="pt-0" iconProps={{ size: 18 }} />
+								<Alert.Content>
+									<Alert.Description className="leading-5" selectable={true}>
+										{statusMessage}
+									</Alert.Description>
+								</Alert.Content>
+							</Alert>
+						) : null}
 
 						{isCodeStep ? (
 							<View className="gap-5">
@@ -420,11 +515,11 @@ export function AuthSignInSheet({
 									<Button.Label>Verify</Button.Label>
 								</Button>
 								<Button
-									isDisabled={isFetching}
+									isDisabled={isResendDisabled}
 									onPress={handleResendEmailCode}
 									variant="ghost"
 								>
-									<Button.Label>Send a new code</Button.Label>
+									<Button.Label>{resendCodeLabel}</Button.Label>
 								</Button>
 							</View>
 						) : (

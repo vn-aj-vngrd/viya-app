@@ -1,43 +1,39 @@
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
-import { palawanDemoTrip } from "@viya-app/domain";
 import { useQuery } from "convex/react";
 import { Link } from "expo-router";
 import { Button, Surface, Text } from "heroui-native";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { View } from "react-native";
 
 import { Container } from "@/components/container";
 import { AccountAvatarButton } from "@/src/components/account/account-avatar-button";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 
-const activeTrip = palawanDemoTrip.trip;
-
 const readinessCategories = [
-	{ label: "Bookings", score: 72 },
-	{ label: "Documents", score: 88 },
-	{ label: "Budget", score: 78 },
-	{ label: "Packing", score: 64 },
-	{ label: "Safety", score: 92 },
+	{ icon: "calendar-outline", label: "Bookings", status: "Needs review" },
+	{ icon: "document-text-outline", label: "Documents", status: "Not synced" },
+	{ icon: "wallet-outline", label: "Budget", status: "Not tracked" },
+	{ icon: "bag-handle-outline", label: "Packing", status: "Not started" },
+	{ icon: "shield-checkmark-outline", label: "Safety", status: "Needs review" },
 ] as const;
 
-const timelineItems = [
-	{ date: "Jun 10", title: "Flight to Puerto Princesa" },
-	{ date: "Jun 10", title: "Hotel check-in" },
-	{ date: "Jun 11", title: "Underground River tour" },
-	{ date: "Jun 12", title: "Free beach day" },
-] as const;
+type IconName = ComponentProps<typeof Ionicons>["name"];
 
-const syncedDocuments = ["Flight confirmation", "Hotel receipt"] as const;
-const missingDocuments = ["Tour booking", "Valid ID copy"] as const;
+const makeCurrencyFormatter = (currency: string) =>
+	new Intl.NumberFormat("en-PH", {
+		currency,
+		maximumFractionDigits: 0,
+		style: "currency",
+	});
 
-const pesoFormatter = new Intl.NumberFormat("en-PH", {
-	currency: "PHP",
-	maximumFractionDigits: 0,
-	style: "currency",
-});
+const formatBudget = (amount?: number, currency = "PHP") => {
+	if (typeof amount !== "number") {
+		return "Not set";
+	}
 
-const formatBudget = (amount: number) => pesoFormatter.format(amount);
+	return makeCurrencyFormatter(currency).format(amount);
+};
 
 const getTimeGreeting = () => {
 	const hour = new Date().getHours();
@@ -64,7 +60,7 @@ const formatTripDate = (date: string) => {
 
 const getTripWindow = (startDate?: string, endDate?: string) => {
 	if (!(startDate && endDate)) {
-		return "June 10-15 · 5 days";
+		return "Dates not set";
 	}
 
 	const start = new Date(`${startDate}T00:00:00.000Z`);
@@ -77,6 +73,18 @@ const getTripWindow = (startDate?: string, endDate?: string) => {
 	const endDay = Number(endDate.split("-")[2] ?? 15);
 
 	return `${startLabel}-${endDay} · ${durationDays} days`;
+};
+
+const getNextAction = (readinessScore: number) => {
+	if (readinessScore <= 0) {
+		return "Start readiness review";
+	}
+
+	if (readinessScore < 100) {
+		return "Review open trip gaps";
+	}
+
+	return "Open trip plan";
 };
 
 function SectionTitle({
@@ -110,12 +118,23 @@ function MetricPill({ label, value }: { label: string; value: string }) {
 }
 
 function ActiveTripCard({
+	budgetAmount,
+	budgetCurrency,
+	readinessScore,
+	summary,
 	tripWindow,
 	title,
 }: {
+	budgetAmount?: number;
+	budgetCurrency?: string;
+	readinessScore: number;
+	summary: string;
 	title: string;
 	tripWindow: string;
 }) {
+	const readinessLabel =
+		readinessScore > 0 ? `${readinessScore}% Ready` : "Not checked";
+
 	return (
 		<Surface
 			className="gap-5 overflow-hidden rounded-[34px] bg-[#071A2F] p-5"
@@ -132,14 +151,17 @@ function ActiveTripCard({
 					{tripWindow}
 				</Text>
 				<Text.Paragraph className="mt-2 text-white/82 leading-5" type="body-sm">
-					Relaxed beach + light adventure
+					{summary}
 				</Text.Paragraph>
 			</View>
 
 			<View className="gap-3">
 				<View className="flex-row gap-3">
-					<MetricPill label="Readiness Score" value="82% Ready" />
-					<MetricPill label="Budget" value="₱18,400 / ₱30,000" />
+					<MetricPill label="Readiness" value={readinessLabel} />
+					<MetricPill
+						label="Budget"
+						value={formatBudget(budgetAmount, budgetCurrency)}
+					/>
 				</View>
 				<View className="flex-row items-center gap-3 rounded-3xl bg-white p-4">
 					<View className="h-10 w-10 items-center justify-center rounded-full bg-[#EAF2FF]">
@@ -150,7 +172,7 @@ function ActiveTripCard({
 							Next action
 						</Text>
 						<Text type="body-sm" weight="semibold">
-							Book airport transfer
+							{getNextAction(readinessScore)}
 						</Text>
 					</View>
 				</View>
@@ -165,7 +187,7 @@ function ActiveTripCard({
 	);
 }
 
-function ViyaRecommendation() {
+function ViyaRecommendation({ tripTitle }: { tripTitle: string }) {
 	return (
 		<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
 			<SectionTitle title="Viya Recommends" />
@@ -174,19 +196,21 @@ function ViyaRecommendation() {
 					<Ionicons color="#0A84FF" name="sparkles" size={18} />
 				</View>
 				<Text.Paragraph className="flex-1 leading-5" type="body-sm">
-					Your hotel confirmation is not synced yet. Upload it so I can update
-					your readiness score.
+					Start with a readiness review for {tripTitle}. I can check bookings,
+					documents, budget, packing, and safety before you travel.
 				</Text.Paragraph>
 			</View>
 			<View className="flex-row flex-wrap gap-2">
-				<Link asChild href={VIYA_ROUTES.tripVault}>
+				<Link asChild href={VIYA_ROUTES.tripReadiness}>
 					<Button className="flex-1" size="sm">
-						<Button.Label>Upload document</Button.Label>
+						<Button.Label>Fix readiness</Button.Label>
 					</Button>
 				</Link>
-				<Button className="flex-1" size="sm" variant="secondary">
-					<Button.Label>Mark as booked</Button.Label>
-				</Button>
+				<Link asChild href={VIYA_ROUTES.tripVault}>
+					<Button className="flex-1" size="sm" variant="secondary">
+						<Button.Label>Open vault</Button.Label>
+					</Button>
+				</Link>
 				<Link asChild href={VIYA_ROUTES.viya}>
 					<Button className="w-full" size="sm" variant="ghost">
 						<Button.Label>Ask Viya</Button.Label>
@@ -210,23 +234,25 @@ function ReadinessSnapshot() {
 				}
 				title="Readiness Snapshot"
 			/>
-			<View className="gap-3">
+			<View className="flex-row flex-wrap gap-3">
 				{readinessCategories.map((item) => (
-					<View className="gap-1.5" key={item.label}>
-						<View className="flex-row items-center justify-between">
-							<Text type="body-sm" weight="medium">
-								{item.label}
-							</Text>
-							<Text color="muted" type="body-xs" weight="semibold">
-								{item.score}%
-							</Text>
-						</View>
-						<View className="h-2 overflow-hidden rounded-full bg-surface-secondary">
-							<View
-								className="h-full rounded-full bg-[#0A84FF]"
-								style={{ width: `${item.score}%` }}
+					<View
+						className="w-[47%] gap-2 rounded-2xl bg-surface-secondary p-3"
+						key={item.label}
+					>
+						<View className="h-9 w-9 items-center justify-center rounded-full bg-white">
+							<Ionicons
+								color="#0A84FF"
+								name={item.icon as IconName}
+								size={17}
 							/>
 						</View>
+						<Text type="body-sm" weight="semibold">
+							{item.label}
+						</Text>
+						<Text color="muted" type="body-xs" weight="medium">
+							{item.status}
+						</Text>
 					</View>
 				))}
 			</View>
@@ -247,43 +273,20 @@ function UpcomingTimeline() {
 				}
 				title="Upcoming Timeline"
 			/>
-			<View className="gap-3">
-				{timelineItems.map((item) => (
-					<View className="flex-row items-center gap-3" key={item.title}>
-						<Text color="muted" type="body-xs" weight="semibold">
-							{item.date}
-						</Text>
-						<View className="h-2 w-2 rounded-full bg-[#0A84FF]" />
-						<Text className="flex-1" type="body-sm" weight="medium">
-							{item.title}
-						</Text>
-					</View>
-				))}
+			<View className="flex-row gap-3 rounded-3xl bg-surface-secondary p-4">
+				<View className="h-10 w-10 items-center justify-center rounded-full bg-white">
+					<Ionicons color="#0A84FF" name="time-outline" size={18} />
+				</View>
+				<View className="flex-1 gap-1">
+					<Text type="body-sm" weight="semibold">
+						No itinerary events yet
+					</Text>
+					<Text.Paragraph color="muted" type="body-sm">
+						Add flights, stays, and activities to build your trip timeline.
+					</Text.Paragraph>
+				</View>
 			</View>
 		</Surface>
-	);
-}
-
-function DocumentRow({
-	name,
-	status,
-}: {
-	name: string;
-	status: "missing" | "synced";
-}) {
-	const isSynced = status === "synced";
-
-	return (
-		<View className="flex-row items-center gap-2">
-			<Ionicons
-				color={isSynced ? "#059669" : "#E97816"}
-				name={isSynced ? "checkmark-circle" : "alert-circle"}
-				size={17}
-			/>
-			<Text type="body-sm" weight="medium">
-				{name}
-			</Text>
-		</View>
 	);
 }
 
@@ -300,29 +303,43 @@ function TripVaultPreview() {
 				}
 				title="Trip Vault"
 			/>
-			<View className="flex-row gap-5">
-				<View className="flex-1 gap-2">
-					<Text color="muted" type="body-xs" weight="semibold">
-						SYNCED
-					</Text>
-					{syncedDocuments.map((item) => (
-						<DocumentRow key={item} name={item} status="synced" />
-					))}
+			<View className="gap-3">
+				<View className="flex-row items-center gap-3 rounded-2xl bg-surface-secondary p-3">
+					<Ionicons color="#0A84FF" name="cloud-upload-outline" size={19} />
+					<View className="flex-1">
+						<Text type="body-sm" weight="semibold">
+							No synced documents yet
+						</Text>
+						<Text color="muted" type="body-xs">
+							Upload confirmations, IDs, receipts, or booking files.
+						</Text>
+					</View>
 				</View>
-				<View className="flex-1 gap-2">
-					<Text color="muted" type="body-xs" weight="semibold">
-						MISSING
-					</Text>
-					{missingDocuments.map((item) => (
-						<DocumentRow key={item} name={item} status="missing" />
-					))}
+				<View className="flex-row items-center gap-3 rounded-2xl bg-[#FFF7ED] p-3">
+					<Ionicons color="#E97816" name="alert-circle-outline" size={19} />
+					<View className="flex-1">
+						<Text type="body-sm" weight="semibold">
+							Missing items will appear here
+						</Text>
+						<Text color="muted" type="body-xs">
+							Viya can flag gaps once your trip details are added.
+						</Text>
+					</View>
 				</View>
 			</View>
 		</Surface>
 	);
 }
 
-function BudgetSnapshot() {
+function BudgetSnapshot({
+	budgetAmount,
+	budgetCurrency,
+}: {
+	budgetAmount?: number;
+	budgetCurrency?: string;
+}) {
+	const plannedBudget = formatBudget(budgetAmount, budgetCurrency);
+
 	return (
 		<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
 			<SectionTitle
@@ -337,10 +354,10 @@ function BudgetSnapshot() {
 			/>
 			<View className="flex-row flex-wrap gap-3">
 				{[
-					["Planned", 30_000],
-					["Spent", 18_400],
-					["Remaining", 11_600],
-					["Safe buffer", 5200],
+					["Planned", plannedBudget],
+					["Spent", "Not tracked"],
+					["Remaining", "Pending"],
+					["Safe buffer", "Pending"],
 				].map(([label, value]) => (
 					<View
 						className="w-[47%] gap-1 rounded-2xl bg-surface-secondary p-3"
@@ -350,14 +367,15 @@ function BudgetSnapshot() {
 							{label}
 						</Text>
 						<Text type="body-sm" weight="semibold">
-							{formatBudget(value as number)}
+							{value}
 						</Text>
 					</View>
 				))}
 			</View>
 			<View className="rounded-2xl bg-[#FFF7ED] p-3">
 				<Text.Paragraph className="leading-5" type="body-sm">
-					You're still within budget, but food spending is trending high.
+					Add expenses so Viya can watch your budget and warn you before
+					spending gets tight.
 				</Text.Paragraph>
 			</View>
 		</Surface>
@@ -381,7 +399,7 @@ function MemoriesTeaser() {
 				{[
 					["Photos saved", "0"],
 					["Notes captured", "0"],
-					["Receipts attached", "2"],
+					["Receipts attached", "0"],
 				].map(([label, value]) => (
 					<View
 						className="flex-1 gap-1 rounded-2xl bg-surface-secondary p-3"
@@ -396,7 +414,45 @@ function MemoriesTeaser() {
 					</View>
 				))}
 			</View>
+			<Text.Paragraph color="muted" type="body-sm">
+				Your trip memories will unlock after photos, notes, or receipts are
+				added.
+			</Text.Paragraph>
 		</Surface>
+	);
+}
+
+function HomeHeader({ greeting }: { greeting: string }) {
+	return (
+		<View
+			className="flex-row items-center gap-4"
+			style={{ alignSelf: "stretch" }}
+		>
+			<Text.Heading type="h2" weight="semibold">
+				{greeting}
+			</Text.Heading>
+			<View style={{ marginLeft: "auto" }}>
+				<AccountAvatarButton size={44} />
+			</View>
+		</View>
+	);
+}
+
+function HomeLoadingState() {
+	const greeting = getTimeGreeting();
+
+	return (
+		<Container className="px-4 pb-28">
+			<View className="gap-4 py-4" style={{ alignSelf: "stretch" }}>
+				<HomeHeader greeting={greeting} />
+				<Surface className="gap-4 rounded-[34px] border border-border bg-surface p-5">
+					<View className="h-4 w-24 rounded-full bg-surface-secondary" />
+					<View className="h-8 w-3/4 rounded-full bg-surface-secondary" />
+					<View className="h-4 w-full rounded-full bg-surface-secondary" />
+					<View className="h-4 w-2/3 rounded-full bg-surface-secondary" />
+				</Surface>
+			</View>
+		</Container>
 	);
 }
 
@@ -406,21 +462,11 @@ function EmptyHomeState() {
 	return (
 		<Container className="px-4 pb-28">
 			<View className="gap-4 py-4" style={{ alignSelf: "stretch" }}>
-				<View
-					className="flex-row items-center gap-4"
-					style={{ alignSelf: "stretch" }}
-				>
-					<Text.Heading type="h2" weight="semibold">
-						{greeting}
-					</Text.Heading>
-					<View style={{ marginLeft: "auto" }}>
-						<AccountAvatarButton size={44} />
-					</View>
-				</View>
+				<HomeHeader greeting={greeting} />
 
 				<Surface className="gap-5 rounded-[34px] border border-border bg-surface p-5">
 					<View className="gap-2">
-						<Text.Heading type="h2" weight="semibold">
+						<Text.Heading type="h3" weight="semibold">
 							Plan your first trip with Viya
 						</Text.Heading>
 						<Text.Paragraph className="leading-5" color="muted" type="body-sm">
@@ -434,11 +480,6 @@ function EmptyHomeState() {
 								<Button.Label>Plan my first trip</Button.Label>
 							</Button>
 						</Link>
-						<Link asChild href={VIYA_ROUTES.trips}>
-							<Button variant="secondary">
-								<Button.Label>Explore demo trip</Button.Label>
-							</Button>
-						</Link>
 					</View>
 				</Surface>
 			</View>
@@ -448,41 +489,40 @@ function EmptyHomeState() {
 
 export default function HomeScreen() {
 	const trips = useQuery(api.trips.listTrips);
-	const hasTrips = (trips?.length ?? 0) > 0;
-	const currentTrip = trips?.[0];
 	const greeting = getTimeGreeting();
 
-	if (!hasTrips) {
+	if (trips === undefined) {
+		return <HomeLoadingState />;
+	}
+
+	const realTrips = trips.filter((trip) => !trip.isDemo);
+	const currentTrip = realTrips[0];
+
+	if (!currentTrip) {
 		return <EmptyHomeState />;
 	}
 
 	return (
 		<Container className="px-4 pb-28">
 			<View className="gap-4 py-4" style={{ alignSelf: "stretch" }}>
-				<View
-					className="flex-row items-center gap-4"
-					style={{ alignSelf: "stretch" }}
-				>
-					<Text.Heading type="h2" weight="semibold">
-						{greeting}
-					</Text.Heading>
-					<View style={{ marginLeft: "auto" }}>
-						<AccountAvatarButton size={44} />
-					</View>
-				</View>
+				<HomeHeader greeting={greeting} />
 
 				<ActiveTripCard
-					title={currentTrip?.title ?? activeTrip.title}
-					tripWindow={getTripWindow(
-						currentTrip?.startDate,
-						currentTrip?.endDate
-					)}
+					budgetAmount={currentTrip.budgetAmount}
+					budgetCurrency={currentTrip.budgetCurrency}
+					readinessScore={currentTrip.readinessScore}
+					summary={currentTrip.summary}
+					title={currentTrip.title}
+					tripWindow={getTripWindow(currentTrip.startDate, currentTrip.endDate)}
 				/>
-				<ViyaRecommendation />
+				<ViyaRecommendation tripTitle={currentTrip.title} />
 				<ReadinessSnapshot />
 				<UpcomingTimeline />
 				<TripVaultPreview />
-				<BudgetSnapshot />
+				<BudgetSnapshot
+					budgetAmount={currentTrip.budgetAmount}
+					budgetCurrency={currentTrip.budgetCurrency}
+				/>
 				<MemoriesTeaser />
 			</View>
 		</Container>
