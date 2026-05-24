@@ -6,6 +6,7 @@ import {
 	CloseButton,
 	ListGroup,
 	Separator,
+	Spinner,
 	Text,
 	useThemeColor,
 } from "heroui-native";
@@ -106,13 +107,24 @@ export function AccountAvatarButton({ size = 48 }: AccountAvatarButtonProps) {
 	const insets = useSafeAreaInsets();
 	const [dangerColor, mutedColor] = useThemeColor(["danger", "muted"]);
 	const [isOpen, setIsOpen] = useState(false);
+	const [isSigningOut, setIsSigningOut] = useState(false);
 	const displayName = user?.fullName ?? "Viya traveler";
 	const primaryEmail = user?.emailAddresses[0]?.emailAddress ?? "Signed in";
 
 	const handleSignOutPress = async () => {
-		setIsOpen(false);
-		await signOut();
-		router.replace("/(auth)");
+		if (isSigningOut) {
+			return;
+		}
+
+		setIsSigningOut(true);
+
+		try {
+			await signOut();
+			setIsOpen(false);
+			router.replace("/(auth)");
+		} finally {
+			setIsSigningOut(false);
+		}
 	};
 
 	return (
@@ -196,20 +208,25 @@ export function AccountAvatarButton({ size = 48 }: AccountAvatarButtonProps) {
 								<ListGroup.Item
 									accessibilityRole="button"
 									className="px-5 py-4"
+									disabled={isSigningOut}
 									onPress={handleSignOutPress}
 								>
 									<ListGroup.ItemPrefix>
 										<View className="h-8 w-8 items-center justify-center rounded-full bg-danger-soft">
-											<Ionicons
-												color={dangerColor}
-												name="log-out-outline"
-												size={17}
-											/>
+											{isSigningOut ? (
+												<Spinner color={dangerColor} size="sm" />
+											) : (
+												<Ionicons
+													color={dangerColor}
+													name="log-out-outline"
+													size={17}
+												/>
+											)}
 										</View>
 									</ListGroup.ItemPrefix>
 									<ListGroup.ItemContent>
 										<ListGroup.ItemTitle className="text-danger">
-											Sign out
+											{isSigningOut ? "Signing out..." : "Sign out"}
 										</ListGroup.ItemTitle>
 									</ListGroup.ItemContent>
 								</ListGroup.Item>

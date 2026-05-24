@@ -6,9 +6,11 @@ import {
 	BottomSheet,
 	Button,
 	Input,
+	Spinner,
 	Text,
 	TextField,
 	useBottomSheetAwareHandlers,
+	useThemeColor,
 } from "heroui-native";
 import React from "react";
 import { Pressable, TextInput, View } from "react-native";
@@ -32,6 +34,7 @@ const RESEND_CODE_COOLDOWN_SECONDS = 30;
 const OTP_SLOT_INDEXES = [0, 1, 2, 3, 4, 5] as const;
 
 type EmailAuthFlow = "sign-in" | "sign-up";
+type PendingAuthAction = "resend" | "send" | "verify";
 
 interface AuthSignInSheetProps {
 	isOpen: boolean;
@@ -206,6 +209,7 @@ function SheetOtpInput({ onChange, value }: SheetOtpInputProps) {
 	);
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Clerk sign-in, sign-up, MFA, resend, and loading states share one sheet state machine.
 export function AuthSignInSheet({
 	isOpen,
 	onOpenChange,
@@ -214,11 +218,14 @@ export function AuthSignInSheet({
 	const { fetchStatus: signUpFetchStatus, signUp } = useSignUp();
 	const router = useRouter();
 	const insets = useSafeAreaInsets();
+	const accentForegroundColor = useThemeColor("accent-foreground");
 	const [emailAddress, setEmailAddress] = React.useState("");
 	const [code, setCode] = React.useState("");
 	const [emailAuthFlow, setEmailAuthFlow] =
 		React.useState<EmailAuthFlow>("sign-in");
 	const [isEmailCodeSent, setIsEmailCodeSent] = React.useState(false);
+	const [pendingAuthAction, setPendingAuthAction] =
+		React.useState<PendingAuthAction | null>(null);
 	const [resendCooldownSeconds, setResendCooldownSeconds] = React.useState(0);
 	const [statusMessage, setStatusMessage] = React.useState<string | null>(null);
 
@@ -232,7 +239,11 @@ export function AuthSignInSheet({
 	const isFetching =
 		signInFetchStatus === "fetching" || signUpFetchStatus === "fetching";
 	const codeDeliveryAddress = emailCodeFactor?.safeIdentifier ?? emailAddress;
-	const isResendDisabled = isFetching || resendCooldownSeconds > 0;
+	const isAuthBusy = isFetching || pendingAuthAction !== null;
+	const isSendingCode = pendingAuthAction === "send";
+	const isResendingCode = pendingAuthAction === "resend";
+	const isVerifyingCode = pendingAuthAction === "verify";
+	const isResendDisabled = isAuthBusy || resendCooldownSeconds > 0;
 	const resendCodeLabel =
 		resendCooldownSeconds > 0
 			? `Send a new code in ${resendCooldownSeconds}s`
@@ -285,60 +296,72 @@ export function AuthSignInSheet({
 	};
 
 	const handleSendEmailCode = async () => {
+		if (isAuthBusy) {
+			return;
+		}
+
+		setPendingAuthAction("send");
 		setStatusMessage(null);
 		setCode("");
 
-		const { error } = await signIn.emailCode.sendCode({
-			emailAddress,
-		});
+		try {
+			const { error } = await signIn.emailCode.sendCode({
+				emailAddress,
+			});
 
-		if (error) {
-			if (!isMissingAccountError(error)) {
-				setStatusMessage(
-					getAuthErrorMessage(error, "Unable to send a code. Please try again.")
-				);
+			if (error) {
+				if (!isMissingAccountError(error)) {
+					setStatusMessage(
+						getAuthErrorMessage(
+							error,
+							"Unable to send a code. Please try again."
+						)
+					);
+					return;
+				}
+
+				const { error: createError } = await signUp.create({ emailAddress });
+
+				if (createError) {
+					setStatusMessage(
+						getAuthErrorMessage(
+							createError,
+							"Unable to create your account. Please try again."
+						)
+					);
+					return;
+				}
+
+				const { error: sendCodeError } =
+					await signUp.verifications.sendEmailCode();
+
+				if (sendCodeError) {
+					setStatusMessage(
+						getAuthErrorMessage(
+							sendCodeError,
+							"Unable to send a code. Please try again."
+						)
+					);
+					return;
+				}
+
+				setEmailAuthFlow("sign-up");
+				setIsEmailCodeSent(true);
+				startResendCooldown();
 				return;
 			}
 
-			const { error: createError } = await signUp.create({ emailAddress });
-
-			if (createError) {
-				setStatusMessage(
-					getAuthErrorMessage(
-						createError,
-						"Unable to create your account. Please try again."
-					)
-				);
+			if (signIn.status === "complete") {
+				await finalizeSignIn();
 				return;
 			}
 
-			const { error: sendCodeError } =
-				await signUp.verifications.sendEmailCode();
-
-			if (sendCodeError) {
-				setStatusMessage(
-					getAuthErrorMessage(
-						sendCodeError,
-						"Unable to send a code. Please try again."
-					)
-				);
-				return;
-			}
-
-			setEmailAuthFlow("sign-up");
+			setEmailAuthFlow("sign-in");
 			setIsEmailCodeSent(true);
 			startResendCooldown();
-			return;
+		} finally {
+			setPendingAuthAction(null);
 		}
-
-		if (signIn.status === "complete") {
-			await finalizeSignIn();
-			return;
-		}
-
-		setEmailAuthFlow("sign-in");
-		setIsEmailCodeSent(true);
-		startResendCooldown();
 	};
 
 	const handleResendEmailCode = async () => {
@@ -346,11 +369,40 @@ export function AuthSignInSheet({
 			return;
 		}
 
+		setPendingAuthAction("resend");
 		setStatusMessage(null);
 		setCode("");
 
-		if (emailAuthFlow === "sign-up") {
-			const { error } = await signUp.verifications.sendEmailCode();
+		try {
+			if (emailAuthFlow === "sign-up") {
+				const { error } = await signUp.verifications.sendEmailCode();
+
+				if (error) {
+					setStatusMessage(
+						getAuthErrorMessage(error, "Unable to send a new code.")
+					);
+					return;
+				}
+
+				startResendCooldown();
+				return;
+			}
+
+			if (requiresMfaEmailCode) {
+				const { error } = await signIn.mfa.sendEmailCode();
+
+				if (error) {
+					setStatusMessage(
+						getAuthErrorMessage(error, "Unable to send a new code.")
+					);
+					return;
+				}
+
+				startResendCooldown();
+				return;
+			}
+
+			const { error } = await signIn.emailCode.sendCode({ emailAddress });
 
 			if (error) {
 				setStatusMessage(
@@ -360,40 +412,40 @@ export function AuthSignInSheet({
 			}
 
 			startResendCooldown();
-			return;
+		} finally {
+			setPendingAuthAction(null);
 		}
-
-		if (requiresMfaEmailCode) {
-			const { error } = await signIn.mfa.sendEmailCode();
-
-			if (error) {
-				setStatusMessage(
-					getAuthErrorMessage(error, "Unable to send a new code.")
-				);
-				return;
-			}
-
-			startResendCooldown();
-			return;
-		}
-
-		const { error } = await signIn.emailCode.sendCode({ emailAddress });
-
-		if (error) {
-			setStatusMessage(
-				getAuthErrorMessage(error, "Unable to send a new code.")
-			);
-			return;
-		}
-
-		startResendCooldown();
 	};
 
 	const handleVerify = async () => {
+		if (isAuthBusy || code.length < EMAIL_CODE_LENGTH) {
+			return;
+		}
+
+		setPendingAuthAction("verify");
 		setStatusMessage(null);
 
-		if (emailAuthFlow === "sign-up") {
-			const { error } = await signUp.verifications.verifyEmailCode({ code });
+		try {
+			if (emailAuthFlow === "sign-up") {
+				const { error } = await signUp.verifications.verifyEmailCode({ code });
+
+				if (error) {
+					setStatusMessage(
+						getAuthErrorMessage(
+							error,
+							"That code did not work. Please try again."
+						)
+					);
+					return;
+				}
+
+				await finalizeSignUp();
+				return;
+			}
+
+			const { error } = requiresMfaEmailCode
+				? await signIn.mfa.verifyEmailCode({ code })
+				: await signIn.emailCode.verifyCode({ code });
 
 			if (error) {
 				setStatusMessage(
@@ -405,38 +457,26 @@ export function AuthSignInSheet({
 				return;
 			}
 
-			await finalizeSignUp();
-			return;
+			if (signIn.status === "complete") {
+				await finalizeSignIn();
+				return;
+			}
+
+			if (
+				(signIn.status === "needs_second_factor" ||
+					signIn.status === "needs_client_trust") &&
+				emailCodeFactor
+			) {
+				await signIn.mfa.sendEmailCode();
+				setCode("");
+				startResendCooldown();
+				return;
+			}
+
+			setStatusMessage("That code did not complete sign-in. Please try again.");
+		} finally {
+			setPendingAuthAction(null);
 		}
-
-		const { error } = requiresMfaEmailCode
-			? await signIn.mfa.verifyEmailCode({ code })
-			: await signIn.emailCode.verifyCode({ code });
-
-		if (error) {
-			setStatusMessage(
-				getAuthErrorMessage(error, "That code did not work. Please try again.")
-			);
-			return;
-		}
-
-		if (signIn.status === "complete") {
-			await finalizeSignIn();
-			return;
-		}
-
-		if (
-			(signIn.status === "needs_second_factor" ||
-				signIn.status === "needs_client_trust") &&
-			emailCodeFactor
-		) {
-			await signIn.mfa.sendEmailCode();
-			setCode("");
-			startResendCooldown();
-			return;
-		}
-
-		setStatusMessage("That code did not complete sign-in. Please try again.");
 	};
 
 	const handleOpenChange = (nextIsOpen: boolean) => {
@@ -509,16 +549,22 @@ export function AuthSignInSheet({
 								</Text.Paragraph>
 								<SheetOtpInput onChange={setCode} value={code} />
 								<Button
-									isDisabled={isFetching || code.length < EMAIL_CODE_LENGTH}
+									isDisabled={isAuthBusy || code.length < EMAIL_CODE_LENGTH}
 									onPress={handleVerify}
 								>
-									<Button.Label>Verify</Button.Label>
+									{isVerifyingCode ? (
+										<Spinner color={accentForegroundColor} size="sm" />
+									) : null}
+									<Button.Label>
+										{isVerifyingCode ? "Verifying..." : "Verify"}
+									</Button.Label>
 								</Button>
 								<Button
 									isDisabled={isResendDisabled}
 									onPress={handleResendEmailCode}
 									variant="ghost"
 								>
+									{isResendingCode ? <Spinner size="sm" /> : null}
 									<Button.Label>{resendCodeLabel}</Button.Label>
 								</Button>
 							</View>
@@ -546,11 +592,17 @@ export function AuthSignInSheet({
 									/>
 								</View>
 								<Button
-									isDisabled={!emailAddress.trim() || isFetching}
+									isDisabled={!emailAddress.trim() || isAuthBusy}
 									onPress={handleSendEmailCode}
 								>
-									<Ionicons color="#FFFFFF" name="mail-outline" size={18} />
-									<Button.Label>Continue with email</Button.Label>
+									{isSendingCode ? (
+										<Spinner color={accentForegroundColor} size="sm" />
+									) : (
+										<Ionicons color="#FFFFFF" name="mail-outline" size={18} />
+									)}
+									<Button.Label>
+										{isSendingCode ? "Sending..." : "Continue with email"}
+									</Button.Label>
 								</Button>
 							</View>
 						)}

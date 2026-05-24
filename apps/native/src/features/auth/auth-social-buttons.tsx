@@ -3,7 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { makeRedirectUri } from "expo-auth-session";
 import { useRouter } from "expo-router";
 import { maybeCompleteAuthSession } from "expo-web-browser";
-import { Button } from "heroui-native";
+import { Button, Spinner } from "heroui-native";
 import React from "react";
 import { View } from "react-native";
 import Svg, { Path } from "react-native-svg";
@@ -131,31 +131,51 @@ export function AuthSocialButtons({
 	return (
 		<View className="gap-2">
 			{SOCIAL_PROVIDERS.map((provider) => (
-				<Button
-					className="rounded-full border border-border bg-surface"
-					isDisabled={activeStrategy !== null}
+				<SocialProviderButton
+					activeStrategy={activeStrategy}
 					key={provider.strategy}
 					onPress={() => handleSocialSignIn(provider.strategy)}
-					variant="secondary"
-				>
-					<View className="flex-row items-center justify-center gap-2">
-						{provider.icon === "google" ? (
-							<GoogleLogo />
-						) : (
-							<Ionicons
-								color={SOCIAL_ICON_COLOR}
-								name={provider.icon}
-								size={18}
-							/>
-						)}
-						<Button.Label className="text-foreground">
-							{activeStrategy === provider.strategy
-								? "Opening..."
-								: provider.label}
-						</Button.Label>
-					</View>
-				</Button>
+					provider={provider}
+				/>
 			))}
 		</View>
+	);
+}
+
+function SocialProviderButton({
+	activeStrategy,
+	onPress,
+	provider,
+}: {
+	activeStrategy: (typeof SOCIAL_PROVIDERS)[number]["strategy"] | null;
+	onPress: () => void;
+	provider: (typeof SOCIAL_PROVIDERS)[number];
+}) {
+	const isActive = activeStrategy === provider.strategy;
+	let startContent: React.ReactNode =
+		provider.icon === "google" ? (
+			<GoogleLogo />
+		) : (
+			<Ionicons color={SOCIAL_ICON_COLOR} name={provider.icon} size={18} />
+		);
+
+	if (isActive) {
+		startContent = <Spinner size="sm" />;
+	}
+
+	return (
+		<Button
+			className="rounded-full border border-border bg-surface"
+			isDisabled={activeStrategy !== null}
+			onPress={onPress}
+			variant="secondary"
+		>
+			<View className="flex-row items-center justify-center gap-2">
+				{startContent}
+				<Button.Label className="text-foreground">
+					{isActive ? "Opening..." : provider.label}
+				</Button.Label>
+			</View>
+		</Button>
 	);
 }

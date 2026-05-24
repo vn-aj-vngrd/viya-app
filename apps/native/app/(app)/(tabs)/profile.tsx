@@ -1,7 +1,8 @@
 import { useClerk, useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Button, Surface, Text } from "heroui-native";
+import { Button, Spinner, Surface, Text } from "heroui-native";
+import { useState } from "react";
 import { Image, View } from "react-native";
 
 import { Container } from "@/components/container";
@@ -23,12 +24,23 @@ export default function ProfileScreen() {
 	const { signOut } = useClerk();
 	const { user } = useUser();
 	const router = useRouter();
+	const [isSigningOut, setIsSigningOut] = useState(false);
 	const displayName = user?.fullName ?? "Viya traveler";
 	const primaryEmail = user?.emailAddresses[0]?.emailAddress ?? "Signed in";
 
 	const handleSignOutPress = async () => {
-		await signOut();
-		router.replace("/(auth)");
+		if (isSigningOut) {
+			return;
+		}
+
+		setIsSigningOut(true);
+
+		try {
+			await signOut();
+			router.replace("/(auth)");
+		} finally {
+			setIsSigningOut(false);
+		}
 	};
 
 	return (
@@ -76,9 +88,19 @@ export default function ProfileScreen() {
 						</Text.Paragraph>
 					</View>
 
-					<Button onPress={handleSignOutPress} variant="secondary">
-						<Ionicons color="#DC2626" name="log-out-outline" size={18} />
-						<Button.Label>Sign out</Button.Label>
+					<Button
+						isDisabled={isSigningOut}
+						onPress={handleSignOutPress}
+						variant="secondary"
+					>
+						{isSigningOut ? (
+							<Spinner color="#DC2626" size="sm" />
+						) : (
+							<Ionicons color="#DC2626" name="log-out-outline" size={18} />
+						)}
+						<Button.Label>
+							{isSigningOut ? "Signing out..." : "Sign out"}
+						</Button.Label>
 					</Button>
 				</Surface>
 			</View>

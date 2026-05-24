@@ -23,7 +23,14 @@ import {
 } from "@viya-app/domain";
 import { useMutation } from "convex/react";
 import { useRouter } from "expo-router";
-import { Button, Input, Surface, Text, TextField } from "heroui-native";
+import {
+	Button,
+	Input,
+	Spinner,
+	Surface,
+	Text,
+	TextField,
+} from "heroui-native";
 import { type ComponentProps, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import Animated, {
@@ -733,6 +740,14 @@ export function PreferenceOnboardingScreen() {
 		return <WelcomeIntroScreen onContinue={() => setIntroStage("questions")} />;
 	}
 
+	let continueButtonLabel = "Continue";
+
+	if (isSaving) {
+		continueButtonLabel = "Saving...";
+	} else if (isLastQuestion) {
+		continueButtonLabel = "Save";
+	}
+
 	return (
 		<Container isScrollable={false}>
 			<View className="flex-1">
@@ -828,9 +843,8 @@ export function PreferenceOnboardingScreen() {
 							isDisabled={!canContinue || isSaving}
 							onPress={handleContinuePress}
 						>
-							<Button.Label>
-								{isLastQuestion ? "Save" : "Continue"}
-							</Button.Label>
+							{isSaving ? <Spinner color="#FFFFFF" size="sm" /> : null}
+							<Button.Label>{continueButtonLabel}</Button.Label>
 						</Button>
 					</View>
 				</View>
