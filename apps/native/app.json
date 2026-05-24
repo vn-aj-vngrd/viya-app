@@ -3,17 +3,17 @@
     "scheme": "viya-app",
     "userInterfaceStyle": "automatic",
     "orientation": "default",
-    "icon": "./assets/images/viya-app-icon-v2.png",
+    "icon": "./assets/images/viya-app-icon.png",
     "web": {
       "bundler": "metro",
-      "favicon": "./assets/images/viya-favicon-v2.png"
+      "favicon": "./assets/images/viya-favicon.png"
     },
     "name": "",
     "slug": "viya-app",
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/viya-android-foreground-v2.png",
-        "backgroundImage": "./assets/images/viya-android-background-v2.png",
+        "foregroundImage": "./assets/images/viya-android-foreground.png",
+        "backgroundImage": "./assets/images/viya-android-background.png",
         "backgroundColor": "#00000000",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       }

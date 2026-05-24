@@ -6,6 +6,44 @@ export const VIYA_SYSTEM_PROMPT = [
 	"Prefer next actions that improve readiness, reduce risk, or help the traveler decide.",
 ].join("\n");
 
+export type ChatMode = "chat" | "plan" | "trip";
+
+const CHAT_MODE_INSTRUCTIONS = {
+	chat: [
+		"Mode: Chat.",
+		"Answer directly, then offer one useful next step when it helps.",
+	],
+	plan: [
+		"Mode: Plan.",
+		"Run an interactive planning intake before drafting the plan.",
+		"Ask exactly one question per response, then wait for the user's answer.",
+		"Use a concise question-card style: short acknowledgement, **Question N/4**, one direct question, then 2-4 numbered options when useful.",
+		'Include a final option like "Type something else" when choices are not exhaustive.',
+		"After the user answers, briefly reflect the answer in one sentence and ask the next question.",
+		"Ask no more than 4 intake questions before drafting a first plan.",
+		"Do not use Markdown tables during intake. Do not list every missing field at once.",
+		"Only skip intake and draft immediately when the user explicitly says to assume sensible defaults or already provides dates, length, style, and budget.",
+		"Keep recommendations realistic for timing, transfers, rest, budget, and weather uncertainty.",
+	],
+	trip: [
+		"Mode: Trip.",
+		"Answer inside an existing trip workspace using the provided Current trip context.",
+		"Handle readiness, bookings, documents, itinerary, risks, budget, day-of travel questions, delays, packing, and backup options.",
+		"Lead with the practical answer, then mention any trip hub gaps that limit confidence.",
+		"Do not claim live status, weather, opening hours, traffic, or booking availability unless the user provided it.",
+	],
+} as const satisfies Record<ChatMode, readonly string[]>;
+
+export const buildChatModeSystemPrompt = (
+	mode: ChatMode,
+	tripContext?: string
+) =>
+	[
+		VIYA_SYSTEM_PROMPT,
+		...CHAT_MODE_INSTRUCTIONS[mode],
+		...(tripContext ? ["Current trip context:", tripContext] : []),
+	].join("\n");
+
 export const buildItineraryPrompt = (tripContext: string) =>
 	[
 		VIYA_SYSTEM_PROMPT,

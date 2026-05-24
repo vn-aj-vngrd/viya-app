@@ -34,7 +34,7 @@ const getModelId = (purpose: AiModelPurpose): string => {
 	return (
 		process.env.AI_MODEL ??
 		process.env.OPENROUTER_MODEL ??
-		"google/gemini-2.5-flash"
+		"openai/gpt-oss-120b:free"
 	);
 };
 

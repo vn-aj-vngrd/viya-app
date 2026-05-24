@@ -1,155 +1,173 @@
-import { useSmoothText, useUIMessages } from "@convex-dev/agent/react";
+import { useUIMessages } from "@convex-dev/agent/react";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
 import { getPreferenceSuggestions } from "@viya-app/domain";
 import { useMutation, useQuery } from "convex/react";
-import { type Href, useLocalSearchParams, useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import {
 	Button,
 	Input,
+	ScrollShadow,
 	Surface,
 	Text,
 	TextField,
 	useThemeColor,
 } from "heroui-native";
-import { type ComponentProps, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
 	KeyboardAvoidingView,
 	Platform,
 	Pressable,
-	ScrollView,
-	type StyleProp,
+	type ScrollView,
 	View,
-	type ViewStyle,
 } from "react-native";
+import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Container } from "@/components/container";
-import { EmptyState } from "@/src/components/empty-state";
-import { ViyaMark } from "@/src/components/viya-mark";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 
-type SuggestionIconName = ComponentProps<typeof Ionicons>["name"];
-type ReturnTabName = "index" | "trips";
-
-interface PromptSuggestion {
-	accent: string;
-	icon: SuggestionIconName;
-	prompt: string;
-	soft: string;
-	title: string;
-}
-
-const returnTabRoutes = {
-	index: VIYA_ROUTES.home,
-	trips: VIYA_ROUTES.trips,
-} as const satisfies Record<ReturnTabName, Href>;
-
-const userBubbleStyle = {
-	backgroundColor: "#0A84FF",
-	borderBottomRightRadius: 8,
-	borderRadius: 24,
-	boxShadow: "0 12px 28px rgba(10, 132, 255, 0.22)",
-} satisfies StyleProp<ViewStyle>;
-
-const assistantBubbleStyle = {
-	backgroundColor: "#FFFFFF",
-	borderBottomLeftRadius: 8,
-	borderColor: "rgba(24, 24, 27, 0.08)",
-	borderRadius: 24,
-	borderWidth: 1,
-	boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)",
-} satisfies StyleProp<ViewStyle>;
-
-function ViyaAvatar() {
-	return (
-		<View className="mt-1 h-8 w-8 items-center justify-center overflow-hidden rounded-xl">
-			<ViyaMark size={32} />
-		</View>
-	);
-}
-
-function TypingBubble() {
-	return (
-		<View className="flex-row gap-2">
-			<ViyaAvatar />
-			<View
-				className="flex-row items-center gap-1 px-4 py-3"
-				style={assistantBubbleStyle}
-			>
-				{["dot-1", "dot-2", "dot-3"].map((dot) => (
-					<View
-						className="h-2 w-2 rounded-full bg-muted"
-						key={dot}
-						style={{ opacity: dot === "dot-2" ? 0.65 : 0.35 }}
-					/>
-				))}
-			</View>
-		</View>
-	);
-}
-
-function MessageContent({
-	isStreaming,
-	isUser,
-	text,
-}: {
-	isStreaming: boolean;
-	isUser: boolean;
-	text: string;
-}) {
-	const [visibleText] = useSmoothText(text, {
-		startStreaming: isStreaming,
-	});
-
-	return (
-		<Text.Paragraph
-			className="leading-relaxed"
-			style={{ color: isUser ? "#FFFFFF" : "#18181B" }}
-			type="body-sm"
-			weight="medium"
-		>
-			{visibleText}
-		</Text.Paragraph>
-	);
-}
+import {
+	ChatModeSelector,
+	HeaderActionGroup,
+	SlashCommandMenu,
+	ViyaChatEmptyContent,
+	ViyaMessageList,
+} from "./viya-chat-components";
+import { composerStyle, returnTabRoutes } from "./viya-chat-constants";
+import type {
+	ChatModeId,
+	PromptSuggestion,
+	ReturnTabName,
+	SlashCommandOption,
+	SuggestionIconName,
+	ThreadIdsByContext,
+} from "./viya-chat-types";
+import {
+	applySlashCommandSelection,
+	getActiveSlashCommand,
+	getChatModeOption,
+	getMessageQueryArgs,
+	getPromptSuggestions,
+	getStoredThreadIdsByContext,
+	getThreadContextKey,
+	getVisibleSlashCommands,
+	hasAssistantMessageAfter,
+	hasPersistedUserMessage,
+	persistStoredThreadIdsByContext,
+	removeStoredThreadIdsByContext,
+	runAsyncTask,
+} from "./viya-chat-utils";
 
 export function ViyaChatScreen() {
 	const router = useRouter();
 	const { fromTab } = useLocalSearchParams<{ fromTab?: string }>();
 	const insets = useSafeAreaInsets();
 	const [input, setInput] = useState("");
-	const [threadId, setThreadId] = useState<string | null>(null);
+	const [threadIdsByContext, setThreadIdsByContext] =
+		useState<ThreadIdsByContext>({});
+	const [chatMode, setChatMode] = useState<ChatModeId>("chat");
+	const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
 	const [isLoading, setIsLoading] = useState(false);
+	const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
+	const [awaitingAssistantMessageCount, setAwaitingAssistantMessageCount] =
+		useState<number | null>(null);
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const scrollViewRef = useRef<ScrollView>(null);
 	const mutedColor = useThemeColor("muted");
+	const trips = useQuery(api.trips.listTrips);
+	const currentTrip = trips?.find((trip) => !trip.isDemo) ?? null;
+	const currentTripId = currentTrip?._id ?? null;
+	const selectedModeOption = getChatModeOption(chatMode);
+	const threadContextKey = getThreadContextKey(chatMode, currentTripId);
+	const threadId = threadIdsByContext[threadContextKey] ?? null;
 	const preferences = useQuery(api.preferences.getCurrentPreferences);
-	const promptSuggestions = getPreferenceSuggestions(
+	const preferencePromptSuggestions = getPreferenceSuggestions(
 		preferences ?? {}
 	).prompts.map((suggestion) => ({
 		...suggestion,
 		icon: suggestion.icon as SuggestionIconName,
 	})) satisfies PromptSuggestion[];
+	const promptSuggestions = getPromptSuggestions(
+		chatMode,
+		preferencePromptSuggestions
+	);
+	const activeSlashCommand = getActiveSlashCommand(input);
+	const visibleSlashCommands = getVisibleSlashCommands(activeSlashCommand);
+	const shouldShowSlashCommandMenu = Boolean(activeSlashCommand && !isLoading);
+	const backgroundColor = useThemeColor("background");
 
 	const createThread = useMutation(api.chat.createNewThread);
 	const sendMessage = useMutation(api.chat.sendMessage);
 
 	const { results: messages } = useUIMessages(
 		api.chat.listMessages,
-		threadId ? { threadId } : "skip",
+		getMessageQueryArgs(threadId),
 		{ initialNumItems: 50, stream: true }
 	);
 
 	const hasStreamingMessage = messages?.some(
 		(message) => message.status === "streaming"
 	);
+	const hasPersistedPendingPrompt = hasPersistedUserMessage(
+		messages,
+		pendingPrompt
+	);
+	const hasAssistantMessageAfterAwaitStart = hasAssistantMessageAfter(
+		messages,
+		awaitingAssistantMessageCount
+	);
+	const shouldShowThinking = Boolean(
+		awaitingAssistantMessageCount !== null &&
+			!hasAssistantMessageAfterAwaitStart
+	);
+	const shouldShowMessages = Boolean(
+		messages?.length || pendingPrompt || isLoading || shouldShowThinking
+	);
 	const messageCount = messages?.length ?? 0;
+
+	useEffect(() => {
+		let isMounted = true;
+
+		const loadStoredThreadIds = async () => {
+			const storedThreadIds = await getStoredThreadIdsByContext();
+
+			if (isMounted) {
+				setThreadIdsByContext(storedThreadIds);
+			}
+		};
+
+		runAsyncTask(loadStoredThreadIds());
+
+		return () => {
+			isMounted = false;
+		};
+	}, []);
+
+	useEffect(() => {
+		if (chatMode === "trip" && trips !== undefined && !currentTripId) {
+			setChatMode("chat");
+			setErrorMessage("Create a trip first to use Trip mode.");
+		}
+	}, [chatMode, currentTripId, trips]);
+
+	useEffect(() => {
+		if (hasPersistedPendingPrompt) {
+			setPendingPrompt(null);
+		}
+	}, [hasPersistedPendingPrompt]);
+
+	useEffect(() => {
+		if (hasAssistantMessageAfterAwaitStart) {
+			setAwaitingAssistantMessageCount(null);
+		}
+	}, [hasAssistantMessageAfterAwaitStart]);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: message state changes should scroll the chat to the latest response.
 	useEffect(() => {
 		scrollViewRef.current?.scrollToEnd({ animated: true });
-	}, [messageCount, hasStreamingMessage]);
+	}, [messageCount, hasStreamingMessage, pendingPrompt]);
 
 	const handleSubmit = async (prompt?: string) => {
 		const value = (prompt ?? input).trim();
@@ -158,8 +176,16 @@ export function ViyaChatScreen() {
 			return;
 		}
 
+		if (chatMode === "trip" && !currentTripId) {
+			setErrorMessage("Create a trip first to use Trip mode.");
+			return;
+		}
+
 		setErrorMessage(null);
 		setIsLoading(true);
+		setIsModeMenuOpen(false);
+		setAwaitingAssistantMessageCount(messageCount);
+		setPendingPrompt(value);
 		setInput("");
 
 		try {
@@ -167,11 +193,25 @@ export function ViyaChatScreen() {
 
 			if (!currentThreadId) {
 				currentThreadId = await createThread();
-				setThreadId(currentThreadId);
+				const nextThreadIds = {
+					...threadIdsByContext,
+					[threadContextKey]: currentThreadId,
+				};
+				setThreadIdsByContext(nextThreadIds);
+				runAsyncTask(persistStoredThreadIdsByContext(nextThreadIds));
 			}
 
-			await sendMessage({ prompt: value, threadId: currentThreadId });
+			await sendMessage({
+				mode: chatMode,
+				prompt: value,
+				threadId: currentThreadId,
+				tripId:
+					chatMode === "trip" && currentTripId ? currentTripId : undefined,
+			});
 		} catch (error) {
+			setInput(value);
+			setPendingPrompt(null);
+			setAwaitingAssistantMessageCount(null);
 			setErrorMessage(
 				error instanceof Error
 					? error.message
@@ -191,6 +231,50 @@ export function ViyaChatScreen() {
 		router.replace(targetRoute);
 	};
 
+	const handleModeSelect = (mode: ChatModeId) => {
+		if (mode === "trip" && !currentTripId) {
+			setErrorMessage("Create a trip first to use Trip mode.");
+			setIsModeMenuOpen(false);
+			return;
+		}
+
+		setChatMode(mode);
+		setIsModeMenuOpen(false);
+		setErrorMessage(null);
+		setAwaitingAssistantMessageCount(null);
+	};
+
+	const handleNewChatPress = () => {
+		const nextThreadIds = { ...threadIdsByContext };
+		delete nextThreadIds[threadContextKey];
+		setThreadIdsByContext(nextThreadIds);
+		setInput("");
+		setPendingPrompt(null);
+		setAwaitingAssistantMessageCount(null);
+		setErrorMessage(null);
+		setIsModeMenuOpen(false);
+
+		if (Object.keys(nextThreadIds).length === 0) {
+			runAsyncTask(removeStoredThreadIdsByContext());
+			return;
+		}
+
+		runAsyncTask(persistStoredThreadIdsByContext(nextThreadIds));
+	};
+
+	const handleSlashCommandSelect = (command: SlashCommandOption) => {
+		setErrorMessage(null);
+		setIsModeMenuOpen(false);
+		applySlashCommandSelection({
+			activeSlashCommand,
+			command,
+			input,
+			onInputChange: setInput,
+			onModeSelect: setChatMode,
+			onNewChat: handleNewChatPress,
+		});
+	};
+
 	return (
 		<Container isScrollable={false}>
 			<KeyboardAvoidingView
@@ -198,108 +282,68 @@ export function ViyaChatScreen() {
 				className="flex-1"
 			>
 				<View
-					className="flex-1 px-5 pb-4"
+					className="flex-1 px-4 pb-4"
 					style={{ paddingTop: insets.top + 10 }}
 				>
-					<View className="mb-5 flex-row items-center">
-						<Pressable
-							accessibilityLabel="Back to previous tab"
-							accessibilityRole="button"
-							className="h-10 w-10 items-center justify-center rounded-full border border-border bg-surface"
-							onPress={handleBackPress}
-						>
-							<Ionicons color="#18181B" name="chevron-back" size={20} />
-						</Pressable>
+					<View
+						className="mb-5 flex-row items-center justify-between"
+						style={{ zIndex: 30 }}
+					>
+						<View className="flex-row items-center gap-3">
+							<Pressable
+								accessibilityLabel="Back to previous tab"
+								accessibilityRole="button"
+								className="h-12 w-12 items-center justify-center rounded-full border border-border bg-surface"
+								onPress={handleBackPress}
+							>
+								<Ionicons color="#18181B" name="chevron-back" size={20} />
+							</Pressable>
+							<ChatModeSelector
+								currentTripId={currentTripId}
+								isOpen={isModeMenuOpen}
+								onOpenChange={setIsModeMenuOpen}
+								onSelect={handleModeSelect}
+								selectedMode={chatMode}
+								threadIdsByContext={threadIdsByContext}
+							/>
+						</View>
+						<HeaderActionGroup
+							currentTripId={currentTripId}
+							onModeSelect={handleModeSelect}
+							onNewChatPress={handleNewChatPress}
+							selectedMode={chatMode}
+						/>
 					</View>
 
-					<ScrollView
+					<ScrollShadow
 						className="flex-1"
-						contentContainerStyle={{ flexGrow: 1, paddingBottom: 18 }}
-						keyboardShouldPersistTaps="handled"
-						ref={scrollViewRef}
-						showsVerticalScrollIndicator={false}
+						color={backgroundColor}
+						LinearGradientComponent={LinearGradient}
+						size={36}
 					>
-						{!messages || messages.length === 0 ? (
-							<View className="gap-5">
-								<EmptyState
-									className="flex-none py-4"
-									description="Ask Viya to dream, plan, prepare, track, or turn your trip into a story."
-									title="Where should we go next?"
-									visual={<ViyaMark size={56} />}
+						<Animated.ScrollView
+							className="flex-1"
+							contentContainerStyle={{ flexGrow: 1, paddingBottom: 18 }}
+							keyboardShouldPersistTaps="handled"
+							ref={scrollViewRef}
+							showsVerticalScrollIndicator={false}
+						>
+							{shouldShowMessages ? (
+								<ViyaMessageList
+									hasPersistedPendingPrompt={hasPersistedPendingPrompt}
+									messages={messages ?? []}
+									pendingPrompt={pendingPrompt}
+									shouldShowThinking={shouldShowThinking}
 								/>
-
-								<View className="gap-3">
-									<Text color="muted" type="body-xs" weight="semibold">
-										TRY ASKING
-									</Text>
-									<View className="flex-row flex-wrap gap-3">
-										{promptSuggestions.map((suggestion) => (
-											<Pressable
-												className="w-[48%]"
-												key={suggestion.title}
-												onPress={() => handleSubmit(suggestion.prompt)}
-											>
-												<Surface className="gap-4 rounded-3xl border border-border bg-surface p-4">
-													<View
-														className="h-10 w-10 items-center justify-center rounded-full"
-														style={{ backgroundColor: suggestion.soft }}
-													>
-														<Ionicons
-															color={suggestion.accent}
-															name={suggestion.icon}
-															size={19}
-														/>
-													</View>
-													<View className="gap-1">
-														<Text type="body-sm" weight="semibold">
-															{suggestion.title}
-														</Text>
-														<Text.Paragraph color="muted" type="body-xs">
-															{suggestion.prompt}
-														</Text.Paragraph>
-													</View>
-												</Surface>
-											</Pressable>
-										))}
-									</View>
-								</View>
-							</View>
-						) : (
-							<View className="gap-4">
-								{messages.map((message) => {
-									const isUser = message.role === "user";
-									const messageText = (message.parts ?? [])
-										.map((part) => (part.type === "text" ? part.text : ""))
-										.join("")
-										.trim();
-
-									if (!(isUser || messageText)) {
-										return <TypingBubble key={message.key} />;
-									}
-
-									return (
-										<View
-											className={`flex-row gap-2 ${isUser ? "justify-end" : "justify-start"}`}
-											key={message.key}
-										>
-											{isUser ? null : <ViyaAvatar />}
-											<View
-												className="max-w-[82%] px-4 py-3"
-												style={isUser ? userBubbleStyle : assistantBubbleStyle}
-											>
-												<MessageContent
-													isStreaming={message.status === "streaming"}
-													isUser={isUser}
-													text={messageText}
-												/>
-											</View>
-										</View>
-									);
-								})}
-								{isLoading && !hasStreamingMessage ? <TypingBubble /> : null}
-							</View>
-						)}
-					</ScrollView>
+							) : (
+								<ViyaChatEmptyContent
+									onSubmitSuggestion={handleSubmit}
+									promptSuggestions={promptSuggestions}
+									selectedModeOption={selectedModeOption}
+								/>
+							)}
+						</Animated.ScrollView>
+					</ScrollShadow>
 
 					{errorMessage ? (
 						<Text className="mb-3 text-danger" type="body-sm">
@@ -307,20 +351,31 @@ export function ViyaChatScreen() {
 						</Text>
 					) : null}
 
-					<Surface className="mt-3 flex-row items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5">
+					{shouldShowSlashCommandMenu ? (
+						<SlashCommandMenu
+							currentTripId={currentTripId}
+							onSelect={handleSlashCommandSelect}
+							visibleCommands={visibleSlashCommands}
+						/>
+					) : null}
+
+					<Surface
+						className="mt-3 flex-row items-center gap-2 rounded-full border border-border bg-surface px-3 py-2"
+						style={composerStyle}
+					>
 						<View className="flex-1">
 							<TextField>
 								<Input
 									editable={!isLoading}
 									onChangeText={setInput}
 									onSubmitEditing={() => handleSubmit()}
-									placeholder="Message Viya"
+									placeholder={selectedModeOption.placeholder}
 									returnKeyType="send"
 									style={{
 										backgroundColor: "transparent",
 										borderColor: "transparent",
 										borderWidth: 0,
-										minHeight: 42,
+										minHeight: 44,
 									}}
 									value={input}
 								/>
