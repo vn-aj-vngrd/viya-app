@@ -46,8 +46,6 @@ export const composerInputMaxHeight = 132;
 export const composerInputMinHeight = 44;
 export const expandedComposerInputMaxHeight = 360;
 export const expandedComposerInputMinHeight = 220;
-export const responseAnchorEstimatedContentHeight = 150;
-export const responseAnchorMinimumSpacerHeight = 180;
 
 export const CHAT_MODE_OPTIONS = [
 	{

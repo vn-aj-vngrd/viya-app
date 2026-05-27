@@ -1152,7 +1152,6 @@ export function ViyaChatEmptyContent({
 }
 
 export function ViyaMessageList({
-	bottomSpacerHeight,
 	hasPersistedPendingPrompt,
 	isCreatingTripFromBlueprint,
 	messages,
@@ -1161,7 +1160,6 @@ export function ViyaMessageList({
 	pendingPrompt,
 	shouldShowThinking,
 }: {
-	bottomSpacerHeight: number;
 	hasPersistedPendingPrompt: boolean;
 	isCreatingTripFromBlueprint: boolean;
 	messages: UiChatMessages;
@@ -1208,13 +1206,6 @@ export function ViyaMessageList({
 				<UserMessageBubble text={pendingPrompt} />
 			) : null}
 			{shouldShowThinking ? <TypingBubble /> : null}
-			{bottomSpacerHeight > 0 ? (
-				<View
-					accessibilityElementsHidden={true}
-					importantForAccessibility="no-hide-descendants"
-					style={{ height: bottomSpacerHeight }}
-				/>
-			) : null}
 		</View>
 	);
 }

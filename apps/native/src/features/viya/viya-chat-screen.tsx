@@ -49,8 +49,6 @@ import {
 	composerInputMinHeight,
 	composerStyle,
 	expandedComposerInputMinHeight,
-	responseAnchorEstimatedContentHeight,
-	responseAnchorMinimumSpacerHeight,
 	returnTabRoutes,
 } from "./viya-chat-constants";
 import type {
@@ -118,6 +116,9 @@ const composerInputLineHeight = 21;
 const composerInputPaddingBottom = 9;
 const composerInputPaddingTop = 11;
 const expandedComposerChromeReserve = 260;
+const chatScrollContentBottomPadding = 18;
+const chatScrollShadowBottomBleed = 12;
+const chatScrollShadowTopBleed = 20;
 
 const getChatInputError = ({
 	chatMode,
@@ -377,7 +378,6 @@ export function ViyaChatScreen() {
 		useState<number | null>(null);
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
-	const [scrollViewportHeight, setScrollViewportHeight] = useState(0);
 	const scrollViewRef = useRef<NativeScrollView>(null);
 	const mutedColor = useThemeColor("muted");
 	const trips = useQuery(api.trips.listTrips);
@@ -442,12 +442,6 @@ export function ViyaChatScreen() {
 	const shouldShowSlashCommandMenu = Boolean(
 		activeSlashCommand && !isAwaitingViya
 	);
-	const responseAnchorSpacerHeight = isAwaitingViya
-		? Math.max(
-				responseAnchorMinimumSpacerHeight,
-				scrollViewportHeight - responseAnchorEstimatedContentHeight
-			)
-		: 0;
 	const composerInputLayout = getComposerInputLayout({
 		contentHeight: composerContentHeight,
 		maxHeight: composerInputMaxHeight,
@@ -785,21 +779,26 @@ export function ViyaChatScreen() {
 						color={backgroundColor}
 						LinearGradientComponent={LinearGradient}
 						size={36}
+						style={{
+							marginBottom: -chatScrollShadowBottomBleed,
+							marginTop: -chatScrollShadowTopBleed,
+						}}
 					>
 						<Animated.ScrollView
 							className="flex-1"
-							contentContainerStyle={{ flexGrow: 1, paddingBottom: 18 }}
+							contentContainerStyle={{
+								flexGrow: 1,
+								paddingBottom:
+									chatScrollContentBottomPadding + chatScrollShadowBottomBleed,
+								paddingTop: chatScrollShadowTopBleed,
+							}}
 							key={`${threadContextKey}:${threadId ?? "new"}`}
 							keyboardShouldPersistTaps="handled"
-							onLayout={(event) =>
-								setScrollViewportHeight(event.nativeEvent.layout.height)
-							}
 							ref={scrollViewRef}
 							showsVerticalScrollIndicator={false}
 						>
 							{shouldShowMessages ? (
 								<ViyaMessageList
-									bottomSpacerHeight={responseAnchorSpacerHeight}
 									hasPersistedPendingPrompt={hasPersistedPendingPrompt}
 									isCreatingTripFromBlueprint={isCreatingTripFromBlueprint}
 									messages={displayedMessages}
