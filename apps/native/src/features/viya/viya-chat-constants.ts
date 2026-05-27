@@ -16,11 +16,12 @@ export const returnTabRoutes = {
 } as const satisfies Record<ReturnTabName, Href>;
 
 export const activeThreadsStorageKey = "viya.ai.activeThreadIds";
-export const bulletLinePattern = /^[-*]\s+(.+)$/;
+export const bulletLinePattern = /^[-*+•]\s+(.+)$/;
 export const headingLinePattern = /^(#{1,4})\s+(.+)$/;
 export const inlineMarkdownTokenPattern =
-	/(`[^`]+`|\*\*[^*\n]+\*\*|\*[^*\n]+\*)/g;
-export const numberedLinePattern = /^\d+\.\s+(.+)$/;
+	/(`[^`]+`|\*\*[^*\n]+\*\*|__[^_\n]+__|\*[^*\n]+\*|_[^_\n]+_)/g;
+export const numberedLinePattern =
+	/^(?:\d+[.)]|\(\d+\)|\d+\uFE0F?\u20E3)\s+(.+)$/u;
 export const pipeEndPattern = /\|$/;
 export const pipeStartPattern = /^\|/;
 export const rgbColorPattern =

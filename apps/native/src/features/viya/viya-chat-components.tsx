@@ -4,14 +4,16 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
 import {
 	BottomSheet,
+	Button,
 	Menu,
 	type MenuKey,
+	Spinner,
 	Surface,
 	Text,
 	useThemeColor,
 } from "heroui-native";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, ScrollView, TextInput, View } from "react-native";
 import Animated, {
 	Easing,
 	interpolate,
@@ -34,6 +36,7 @@ import {
 	thinkingShimmerTailLength,
 } from "./viya-chat-constants";
 import { MarkdownContent } from "./viya-chat-markdown";
+import { getQuestionPromptOnlyDisplayText } from "./viya-chat-question-utils";
 import type {
 	ChatHistoryItem,
 	ChatModeId,
@@ -499,7 +502,7 @@ export function ChatHistorySheet({
 
 						{hasHistory ? (
 							<ScrollView
-								className="max-h-[420px]"
+								className="max-h-105"
 								showsVerticalScrollIndicator={false}
 							>
 								<View className="gap-2 pb-1">
@@ -570,7 +573,7 @@ export function ChatHistorySheet({
 								</View>
 							</ScrollView>
 						) : (
-							<View className="items-center gap-2 rounded-[24px] border border-border bg-surface px-4 py-8">
+							<View className="items-center gap-2 rounded-3xl border border-border bg-surface px-4 py-8">
 								<View className="h-11 w-11 items-center justify-center rounded-full bg-default">
 									<Ionicons color="#71717A" name="time-outline" size={20} />
 								</View>
@@ -601,11 +604,23 @@ export function QuestionOptionsDock({
 	isLoading: boolean;
 	onDismiss: (question: ChatQuestionPrompt) => void;
 	onSelectOption: (value: string) => void;
-	onUseCustomAnswer: () => void;
+	onUseCustomAnswer: (value: string) => void;
 	pendingQuestion: ChatQuestionPrompt | null | undefined;
 }) {
 	const today = useMemo(() => getStartOfToday(), []);
 	const [selectedDate, setSelectedDate] = useState(today);
+	const [customAnswer, setCustomAnswer] = useState("");
+	const [isCustomAnswerVisible, setIsCustomAnswerVisible] = useState(false);
+	const pendingQuestionId = pendingQuestion?._id;
+
+	useEffect(() => {
+		if (!pendingQuestionId) {
+			return;
+		}
+
+		setCustomAnswer("");
+		setIsCustomAnswerVisible(false);
+	}, [pendingQuestionId]);
 
 	if (!pendingQuestion) {
 		return null;
@@ -615,10 +630,11 @@ export function QuestionOptionsDock({
 	const shouldShowDatePicker = isTravelDateQuestion(pendingQuestion.question);
 	const selectedDateAnswer = formatDateAnswer(selectedDate);
 	const selectedDateLabel = formatReadableDate(selectedDate);
+	const trimmedCustomAnswer = customAnswer.trim();
 
 	return (
 		<Surface
-			className="mb-2 overflow-hidden rounded-[24px] border border-border bg-surface p-2"
+			className="mb-2 overflow-hidden rounded-3xl border border-border bg-surface p-2"
 			style={composerStyle}
 		>
 			<View className="gap-2">
@@ -673,7 +689,7 @@ export function QuestionOptionsDock({
 							</View>
 						</View>
 						<View className="flex-row items-center justify-between gap-3">
-							<View className="min-h-12 flex-1 justify-center rounded-[16px] bg-surface px-3">
+							<View className="min-h-12 flex-1 justify-center rounded-2xl bg-surface px-3">
 								<Text color="muted" type="body-xs" weight="medium">
 									Selected
 								</Text>
@@ -696,7 +712,7 @@ export function QuestionOptionsDock({
 						<Pressable
 							accessibilityLabel={`Use ${selectedDateLabel}`}
 							accessibilityRole="button"
-							className="min-h-11 flex-row items-center justify-center gap-2 rounded-[16px] px-3 py-2.5"
+							className="min-h-11 flex-row items-center justify-center gap-2 rounded-2xl px-3 py-2.5"
 							disabled={isLoading}
 							onPress={() => onSelectOption(selectedDateAnswer)}
 							style={({ pressed }) => ({
@@ -718,7 +734,7 @@ export function QuestionOptionsDock({
 						<Pressable
 							accessibilityLabel={`Choose ${questionOption.label}`}
 							accessibilityRole="button"
-							className="min-h-10 flex-row items-center gap-3 rounded-[16px] px-2 py-2"
+							className="min-h-10 flex-row items-center gap-3 rounded-2xl px-2 py-2"
 							disabled={isLoading}
 							key={questionOption.id}
 							onPress={() => onSelectOption(questionOption.value)}
@@ -743,8 +759,8 @@ export function QuestionOptionsDock({
 					<Pressable
 						accessibilityLabel="Answer with something else"
 						accessibilityRole="button"
-						className="min-h-10 flex-row items-center gap-3 rounded-[16px] px-2 py-2"
-						onPress={onUseCustomAnswer}
+						className="min-h-10 flex-row items-center gap-3 rounded-2xl px-2 py-2"
+						onPress={() => setIsCustomAnswerVisible(true)}
 					>
 						<View className="h-6 w-6 items-center justify-center rounded-full bg-default">
 							<Ionicons color="#18181B" name="pencil-outline" size={13} />
@@ -753,6 +769,57 @@ export function QuestionOptionsDock({
 							Something else
 						</Text>
 					</Pressable>
+					{isCustomAnswerVisible ? (
+						<View className="gap-2 rounded-[18px] bg-default/50 p-2">
+							<TextInput
+								accessibilityLabel="Custom question answer"
+								autoFocus={true}
+								editable={!isLoading}
+								multiline={true}
+								onChangeText={setCustomAnswer}
+								onSubmitEditing={() => {
+									if (trimmedCustomAnswer) {
+										onUseCustomAnswer(trimmedCustomAnswer);
+									}
+								}}
+								placeholder="Type your answer"
+								placeholderTextColor="#71717A"
+								returnKeyType="send"
+								style={{
+									color: "#18181B",
+									fontSize: 15,
+									fontWeight: "500",
+									lineHeight: 21,
+									minHeight: 72,
+									paddingHorizontal: 10,
+									paddingVertical: 10,
+									textAlignVertical: "top",
+								}}
+								submitBehavior="submit"
+								value={customAnswer}
+							/>
+							<View className="flex-row justify-end gap-2">
+								<Button
+									onPress={() => {
+										setCustomAnswer("");
+										setIsCustomAnswerVisible(false);
+									}}
+									size="sm"
+									variant="ghost"
+								>
+									<Button.Label>Cancel</Button.Label>
+								</Button>
+								<Button
+									isDisabled={!trimmedCustomAnswer || isLoading}
+									onPress={() => onUseCustomAnswer(trimmedCustomAnswer)}
+									size="sm"
+								>
+									{isLoading ? <Spinner size="sm" /> : null}
+									<Button.Label>Send</Button.Label>
+								</Button>
+							</View>
+						</View>
+					) : null}
 				</View>
 			</View>
 		</Surface>
@@ -1025,6 +1092,7 @@ function MessageContent({
 	isUser,
 	onCreateTripFromBlueprint,
 	onSubmitBlueprintAction,
+	shouldCollapseQuestionPrompt = false,
 	text,
 }: {
 	isCreatingTripFromBlueprint?: boolean;
@@ -1032,15 +1100,19 @@ function MessageContent({
 	isUser: boolean;
 	onCreateTripFromBlueprint?: (blueprint: TripBlueprint) => void;
 	onSubmitBlueprintAction?: (prompt: string) => void;
+	shouldCollapseQuestionPrompt?: boolean;
 	text: string;
 }) {
 	const primaryColor = useThemeColor("accent");
 	const [visibleText] = useSmoothText(text, {
 		startStreaming: isStreaming,
 	});
-	const displayText = isUser
-		? visibleText
+	const assistantDisplayText = shouldCollapseQuestionPrompt
+		? getQuestionPromptOnlyDisplayText(
+				getSingleQuestionDisplayText(visibleText)
+			)
 		: getSingleQuestionDisplayText(visibleText);
+	const displayText = isUser ? visibleText : assistantDisplayText;
 	const blueprint = isUser ? null : extractTripBlueprint(displayText);
 
 	if (!isUser) {
@@ -1152,6 +1224,7 @@ export function ViyaChatEmptyContent({
 }
 
 export function ViyaMessageList({
+	focusedQuestionAssistantMessageId,
 	hasPersistedPendingPrompt,
 	isCreatingTripFromBlueprint,
 	messages,
@@ -1160,6 +1233,7 @@ export function ViyaMessageList({
 	pendingPrompt,
 	shouldShowThinking,
 }: {
+	focusedQuestionAssistantMessageId?: string | null;
 	hasPersistedPendingPrompt: boolean;
 	isCreatingTripFromBlueprint: boolean;
 	messages: UiChatMessages;
@@ -1176,6 +1250,8 @@ export function ViyaMessageList({
 			{messages.map((message) => {
 				const isUser = message.role === "user";
 				const messageText = getUiMessageText(message);
+				const shouldCollapseQuestionPrompt =
+					!isUser && message.key === focusedQuestionAssistantMessageId;
 
 				if (!(isUser || messageText)) {
 					return <TypingBubble key={message.key} />;
@@ -1196,6 +1272,7 @@ export function ViyaMessageList({
 								isUser={isUser}
 								onCreateTripFromBlueprint={onCreateTripFromBlueprint}
 								onSubmitBlueprintAction={onSubmitBlueprintAction}
+								shouldCollapseQuestionPrompt={shouldCollapseQuestionPrompt}
 								text={messageText}
 							/>
 						</View>

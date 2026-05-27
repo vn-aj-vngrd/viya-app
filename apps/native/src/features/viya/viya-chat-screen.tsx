@@ -51,6 +51,10 @@ import {
 	expandedComposerInputMinHeight,
 	returnTabRoutes,
 } from "./viya-chat-constants";
+import {
+	getQuestionDockContainerClassName,
+	shouldUseQuestionFocusMode,
+} from "./viya-chat-question-utils";
 import type {
 	ChatHistoryItem,
 	ChatModeId,
@@ -442,6 +446,10 @@ export function ViyaChatScreen() {
 	const shouldShowSlashCommandMenu = Boolean(
 		activeSlashCommand && !isAwaitingViya
 	);
+	const isQuestionFocusMode = shouldUseQuestionFocusMode({
+		hasPendingQuestion: Boolean(pendingQuestion),
+		shouldShowSlashCommandMenu,
+	});
 	const composerInputLayout = getComposerInputLayout({
 		contentHeight: composerContentHeight,
 		maxHeight: composerInputMaxHeight,
@@ -499,6 +507,12 @@ export function ViyaChatScreen() {
 			setAwaitingAssistantMessageCount(null);
 		}
 	}, [hasAssistantMessageAfterAwaitStart]);
+
+	useEffect(() => {
+		if (isQuestionFocusMode) {
+			setIsComposerSheetOpen(false);
+		}
+	}, [isQuestionFocusMode]);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: message state changes should scroll the chat to the latest response.
 	useEffect(() => {
@@ -695,12 +709,10 @@ export function ViyaChatScreen() {
 		}
 	};
 
-	const handleCustomQuestionAnswer = () => {
-		if (pendingQuestion) {
-			runAsyncTask(dismissPendingQuestion({ questionId: pendingQuestion._id }));
-		}
+	const handleCustomQuestionAnswer = (value: string) => {
 		setErrorMessage(null);
 		setNoticeMessage(null);
+		runAsyncTask(handleSubmit(value));
 	};
 
 	const handleSlashCommandSelect = (command: SlashCommandOption) => {
@@ -799,6 +811,11 @@ export function ViyaChatScreen() {
 						>
 							{shouldShowMessages ? (
 								<ViyaMessageList
+									focusedQuestionAssistantMessageId={
+										isQuestionFocusMode
+											? pendingQuestion?.assistantMessageId
+											: null
+									}
 									hasPersistedPendingPrompt={hasPersistedPendingPrompt}
 									isCreatingTripFromBlueprint={isCreatingTripFromBlueprint}
 									messages={displayedMessages}
@@ -838,78 +855,84 @@ export function ViyaChatScreen() {
 					) : null}
 
 					{shouldShowSlashCommandMenu ? null : (
-						<QuestionOptionsDock
-							isLoading={isAwaitingViya}
-							onDismiss={handleQuestionDismiss}
-							onSelectOption={handleQuestionOptionSelect}
-							onUseCustomAnswer={handleCustomQuestionAnswer}
-							pendingQuestion={pendingQuestion}
-						/>
-					)}
-
-					<Surface
-						className="relative mt-3 flex-row items-end gap-2 rounded-[28px] border border-border bg-surface px-3 py-2"
-						style={composerStyle}
-					>
 						<View
-							className="relative flex-1"
-							style={{ height: composerInputLayout.height }}
+							className={getQuestionDockContainerClassName(isQuestionFocusMode)}
 						>
-							<ComposerTextInput
-								height={composerInputLayout.height}
-								isEditable={!isAwaitingViya}
-								isScrollable={composerInputLayout.isScrollable}
-								maxHeight={composerInputMaxHeight}
-								minHeight={composerInputMinHeight}
-								onChangeText={handleComposerTextChange}
-								onMeasuredHeightChange={setComposerContentHeight}
-								onSubmit={() => {
-									runAsyncTask(handleSubmit());
-								}}
-								placeholder={selectedModeOption.placeholder}
-								placeholderTextColor={mutedColor}
-								value={input}
+							<QuestionOptionsDock
+								isLoading={isAwaitingViya}
+								onDismiss={handleQuestionDismiss}
+								onSelectOption={handleQuestionOptionSelect}
+								onUseCustomAnswer={handleCustomQuestionAnswer}
+								pendingQuestion={pendingQuestion}
 							/>
 						</View>
-						<View
-							className="items-center justify-end"
-							style={{ height: composerInputLayout.height, width: 38 }}
+					)}
+
+					{isQuestionFocusMode ? null : (
+						<Surface
+							className="relative mt-3 flex-row items-end gap-2 rounded-[28px] border border-border bg-surface px-3 py-2"
+							style={composerStyle}
 						>
-							{composerInputLayout.shouldShowExpand ? (
-								<Pressable
-									accessibilityLabel="Expand message editor"
-									accessibilityRole="button"
-									className="absolute top-0 h-9 w-9 items-center justify-center rounded-full bg-surface"
-									onPress={() => setIsComposerSheetOpen(true)}
+							<View
+								className="relative flex-1"
+								style={{ height: composerInputLayout.height }}
+							>
+								<ComposerTextInput
+									height={composerInputLayout.height}
+									isEditable={!isAwaitingViya}
+									isScrollable={composerInputLayout.isScrollable}
+									maxHeight={composerInputMaxHeight}
+									minHeight={composerInputMinHeight}
+									onChangeText={handleComposerTextChange}
+									onMeasuredHeightChange={setComposerContentHeight}
+									onSubmit={() => {
+										runAsyncTask(handleSubmit());
+									}}
+									placeholder={selectedModeOption.placeholder}
+									placeholderTextColor={mutedColor}
+									value={input}
+								/>
+							</View>
+							<View
+								className="items-center justify-end"
+								style={{ height: composerInputLayout.height, width: 38 }}
+							>
+								{composerInputLayout.shouldShowExpand ? (
+									<Pressable
+										accessibilityLabel="Expand message editor"
+										accessibilityRole="button"
+										className="absolute top-0 h-9 w-9 items-center justify-center rounded-full bg-surface"
+										onPress={() => setIsComposerSheetOpen(true)}
+									>
+										<Ionicons
+											color={mutedColor}
+											name="expand-outline"
+											size={18}
+										/>
+									</Pressable>
+								) : null}
+								<Button
+									isDisabled={!input.trim() || isAwaitingViya}
+									isIconOnly={true}
+									onPress={() => handleSubmit()}
+									size="sm"
+									style={{ height: 38, width: 38 }}
+									variant={
+										input.trim() && !isAwaitingViya ? "primary" : "secondary"
+									}
 								>
 									<Ionicons
-										color={mutedColor}
-										name="expand-outline"
+										color={
+											input.trim() && !isAwaitingViya ? "#FFFFFF" : mutedColor
+										}
+										name="arrow-up"
 										size={18}
 									/>
-								</Pressable>
-							) : null}
-							<Button
-								isDisabled={!input.trim() || isAwaitingViya}
-								isIconOnly={true}
-								onPress={() => handleSubmit()}
-								size="sm"
-								style={{ height: 38, width: 38 }}
-								variant={
-									input.trim() && !isAwaitingViya ? "primary" : "secondary"
-								}
-							>
-								<Ionicons
-									color={
-										input.trim() && !isAwaitingViya ? "#FFFFFF" : mutedColor
-									}
-									name="arrow-up"
-									size={18}
-								/>
-							</Button>
-						</View>
-					</Surface>
-					{shouldShowInputLimit ? (
+								</Button>
+							</View>
+						</Surface>
+					)}
+					{shouldShowInputLimit && !isQuestionFocusMode ? (
 						<Text className="mt-1 px-4" color="muted" type="body-xs">
 							{remainingInputCharacters.toLocaleString()} characters left
 						</Text>
