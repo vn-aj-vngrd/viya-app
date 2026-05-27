@@ -24,6 +24,16 @@ const nextActionsPattern = /### Next actions/i;
 const oneQuestionPattern = /Ask at most one direct question/i;
 const noSelfAnswerPattern = /do not answer the question yourself/i;
 const noLaterIntakeQuestionPattern = /Never include Question N\+1/i;
+const preferenceContext = [
+	"Traveler preference context:",
+	"- Travel style: relaxed",
+	"- Pace: slow",
+	"- Budget comfort: budget",
+].join("\n");
+const preferenceContextPattern = /Traveler preference context:/i;
+const relaxedStylePattern = /Travel style: relaxed/i;
+const tripContext = "Current trip: Palawan family beach trip.";
+const tripContextPattern = /Current trip: Palawan family beach trip/i;
 
 describe("Viya prompt guardrails", () => {
 	it("keeps the base agent focused on travel only", () => {
@@ -72,5 +82,34 @@ describe("Viya prompt guardrails", () => {
 		assert.match(prompt, bookingTargetsPattern);
 		assert.match(prompt, nextActionsPattern);
 		assert.match(prompt, noLaterIntakeQuestionPattern);
+	});
+
+	it("includes preference context in chat mode prompts", () => {
+		const prompt = buildChatModeSystemPrompt("chat", undefined, undefined, {
+			preferenceContext,
+		});
+
+		assert.match(prompt, preferenceContextPattern);
+		assert.match(prompt, relaxedStylePattern);
+	});
+
+	it("includes preference context in plan mode prompts", () => {
+		const prompt = buildChatModeSystemPrompt("plan", undefined, undefined, {
+			preferenceContext,
+		});
+
+		assert.match(prompt, preferenceContextPattern);
+		assert.match(prompt, relaxedStylePattern);
+	});
+
+	it("keeps preference context separate from trip context in trip mode", () => {
+		const prompt = buildChatModeSystemPrompt("trip", tripContext, undefined, {
+			preferenceContext,
+		});
+
+		assert.match(prompt, preferenceContextPattern);
+		assert.match(prompt, relaxedStylePattern);
+		assert.match(prompt, tripContextPattern);
+		assert.ok(prompt.indexOf(preferenceContext) < prompt.indexOf(tripContext));
 	});
 });

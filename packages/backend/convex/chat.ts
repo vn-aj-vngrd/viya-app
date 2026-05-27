@@ -5,6 +5,7 @@ import {
 	syncStreams,
 	vStreamArgs,
 } from "@convex-dev/agent";
+import { formatPreferenceContext } from "@viya-app/domain";
 import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
 
@@ -653,13 +654,26 @@ export const generateResponseAsync = internalAction({
 						tripId: tripId as Id<"trips">,
 					})
 				: undefined;
+		const preferences = await ctx.runQuery(internal.preferences.getForOwner, {
+			ownerId,
+		});
+		const preferenceContext = preferences
+			? formatPreferenceContext(preferences)
+			: undefined;
 
 		await chatAgent.streamText(
 			ctx,
 			{ threadId },
 			{
 				promptMessageId,
-				system: buildChatModeSystemPrompt(mode as ChatMode, tripContext),
+				system: buildChatModeSystemPrompt(
+					mode as ChatMode,
+					tripContext,
+					undefined,
+					{
+						preferenceContext,
+					}
+				),
 			},
 			{ saveStreamDeltas: true }
 		);

@@ -17,6 +17,10 @@ interface PromptRuntimeContext {
 	now?: Date;
 }
 
+interface ChatPromptContext {
+	preferenceContext?: string;
+}
+
 const formatCurrentDate = (date: Date) => date.toISOString().slice(0, 10);
 
 const buildCurrentDateInstructions = ({
@@ -65,12 +69,16 @@ const CHAT_MODE_INSTRUCTIONS = {
 export const buildChatModeSystemPrompt = (
 	mode: ChatMode,
 	tripContext?: string,
-	runtimeContext?: PromptRuntimeContext
+	runtimeContext?: PromptRuntimeContext,
+	promptContext?: ChatPromptContext
 ) =>
 	[
 		VIYA_SYSTEM_PROMPT,
 		buildCurrentDateInstructions(runtimeContext),
 		...CHAT_MODE_INSTRUCTIONS[mode],
+		...(promptContext?.preferenceContext
+			? [promptContext.preferenceContext]
+			: []),
 		...(tripContext ? ["Current trip context:", tripContext] : []),
 	].join("\n");
 

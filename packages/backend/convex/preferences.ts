@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 
-import { mutation, query } from "./_generated/server";
+import { internalQuery, mutation, query } from "./_generated/server";
 import { ensureUserRecord, getRequiredIdentity } from "./lib/auth";
 
 const travelStyleValidator = v.union(
@@ -76,6 +76,17 @@ export const getCurrentPreferences = query({
 			.withIndex("by_owner", (q) => q.eq("ownerId", identity.subject))
 			.unique();
 	},
+});
+
+export const getForOwner = internalQuery({
+	args: {
+		ownerId: v.string(),
+	},
+	handler: async (ctx, { ownerId }) =>
+		await ctx.db
+			.query("userPreferences")
+			.withIndex("by_owner", (q) => q.eq("ownerId", ownerId))
+			.unique(),
 });
 
 export const upsertCurrentPreferences = mutation({
