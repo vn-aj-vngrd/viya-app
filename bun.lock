@@ -76,6 +76,7 @@
         "@types/node": "^25.9.1",
         "@types/react": "~19.2.14",
         "@viya-app/config": "workspace:*",
+        "bun-types": "^1.3.14",
         "typescript": "catalog:",
       },
     },
