@@ -1,5 +1,6 @@
 import type { useUIMessages } from "@convex-dev/agent/react";
 import type { Ionicons } from "@expo/vector-icons";
+import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
 import type { ComponentProps } from "react";
 
 export type SuggestionIconName = ComponentProps<typeof Ionicons>["name"];
@@ -32,6 +33,38 @@ export interface ChatModeOption {
 	soft: string;
 }
 
+export interface ChatHistoryItem {
+	_id: Id<"chatThreads">;
+	createdAt: number;
+	messageCount: number;
+	mode: ChatModeId;
+	preview: string | null;
+	threadId: string;
+	title: string;
+	tripDestination: string | null;
+	tripId: Id<"trips"> | null;
+	tripTitle: string | null;
+	updatedAt: number;
+}
+
+export interface ChatQuestionOption {
+	id: string;
+	label: string;
+	value: string;
+}
+
+export interface ChatQuestionPrompt {
+	_id: Id<"chatQuestionPrompts">;
+	assistantMessageId: string;
+	createdAt: number;
+	mode: ChatModeId;
+	options: ChatQuestionOption[];
+	question: string;
+	stepLabel: string | null;
+	threadId: string;
+	updatedAt: number;
+}
+
 export interface ActiveSlashCommand {
 	endIndex: number;
 	query: string;
@@ -50,6 +83,47 @@ export interface SlashCommandOption {
 	prompt?: string;
 	requiresTrip?: boolean;
 }
+
+export type TripBlueprintSectionId =
+	| "destination"
+	| "route"
+	| "dates"
+	| "budget"
+	| "itineraryStyle"
+	| "bookingTargets"
+	| "requirements"
+	| "risks"
+	| "nextActions";
+
+export interface TripBlueprintSection {
+	id: TripBlueprintSectionId;
+	items: string[];
+	label: string;
+}
+
+export interface TripBlueprint {
+	sections: TripBlueprintSection[];
+	summary: string | null;
+	title: string;
+}
+
+export interface TripBlueprintCreateInput {
+	bookingTargets: string[];
+	budgetAllocation: string[];
+	dates: string[];
+	destination: string;
+	itineraryStyle: string[];
+	nextActions: string[];
+	requirements: string[];
+	risks: string[];
+	route: string[];
+	title: string;
+}
+
+export type TripBlueprintAction =
+	| "refineBudget"
+	| "adjustItinerary"
+	| "reviewRisks";
 
 export type MarkdownBlock =
 	| {

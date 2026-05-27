@@ -18,8 +18,70 @@ import type {
 	PromptSuggestion,
 	SlashCommandOption,
 	ThreadIdsByContext,
+	TripBlueprint,
+	TripBlueprintAction,
+	TripBlueprintCreateInput,
+	TripBlueprintSection,
+	TripBlueprintSectionId,
 	UiChatMessages,
 } from "./viya-chat-types";
+
+const tripBlueprintHeadingPattern =
+	/^\s*#{1,3}\s+(?:trip\s+)?blueprint\b[:\s-]*/i;
+const markdownHeadingPattern = /^\s*#{1,4}\s+(.+?)\s*$/;
+const markdownListPrefixPattern = /^\s*(?:[-*]\s+|\d+[.)]\s+)(.+?)\s*$/;
+const markdownControlCharacterPattern = /[*_`]/g;
+const planningQuestionMarkerPattern =
+	/(^|\n)\s*(?:#{1,4}\s+)?\**Question\s+\d+\s*\/\s*\d+\**\b/gim;
+const trailingColonPattern = /:$/;
+const lineBreakPattern = /\r\n|\r|\n/g;
+const whitespacePattern = /\s+/g;
+
+const tripBlueprintSectionOrder = [
+	"destination",
+	"route",
+	"dates",
+	"budget",
+	"itineraryStyle",
+	"bookingTargets",
+	"requirements",
+	"risks",
+	"nextActions",
+] as const satisfies readonly TripBlueprintSectionId[];
+
+const tripBlueprintSectionLabels = {
+	bookingTargets: "Booking targets",
+	budget: "Budget allocation",
+	dates: "Dates",
+	destination: "Destination",
+	itineraryStyle: "Itinerary style",
+	nextActions: "Next actions",
+	requirements: "Requirements",
+	risks: "Risks",
+	route: "Route",
+} as const satisfies Record<TripBlueprintSectionId, string>;
+
+const tripBlueprintSectionAliases = new Map<string, TripBlueprintSectionId>([
+	["booking target", "bookingTargets"],
+	["booking targets", "bookingTargets"],
+	["bookings", "bookingTargets"],
+	["budget", "budget"],
+	["budget allocation", "budget"],
+	["costs", "budget"],
+	["dates", "dates"],
+	["destination", "destination"],
+	["destinations", "destination"],
+	["itinerary", "itineraryStyle"],
+	["itinerary style", "itineraryStyle"],
+	["next action", "nextActions"],
+	["next actions", "nextActions"],
+	["requirements", "requirements"],
+	["route", "route"],
+	["risks", "risks"],
+	["style", "itineraryStyle"],
+]);
+
+const fallbackTripDestination = "Planned trip";
 
 export const getColorWithOpacity = (color: string, opacity: number) => {
 	if (color.startsWith("#") && color.length === 7) {
@@ -122,6 +184,159 @@ export const getUiMessageText = (message: {
 		.map((part) => (part.type === "text" ? (part.text ?? "") : ""))
 		.join("")
 		.trim();
+
+export const getNormalizedChatInput = (value: string) =>
+	value.replace(whitespacePattern, " ").trim();
+
+export const getChatInputLineCount = (value: string) =>
+	value ? value.split(lineBreakPattern).length : 0;
+
+export const getSingleQuestionDisplayText = (text: string) => {
+	const questionMatches = Array.from(
+		text.matchAll(planningQuestionMarkerPattern)
+	);
+
+	if (questionMatches.length <= 1) {
+		return text;
+	}
+
+	const secondQuestionIndex = questionMatches[1].index ?? text.length;
+
+	return text.slice(0, secondQuestionIndex).trim();
+};
+
+const cleanBlueprintLine = (value: string) => {
+	const listMatch = markdownListPrefixPattern.exec(value);
+	const cleanedValue = listMatch?.[1] ?? value;
+
+	return cleanedValue
+		.replace(markdownControlCharacterPattern, "")
+		.replace(/\s+/g, " ")
+		.trim();
+};
+
+const normalizeBlueprintSectionHeading = (
+	value: string
+): TripBlueprintSectionId | null => {
+	const headingMatch = markdownHeadingPattern.exec(value);
+	const headingText = (headingMatch?.[1] ?? value)
+		.replace(markdownControlCharacterPattern, "")
+		.replace(trailingColonPattern, "")
+		.trim()
+		.toLowerCase();
+
+	return tripBlueprintSectionAliases.get(headingText) ?? null;
+};
+
+export const extractTripBlueprint = (text: string): TripBlueprint | null => {
+	const lines = text.replace(/\r\n/g, "\n").split("\n");
+	const blueprintHeadingIndex = lines.findIndex((line) =>
+		tripBlueprintHeadingPattern.test(line)
+	);
+
+	if (blueprintHeadingIndex < 0) {
+		return null;
+	}
+
+	const sectionItems = new Map<TripBlueprintSectionId, string[]>();
+	const summaryLines: string[] = [];
+	let currentSectionId: TripBlueprintSectionId | null = null;
+
+	for (const line of lines.slice(blueprintHeadingIndex + 1)) {
+		const trimmedLine = line.trim();
+
+		if (!trimmedLine) {
+			continue;
+		}
+
+		const nextSectionId = normalizeBlueprintSectionHeading(trimmedLine);
+
+		if (nextSectionId) {
+			currentSectionId = nextSectionId;
+			continue;
+		}
+
+		const cleanedLine = cleanBlueprintLine(trimmedLine);
+
+		if (!cleanedLine) {
+			continue;
+		}
+
+		if (!currentSectionId) {
+			summaryLines.push(cleanedLine);
+			continue;
+		}
+
+		const items = sectionItems.get(currentSectionId) ?? [];
+		items.push(cleanedLine);
+		sectionItems.set(currentSectionId, items);
+	}
+
+	const sections: TripBlueprintSection[] = tripBlueprintSectionOrder
+		.map((sectionId) => ({
+			id: sectionId,
+			items: sectionItems.get(sectionId) ?? [],
+			label: tripBlueprintSectionLabels[sectionId],
+		}))
+		.filter((section) => section.items.length > 0);
+
+	if (sections.length < 3) {
+		return null;
+	}
+
+	return {
+		sections,
+		summary: summaryLines.slice(0, 2).join(" ") || null,
+		title: "Trip Blueprint",
+	};
+};
+
+export const getTripBlueprintActionPrompt = (
+	action: TripBlueprintAction,
+	blueprint: TripBlueprint
+) => {
+	const blueprintSummary = blueprint.sections
+		.map((section) => `${section.label}: ${section.items.join("; ")}`)
+		.join("\n");
+
+	const actionInstructions = {
+		adjustItinerary:
+			"Refine this Trip Blueprint with a clearer route and itinerary style. Keep timing, rest, and transfers realistic.",
+		refineBudget:
+			"Refine this Trip Blueprint with a clearer budget allocation and trade-offs. Keep the same destination and dates unless I say otherwise.",
+		reviewRisks:
+			"Pressure-test this Trip Blueprint. Tighten the requirements, risks, backup moves, and next actions.",
+	} as const satisfies Record<TripBlueprintAction, string>;
+
+	return `${actionInstructions[action]}\n\nCurrent blueprint:\n${blueprintSummary}`;
+};
+
+const getBlueprintSectionItems = (
+	blueprint: TripBlueprint,
+	sectionId: TripBlueprintSectionId
+) =>
+	blueprint.sections.find((section) => section.id === sectionId)?.items ?? [];
+
+export const getTripBlueprintCreateInput = (
+	blueprint: TripBlueprint
+): TripBlueprintCreateInput => {
+	const destination =
+		getBlueprintSectionItems(blueprint, "destination")[0] ??
+		fallbackTripDestination;
+
+	return {
+		bookingTargets: getBlueprintSectionItems(blueprint, "bookingTargets"),
+		budgetAllocation: getBlueprintSectionItems(blueprint, "budget"),
+		dates: getBlueprintSectionItems(blueprint, "dates"),
+		destination,
+		itineraryStyle: getBlueprintSectionItems(blueprint, "itineraryStyle"),
+		nextActions: getBlueprintSectionItems(blueprint, "nextActions"),
+		requirements: getBlueprintSectionItems(blueprint, "requirements"),
+		risks: getBlueprintSectionItems(blueprint, "risks"),
+		route: getBlueprintSectionItems(blueprint, "route"),
+		title: `${destination} Trip`,
+	};
+};
 
 export const hasPersistedUserMessage = (
 	messages: UiChatMessages | undefined,

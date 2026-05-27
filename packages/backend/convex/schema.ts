@@ -76,6 +76,52 @@ export default defineSchema({
 		createdAt: v.number(),
 		updatedAt: v.number(),
 	}).index("by_owner", ["ownerId"]),
+	chatThreads: defineTable({
+		ownerId: v.string(),
+		threadId: v.string(),
+		mode: v.union(v.literal("chat"), v.literal("plan"), v.literal("trip")),
+		tripId: v.optional(v.id("trips")),
+		title: v.string(),
+		preview: v.optional(v.string()),
+		messageCount: v.number(),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	})
+		.index("by_owner_updatedAt", ["ownerId", "updatedAt"])
+		.index("by_owner_thread", ["ownerId", "threadId"])
+		.index("by_thread", ["threadId"]),
+	chatQuestionPrompts: defineTable({
+		ownerId: v.string(),
+		threadId: v.string(),
+		promptMessageId: v.string(),
+		assistantMessageId: v.string(),
+		mode: v.union(v.literal("chat"), v.literal("plan"), v.literal("trip")),
+		question: v.string(),
+		stepLabel: v.optional(v.string()),
+		options: v.array(
+			v.object({
+				id: v.string(),
+				label: v.string(),
+				value: v.string(),
+			})
+		),
+		status: v.union(
+			v.literal("pending"),
+			v.literal("answered"),
+			v.literal("dismissed")
+		),
+		answerText: v.optional(v.string()),
+		answeredAt: v.optional(v.number()),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	})
+		.index("by_owner_thread_status_updatedAt", [
+			"ownerId",
+			"threadId",
+			"status",
+			"updatedAt",
+		])
+		.index("by_thread_status", ["threadId", "status"]),
 	trips: defineTable({
 		ownerId: v.string(),
 		title: v.string(),

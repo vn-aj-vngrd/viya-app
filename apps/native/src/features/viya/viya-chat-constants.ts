@@ -39,6 +39,15 @@ export const thinkingMessageLetters = Array.from(
 );
 export const thinkingShimmerDurationMs = 1400;
 export const thinkingShimmerTailLength = 4;
+export const chatInputMaxLength = 1200;
+export const chatInputMaxLines = 12;
+export const chatInputWarningThreshold = 1000;
+export const composerInputMaxHeight = 132;
+export const composerInputMinHeight = 44;
+export const expandedComposerInputMaxHeight = 360;
+export const expandedComposerInputMinHeight = 220;
+export const responseAnchorEstimatedContentHeight = 150;
+export const responseAnchorMinimumSpacerHeight = 180;
 
 export const CHAT_MODE_OPTIONS = [
 	{
@@ -85,7 +94,7 @@ export const planPromptSuggestions = [
 		accent: "#BF5AF2",
 		icon: "map-outline",
 		prompt:
-			"Help me plan a Palawan trip. Ask me one question at a time before drafting it.",
+			"Help me start planning a trip. Ask me one question at a time before drafting it.",
 		soft: "rgba(191, 90, 242, 0.12)",
 		summary: "Start with the first decision.",
 		title: "Plan the first night",
@@ -93,8 +102,7 @@ export const planPromptSuggestions = [
 	{
 		accent: "#0A84FF",
 		icon: "git-compare-outline",
-		prompt:
-			"Help me plan a Hong Kong trip. Start with the most important question.",
+		prompt: "Help me plan a trip. Start with the most important question.",
 		soft: "rgba(10, 132, 255, 0.12)",
 		summary: "Answer one question at a time.",
 		title: "Start a guided plan",

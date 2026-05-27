@@ -1,9 +1,10 @@
-import { Feather, Ionicons } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import type { ComponentProps } from "react";
 import type { ColorValue } from "react-native";
 
 import { FloatingTabBar } from "@/src/components/navigation/floating-tab-bar";
+import { ViyaMark } from "@/src/components/viya-mark";
 
 type TabIconName = ComponentProps<typeof Feather>["name"];
 
@@ -17,17 +18,8 @@ function FloatingTabIcon({ color, focused, name }: FloatingTabIconProps) {
 	return <Feather color={focused ? "#FFFFFF" : color} name={name} size={19} />;
 }
 
-function FloatingAiIcon({
-	color,
-	focused,
-}: Omit<FloatingTabIconProps, "name">) {
-	return (
-		<Ionicons
-			color={focused ? "#FFFFFF" : color}
-			name="sparkles"
-			size={focused ? 21 : 20}
-		/>
-	);
+function FloatingAiIcon({ focused }: Omit<FloatingTabIconProps, "name">) {
+	return <ViyaMark size={24} variant={focused ? "white" : "blue"} />;
 }
 
 export default function TabLayout() {

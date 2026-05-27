@@ -1,15 +1,17 @@
 import { useSmoothText } from "@convex-dev/agent/react";
 import { Feather, Ionicons } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
 import {
+	BottomSheet,
 	Menu,
 	type MenuKey,
 	Surface,
 	Text,
 	useThemeColor,
 } from "heroui-native";
-import { useEffect } from "react";
-import { Pressable, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Pressable, ScrollView, View } from "react-native";
 import Animated, {
 	Easing,
 	interpolate,
@@ -19,6 +21,7 @@ import Animated, {
 	withRepeat,
 	withTiming,
 } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { EmptyState } from "@/src/components/empty-state";
 
@@ -32,20 +35,99 @@ import {
 } from "./viya-chat-constants";
 import { MarkdownContent } from "./viya-chat-markdown";
 import type {
+	ChatHistoryItem,
 	ChatModeId,
 	ChatModeOption,
+	ChatQuestionPrompt,
 	PromptSuggestion,
 	SlashCommandOption,
+	SuggestionIconName,
 	ThreadIdsByContext,
+	TripBlueprint,
+	TripBlueprintAction,
+	TripBlueprintSection,
 	UiChatMessages,
 } from "./viya-chat-types";
 import {
+	extractTripBlueprint,
 	getChatModeOption,
+	getSingleQuestionDisplayText,
 	getThreadContextKey,
+	getTripBlueprintActionPrompt,
 	getUiMessageText,
 	getUserBubbleStyle,
 	isChatModeId,
 } from "./viya-chat-utils";
+
+const formatHistoryTimestamp = (timestamp: number) =>
+	new Intl.DateTimeFormat(undefined, {
+		day: "numeric",
+		hour: "numeric",
+		minute: "2-digit",
+		month: "short",
+	}).format(new Date(timestamp));
+
+const dateQuestionPattern =
+	/\b(arrival|date|dates|departure|end|leave|leaving|return|schedule|start|when)\b/i;
+
+const dateNumberFormatter = new Intl.NumberFormat("en", {
+	minimumIntegerDigits: 2,
+	useGrouping: false,
+});
+
+const readableDateFormatter = new Intl.DateTimeFormat(undefined, {
+	day: "numeric",
+	month: "short",
+	year: "numeric",
+});
+
+const getStartOfToday = () => {
+	const now = new Date();
+
+	return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+};
+
+const formatDateAnswer = (date: Date) => {
+	const year = date.getFullYear();
+	const month = dateNumberFormatter.format(date.getMonth() + 1);
+	const day = dateNumberFormatter.format(date.getDate());
+
+	return `${year}-${month}-${day}`;
+};
+
+const formatReadableDate = (date: Date) => readableDateFormatter.format(date);
+
+const isTravelDateQuestion = (question: string) =>
+	dateQuestionPattern.test(question);
+
+const blueprintSnapshotSectionIds = [
+	"destination",
+	"dates",
+	"budget",
+	"itineraryStyle",
+] as const;
+
+const blueprintActionItems = [
+	{
+		action: "refineBudget",
+		icon: "wallet-outline",
+		label: "Refine budget",
+	},
+	{
+		action: "adjustItinerary",
+		icon: "map-outline",
+		label: "Adjust itinerary",
+	},
+	{
+		action: "reviewRisks",
+		icon: "shield-checkmark-outline",
+		label: "Review risks",
+	},
+] as const satisfies readonly {
+	action: TripBlueprintAction;
+	icon: SuggestionIconName;
+	label: string;
+}[];
 
 function ThinkingShimmerLetter({
 	character,
@@ -261,16 +343,47 @@ export function ChatModeSelector({
 }
 
 export function HeaderActionGroup({
+	currentThreadId,
 	currentTripId,
-	onModeSelect,
+	onAddToTripPress,
+	onHistoryPress,
 	onNewChatPress,
-	selectedMode,
+	threadIdsByContext,
 }: {
+	currentThreadId: string | null;
 	currentTripId: Id<"trips"> | null;
-	onModeSelect: (mode: ChatModeId) => void;
+	onAddToTripPress: () => void;
+	onHistoryPress: () => void;
 	onNewChatPress: () => void;
-	selectedMode: ChatModeId;
+	threadIdsByContext: ThreadIdsByContext;
 }) {
+	const tripContextKey = currentTripId
+		? getThreadContextKey("trip", currentTripId)
+		: null;
+	const isCurrentThreadInTrip = Boolean(
+		currentThreadId &&
+			tripContextKey &&
+			threadIdsByContext[tripContextKey] === currentThreadId
+	);
+	const isAddToTripDisabled = Boolean(
+		!(currentTripId && currentThreadId) || isCurrentThreadInTrip
+	);
+	const addToTripDescription = (() => {
+		if (!currentTripId) {
+			return "Create a trip before linking chat context.";
+		}
+
+		if (!currentThreadId) {
+			return "Send a message before linking chat context.";
+		}
+
+		if (isCurrentThreadInTrip) {
+			return "This chat is already linked to your trip.";
+		}
+
+		return "Use this chat as the active trip thread.";
+	})();
+
 	return (
 		<Surface className="h-12 flex-row items-center gap-1 rounded-full border border-border bg-surface px-1">
 			<Pressable
@@ -299,80 +412,349 @@ export function HeaderActionGroup({
 						offset={10}
 						placement="bottom"
 						presentation="popover"
-						width={260}
+						width={280}
 					>
-						<Menu.Label className="px-3 pt-2 pb-1 font-semibold text-xs">
-							CHAT OPTIONS
-						</Menu.Label>
 						<Menu.Item
-							accessibilityLabel="Start a new chat"
+							accessibilityLabel="Open chat history"
 							className="flex-row items-center gap-3 rounded-[22px] p-3"
 							isAnimatedStyleActive={false}
-							onPress={onNewChatPress}
+							onPress={onHistoryPress}
 						>
-							<View className="h-9 w-9 items-center justify-center rounded-full bg-default">
-								<Feather color="#18181B" name="edit" size={19} />
+							<View className="h-9 w-9 items-center justify-center rounded-full bg-primary/10">
+								<Ionicons color="#0A84FF" name="time-outline" size={18} />
 							</View>
 							<View className="flex-1">
 								<Menu.ItemTitle className="font-semibold text-sm">
-									New chat
+									History
 								</Menu.ItemTitle>
 								<Menu.ItemDescription className="text-xs">
-									Start fresh in the current mode.
+									Review previous conversations.
 								</Menu.ItemDescription>
 							</View>
 						</Menu.Item>
-						<View className="my-1 h-px bg-border" />
-						{CHAT_MODE_OPTIONS.map((option) => {
-							const isSelected = option.id === selectedMode;
-							const isDisabled = Boolean(
-								"requiresTrip" in option &&
-									option.requiresTrip &&
-									!currentTripId
-							);
-
-							return (
-								<Menu.Item
-									accessibilityLabel={`Switch to ${option.label} mode`}
-									className="flex-row items-center gap-3 rounded-[22px] p-3"
-									isAnimatedStyleActive={false}
-									isDisabled={isDisabled}
-									key={option.id}
-									onPress={() => onModeSelect(option.id)}
-									style={{
-										backgroundColor: isSelected ? option.soft : "transparent",
-										opacity: isDisabled ? 0.5 : 1,
-									}}
-								>
-									<View
-										className="h-9 w-9 items-center justify-center rounded-full"
-										style={{ backgroundColor: option.soft }}
-									>
-										<Ionicons
-											color={option.accent}
-											name={option.icon}
-											size={18}
-										/>
-									</View>
-									<View className="flex-1">
-										<Menu.ItemTitle className="font-semibold text-sm">
-											{option.label}
-										</Menu.ItemTitle>
-										<Menu.ItemDescription className="text-xs">
-											{isDisabled
-												? "Create a trip first to unlock trip context."
-												: option.description}
-										</Menu.ItemDescription>
-									</View>
-									{isSelected ? (
-										<Ionicons color="#18181B" name="checkmark" size={18} />
-									) : null}
-								</Menu.Item>
-							);
-						})}
+						<Menu.Item
+							accessibilityLabel="Add current chat to trip"
+							className="flex-row items-center gap-3 rounded-[22px] p-3"
+							isAnimatedStyleActive={false}
+							isDisabled={isAddToTripDisabled}
+							onPress={onAddToTripPress}
+							style={{ opacity: isAddToTripDisabled ? 0.5 : 1 }}
+						>
+							<View className="h-9 w-9 items-center justify-center rounded-full bg-warning/10">
+								<Ionicons color="#FF9F0A" name="briefcase-outline" size={18} />
+							</View>
+							<View className="flex-1">
+								<Menu.ItemTitle className="font-semibold text-sm">
+									Add to trip
+								</Menu.ItemTitle>
+								<Menu.ItemDescription className="text-xs">
+									{addToTripDescription}
+								</Menu.ItemDescription>
+							</View>
+						</Menu.Item>
 					</Menu.Content>
 				</Menu.Portal>
 			</Menu>
+		</Surface>
+	);
+}
+
+export function ChatHistorySheet({
+	currentThreadId,
+	currentTripId,
+	history,
+	isOpen,
+	onOpenChange,
+	onSelect,
+}: {
+	currentThreadId: string | null;
+	currentTripId: Id<"trips"> | null;
+	history: readonly ChatHistoryItem[] | undefined;
+	isOpen: boolean;
+	onOpenChange: (isOpen: boolean) => void;
+	onSelect: (item: ChatHistoryItem) => void;
+}) {
+	const insets = useSafeAreaInsets();
+	const hasLoaded = history !== undefined;
+	const hasHistory = Boolean(history?.length);
+
+	return (
+		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
+			<BottomSheet.Portal>
+				<BottomSheet.Overlay />
+				<BottomSheet.Content
+					backgroundClassName="rounded-t-[36px] bg-background"
+					enablePanDownToClose={true}
+				>
+					<View
+						className="gap-5 px-5 pt-2"
+						style={{ paddingBottom: Math.max(insets.bottom, 18) }}
+					>
+						<View className="gap-1">
+							<BottomSheet.Title>Chat history</BottomSheet.Title>
+							<BottomSheet.Description>
+								Reopen a previous Viya conversation.
+							</BottomSheet.Description>
+						</View>
+
+						{hasHistory ? (
+							<ScrollView
+								className="max-h-[420px]"
+								showsVerticalScrollIndicator={false}
+							>
+								<View className="gap-2 pb-1">
+									{history?.map((item) => {
+										const option = getChatModeOption(item.mode);
+										const isCurrentThread = item.threadId === currentThreadId;
+										const isUnavailableTrip =
+											item.mode === "trip" &&
+											Boolean(item.tripId && item.tripId !== currentTripId);
+										const subtitle =
+											item.mode === "trip"
+												? (item.tripTitle ??
+													item.tripDestination ??
+													"Trip chat")
+												: option.label;
+
+										return (
+											<Pressable
+												accessibilityLabel={`Open ${item.title}`}
+												accessibilityRole="button"
+												className="min-h-14 flex-row items-center gap-3 rounded-[18px] border border-border bg-surface px-3 py-2.5"
+												disabled={isUnavailableTrip}
+												key={item._id}
+												onPress={() => onSelect(item)}
+												style={({ pressed }) => ({
+													opacity: isUnavailableTrip ? 0.45 : 1,
+													transform: [
+														{ scale: pressed && !isUnavailableTrip ? 0.99 : 1 },
+													],
+												})}
+											>
+												<View
+													className="h-8 w-8 items-center justify-center rounded-full"
+													style={{ backgroundColor: option.soft }}
+												>
+													<Ionicons
+														color={option.accent}
+														name={option.icon}
+														size={16}
+													/>
+												</View>
+												<View className="flex-1 gap-0.5">
+													<View className="flex-row items-center gap-2">
+														<Text
+															className="flex-1"
+															numberOfLines={1}
+															type="body-sm"
+															weight="bold"
+														>
+															{item.title}
+														</Text>
+														{isCurrentThread ? (
+															<Ionicons
+																color="#18181B"
+																name="checkmark"
+																size={17}
+															/>
+														) : null}
+													</View>
+													<Text color="muted" numberOfLines={1} type="body-xs">
+														{subtitle} -{" "}
+														{formatHistoryTimestamp(item.updatedAt)}
+													</Text>
+												</View>
+											</Pressable>
+										);
+									})}
+								</View>
+							</ScrollView>
+						) : (
+							<View className="items-center gap-2 rounded-[24px] border border-border bg-surface px-4 py-8">
+								<View className="h-11 w-11 items-center justify-center rounded-full bg-default">
+									<Ionicons color="#71717A" name="time-outline" size={20} />
+								</View>
+								<Text type="body-sm" weight="bold">
+									{hasLoaded ? "No history yet" : "Loading history"}
+								</Text>
+								<Text align="center" color="muted" type="body-xs">
+									{hasLoaded
+										? "Your conversations will appear here after you send a message."
+										: "Fetching your saved conversations."}
+								</Text>
+							</View>
+						)}
+					</View>
+				</BottomSheet.Content>
+			</BottomSheet.Portal>
+		</BottomSheet>
+	);
+}
+
+export function QuestionOptionsDock({
+	isLoading,
+	onDismiss,
+	onSelectOption,
+	onUseCustomAnswer,
+	pendingQuestion,
+}: {
+	isLoading: boolean;
+	onDismiss: (question: ChatQuestionPrompt) => void;
+	onSelectOption: (value: string) => void;
+	onUseCustomAnswer: () => void;
+	pendingQuestion: ChatQuestionPrompt | null | undefined;
+}) {
+	const today = useMemo(() => getStartOfToday(), []);
+	const [selectedDate, setSelectedDate] = useState(today);
+
+	if (!pendingQuestion) {
+		return null;
+	}
+
+	const option = getChatModeOption(pendingQuestion.mode);
+	const shouldShowDatePicker = isTravelDateQuestion(pendingQuestion.question);
+	const selectedDateAnswer = formatDateAnswer(selectedDate);
+	const selectedDateLabel = formatReadableDate(selectedDate);
+
+	return (
+		<Surface
+			className="mb-2 overflow-hidden rounded-[24px] border border-border bg-surface p-2"
+			style={composerStyle}
+		>
+			<View className="gap-2">
+				<View className="flex-row items-start gap-3 px-1 pt-1">
+					<View
+						className="mt-0.5 h-8 w-8 items-center justify-center rounded-full"
+						style={{ backgroundColor: option.soft }}
+					>
+						<Ionicons color={option.accent} name={option.icon} size={16} />
+					</View>
+					<View className="flex-1 gap-0.5">
+						<Text color="muted" type="body-xs" weight="semibold">
+							{pendingQuestion.stepLabel ?? `${option.label} question`}
+						</Text>
+						<Text type="body-sm" weight="bold">
+							{pendingQuestion.question}
+						</Text>
+					</View>
+					<Pressable
+						accessibilityLabel="Dismiss question options"
+						accessibilityRole="button"
+						className="h-8 w-8 items-center justify-center rounded-full"
+						onPress={() => onDismiss(pendingQuestion)}
+					>
+						<Ionicons color="#71717A" name="close" size={17} />
+					</Pressable>
+				</View>
+
+				{shouldShowDatePicker ? (
+					<View
+						className="gap-3 rounded-[20px] border border-border bg-default/40 p-3"
+						style={{ borderCurve: "continuous" }}
+					>
+						<View className="flex-row items-center gap-3">
+							<View
+								className="h-9 w-9 items-center justify-center rounded-full bg-surface"
+								style={{ borderCurve: "continuous" }}
+							>
+								<Ionicons
+									color={option.accent}
+									name="calendar-outline"
+									size={17}
+								/>
+							</View>
+							<View className="flex-1 gap-0.5">
+								<Text type="body-sm" weight="bold">
+									Pick a date
+								</Text>
+								<Text color="muted" type="body-xs">
+									Only today or future dates are available.
+								</Text>
+							</View>
+						</View>
+						<View className="flex-row items-center justify-between gap-3">
+							<View className="min-h-12 flex-1 justify-center rounded-[16px] bg-surface px-3">
+								<Text color="muted" type="body-xs" weight="medium">
+									Selected
+								</Text>
+								<Text type="body-sm" weight="bold">
+									{selectedDateLabel}
+								</Text>
+							</View>
+							<DateTimePicker
+								accentColor={option.accent}
+								minimumDate={today}
+								mode="date"
+								onChange={(_event, nextDate) => {
+									if (nextDate) {
+										setSelectedDate(nextDate);
+									}
+								}}
+								value={selectedDate}
+							/>
+						</View>
+						<Pressable
+							accessibilityLabel={`Use ${selectedDateLabel}`}
+							accessibilityRole="button"
+							className="min-h-11 flex-row items-center justify-center gap-2 rounded-[16px] px-3 py-2.5"
+							disabled={isLoading}
+							onPress={() => onSelectOption(selectedDateAnswer)}
+							style={({ pressed }) => ({
+								backgroundColor: option.accent,
+								opacity: isLoading ? 0.5 : 1,
+								transform: [{ scale: pressed && !isLoading ? 0.99 : 1 }],
+							})}
+						>
+							<Ionicons color="#FFFFFF" name="checkmark" size={16} />
+							<Text className="text-white" type="body-sm" weight="bold">
+								Use {selectedDateLabel}
+							</Text>
+						</Pressable>
+					</View>
+				) : null}
+
+				<View className="gap-1">
+					{pendingQuestion.options.map((questionOption, index) => (
+						<Pressable
+							accessibilityLabel={`Choose ${questionOption.label}`}
+							accessibilityRole="button"
+							className="min-h-10 flex-row items-center gap-3 rounded-[16px] px-2 py-2"
+							disabled={isLoading}
+							key={questionOption.id}
+							onPress={() => onSelectOption(questionOption.value)}
+							style={({ pressed }) => ({
+								backgroundColor:
+									pressed && !isLoading
+										? "rgba(24, 24, 27, 0.06)"
+										: "transparent",
+								opacity: isLoading ? 0.5 : 1,
+							})}
+						>
+							<View className="h-6 w-6 items-center justify-center rounded-full bg-default">
+								<Text type="body-xs" weight="bold">
+									{index + 1}
+								</Text>
+							</View>
+							<Text className="flex-1" numberOfLines={2} type="body-sm">
+								{questionOption.label}
+							</Text>
+						</Pressable>
+					))}
+					<Pressable
+						accessibilityLabel="Answer with something else"
+						accessibilityRole="button"
+						className="min-h-10 flex-row items-center gap-3 rounded-[16px] px-2 py-2"
+						onPress={onUseCustomAnswer}
+					>
+						<View className="h-6 w-6 items-center justify-center rounded-full bg-default">
+							<Ionicons color="#18181B" name="pencil-outline" size={13} />
+						</View>
+						<Text className="flex-1" color="muted" type="body-sm">
+							Something else
+						</Text>
+					</Pressable>
+				</View>
+			</View>
 		</Surface>
 	);
 }
@@ -464,22 +846,217 @@ export function SlashCommandMenu({
 	);
 }
 
+function getBlueprintSection(
+	blueprint: TripBlueprint,
+	sectionId: TripBlueprintSection["id"]
+) {
+	return blueprint.sections.find((section) => section.id === sectionId) ?? null;
+}
+
+const isBlueprintSnapshotSection = (sectionId: TripBlueprintSection["id"]) =>
+	blueprintSnapshotSectionIds.some((snapshotId) => snapshotId === sectionId);
+
+function TripBlueprintSnapshot({ blueprint }: { blueprint: TripBlueprint }) {
+	const snapshotSections = blueprintSnapshotSectionIds
+		.map((sectionId) => getBlueprintSection(blueprint, sectionId))
+		.filter((section) => section !== null);
+
+	return (
+		<View className="flex-row flex-wrap gap-2">
+			{snapshotSections.map((section) => (
+				<View
+					className="min-h-16 w-[48%] gap-1 rounded-[18px] bg-default/50 p-3"
+					key={section.id}
+					style={{ borderCurve: "continuous" }}
+				>
+					<Text color="muted" type="body-xs" weight="semibold">
+						{section.label}
+					</Text>
+					<Text numberOfLines={3} type="body-sm" weight="bold">
+						{section.items[0]}
+					</Text>
+				</View>
+			))}
+		</View>
+	);
+}
+
+function TripBlueprintSectionList({
+	sections,
+}: {
+	sections: readonly TripBlueprintSection[];
+}) {
+	return (
+		<View className="gap-3">
+			{sections.map((section) => (
+				<View className="gap-2" key={section.id}>
+					<Text type="body-sm" weight="bold">
+						{section.label}
+					</Text>
+					<View className="gap-1.5">
+						{section.items.slice(0, 3).map((item) => (
+							<View className="flex-row gap-2" key={`${section.id}-${item}`}>
+								<Text color="muted" type="body-sm" weight="bold">
+									-
+								</Text>
+								<Text.Paragraph
+									className="flex-1 leading-5"
+									color="muted"
+									type="body-sm"
+								>
+									{item}
+								</Text.Paragraph>
+							</View>
+						))}
+						{section.items.length > 3 ? (
+							<Text color="muted" type="body-xs" weight="medium">
+								+{section.items.length - 3} more
+							</Text>
+						) : null}
+					</View>
+				</View>
+			))}
+		</View>
+	);
+}
+
+function TripBlueprintReviewCard({
+	blueprint,
+	isCreatingTripFromBlueprint = false,
+	onCreateTripFromBlueprint,
+	onSubmitBlueprintAction,
+}: {
+	blueprint: TripBlueprint;
+	isCreatingTripFromBlueprint?: boolean;
+	onCreateTripFromBlueprint?: (blueprint: TripBlueprint) => void;
+	onSubmitBlueprintAction?: (prompt: string) => void;
+}) {
+	const primaryColor = useThemeColor("accent");
+	const detailSections = blueprint.sections.filter(
+		(section) => !isBlueprintSnapshotSection(section.id)
+	);
+
+	return (
+		<Surface className="mt-4 gap-4 rounded-[28px] border border-border bg-surface p-4">
+			<View className="flex-row items-start gap-3">
+				<View
+					className="h-10 w-10 items-center justify-center rounded-full"
+					style={{ backgroundColor: "rgba(191, 90, 242, 0.12)" }}
+				>
+					<Ionicons color="#BF5AF2" name="map-outline" size={19} />
+				</View>
+				<View className="flex-1 gap-1">
+					<Text
+						style={{ color: primaryColor }}
+						type="body-xs"
+						weight="semibold"
+					>
+						PLANNING OUTPUT
+					</Text>
+					<Text type="body" weight="bold">
+						{blueprint.title}
+					</Text>
+					{blueprint.summary ? (
+						<Text.Paragraph color="muted" type="body-sm">
+							{blueprint.summary}
+						</Text.Paragraph>
+					) : null}
+				</View>
+			</View>
+
+			<TripBlueprintSnapshot blueprint={blueprint} />
+
+			{detailSections.length > 0 ? (
+				<TripBlueprintSectionList sections={detailSections} />
+			) : null}
+
+			<Pressable
+				accessibilityLabel="Create trip from blueprint"
+				accessibilityRole="button"
+				className="min-h-12 flex-row items-center justify-center gap-2 rounded-full px-4 py-3"
+				disabled={isCreatingTripFromBlueprint}
+				onPress={() => onCreateTripFromBlueprint?.(blueprint)}
+				style={({ pressed }) => ({
+					backgroundColor: primaryColor,
+					opacity: isCreatingTripFromBlueprint ? 0.55 : 1,
+					transform: [
+						{ scale: pressed && !isCreatingTripFromBlueprint ? 0.99 : 1 },
+					],
+				})}
+			>
+				<Ionicons color="#FFFFFF" name="checkmark-circle-outline" size={17} />
+				<Text className="text-white" type="body-sm" weight="bold">
+					{isCreatingTripFromBlueprint ? "Creating trip" : "Create trip"}
+				</Text>
+			</Pressable>
+
+			<View className="flex-row flex-wrap gap-2 border-border border-t pt-3">
+				{blueprintActionItems.map((item) => (
+					<Pressable
+						accessibilityLabel={item.label}
+						accessibilityRole="button"
+						className="min-h-10 flex-row items-center gap-2 rounded-full border border-border px-3 py-2"
+						key={item.action}
+						onPress={() =>
+							onSubmitBlueprintAction?.(
+								getTripBlueprintActionPrompt(item.action, blueprint)
+							)
+						}
+						style={({ pressed }) => ({
+							backgroundColor: pressed
+								? "rgba(24, 24, 27, 0.06)"
+								: "transparent",
+						})}
+					>
+						<Ionicons color={primaryColor} name={item.icon} size={15} />
+						<Text type="body-xs" weight="bold">
+							{item.label}
+						</Text>
+					</Pressable>
+				))}
+			</View>
+		</Surface>
+	);
+}
+
 function MessageContent({
+	isCreatingTripFromBlueprint,
 	isStreaming,
 	isUser,
+	onCreateTripFromBlueprint,
+	onSubmitBlueprintAction,
 	text,
 }: {
+	isCreatingTripFromBlueprint?: boolean;
 	isStreaming: boolean;
 	isUser: boolean;
+	onCreateTripFromBlueprint?: (blueprint: TripBlueprint) => void;
+	onSubmitBlueprintAction?: (prompt: string) => void;
 	text: string;
 }) {
 	const primaryColor = useThemeColor("accent");
 	const [visibleText] = useSmoothText(text, {
 		startStreaming: isStreaming,
 	});
+	const displayText = isUser
+		? visibleText
+		: getSingleQuestionDisplayText(visibleText);
+	const blueprint = isUser ? null : extractTripBlueprint(displayText);
 
 	if (!isUser) {
-		return <MarkdownContent text={visibleText} />;
+		return (
+			<View>
+				<MarkdownContent text={displayText} />
+				{blueprint ? (
+					<TripBlueprintReviewCard
+						blueprint={blueprint}
+						isCreatingTripFromBlueprint={isCreatingTripFromBlueprint}
+						onCreateTripFromBlueprint={onCreateTripFromBlueprint}
+						onSubmitBlueprintAction={onSubmitBlueprintAction}
+					/>
+				) : null}
+			</View>
+		);
 	}
 
 	return (
@@ -489,7 +1066,7 @@ function MessageContent({
 			type="body-sm"
 			weight="semibold"
 		>
-			{visibleText}
+			{displayText}
 		</Text.Paragraph>
 	);
 }
@@ -575,13 +1152,21 @@ export function ViyaChatEmptyContent({
 }
 
 export function ViyaMessageList({
+	bottomSpacerHeight,
 	hasPersistedPendingPrompt,
+	isCreatingTripFromBlueprint,
 	messages,
+	onCreateTripFromBlueprint,
+	onSubmitBlueprintAction,
 	pendingPrompt,
 	shouldShowThinking,
 }: {
+	bottomSpacerHeight: number;
 	hasPersistedPendingPrompt: boolean;
+	isCreatingTripFromBlueprint: boolean;
 	messages: UiChatMessages;
+	onCreateTripFromBlueprint: (blueprint: TripBlueprint) => void;
+	onSubmitBlueprintAction: (prompt: string) => void;
 	pendingPrompt: string | null;
 	shouldShowThinking: boolean;
 }) {
@@ -608,8 +1193,11 @@ export function ViyaMessageList({
 							style={isUser ? userMessageBubbleStyle : undefined}
 						>
 							<MessageContent
+								isCreatingTripFromBlueprint={isCreatingTripFromBlueprint}
 								isStreaming={message.status === "streaming"}
 								isUser={isUser}
+								onCreateTripFromBlueprint={onCreateTripFromBlueprint}
+								onSubmitBlueprintAction={onSubmitBlueprintAction}
 								text={messageText}
 							/>
 						</View>
@@ -620,6 +1208,13 @@ export function ViyaMessageList({
 				<UserMessageBubble text={pendingPrompt} />
 			) : null}
 			{shouldShowThinking ? <TypingBubble /> : null}
+			{bottomSpacerHeight > 0 ? (
+				<View
+					accessibilityElementsHidden={true}
+					importantForAccessibility="no-hide-descendants"
+					style={{ height: bottomSpacerHeight }}
+				/>
+			) : null}
 		</View>
 	);
 }
