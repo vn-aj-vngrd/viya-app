@@ -1,12 +1,13 @@
 import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
-import { deleteItemAsync, getItemAsync, setItemAsync } from "expo-secure-store";
+import type { Href } from "expo-router";
 import type { MenuKey } from "heroui-native";
-import { Platform, type StyleProp, type ViewStyle } from "react-native";
+import type { StyleProp, ViewStyle } from "react-native";
 
 import {
 	activeThreadsStorageKey,
 	CHAT_MODE_OPTIONS,
 	planPromptSuggestions,
+	returnTabRoutes,
 	rgbColorPattern,
 	SLASH_COMMAND_OPTIONS,
 	slashCommandTokenPattern,
@@ -36,6 +37,8 @@ const planningQuestionMarkerPattern =
 const trailingColonPattern = /:$/;
 const lineBreakPattern = /\r\n|\r|\n/g;
 const whitespacePattern = /\s+/g;
+const appRoutePrefix = "/(app)/";
+const hasWebStorage = () => typeof globalThis.localStorage !== "undefined";
 
 const tripBlueprintSectionOrder = [
 	"destination",
@@ -82,6 +85,44 @@ const tripBlueprintSectionAliases = new Map<string, TripBlueprintSectionId>([
 ]);
 
 const fallbackTripDestination = "Planned trip";
+
+const getFirstSearchParamValue = (value?: string | string[]) =>
+	Array.isArray(value) ? value[0] : value;
+
+const isAppReturnRoute = (value: string) => value.startsWith(appRoutePrefix);
+
+export const getViyaBackRoute = ({
+	fromTab,
+	returnTo,
+}: {
+	fromTab?: string | string[];
+	returnTo?: string | string[];
+}): Href => {
+	const launchRoute = getFirstSearchParamValue(returnTo);
+
+	if (launchRoute && isAppReturnRoute(launchRoute)) {
+		return launchRoute as Href;
+	}
+
+	const launchTab = getFirstSearchParamValue(fromTab);
+
+	if (launchTab && launchTab in returnTabRoutes) {
+		return returnTabRoutes[launchTab as keyof typeof returnTabRoutes];
+	}
+
+	return returnTabRoutes.index;
+};
+
+export const getDraftTripBlueprintPrompt = () =>
+	"Generate a Trip Blueprint now using the planning details we have. Make sensible assumptions for missing fields and clearly mark anything that needs confirmation.";
+
+export const isCurrentChatRequest = ({
+	activeSessionId,
+	requestSessionId,
+}: {
+	activeSessionId: number;
+	requestSessionId: number;
+}) => requestSessionId === activeSessionId;
 
 export const getColorWithOpacity = (color: string, opacity: number) => {
 	if (color.startsWith("#") && color.length === 7) {
@@ -359,6 +400,43 @@ export const hasAssistantMessageAfter = (
 		.slice(messageCount)
 		.some((message) => message.role !== "user");
 
+export const getPendingPromptInsertionIndex = ({
+	hasPersistedPendingPrompt,
+	messageCount,
+	pendingPrompt,
+	pendingPromptMessageIndex,
+	persistedPromptMessageIndex,
+}: {
+	hasPersistedPendingPrompt: boolean;
+	messageCount: number;
+	pendingPrompt: string | null;
+	pendingPromptMessageIndex: number | null;
+	persistedPromptMessageIndex?: number | null;
+}) => {
+	if (!pendingPrompt) {
+		return null;
+	}
+
+	const insertionIndex =
+		pendingPromptMessageIndex === null
+			? messageCount
+			: Math.min(pendingPromptMessageIndex, messageCount);
+
+	if (!hasPersistedPendingPrompt) {
+		return insertionIndex;
+	}
+
+	if (
+		persistedPromptMessageIndex !== null &&
+		persistedPromptMessageIndex !== undefined &&
+		persistedPromptMessageIndex > insertionIndex
+	) {
+		return insertionIndex;
+	}
+
+	return null;
+};
+
 export const applySlashCommandSelection = ({
 	activeSlashCommand,
 	command,
@@ -419,13 +497,35 @@ const isThreadIdsByContext = (value: unknown): value is ThreadIdsByContext => {
 	);
 };
 
+export const getSelectableTripContexts = <
+	TripContext extends { isDemo: boolean },
+>(
+	trips: readonly TripContext[] | undefined
+) => trips?.filter((trip) => !trip.isDemo) ?? [];
+
+export const getSelectedTripContext = <
+	TripContext extends { _id: string; isDemo: boolean },
+>(
+	trips: readonly TripContext[] | undefined,
+	selectedTripId: string | null
+) => {
+	const selectableTrips = getSelectableTripContexts(trips);
+
+	return (
+		selectableTrips.find((trip) => trip._id === selectedTripId) ??
+		selectableTrips[0] ??
+		null
+	);
+};
+
 export const getStoredThreadIdsByContext =
 	async (): Promise<ThreadIdsByContext> => {
 		try {
-			const storedValue =
-				Platform.OS === "web"
-					? globalThis.localStorage?.getItem(activeThreadsStorageKey)
-					: await getItemAsync(activeThreadsStorageKey);
+			const storedValue = hasWebStorage()
+				? globalThis.localStorage?.getItem(activeThreadsStorageKey)
+				: await import("expo-secure-store").then(({ getItemAsync }) =>
+						getItemAsync(activeThreadsStorageKey)
+					);
 
 			if (!storedValue) {
 				return {};
@@ -444,11 +544,12 @@ export const persistStoredThreadIdsByContext = async (
 	try {
 		const storedValue = JSON.stringify(threadIds);
 
-		if (Platform.OS === "web") {
+		if (hasWebStorage()) {
 			globalThis.localStorage?.setItem(activeThreadsStorageKey, storedValue);
 			return;
 		}
 
+		const { setItemAsync } = await import("expo-secure-store");
 		await setItemAsync(activeThreadsStorageKey, storedValue);
 	} catch {
 		return;
@@ -457,11 +558,12 @@ export const persistStoredThreadIdsByContext = async (
 
 export const removeStoredThreadIdsByContext = async () => {
 	try {
-		if (Platform.OS === "web") {
+		if (hasWebStorage()) {
 			globalThis.localStorage?.removeItem(activeThreadsStorageKey);
 			return;
 		}
 
+		const { deleteItemAsync } = await import("expo-secure-store");
 		await deleteItemAsync(activeThreadsStorageKey);
 	} catch {
 		return;

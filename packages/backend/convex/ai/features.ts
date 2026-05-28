@@ -111,8 +111,13 @@ export const generateWrappedDraft = action({
 export const extractVaultItemDraft = action({
 	args: {
 		fileName: v.string(),
+		fileSize: v.optional(v.number()),
+		kind: v.optional(v.string()),
 		mimeType: v.string(),
+		pastedText: v.optional(v.string()),
+		storageId: v.optional(v.id("_storage")),
 		title: v.string(),
+		tripId: v.optional(v.id("trips")),
 		useFallback: v.optional(v.boolean()),
 	},
 	handler: async (_ctx, args) => {
@@ -122,8 +127,13 @@ export const extractVaultItemDraft = action({
 
 		const vaultContext = JSON.stringify({
 			fileName: args.fileName,
+			fileSize: args.fileSize,
+			kind: args.kind,
 			mimeType: args.mimeType,
+			pastedText: args.pastedText,
+			storageId: args.storageId,
 			title: args.title,
+			tripId: args.tripId,
 		});
 
 		return await generateStructuredObject({

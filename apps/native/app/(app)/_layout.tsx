@@ -64,14 +64,22 @@ function AppLayout() {
 				name="onboarding/preferences"
 				options={{ headerShown: false }}
 			/>
-			<Stack.Screen name="trips/[tripId]/index" options={{ title: "Trip" }} />
+			<Stack.Screen name="trips/new" options={{ headerShown: false }} />
+			<Stack.Screen
+				name="trips/[tripId]/index"
+				options={{ headerShown: false }}
+			/>
 			<Stack.Screen
 				name="trips/[tripId]/itinerary"
-				options={{ title: "Itinerary" }}
+				options={{ headerShown: false }}
+			/>
+			<Stack.Screen
+				name="trips/[tripId]/bookings"
+				options={{ headerShown: false }}
 			/>
 			<Stack.Screen
 				name="trips/[tripId]/readiness"
-				options={{ title: "Readiness" }}
+				options={{ headerShown: false }}
 			/>
 			<Stack.Screen name="trips/[tripId]/risks" options={{ title: "Risks" }} />
 			<Stack.Screen
@@ -86,7 +94,10 @@ function AppLayout() {
 				name="trips/[tripId]/wrapped"
 				options={{ title: "Trip Story" }}
 			/>
-			<Stack.Screen name="trips/[tripId]/vault" options={{ title: "Vault" }} />
+			<Stack.Screen
+				name="trips/[tripId]/vault"
+				options={{ headerShown: false }}
+			/>
 		</Stack>
 	);
 }

@@ -29,16 +29,19 @@ import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Container } from "@/components/container";
-import { VIYA_ROUTES } from "@/src/constants/routes";
+import { NavigationBackButton } from "@/src/components/navigation/navigation-back-button";
 
 import {
 	ChatHistorySheet,
 	ChatModeSelector,
+	DraftBlueprintShortcut,
 	HeaderActionGroup,
 	QuestionOptionsDock,
 	SlashCommandMenu,
+	TripContextSheet,
 	ViyaChatEmptyContent,
 	ViyaMessageList,
+	ViyaPromptSuggestionsCard,
 } from "./viya-chat-components";
 import { getComposerInputLayout } from "./viya-chat-composer";
 import {
@@ -49,18 +52,11 @@ import {
 	composerInputMinHeight,
 	composerStyle,
 	expandedComposerInputMinHeight,
-	returnTabRoutes,
 } from "./viya-chat-constants";
-import {
-	getQuestionDockContainerClassName,
-	shouldUseQuestionFocusMode,
-} from "./viya-chat-question-utils";
 import type {
 	ChatHistoryItem,
 	ChatModeId,
-	ChatQuestionPrompt,
 	PromptSuggestion,
-	ReturnTabName,
 	SlashCommandOption,
 	SuggestionIconName,
 	ThreadIdsByContext,
@@ -72,15 +68,21 @@ import {
 	getActiveSlashCommand,
 	getChatInputLineCount,
 	getChatModeOption,
+	getDraftTripBlueprintPrompt,
 	getMessageQueryArgs,
 	getNormalizedChatInput,
 	getPromptSuggestions,
+	getSelectableTripContexts,
+	getSelectedTripContext,
 	getStoredThreadIdsByContext,
 	getThreadContextKey,
 	getTripBlueprintCreateInput,
+	getUiMessageText,
 	getVisibleSlashCommands,
+	getViyaBackRoute,
 	hasAssistantMessageAfter,
 	hasPersistedUserMessage,
+	isCurrentChatRequest,
 	persistStoredThreadIdsByContext,
 	removeStoredThreadIdsByContext,
 	runAsyncTask,
@@ -110,11 +112,6 @@ const getThreadIdsAfterTripCreate = ({
 
 	return nextThreadIds;
 };
-
-const getBackRoute = (fromTab?: string) =>
-	fromTab && fromTab in returnTabRoutes
-		? returnTabRoutes[fromTab as ReturnTabName]
-		: VIYA_ROUTES.home;
 
 const composerInputLineHeight = 21;
 const composerInputPaddingBottom = 9;
@@ -252,7 +249,7 @@ const createBlueprintTripHandler =
 			onChatModeChange("trip");
 			onAwaitingAssistantMessageCountChange(null);
 			onNoticeMessageChange(
-				"Trip created. Booking targets were saved as external booking placeholders."
+				"Draft trip created. Booking targets were saved as external booking placeholders."
 			);
 			runAsyncTask(persistStoredThreadIdsByContext(nextThreadIds));
 		} catch (error) {
@@ -358,7 +355,11 @@ function ComposerTextInput({
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Chat screen coordinates streaming, modes, question docks, and blueprint creation until the flow is split into containers.
 export function ViyaChatScreen() {
 	const router = useRouter();
-	const { fromTab } = useLocalSearchParams<{ fromTab?: string }>();
+	const { fromTab, mode, returnTo } = useLocalSearchParams<{
+		fromTab?: string | string[];
+		mode?: string | string[];
+		returnTo?: string | string[];
+	}>();
 	const insets = useSafeAreaInsets();
 	const { height: windowHeight } = useWindowDimensions();
 	const [input, setInput] = useState("");
@@ -369,23 +370,34 @@ export function ViyaChatScreen() {
 		useState(expandedComposerInputMinHeight);
 	const [threadIdsByContext, setThreadIdsByContext] =
 		useState<ThreadIdsByContext>({});
-	const [chatMode, setChatMode] = useState<ChatModeId>("chat");
+	const initialMode =
+		(Array.isArray(mode) ? mode[0] : mode) === "trip" ? "trip" : "plan";
+	const [chatMode, setChatMode] = useState<ChatModeId>(initialMode);
 	const [createdTripId, setCreatedTripId] = useState<Id<"trips"> | null>(null);
 	const [isHistorySheetOpen, setIsHistorySheetOpen] = useState(false);
 	const [isComposerSheetOpen, setIsComposerSheetOpen] = useState(false);
 	const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
+	const [isTripContextSheetOpen, setIsTripContextSheetOpen] = useState(false);
 	const [isCreatingTripFromBlueprint, setIsCreatingTripFromBlueprint] =
 		useState(false);
+	const [selectedTripId, setSelectedTripId] = useState<Id<"trips"> | null>(
+		null
+	);
 	const [isLoading, setIsLoading] = useState(false);
 	const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
+	const [pendingPromptMessageIndex, setPendingPromptMessageIndex] = useState<
+		number | null
+	>(null);
 	const [awaitingAssistantMessageCount, setAwaitingAssistantMessageCount] =
 		useState<number | null>(null);
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
 	const scrollViewRef = useRef<NativeScrollView>(null);
+	const chatSessionIdRef = useRef(0);
 	const mutedColor = useThemeColor("muted");
 	const trips = useQuery(api.trips.listTrips);
-	const currentTrip = trips?.find((trip) => !trip.isDemo) ?? null;
+	const selectableTripContexts = getSelectableTripContexts(trips);
+	const currentTrip = getSelectedTripContext(trips, selectedTripId);
 	const currentTripId = currentTrip?._id ?? createdTripId;
 	const selectedModeOption = getChatModeOption(chatMode);
 	const threadContextKey = getThreadContextKey(chatMode, currentTripId);
@@ -429,6 +441,17 @@ export function ViyaChatScreen() {
 		displayedMessages,
 		pendingPrompt
 	);
+	const persistedPendingPromptMessageIndex = pendingPrompt
+		? displayedMessages.findIndex(
+				(message) =>
+					message.role === "user" && getUiMessageText(message) === pendingPrompt
+			)
+		: -1;
+	const hasMisorderedPersistedPendingPrompt = Boolean(
+		pendingPrompt &&
+			pendingPromptMessageIndex !== null &&
+			persistedPendingPromptMessageIndex > pendingPromptMessageIndex
+	);
 	const hasAssistantMessageAfterAwaitStart = hasAssistantMessageAfter(
 		displayedMessages,
 		awaitingAssistantMessageCount
@@ -446,10 +469,27 @@ export function ViyaChatScreen() {
 	const shouldShowSlashCommandMenu = Boolean(
 		activeSlashCommand && !isAwaitingViya
 	);
-	const isQuestionFocusMode = shouldUseQuestionFocusMode({
-		hasPendingQuestion: Boolean(pendingQuestion),
-		shouldShowSlashCommandMenu,
-	});
+	const shouldShowEmptySuggestions = Boolean(
+		!(shouldShowMessages || input.trim() || shouldShowSlashCommandMenu)
+	);
+	const shouldShowQuestionCard = Boolean(
+		pendingQuestion && !shouldShowSlashCommandMenu
+	);
+	const hasPlanUserInput = displayedMessages.some(
+		(message) => message.role === "user" && getUiMessageText(message)
+	);
+	const shouldShowDraftBlueprintShortcut = Boolean(
+		chatMode === "plan" &&
+			hasPlanUserInput &&
+			!isAwaitingViya &&
+			!shouldShowSlashCommandMenu
+	);
+	const hasBottomOverlayPanel = Boolean(
+		shouldShowSlashCommandMenu ||
+			shouldShowEmptySuggestions ||
+			shouldShowDraftBlueprintShortcut ||
+			shouldShowQuestionCard
+	);
 	const composerInputLayout = getComposerInputLayout({
 		contentHeight: composerContentHeight,
 		maxHeight: composerInputMaxHeight,
@@ -491,16 +531,17 @@ export function ViyaChatScreen() {
 
 	useEffect(() => {
 		if (chatMode === "trip" && trips !== undefined && !currentTripId) {
-			setChatMode("chat");
+			setChatMode("plan");
 			setErrorMessage("Create a trip first to use Trip mode.");
 		}
 	}, [chatMode, currentTripId, trips]);
 
 	useEffect(() => {
-		if (hasPersistedPendingPrompt) {
+		if (hasPersistedPendingPrompt && !hasMisorderedPersistedPendingPrompt) {
 			setPendingPrompt(null);
+			setPendingPromptMessageIndex(null);
 		}
-	}, [hasPersistedPendingPrompt]);
+	}, [hasMisorderedPersistedPendingPrompt, hasPersistedPendingPrompt]);
 
 	useEffect(() => {
 		if (hasAssistantMessageAfterAwaitStart) {
@@ -508,18 +549,89 @@ export function ViyaChatScreen() {
 		}
 	}, [hasAssistantMessageAfterAwaitStart]);
 
-	useEffect(() => {
-		if (isQuestionFocusMode) {
-			setIsComposerSheetOpen(false);
-		}
-	}, [isQuestionFocusMode]);
-
 	// biome-ignore lint/correctness/useExhaustiveDependencies: message state changes should scroll the chat to the latest response.
 	useEffect(() => {
 		scrollViewRef.current?.scrollToEnd({ animated: true });
 	}, [messageCount, hasStreamingMessage, pendingPrompt]);
 
+	const isActiveChatSession = (requestSessionId: number) =>
+		isCurrentChatRequest({
+			activeSessionId: chatSessionIdRef.current,
+			requestSessionId,
+		});
+
+	const createActiveThreadForSubmit = async (requestSessionId: number) => {
+		const createdThreadId = await createThread();
+
+		if (!isActiveChatSession(requestSessionId)) {
+			return null;
+		}
+
+		const nextThreadIds = {
+			...threadIdsByContext,
+			[threadContextKey]: createdThreadId,
+		};
+		setThreadIdsByContext(nextThreadIds);
+		runAsyncTask(persistStoredThreadIdsByContext(nextThreadIds));
+
+		return createdThreadId;
+	};
+
+	const sendChatPrompt = async ({
+		requestSessionId,
+		value,
+	}: {
+		requestSessionId: number;
+		value: string;
+	}) => {
+		try {
+			let currentThreadId = threadId;
+
+			if (!currentThreadId) {
+				const createdThreadId =
+					await createActiveThreadForSubmit(requestSessionId);
+
+				if (!createdThreadId) {
+					return false;
+				}
+
+				currentThreadId = createdThreadId;
+			}
+
+			await sendMessage({
+				mode: chatMode,
+				prompt: value,
+				threadId: currentThreadId,
+				tripId:
+					chatMode === "trip" && currentTripId ? currentTripId : undefined,
+			});
+
+			return isActiveChatSession(requestSessionId);
+		} catch (error) {
+			if (!isActiveChatSession(requestSessionId)) {
+				return false;
+			}
+
+			setInput(value);
+			setPendingPrompt(null);
+			setPendingPromptMessageIndex(null);
+			setAwaitingAssistantMessageCount(null);
+			setErrorMessage(
+				error instanceof Error
+					? error.message
+					: "Viya could not send this message."
+			);
+		} finally {
+			if (isActiveChatSession(requestSessionId)) {
+				setIsLoading(false);
+			}
+		}
+
+		return false;
+	};
+
 	const handleSubmit = async (prompt?: string) => {
+		const requestSessionId = chatSessionIdRef.current;
 		const rawValue = prompt ?? input;
 		const value = getNormalizedChatInput(rawValue);
 		const inputError = getChatInputError({
@@ -542,46 +654,13 @@ export function ViyaChatScreen() {
 		setIsLoading(true);
 		setIsModeMenuOpen(false);
 		setAwaitingAssistantMessageCount(messageCount);
+		setPendingPromptMessageIndex(messageCount);
 		setPendingPrompt(value);
 		setInput("");
 		setComposerContentHeight(composerInputMinHeight);
 		setExpandedComposerContentHeight(expandedComposerInputMinHeight);
 
-		try {
-			let currentThreadId = threadId;
-
-			if (!currentThreadId) {
-				currentThreadId = await createThread();
-				const nextThreadIds = {
-					...threadIdsByContext,
-					[threadContextKey]: currentThreadId,
-				};
-				setThreadIdsByContext(nextThreadIds);
-				runAsyncTask(persistStoredThreadIdsByContext(nextThreadIds));
-			}
-
-			await sendMessage({
-				mode: chatMode,
-				prompt: value,
-				threadId: currentThreadId,
-				tripId:
-					chatMode === "trip" && currentTripId ? currentTripId : undefined,
-			});
-			return true;
-		} catch (error) {
-			setInput(value);
-			setPendingPrompt(null);
-			setAwaitingAssistantMessageCount(null);
-			setErrorMessage(
-				error instanceof Error
-					? error.message
-					: "Viya could not send this message."
-			);
-		} finally {
-			setIsLoading(false);
-		}
-
-		return false;
+		return await sendChatPrompt({ requestSessionId, value });
 	};
 
 	const handleExpandedComposerSubmit = async () => {
@@ -593,7 +672,7 @@ export function ViyaChatScreen() {
 	};
 
 	const handleBackPress = () => {
-		router.replace(getBackRoute(fromTab));
+		router.replace(getViyaBackRoute({ fromTab, returnTo }));
 	};
 
 	const handleModeSelect = createModeSelectHandler({
@@ -606,6 +685,7 @@ export function ViyaChatScreen() {
 	});
 
 	const handleNewChatPress = () => {
+		chatSessionIdRef.current += 1;
 		const nextThreadIds = { ...threadIdsByContext };
 		delete nextThreadIds[threadContextKey];
 		if (pendingQuestion) {
@@ -615,7 +695,9 @@ export function ViyaChatScreen() {
 		setInput("");
 		setComposerContentHeight(composerInputMinHeight);
 		setExpandedComposerContentHeight(expandedComposerInputMinHeight);
+		setIsLoading(false);
 		setPendingPrompt(null);
+		setPendingPromptMessageIndex(null);
 		setAwaitingAssistantMessageCount(null);
 		setErrorMessage(null);
 		setNoticeMessage(null);
@@ -654,6 +736,7 @@ export function ViyaChatScreen() {
 			setErrorMessage(null);
 			setNoticeMessage(null);
 			setAwaitingAssistantMessageCount(null);
+			setPendingPromptMessageIndex(null);
 			setIsModeMenuOpen(false);
 			runAsyncTask(persistStoredThreadIdsByContext(nextThreadIds));
 		} catch (error) {
@@ -666,16 +749,20 @@ export function ViyaChatScreen() {
 	};
 
 	const handleHistorySelect = (item: ChatHistoryItem) => {
-		if (
-			item.mode === "trip" &&
-			(!currentTripId || item.tripId !== currentTripId)
-		) {
-			setErrorMessage("This trip chat belongs to another trip.");
+		const historyTripId =
+			item.mode === "trip" ? (item.tripId ?? currentTripId) : currentTripId;
+
+		if (item.mode === "trip" && !historyTripId) {
+			setErrorMessage("Choose a trip before opening this trip chat.");
 			setIsHistorySheetOpen(false);
 			return;
 		}
 
-		const nextContextKey = getThreadContextKey(item.mode, currentTripId);
+		if (item.mode === "trip" && historyTripId) {
+			setSelectedTripId(historyTripId);
+		}
+
+		const nextContextKey = getThreadContextKey(item.mode, historyTripId);
 		const nextThreadIds = {
 			...threadIdsByContext,
 			[nextContextKey]: item.threadId,
@@ -686,18 +773,29 @@ export function ViyaChatScreen() {
 		setErrorMessage(null);
 		setNoticeMessage(null);
 		setPendingPrompt(null);
+		setPendingPromptMessageIndex(null);
 		setAwaitingAssistantMessageCount(null);
 		setIsHistorySheetOpen(false);
 		setIsModeMenuOpen(false);
 		runAsyncTask(persistStoredThreadIdsByContext(nextThreadIds));
 	};
 
-	const handleQuestionDismiss = (question: ChatQuestionPrompt) => {
-		runAsyncTask(dismissPendingQuestion({ questionId: question._id }));
+	const handleTripContextSelect = (tripId: Id<"trips">) => {
+		setSelectedTripId(tripId);
+		setChatMode("trip");
+		setErrorMessage(null);
+		setNoticeMessage(null);
+		setAwaitingAssistantMessageCount(null);
+		setPendingPromptMessageIndex(null);
+		setIsTripContextSheetOpen(false);
 	};
 
 	const handleQuestionOptionSelect = (value: string) => {
 		runAsyncTask(handleSubmit(value));
+	};
+
+	const handleDraftBlueprintPress = () => {
+		runAsyncTask(handleSubmit(getDraftTripBlueprintPrompt()));
 	};
 
 	const handleComposerTextChange = (value: string) => {
@@ -734,7 +832,10 @@ export function ViyaChatScreen() {
 		linkThreadToTrip,
 		onAwaitingAssistantMessageCountChange: setAwaitingAssistantMessageCount,
 		onChatModeChange: setChatMode,
-		onCreatedTripIdChange: setCreatedTripId,
+		onCreatedTripIdChange: (tripId) => {
+			setCreatedTripId(tripId);
+			setSelectedTripId(tripId);
+		},
 		onCreatingChange: setIsCreatingTripFromBlueprint,
 		onErrorMessageChange: setErrorMessage,
 		onNoticeMessageChange: setNoticeMessage,
@@ -751,22 +852,18 @@ export function ViyaChatScreen() {
 				className="flex-1"
 			>
 				<View
-					className="flex-1 px-4 pb-4"
-					style={{ paddingTop: insets.top + 10 }}
+					className="flex-1 overflow-hidden px-4 pb-4"
+					style={{ backgroundColor, paddingTop: insets.top + 10 }}
 				>
 					<View
 						className="mb-5 flex-row items-center justify-between"
 						style={{ zIndex: 30 }}
 					>
 						<View className="flex-row items-center gap-3">
-							<Pressable
+							<NavigationBackButton
 								accessibilityLabel="Back to previous tab"
-								accessibilityRole="button"
-								className="h-12 w-12 items-center justify-center rounded-full border border-border bg-surface"
 								onPress={handleBackPress}
-							>
-								<Ionicons color="#18181B" name="chevron-back" size={20} />
-							</Pressable>
+							/>
 							<ChatModeSelector
 								currentTripId={currentTripId}
 								isOpen={isModeMenuOpen}
@@ -792,7 +889,9 @@ export function ViyaChatScreen() {
 						LinearGradientComponent={LinearGradient}
 						size={36}
 						style={{
-							marginBottom: -chatScrollShadowBottomBleed,
+							marginBottom: hasBottomOverlayPanel
+								? 0
+								: -chatScrollShadowBottomBleed,
 							marginTop: -chatScrollShadowTopBleed,
 						}}
 					>
@@ -800,8 +899,10 @@ export function ViyaChatScreen() {
 							className="flex-1"
 							contentContainerStyle={{
 								flexGrow: 1,
+								justifyContent: shouldShowMessages ? undefined : "center",
 								paddingBottom:
-									chatScrollContentBottomPadding + chatScrollShadowBottomBleed,
+									chatScrollContentBottomPadding +
+									(hasBottomOverlayPanel ? 0 : chatScrollShadowBottomBleed),
 								paddingTop: chatScrollShadowTopBleed,
 							}}
 							key={`${threadContextKey}:${threadId ?? "new"}`}
@@ -811,25 +912,17 @@ export function ViyaChatScreen() {
 						>
 							{shouldShowMessages ? (
 								<ViyaMessageList
-									focusedQuestionAssistantMessageId={
-										isQuestionFocusMode
-											? pendingQuestion?.assistantMessageId
-											: null
-									}
 									hasPersistedPendingPrompt={hasPersistedPendingPrompt}
 									isCreatingTripFromBlueprint={isCreatingTripFromBlueprint}
 									messages={displayedMessages}
 									onCreateTripFromBlueprint={handleCreateTripFromBlueprint}
 									onSubmitBlueprintAction={handleSubmit}
 									pendingPrompt={pendingPrompt}
+									pendingPromptMessageIndex={pendingPromptMessageIndex}
 									shouldShowThinking={shouldShowThinking}
 								/>
 							) : (
-								<ViyaChatEmptyContent
-									onSubmitSuggestion={handleSubmit}
-									promptSuggestions={promptSuggestions}
-									selectedModeOption={selectedModeOption}
-								/>
+								<ViyaChatEmptyContent selectedModeOption={selectedModeOption} />
 							)}
 						</Animated.ScrollView>
 					</ScrollShadow>
@@ -854,25 +947,88 @@ export function ViyaChatScreen() {
 						/>
 					) : null}
 
-					{shouldShowSlashCommandMenu ? null : (
-						<View
-							className={getQuestionDockContainerClassName(isQuestionFocusMode)}
-						>
-							<QuestionOptionsDock
-								isLoading={isAwaitingViya}
-								onDismiss={handleQuestionDismiss}
-								onSelectOption={handleQuestionOptionSelect}
-								onUseCustomAnswer={handleCustomQuestionAnswer}
-								pendingQuestion={pendingQuestion}
+					{shouldShowEmptySuggestions ? (
+						<View>
+							<ViyaPromptSuggestionsCard
+								onSubmitSuggestion={handleSubmit}
+								promptSuggestions={promptSuggestions}
 							/>
 						</View>
-					)}
+					) : null}
 
-					{isQuestionFocusMode ? null : (
+					{shouldShowDraftBlueprintShortcut || shouldShowQuestionCard ? (
+						<View className="gap-2">
+							{shouldShowDraftBlueprintShortcut ? (
+								<DraftBlueprintShortcut
+									isDisabled={isAwaitingViya}
+									onPress={handleDraftBlueprintPress}
+								/>
+							) : null}
+							{shouldShowQuestionCard ? (
+								<QuestionOptionsDock
+									isLoading={isAwaitingViya}
+									onSelectOption={handleQuestionOptionSelect}
+									onUseCustomAnswer={handleCustomQuestionAnswer}
+									pendingQuestion={pendingQuestion}
+								/>
+							) : null}
+						</View>
+					) : null}
+
+					<View className="mt-2 gap-1">
+						{chatMode === "trip" && currentTrip ? (
+							<Pressable
+								accessibilityLabel={`Current trip context is ${currentTrip.title}`}
+								accessibilityRole="button"
+								className="flex-row items-center gap-1.5 self-start rounded-full border border-warning/30 bg-warning/10 px-3 py-1.5"
+								onPress={() => setIsTripContextSheetOpen(true)}
+							>
+								<Ionicons color="#FF9F0A" name="briefcase-outline" size={13} />
+								<Text
+									numberOfLines={1}
+									style={{ color: "#9A5A00", maxWidth: 220 }}
+									type="body-xs"
+									weight="semibold"
+								>
+									{currentTrip.title}
+								</Text>
+							</Pressable>
+						) : null}
 						<Surface
-							className="relative mt-3 flex-row items-end gap-2 rounded-[28px] border border-border bg-surface px-3 py-2"
+							className="relative flex-row items-center gap-2 rounded-[28px] border border-border bg-surface px-3 py-2"
 							style={composerStyle}
 						>
+							{chatMode === "trip" ? (
+								<View
+									className="items-center justify-center"
+									style={{ height: composerInputLayout.height, width: 38 }}
+								>
+									<Pressable
+										accessibilityLabel={
+											currentTrip
+												? `Change trip context from ${currentTrip.title}`
+												: "Choose trip context"
+										}
+										accessibilityRole="button"
+										className="h-9 w-9 items-center justify-center rounded-full border"
+										onPress={() => setIsTripContextSheetOpen(true)}
+										style={{
+											backgroundColor: currentTrip
+												? "rgba(255, 159, 10, 0.14)"
+												: "rgba(24, 24, 27, 0.06)",
+											borderColor: currentTrip
+												? "rgba(255, 159, 10, 0.32)"
+												: "transparent",
+										}}
+									>
+										<Ionicons
+											color={currentTrip ? "#FF9F0A" : "#18181B"}
+											name={currentTrip ? "briefcase-outline" : "add"}
+											size={currentTrip ? 17 : 20}
+										/>
+									</Pressable>
+								</View>
+							) : null}
 							<View
 								className="relative flex-1"
 								style={{ height: composerInputLayout.height }}
@@ -931,8 +1087,8 @@ export function ViyaChatScreen() {
 								</Button>
 							</View>
 						</Surface>
-					)}
-					{shouldShowInputLimit && !isQuestionFocusMode ? (
+					</View>
+					{shouldShowInputLimit ? (
 						<Text className="mt-1 px-4" color="muted" type="body-xs">
 							{remainingInputCharacters.toLocaleString()} characters left
 						</Text>
@@ -1017,6 +1173,13 @@ export function ViyaChatScreen() {
 				isOpen={isHistorySheetOpen}
 				onOpenChange={setIsHistorySheetOpen}
 				onSelect={handleHistorySelect}
+			/>
+			<TripContextSheet
+				isOpen={isTripContextSheetOpen}
+				onOpenChange={setIsTripContextSheetOpen}
+				onSelect={handleTripContextSelect}
+				selectedTripId={currentTripId}
+				trips={selectableTripContexts}
 			/>
 		</Container>
 	);

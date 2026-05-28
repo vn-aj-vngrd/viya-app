@@ -1,6 +1,5 @@
 import { useSmoothText } from "@convex-dev/agent/react";
 import { Feather, Ionicons } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
 import {
 	BottomSheet,
@@ -24,12 +23,20 @@ import Animated, {
 	withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
+import { formatReadableTripDateRange } from "@/src/components/date/date-format-utils";
+import {
+	DatePickerField,
+	formatIsoDate,
+	formatReadableDate,
+	getStartOfToday,
+	parseIsoDate,
+} from "@/src/components/date/date-picker-field";
 import { EmptyState } from "@/src/components/empty-state";
 
 import {
 	CHAT_MODE_OPTIONS,
 	composerStyle,
+	questionCardStyle,
 	thinkingMessage,
 	thinkingMessageLetters,
 	thinkingShimmerDurationMs,
@@ -42,6 +49,7 @@ import type {
 	ChatModeId,
 	ChatModeOption,
 	ChatQuestionPrompt,
+	ChatTripContextItem,
 	PromptSuggestion,
 	SlashCommandOption,
 	SuggestionIconName,
@@ -54,6 +62,7 @@ import type {
 import {
 	extractTripBlueprint,
 	getChatModeOption,
+	getPendingPromptInsertionIndex,
 	getSingleQuestionDisplayText,
 	getThreadContextKey,
 	getTripBlueprintActionPrompt,
@@ -72,33 +81,6 @@ const formatHistoryTimestamp = (timestamp: number) =>
 
 const dateQuestionPattern =
 	/\b(arrival|date|dates|departure|end|leave|leaving|return|schedule|start|when)\b/i;
-
-const dateNumberFormatter = new Intl.NumberFormat("en", {
-	minimumIntegerDigits: 2,
-	useGrouping: false,
-});
-
-const readableDateFormatter = new Intl.DateTimeFormat(undefined, {
-	day: "numeric",
-	month: "short",
-	year: "numeric",
-});
-
-const getStartOfToday = () => {
-	const now = new Date();
-
-	return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-};
-
-const formatDateAnswer = (date: Date) => {
-	const year = date.getFullYear();
-	const month = dateNumberFormatter.format(date.getMonth() + 1);
-	const day = dateNumberFormatter.format(date.getDate());
-
-	return `${year}-${month}-${day}`;
-};
-
-const formatReadableDate = (date: Date) => readableDateFormatter.format(date);
 
 const isTravelDateQuestion = (question: string) =>
 	dateQuestionPattern.test(question);
@@ -223,6 +205,7 @@ export function ChatModeSelector({
 }) {
 	const selectedOption = getChatModeOption(selectedMode);
 	const selectedModeKeys = new Set<MenuKey>([selectedMode]);
+	const mutedColor = useThemeColor("muted");
 
 	const handleSelectionChange = (keys: Set<MenuKey>) => {
 		const [nextMode] = keys;
@@ -333,7 +316,7 @@ export function ChatModeSelector({
 										/>
 									) : null}
 									<Menu.ItemIndicator
-										iconProps={{ color: "#18181B", size: 20 }}
+										iconProps={{ color: mutedColor, size: 20 }}
 									/>
 								</Menu.Item>
 							);
@@ -388,7 +371,7 @@ export function HeaderActionGroup({
 	})();
 
 	return (
-		<Surface className="h-12 flex-row items-center gap-1 rounded-full border border-border bg-surface px-1">
+		<View className="h-12 flex-row items-center gap-1 rounded-full border border-border bg-surface px-1">
 			<Pressable
 				accessibilityLabel="Start a new chat"
 				accessibilityRole="button"
@@ -458,7 +441,7 @@ export function HeaderActionGroup({
 					</Menu.Content>
 				</Menu.Portal>
 			</Menu>
-		</Surface>
+		</View>
 	);
 }
 
@@ -594,21 +577,139 @@ export function ChatHistorySheet({
 	);
 }
 
+export function TripContextSheet({
+	isOpen,
+	onOpenChange,
+	onSelect,
+	selectedTripId,
+	trips,
+}: {
+	isOpen: boolean;
+	onOpenChange: (isOpen: boolean) => void;
+	onSelect: (tripId: Id<"trips">) => void;
+	selectedTripId: Id<"trips"> | null;
+	trips: readonly ChatTripContextItem[];
+}) {
+	const insets = useSafeAreaInsets();
+	const hasTrips = trips.length > 0;
+
+	return (
+		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
+			<BottomSheet.Portal>
+				<BottomSheet.Overlay />
+				<BottomSheet.Content
+					backgroundClassName="rounded-t-[36px] bg-background"
+					enablePanDownToClose={true}
+				>
+					<View
+						className="gap-5 px-5 pt-2"
+						style={{ paddingBottom: Math.max(insets.bottom, 18) }}
+					>
+						<View className="gap-1">
+							<BottomSheet.Title>Choose trip context</BottomSheet.Title>
+							<BottomSheet.Description>
+								Viya will use this trip's itinerary, vault, readiness, bookings,
+								risks, and budget.
+							</BottomSheet.Description>
+						</View>
+
+						{hasTrips ? (
+							<ScrollView
+								className="max-h-105"
+								showsVerticalScrollIndicator={false}
+							>
+								<View className="gap-2 pb-1">
+									{trips.map((trip) => {
+										const isSelected = trip._id === selectedTripId;
+										const dateRange = formatReadableTripDateRange({
+											endDate: trip.endDate,
+											startDate: trip.startDate,
+										});
+
+										return (
+											<Pressable
+												accessibilityLabel={`Use ${trip.title} as trip context`}
+												accessibilityRole="button"
+												className="min-h-16 flex-row items-center gap-3 rounded-[20px] border border-border bg-surface px-3 py-2.5"
+												key={trip._id}
+												onPress={() => onSelect(trip._id)}
+												style={({ pressed }) => ({
+													transform: [{ scale: pressed ? 0.99 : 1 }],
+												})}
+											>
+												<View className="h-9 w-9 items-center justify-center rounded-full bg-warning/10">
+													<Ionicons
+														color="#FF9F0A"
+														name="briefcase-outline"
+														size={18}
+													/>
+												</View>
+												<View className="flex-1 gap-0.5">
+													<View className="flex-row items-center gap-2">
+														<Text
+															className="flex-1"
+															numberOfLines={1}
+															type="body-sm"
+															weight="bold"
+														>
+															{trip.title}
+														</Text>
+														{isSelected ? (
+															<Ionicons
+																color="#18181B"
+																name="checkmark"
+																size={17}
+															/>
+														) : null}
+													</View>
+													<Text color="muted" numberOfLines={1} type="body-xs">
+														{trip.destination} - {dateRange}
+													</Text>
+												</View>
+											</Pressable>
+										);
+									})}
+								</View>
+							</ScrollView>
+						) : (
+							<View className="items-center gap-2 rounded-3xl border border-border bg-surface px-4 py-8">
+								<View className="h-11 w-11 items-center justify-center rounded-full bg-default">
+									<Ionicons
+										color="#71717A"
+										name="briefcase-outline"
+										size={20}
+									/>
+								</View>
+								<Text type="body-sm" weight="bold">
+									No trips yet
+								</Text>
+								<Text align="center" color="muted" type="body-xs">
+									Create a trip before using Trip mode context.
+								</Text>
+							</View>
+						)}
+					</View>
+				</BottomSheet.Content>
+			</BottomSheet.Portal>
+		</BottomSheet>
+	);
+}
+
 export function QuestionOptionsDock({
 	isLoading,
-	onDismiss,
 	onSelectOption,
 	onUseCustomAnswer,
 	pendingQuestion,
 }: {
 	isLoading: boolean;
-	onDismiss: (question: ChatQuestionPrompt) => void;
 	onSelectOption: (value: string) => void;
 	onUseCustomAnswer: (value: string) => void;
 	pendingQuestion: ChatQuestionPrompt | null | undefined;
 }) {
 	const today = useMemo(() => getStartOfToday(), []);
-	const [selectedDate, setSelectedDate] = useState(today);
+	const [selectedDate, setSelectedDate] = useState(() =>
+		formatIsoDate(getStartOfToday())
+	);
 	const [customAnswer, setCustomAnswer] = useState("");
 	const [isCustomAnswerVisible, setIsCustomAnswerVisible] = useState(false);
 	const pendingQuestionId = pendingQuestion?._id;
@@ -628,39 +729,25 @@ export function QuestionOptionsDock({
 
 	const option = getChatModeOption(pendingQuestion.mode);
 	const shouldShowDatePicker = isTravelDateQuestion(pendingQuestion.question);
-	const selectedDateAnswer = formatDateAnswer(selectedDate);
-	const selectedDateLabel = formatReadableDate(selectedDate);
+	const selectedDateAnswer = selectedDate;
+	const selectedDateLabel = formatReadableDate(
+		parseIsoDate(selectedDate, today)
+	);
 	const trimmedCustomAnswer = customAnswer.trim();
 
 	return (
 		<Surface
-			className="mb-2 overflow-hidden rounded-3xl border border-border bg-surface p-2"
-			style={composerStyle}
+			className="overflow-hidden rounded-3xl border border-border bg-surface p-2"
+			style={questionCardStyle}
 		>
-			<View className="gap-2">
-				<View className="flex-row items-start gap-3 px-1 pt-1">
-					<View
-						className="mt-0.5 h-8 w-8 items-center justify-center rounded-full"
-						style={{ backgroundColor: option.soft }}
-					>
-						<Ionicons color={option.accent} name={option.icon} size={16} />
-					</View>
-					<View className="flex-1 gap-0.5">
-						<Text color="muted" type="body-xs" weight="semibold">
-							{pendingQuestion.stepLabel ?? `${option.label} question`}
-						</Text>
-						<Text type="body-sm" weight="bold">
-							{pendingQuestion.question}
-						</Text>
-					</View>
-					<Pressable
-						accessibilityLabel="Dismiss question options"
-						accessibilityRole="button"
-						className="h-8 w-8 items-center justify-center rounded-full"
-						onPress={() => onDismiss(pendingQuestion)}
-					>
-						<Ionicons color="#71717A" name="close" size={17} />
-					</Pressable>
+			<View className="gap-1.5">
+				<View className="gap-0.5 px-2 pt-0.5">
+					<Text color="muted" type="body-xs" weight="semibold">
+						{pendingQuestion.stepLabel ?? `${option.label} question`}
+					</Text>
+					<Text type="body-sm" weight="bold">
+						{pendingQuestion.question}
+					</Text>
 				</View>
 
 				{shouldShowDatePicker ? (
@@ -688,27 +775,13 @@ export function QuestionOptionsDock({
 								</Text>
 							</View>
 						</View>
-						<View className="flex-row items-center justify-between gap-3">
-							<View className="min-h-12 flex-1 justify-center rounded-2xl bg-surface px-3">
-								<Text color="muted" type="body-xs" weight="medium">
-									Selected
-								</Text>
-								<Text type="body-sm" weight="bold">
-									{selectedDateLabel}
-								</Text>
-							</View>
-							<DateTimePicker
-								accentColor={option.accent}
-								minimumDate={today}
-								mode="date"
-								onChange={(_event, nextDate) => {
-									if (nextDate) {
-										setSelectedDate(nextDate);
-									}
-								}}
-								value={selectedDate}
-							/>
-						</View>
+						<DatePickerField
+							accentColor={option.accent}
+							label="Selected"
+							minimumDate={today}
+							onChangeText={setSelectedDate}
+							value={selectedDate}
+						/>
 						<Pressable
 							accessibilityLabel={`Use ${selectedDateLabel}`}
 							accessibilityRole="button"
@@ -729,12 +802,12 @@ export function QuestionOptionsDock({
 					</View>
 				) : null}
 
-				<View className="gap-1">
+				<View className="gap-0.5">
 					{pendingQuestion.options.map((questionOption, index) => (
 						<Pressable
 							accessibilityLabel={`Choose ${questionOption.label}`}
 							accessibilityRole="button"
-							className="min-h-10 flex-row items-center gap-3 rounded-2xl px-2 py-2"
+							className="min-h-10 flex-row items-center gap-2 rounded-2xl px-2 py-1.5"
 							disabled={isLoading}
 							key={questionOption.id}
 							onPress={() => onSelectOption(questionOption.value)}
@@ -759,7 +832,7 @@ export function QuestionOptionsDock({
 					<Pressable
 						accessibilityLabel="Answer with something else"
 						accessibilityRole="button"
-						className="min-h-10 flex-row items-center gap-3 rounded-2xl px-2 py-2"
+						className="min-h-10 flex-row items-center gap-2 rounded-2xl px-2 py-1.5"
 						onPress={() => setIsCustomAnswerVisible(true)}
 					>
 						<View className="h-6 w-6 items-center justify-center rounded-full bg-default">
@@ -823,6 +896,35 @@ export function QuestionOptionsDock({
 				</View>
 			</View>
 		</Surface>
+	);
+}
+
+export function DraftBlueprintShortcut({
+	isDisabled,
+	onPress,
+}: {
+	isDisabled: boolean;
+	onPress: () => void;
+}) {
+	const primaryColor = useThemeColor("accent");
+
+	return (
+		<Pressable
+			accessibilityLabel="Draft blueprint now"
+			accessibilityRole="button"
+			className="min-h-10 flex-row items-center gap-1.5 self-start rounded-full border border-secondary/30 bg-secondary/10 px-3 py-1.5"
+			disabled={isDisabled}
+			onPress={onPress}
+			style={({ pressed }) => ({
+				opacity: isDisabled ? 0.5 : 1,
+				transform: [{ scale: pressed && !isDisabled ? 0.99 : 1 }],
+			})}
+		>
+			<Ionicons color={primaryColor} name="sparkles-outline" size={13} />
+			<Text style={{ color: primaryColor }} type="body-xs" weight="semibold">
+				Draft blueprint now
+			</Text>
+		</Pressable>
 	);
 }
 
@@ -1018,7 +1120,7 @@ function TripBlueprintReviewCard({
 						type="body-xs"
 						weight="semibold"
 					>
-						PLANNING OUTPUT
+						DRAFT BLUEPRINT
 					</Text>
 					<Text type="body" weight="bold">
 						{blueprint.title}
@@ -1033,12 +1135,26 @@ function TripBlueprintReviewCard({
 
 			<TripBlueprintSnapshot blueprint={blueprint} />
 
+			<View
+				className="flex-row items-center gap-2 rounded-[18px] bg-default/50 px-3 py-2"
+				style={{ borderCurve: "continuous" }}
+			>
+				<Ionicons
+					color={primaryColor}
+					name="information-circle-outline"
+					size={16}
+				/>
+				<Text.Paragraph className="flex-1" color="muted" type="body-xs">
+					Uses assumptions. Missing details can be refined later.
+				</Text.Paragraph>
+			</View>
+
 			{detailSections.length > 0 ? (
 				<TripBlueprintSectionList sections={detailSections} />
 			) : null}
 
 			<Pressable
-				accessibilityLabel="Create trip from blueprint"
+				accessibilityLabel="Create draft trip from blueprint"
 				accessibilityRole="button"
 				className="min-h-12 flex-row items-center justify-center gap-2 rounded-full px-4 py-3"
 				disabled={isCreatingTripFromBlueprint}
@@ -1053,7 +1169,9 @@ function TripBlueprintReviewCard({
 			>
 				<Ionicons color="#FFFFFF" name="checkmark-circle-outline" size={17} />
 				<Text className="text-white" type="body-sm" weight="bold">
-					{isCreatingTripFromBlueprint ? "Creating trip" : "Create trip"}
+					{isCreatingTripFromBlueprint
+						? "Creating draft trip"
+						: "Create draft trip"}
 				</Text>
 			</Pressable>
 
@@ -1157,129 +1275,173 @@ function UserMessageBubble({ text }: { text: string }) {
 }
 
 export function ViyaChatEmptyContent({
-	onSubmitSuggestion,
-	promptSuggestions,
 	selectedModeOption,
 }: {
-	onSubmitSuggestion: (prompt: string) => void;
-	promptSuggestions: readonly PromptSuggestion[];
 	selectedModeOption: ChatModeOption;
 }) {
 	return (
-		<View className="gap-5">
-			<EmptyState
-				className="flex-none py-4"
-				description={selectedModeOption.emptyDescription}
-				title={selectedModeOption.emptyTitle}
-				visual={
-					<View
-						className="h-16 w-16 items-center justify-center rounded-full"
-						style={{ backgroundColor: selectedModeOption.soft }}
-					>
-						<Ionicons
-							color={selectedModeOption.accent}
-							name={selectedModeOption.icon}
-							size={30}
-						/>
-					</View>
-				}
-			/>
+		<EmptyState
+			className="flex-none py-4"
+			description={selectedModeOption.emptyDescription}
+			title={selectedModeOption.emptyTitle}
+			visual={
+				<View
+					className="h-16 w-16 items-center justify-center rounded-full"
+					style={{ backgroundColor: selectedModeOption.soft }}
+				>
+					<Ionicons
+						color={selectedModeOption.accent}
+						name={selectedModeOption.icon}
+						size={30}
+					/>
+				</View>
+			}
+		/>
+	);
+}
 
-			<View className="gap-3">
-				<Text color="muted" type="body-xs" weight="semibold">
-					TRY ASKING
-				</Text>
-				<Surface className="gap-1 rounded-[28px] border border-border bg-surface p-1">
-					{promptSuggestions.map((suggestion) => (
-						<Pressable
-							className="min-h-16 flex-row items-center gap-3 rounded-3xl px-3 py-2.5"
-							key={suggestion.title}
-							onPress={() => onSubmitSuggestion(suggestion.prompt)}
+export function ViyaPromptSuggestionsCard({
+	onSubmitSuggestion,
+	promptSuggestions,
+}: {
+	onSubmitSuggestion: (prompt: string) => void;
+	promptSuggestions: readonly PromptSuggestion[];
+}) {
+	return (
+		<View className="gap-1">
+			<Text className="px-1" color="muted" type="body-xs" weight="semibold">
+				TRY ASKING
+			</Text>
+			<Surface className="gap-1 rounded-[28px] border border-border bg-surface p-1">
+				{promptSuggestions.map((suggestion) => (
+					<Pressable
+						accessibilityLabel={`Try asking: ${suggestion.title}`}
+						accessibilityRole="button"
+						className="min-h-12 flex-row items-center gap-2 rounded-3xl px-3 py-1.5"
+						key={suggestion.title}
+						onPress={() => onSubmitSuggestion(suggestion.prompt)}
+					>
+						<View
+							className="h-8 w-8 items-center justify-center rounded-full"
+							style={{ backgroundColor: suggestion.soft }}
 						>
-							<View
-								className="h-9 w-9 items-center justify-center rounded-full"
-								style={{ backgroundColor: suggestion.soft }}
-							>
-								<Ionicons
-									color={suggestion.accent}
-									name={suggestion.icon}
-									size={17}
-								/>
-							</View>
-							<View className="flex-1 gap-0.5">
-								<Text type="body-sm" weight="semibold">
-									{suggestion.title}
-								</Text>
-								<Text.Paragraph color="muted" type="body-xs">
-									{suggestion.summary ?? suggestion.prompt}
-								</Text.Paragraph>
-							</View>
-							<Ionicons color="#A1A1AA" name="arrow-forward" size={15} />
-						</Pressable>
-					))}
-				</Surface>
-			</View>
+							<Ionicons
+								color={suggestion.accent}
+								name={suggestion.icon}
+								size={17}
+							/>
+						</View>
+						<View className="flex-1 gap-0.5">
+							<Text type="body-sm" weight="semibold">
+								{suggestion.title}
+							</Text>
+							<Text.Paragraph color="muted" type="body-xs">
+								{suggestion.summary ?? suggestion.prompt}
+							</Text.Paragraph>
+						</View>
+						<Ionicons color="#A1A1AA" name="arrow-forward" size={15} />
+					</Pressable>
+				))}
+			</Surface>
 		</View>
 	);
 }
 
 export function ViyaMessageList({
-	focusedQuestionAssistantMessageId,
 	hasPersistedPendingPrompt,
 	isCreatingTripFromBlueprint,
 	messages,
 	onCreateTripFromBlueprint,
 	onSubmitBlueprintAction,
 	pendingPrompt,
+	pendingPromptMessageIndex,
 	shouldShowThinking,
 }: {
-	focusedQuestionAssistantMessageId?: string | null;
 	hasPersistedPendingPrompt: boolean;
 	isCreatingTripFromBlueprint: boolean;
 	messages: UiChatMessages;
 	onCreateTripFromBlueprint: (blueprint: TripBlueprint) => void;
 	onSubmitBlueprintAction: (prompt: string) => void;
 	pendingPrompt: string | null;
+	pendingPromptMessageIndex?: number | null;
 	shouldShowThinking: boolean;
 }) {
 	const primaryColor = useThemeColor("accent");
 	const userMessageBubbleStyle = getUserBubbleStyle(primaryColor);
+	const persistedPendingPromptMessageIndex = pendingPrompt
+		? messages.findIndex(
+				(message) =>
+					message.role === "user" && getUiMessageText(message) === pendingPrompt
+			)
+		: -1;
+	const pendingPromptInsertionIndex = getPendingPromptInsertionIndex({
+		hasPersistedPendingPrompt,
+		messageCount: messages.length,
+		pendingPrompt,
+		pendingPromptMessageIndex: pendingPromptMessageIndex ?? null,
+		persistedPromptMessageIndex:
+			persistedPendingPromptMessageIndex < 0
+				? null
+				: persistedPendingPromptMessageIndex,
+	});
 
 	return (
 		<View className="gap-6">
-			{messages.map((message) => {
+			{messages.map((message, messageIndex) => {
 				const isUser = message.role === "user";
 				const messageText = getUiMessageText(message);
-				const shouldCollapseQuestionPrompt =
-					!isUser && message.key === focusedQuestionAssistantMessageId;
+				const shouldInsertPendingPrompt =
+					pendingPromptInsertionIndex === messageIndex;
+				const shouldSkipMisorderedPendingPrompt = Boolean(
+					pendingPromptInsertionIndex !== null &&
+						isUser &&
+						pendingPrompt &&
+						messageText === pendingPrompt
+				);
+
+				if (shouldSkipMisorderedPendingPrompt) {
+					return null;
+				}
 
 				if (!(isUser || messageText)) {
-					return <TypingBubble key={message.key} />;
+					return (
+						<View className="gap-6" key={message.key}>
+							{shouldInsertPendingPrompt && pendingPrompt ? (
+								<UserMessageBubble text={pendingPrompt} />
+							) : null}
+							<TypingBubble />
+						</View>
+					);
 				}
 
 				return (
-					<View
-						className={`w-full flex-row items-start ${isUser ? "justify-end" : "justify-start"}`}
-						key={message.key}
-					>
+					<View className="gap-6" key={message.key}>
+						{shouldInsertPendingPrompt && pendingPrompt ? (
+							<UserMessageBubble text={pendingPrompt} />
+						) : null}
 						<View
-							className={isUser ? "max-w-[88%] px-4 py-3" : "w-full px-1 py-1"}
-							style={isUser ? userMessageBubbleStyle : undefined}
+							className={`w-full flex-row items-start ${isUser ? "justify-end" : "justify-start"}`}
 						>
-							<MessageContent
-								isCreatingTripFromBlueprint={isCreatingTripFromBlueprint}
-								isStreaming={message.status === "streaming"}
-								isUser={isUser}
-								onCreateTripFromBlueprint={onCreateTripFromBlueprint}
-								onSubmitBlueprintAction={onSubmitBlueprintAction}
-								shouldCollapseQuestionPrompt={shouldCollapseQuestionPrompt}
-								text={messageText}
-							/>
+							<View
+								className={
+									isUser ? "max-w-[88%] px-4 py-3" : "w-full px-1 py-1"
+								}
+								style={isUser ? userMessageBubbleStyle : undefined}
+							>
+								<MessageContent
+									isCreatingTripFromBlueprint={isCreatingTripFromBlueprint}
+									isStreaming={message.status === "streaming"}
+									isUser={isUser}
+									onCreateTripFromBlueprint={onCreateTripFromBlueprint}
+									onSubmitBlueprintAction={onSubmitBlueprintAction}
+									text={messageText}
+								/>
+							</View>
 						</View>
 					</View>
 				);
 			})}
-			{pendingPrompt && !hasPersistedPendingPrompt ? (
+			{pendingPromptInsertionIndex === messages.length && pendingPrompt ? (
 				<UserMessageBubble text={pendingPrompt} />
 			) : null}
 			{shouldShowThinking ? <TypingBubble /> : null}

@@ -50,18 +50,6 @@ export const expandedComposerInputMinHeight = 220;
 
 export const CHAT_MODE_OPTIONS = [
 	{
-		accent: "#0A84FF",
-		description: "General answers for ideas, questions, and prep checks.",
-		emptyDescription:
-			"Ask Viya to dream, plan, prepare, track, or turn your trip into a story.",
-		emptyTitle: "Where should we go next?",
-		icon: "chatbubble-ellipses-outline",
-		id: "chat",
-		label: "Chat",
-		placeholder: "Message Viya",
-		soft: "rgba(10, 132, 255, 0.12)",
-	},
-	{
 		accent: "#BF5AF2",
 		description: "Guided trip planning, one decision at a time.",
 		emptyDescription:
@@ -166,15 +154,6 @@ export const tripPromptSuggestions = [
 
 export const SLASH_COMMAND_OPTIONS = [
 	{
-		accent: "#0A84FF",
-		description: "Switch to general chat.",
-		icon: "chatbubble-ellipses-outline",
-		id: "chat",
-		keywords: ["general", "ask", "question"],
-		label: "/chat",
-		mode: "chat",
-	},
-	{
 		accent: "#BF5AF2",
 		description: "Switch to guided planning.",
 		icon: "map-outline",
@@ -252,4 +231,9 @@ export const SLASH_COMMAND_OPTIONS = [
 
 export const composerStyle = {
 	boxShadow: "0 12px 32px rgba(15, 23, 42, 0.12)",
+} satisfies StyleProp<ViewStyle>;
+
+export const questionCardStyle = {
+	borderCurve: "continuous",
+	boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)",
 } satisfies StyleProp<ViewStyle>;

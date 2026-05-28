@@ -4,7 +4,7 @@ import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
 import type { ComponentProps } from "react";
 
 export type SuggestionIconName = ComponentProps<typeof Ionicons>["name"];
-export type ChatModeId = "chat" | "plan" | "trip";
+export type ChatModeId = "plan" | "trip";
 export type ThreadIdsByContext = Record<string, string>;
 export type UiChatMessages = NonNullable<
 	ReturnType<typeof useUIMessages>["results"]
@@ -45,6 +45,17 @@ export interface ChatHistoryItem {
 	tripId: Id<"trips"> | null;
 	tripTitle: string | null;
 	updatedAt: number;
+}
+
+export interface ChatTripContextItem {
+	_id: Id<"trips">;
+	destination: string;
+	endDate: string;
+	isDemo: boolean;
+	readinessScore: number;
+	startDate: string;
+	status: string;
+	title: string;
 }
 
 export interface ChatQuestionOption {

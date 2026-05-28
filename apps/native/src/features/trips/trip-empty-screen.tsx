@@ -40,9 +40,9 @@ export function TripEmptyScreen({
 						),
 						variant: "primary",
 					}}
-					description="This space fills in after Viya creates your first blueprint."
+					description="Viya can help prepare this module from the current trip details."
 					icon={icon}
-					title="Start a trip first"
+					title="Ready for trip data"
 				/>
 			</View>
 		</Container>

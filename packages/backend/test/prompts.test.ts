@@ -21,6 +21,9 @@ const tripBlueprintPattern = /## Trip Blueprint/i;
 const budgetAllocationPattern = /### Budget allocation/i;
 const bookingTargetsPattern = /### Booking targets/i;
 const nextActionsPattern = /### Next actions/i;
+const draftNowPattern = /Generate a Trip Blueprint now/i;
+const assumptionPattern = /assumptions/i;
+const needsConfirmationPattern = /needs confirmation/i;
 const oneQuestionPattern = /Ask at most one direct question/i;
 const noSelfAnswerPattern = /do not answer the question yourself/i;
 const noLaterIntakeQuestionPattern = /Never include Question N\+1/i;
@@ -50,14 +53,14 @@ describe("Viya prompt guardrails", () => {
 		assert.match(VIYA_SYSTEM_PROMPT, taglishPattern);
 	});
 
-	it("preserves travel-only guardrails in chat mode prompts", () => {
-		const prompt = buildChatModeSystemPrompt("chat");
+	it("preserves travel-only guardrails in plan mode prompts", () => {
+		const prompt = buildChatModeSystemPrompt("plan");
 
 		assert.match(prompt, travelOnlyPattern);
 		assert.match(prompt, offTopicPattern);
 	});
 
-	it("limits every chat response to one question", () => {
+	it("limits every assistant response to one question", () => {
 		const prompt = buildChatModeSystemPrompt("trip");
 
 		assert.match(prompt, oneQuestionPattern);
@@ -84,13 +87,12 @@ describe("Viya prompt guardrails", () => {
 		assert.match(prompt, noLaterIntakeQuestionPattern);
 	});
 
-	it("includes preference context in chat mode prompts", () => {
-		const prompt = buildChatModeSystemPrompt("chat", undefined, undefined, {
-			preferenceContext,
-		});
+	it("allows users to request a draft blueprint before intake is complete", () => {
+		const prompt = buildChatModeSystemPrompt("plan");
 
-		assert.match(prompt, preferenceContextPattern);
-		assert.match(prompt, relaxedStylePattern);
+		assert.match(prompt, draftNowPattern);
+		assert.match(prompt, assumptionPattern);
+		assert.match(prompt, needsConfirmationPattern);
 	});
 
 	it("includes preference context in plan mode prompts", () => {

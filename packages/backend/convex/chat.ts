@@ -23,11 +23,9 @@ import { chatAgent } from "./agent";
 import { buildChatModeSystemPrompt, type ChatMode } from "./ai/prompts";
 import { ensureTripAccess, getRequiredIdentity } from "./lib/auth";
 
-const chatModeValidator = v.union(
-	v.literal("chat"),
-	v.literal("plan"),
-	v.literal("trip")
-);
+const chatModeValidator = v.union(v.literal("plan"), v.literal("trip"));
+const normalizeChatMode = (mode: "chat" | ChatMode): ChatMode =>
+	mode === "chat" ? "plan" : mode;
 
 const maxHistoryItems = 50;
 const maxPromptLength = 1200;
@@ -225,7 +223,7 @@ export const listHistory = query({
 					_id: thread._id,
 					createdAt: thread.createdAt,
 					messageCount: thread.messageCount,
-					mode: thread.mode,
+					mode: normalizeChatMode(thread.mode),
 					preview: thread.preview ?? null,
 					threadId: thread.threadId,
 					title: thread.title,
@@ -282,7 +280,7 @@ export const getPendingQuestion = query({
 			_id: question._id,
 			assistantMessageId: question.assistantMessageId,
 			createdAt: question.createdAt,
-			mode: question.mode,
+			mode: normalizeChatMode(question.mode),
 			options: question.options,
 			question: question.question,
 			stepLabel: question.stepLabel ?? null,

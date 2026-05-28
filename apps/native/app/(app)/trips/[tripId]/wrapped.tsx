@@ -1,11 +1,5 @@
-import { TripEmptyScreen } from "@/src/features/trips/trip-empty-screen";
+import { TripDashboardScreen } from "@/src/features/trips/trip-dashboard-screen";
 
 export default function WrappedScreen() {
-	return (
-		<TripEmptyScreen
-			icon="sparkles"
-			subtitle="Shareable stories, insights, and reusable guides."
-			title="Trip Story"
-		/>
-	);
+	return <TripDashboardScreen initialTab="recap" />;
 }

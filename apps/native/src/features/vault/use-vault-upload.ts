@@ -1,20 +1,18 @@
 import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
-import { useMutation } from "convex/react";
+import { useAction, useMutation } from "convex/react";
 import { getDocumentAsync } from "expo-document-picker";
 import { launchImageLibraryAsync } from "expo-image-picker";
 import { useState } from "react";
 
+import type { PendingTripSyncReview } from "./tripsync-types";
+
+type TripSyncUploadKind = "booking" | "document" | "receipt" | "other";
+
 interface VaultUploadInput {
 	fileName: string;
 	fileSize: number;
-	kind:
-		| "booking"
-		| "document"
-		| "momentPhoto"
-		| "receipt"
-		| "noteAttachment"
-		| "other";
+	kind: TripSyncUploadKind;
 	mimeType: string;
 	tripId?: Id<"trips">;
 	uri: string;
@@ -45,17 +43,20 @@ export function useVaultUpload() {
 	const [isUploading, setIsUploading] = useState(false);
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const generateUploadUrl = useMutation(api.vault.generateUploadUrl);
-	const saveVaultItem = useMutation(api.vault.saveVaultItem);
+	const extractVaultItemDraft = useAction(
+		api.ai.features.extractVaultItemDraft
+	);
 
-	const uploadFile = async (input: VaultUploadInput) => {
+	const uploadFile = async (
+		input: VaultUploadInput
+	): Promise<PendingTripSyncReview> => {
 		setIsUploading(true);
 		setErrorMessage(null);
 
 		try {
 			const uploadUrl = await generateUploadUrl();
 			const { storageId } = await uploadToStorage(uploadUrl, input);
-
-			return saveVaultItem({
+			const extraction = await extractVaultItemDraft({
 				fileName: input.fileName,
 				fileSize: input.fileSize,
 				kind: input.kind,
@@ -64,6 +65,17 @@ export function useVaultUpload() {
 				title: input.fileName,
 				tripId: input.tripId,
 			});
+
+			return {
+				extraction,
+				upload: {
+					fileName: input.fileName,
+					fileSize: input.fileSize,
+					kind: input.kind,
+					mimeType: input.mimeType,
+					storageId,
+				},
+			};
 		} catch (error) {
 			const message =
 				error instanceof Error ? error.message : "Vault upload failed.";
@@ -74,7 +86,13 @@ export function useVaultUpload() {
 		}
 	};
 
-	const pickDocument = async () => {
+	const pickDocument = async ({
+		kind = "document",
+		tripId,
+	}: {
+		kind?: TripSyncUploadKind;
+		tripId?: Id<"trips">;
+	} = {}) => {
 		const result = await getDocumentAsync({
 			copyToCacheDirectory: true,
 			multiple: false,
@@ -89,13 +107,14 @@ export function useVaultUpload() {
 		return uploadFile({
 			fileName: asset.name,
 			fileSize: asset.size ?? 0,
-			kind: "document",
+			kind,
 			mimeType: asset.mimeType ?? "application/octet-stream",
+			tripId,
 			uri: asset.uri,
 		});
 	};
 
-	const pickPhoto = async () => {
+	const pickPhoto = async ({ tripId }: { tripId?: Id<"trips"> } = {}) => {
 		const result = await launchImageLibraryAsync({
 			allowsMultipleSelection: false,
 			mediaTypes: ["images"],
@@ -109,10 +128,11 @@ export function useVaultUpload() {
 		const asset = result.assets[0];
 
 		return uploadFile({
-			fileName: asset.fileName ?? "moment-photo.jpg",
+			fileName: asset.fileName ?? "trip-file.jpg",
 			fileSize: asset.fileSize ?? 0,
-			kind: "momentPhoto",
+			kind: "other",
 			mimeType: asset.mimeType ?? "image/jpeg",
+			tripId,
 			uri: asset.uri,
 		});
 	};

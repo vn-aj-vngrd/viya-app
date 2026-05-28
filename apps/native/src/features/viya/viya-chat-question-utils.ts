@@ -1,18 +1,6 @@
 const numberedOptionPattern = /^\s*(?:[-*]\s*)?\d+[.)]\s+.+/;
 const lineBreakPattern = /\r\n|\r|\n/g;
 
-export const shouldUseQuestionFocusMode = ({
-	hasPendingQuestion,
-	shouldShowSlashCommandMenu,
-}: {
-	hasPendingQuestion: boolean;
-	shouldShowSlashCommandMenu: boolean;
-}) => hasPendingQuestion && !shouldShowSlashCommandMenu;
-
-export const getQuestionDockContainerClassName = (
-	isQuestionFocusMode: boolean
-) => (isQuestionFocusMode ? "relative z-30" : "relative z-10");
-
 export const getQuestionPromptOnlyDisplayText = (text: string) => {
 	const lines = text.split(lineBreakPattern);
 	const firstOptionIndex = lines.findIndex((line) =>

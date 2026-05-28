@@ -2,6 +2,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { Surface, Text } from "heroui-native";
 import { View } from "react-native";
 
+import { formatReadableDate } from "@/src/components/date/date-format-utils";
+
 interface VaultPreviewCardProps {
 	createdAt: number;
 	fileName: string;
@@ -15,6 +17,8 @@ export function VaultPreviewCard({
 	kind,
 	title,
 }: VaultPreviewCardProps) {
+	const createdDateLabel = formatReadableDate(createdAt);
+
 	return (
 		<Surface className="rounded-lg p-4" variant="secondary">
 			<View className="flex-row items-center gap-3">
@@ -27,7 +31,7 @@ export function VaultPreviewCard({
 						{fileName}
 					</Text>
 					<Text className="mt-1" color="muted" type="body-xs">
-						{kind} · {new Date(createdAt).toLocaleDateString()}
+						{kind} · {createdDateLabel}
 					</Text>
 				</View>
 			</View>

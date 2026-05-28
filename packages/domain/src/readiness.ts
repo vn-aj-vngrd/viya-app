@@ -8,6 +8,15 @@ import type { ReadinessCategory, ReadinessItem, ReadinessScore } from "./types";
 const incompleteStatuses = new Set<string>(INCOMPLETE_READINESS_STATUSES);
 const ACTIVE_GAP_SCORE_WEIGHT = 0.25;
 const UNCOVERED_CATEGORY_SCORE_PENALTY = 8 / 3;
+export const REQUIRED_READINESS_CATEGORIES = [
+	"bookings",
+	"documents",
+	"budget",
+	"packing",
+	"schedule",
+	"safety",
+	"backupPlan",
+] as const satisfies readonly ReadinessCategory[];
 
 const getItemPenalty = (item: ReadinessItem): number => {
 	if (!incompleteStatuses.has(item.status)) {
@@ -80,4 +89,18 @@ export const calculateReadinessScore = (
 		summary: summarizeScore(overallScore, highPriorityGapCount),
 		updatedAt: new Date().toISOString(),
 	};
+};
+
+export const getMissingRequiredReadinessCategories = (
+	items: readonly Pick<ReadinessItem, "category" | "status">[]
+) => {
+	const activeCategories = new Set(
+		items
+			.filter((item) => item.status !== "ignored")
+			.map((item) => item.category)
+	);
+
+	return REQUIRED_READINESS_CATEGORIES.filter(
+		(category) => !activeCategories.has(category)
+	);
 };

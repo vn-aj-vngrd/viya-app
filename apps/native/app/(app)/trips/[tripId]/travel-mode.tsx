@@ -1,11 +1,5 @@
-import { TripEmptyScreen } from "@/src/features/trips/trip-empty-screen";
+import { TripDashboardScreen } from "@/src/features/trips/trip-dashboard-screen";
 
 export default function TravelModeScreen() {
-	return (
-		<TripEmptyScreen
-			icon="navigate"
-			subtitle="Now, Next, and Watch Out guidance during a live trip."
-			title="Travel Mode"
-		/>
-	);
+	return <TripDashboardScreen initialTab="travel" />;
 }

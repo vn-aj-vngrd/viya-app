@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
 import type { NextBestAction } from "@viya-app/domain";
 import { Link } from "expo-router";
 import { Button, Surface, Text } from "heroui-native";
@@ -8,17 +9,21 @@ import { VIYA_ROUTES } from "@/src/constants/routes";
 
 interface NextBestActionCardProps {
 	action: NextBestAction;
+	tripId: Id<"trips">;
 }
 
-const targetRoute = {
-	itinerary: VIYA_ROUTES.tripItinerary,
-	moments: VIYA_ROUTES.tripMoments,
-	readiness: VIYA_ROUTES.tripReadiness,
-	risks: VIYA_ROUTES.tripRisks,
-	travelMode: VIYA_ROUTES.tripTravelMode,
-} as const;
+export function NextBestActionCard({
+	action,
+	tripId,
+}: NextBestActionCardProps) {
+	const targetRoute = {
+		itinerary: VIYA_ROUTES.tripItinerary(tripId),
+		moments: VIYA_ROUTES.tripMoments(tripId),
+		readiness: VIYA_ROUTES.tripReadiness(tripId),
+		risks: VIYA_ROUTES.tripRisks(tripId),
+		travelMode: VIYA_ROUTES.tripTravelMode(tripId),
+	} as const;
 
-export function NextBestActionCard({ action }: NextBestActionCardProps) {
 	return (
 		<Surface className="gap-4 rounded-lg p-4" variant="secondary">
 			<View className="flex-row gap-3">

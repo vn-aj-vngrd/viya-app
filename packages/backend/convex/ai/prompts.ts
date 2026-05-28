@@ -11,7 +11,7 @@ export const VIYA_SYSTEM_PROMPT = [
 	"When asking a question, stop after that question and its answer options; do not answer the question yourself or include the next question.",
 ].join("\n");
 
-export type ChatMode = "chat" | "plan" | "trip";
+export type ChatMode = "plan" | "trip";
 
 interface PromptRuntimeContext {
 	now?: Date;
@@ -33,11 +33,6 @@ const buildCurrentDateInstructions = ({
 	].join("\n");
 
 const CHAT_MODE_INSTRUCTIONS = {
-	chat: [
-		"Mode: Chat.",
-		"Answer directly, then offer one useful next step when it helps.",
-		"When asking the user to choose, ask one direct question and provide 2-4 numbered options.",
-	],
 	plan: [
 		"Mode: Plan.",
 		"Run an interactive planning intake before drafting the plan.",
@@ -49,6 +44,8 @@ const CHAT_MODE_INSTRUCTIONS = {
 		"Ask no more than 4 intake questions before drafting a first plan.",
 		"Do not use Markdown tables during intake. Do not list every missing field at once.",
 		"Only skip intake and draft immediately when the user explicitly says to assume sensible defaults or already provides dates, length, style, and budget.",
+		"When the user asks to `Generate a Trip Blueprint now`, stop intake and produce the Trip Blueprint immediately, even if dates, budget, route, booking targets, or requirements are missing.",
+		"For a draft-now Trip Blueprint, use sensible assumptions for missing fields, label uncertain items as assumptions, and include anything the user still needs to confirm as `needs confirmation`.",
 		"Once the user and Viya align on enough planning inputs, generate a planning output titled exactly `## Trip Blueprint`.",
 		"Trip Blueprint must include these exact Markdown section headings: `### Destination`, `### Route`, `### Dates`, `### Budget allocation`, `### Itinerary style`, `### Booking targets`, `### Requirements`, `### Risks`, and `### Next actions`.",
 		"Keep each Trip Blueprint section concise, using bullets or one short line per item so the app can render it as a review card and create a draft trip from it.",
@@ -141,8 +138,10 @@ export const buildVaultExtractionPrompt = (
 		VIYA_SYSTEM_PROMPT,
 		buildCurrentDateInstructions(runtimeContext),
 		"Mode: Organizer.",
-		"Extract useful booking or travel-document details from the Vault file context.",
+		"Extract useful booking or travel-document details from the Vault file context, pasted text, and file metadata.",
 		"Never mark uncertain facts as confirmed. Use null for fields that are not visible or not provided.",
+		"Classify confirmations, vouchers, IDs, tickets, receipts, permits, and insurance into the closest document type.",
+		"Suggest readiness items for missing booking coverage, documents, budget proof, packing, safety, schedule buffers, and emergency coverage when the file reveals a concrete gap.",
 		"Return readiness suggestions only when the file reveals a concrete missing or risky item.",
 		vaultContext,
 	].join("\n\n");

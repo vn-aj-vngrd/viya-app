@@ -1,11 +1,5 @@
-import { TripEmptyScreen } from "@/src/features/trips/trip-empty-screen";
+import { TripDashboardScreen } from "@/src/features/trips/trip-dashboard-screen";
 
-export default function TripDashboardScreen() {
-	return (
-		<TripEmptyScreen
-			icon="map"
-			subtitle="A command center for a trip once planning begins."
-			title="Trip"
-		/>
-	);
+export default function TripDashboardRoute() {
+	return <TripDashboardScreen />;
 }

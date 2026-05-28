@@ -1,0 +1,134 @@
+import {
+	BottomSheet,
+	Button,
+	Chip,
+	Spinner,
+	Surface,
+	Text,
+} from "heroui-native";
+import { View } from "react-native";
+
+import type { PendingTripSyncReview } from "./tripsync-types";
+
+interface TripSyncReviewSheetProps {
+	isConfirming: boolean;
+	isOpen: boolean;
+	onConfirm: () => void;
+	onDiscard: () => void;
+	onOpenChange: (isOpen: boolean) => void;
+	review: PendingTripSyncReview | null;
+}
+
+export function TripSyncReviewSheet({
+	isConfirming,
+	isOpen,
+	onConfirm,
+	onDiscard,
+	onOpenChange,
+	review,
+}: TripSyncReviewSheetProps) {
+	const extraction = review?.extraction;
+
+	return (
+		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
+			<BottomSheet.Portal>
+				<BottomSheet.Overlay />
+				<BottomSheet.Content
+					className="rounded-t-[34px] border border-border bg-surface px-5 pt-4 pb-8"
+					enableDynamicSizing={true}
+				>
+					<View className="gap-4">
+						<View className="gap-1">
+							<BottomSheet.Title>Review TripSync</BottomSheet.Title>
+							<BottomSheet.Description>
+								Confirm the extracted trip updates before saving them.
+							</BottomSheet.Description>
+						</View>
+
+						{extraction ? (
+							<View className="gap-3">
+								<Surface className="gap-2 rounded-[24px] bg-surface-secondary p-4">
+									<View className="flex-row flex-wrap gap-2">
+										<Chip size="sm" variant="secondary">
+											<Chip.Label>{review.upload.kind}</Chip.Label>
+										</Chip>
+										<Chip size="sm" variant="secondary">
+											<Chip.Label>
+												{Math.round(extraction.confidence * 100)}% confidence
+											</Chip.Label>
+										</Chip>
+									</View>
+									<Text type="body" weight="bold">
+										{extraction.extractedTitle}
+									</Text>
+									<Text.Paragraph color="muted" type="body-sm">
+										{extraction.summary}
+									</Text.Paragraph>
+								</Surface>
+
+								{extraction.booking ? (
+									<Surface className="gap-1 rounded-[24px] bg-surface-secondary p-4">
+										<Text color="muted" type="body-xs" weight="semibold">
+											BOOKING
+										</Text>
+										<Text type="body-sm" weight="bold">
+											{extraction.booking.title}
+										</Text>
+										<Text color="muted" type="body-xs">
+											{extraction.booking.provider ?? "Provider not detected"}
+										</Text>
+										<Text color="muted" type="body-xs">
+											{extraction.booking.confirmationCode ??
+												"Confirmation code not detected"}
+										</Text>
+									</Surface>
+								) : null}
+
+								<Surface className="gap-1 rounded-[24px] bg-surface-secondary p-4">
+									<Text color="muted" type="body-xs" weight="semibold">
+										DOCUMENT
+									</Text>
+									<Text type="body-sm" weight="bold">
+										{extraction.documentType}
+									</Text>
+								</Surface>
+
+								{extraction.readinessSuggestions.length > 0 ? (
+									<Surface className="gap-2 rounded-[24px] bg-surface-secondary p-4">
+										<Text color="muted" type="body-xs" weight="semibold">
+											READINESS
+										</Text>
+										{extraction.readinessSuggestions.map((suggestion) => (
+											<View className="gap-1" key={suggestion.title}>
+												<Text type="body-sm" weight="bold">
+													{suggestion.title}
+												</Text>
+												<Text color="muted" type="body-xs">
+													{suggestion.reason}
+												</Text>
+											</View>
+										))}
+									</Surface>
+								) : null}
+							</View>
+						) : null}
+
+						<View className="gap-2">
+							<Button isDisabled={isConfirming || !review} onPress={onConfirm}>
+								{isConfirming ? <Spinner size="sm" /> : null}
+								<Button.Label>Confirm and sync</Button.Label>
+							</Button>
+							<Button
+								isDisabled={isConfirming}
+								onPress={onDiscard}
+								variant="secondary"
+							>
+								<Button.Label>Discard</Button.Label>
+							</Button>
+						</View>
+					</View>
+				</BottomSheet.Content>
+			</BottomSheet.Portal>
+		</BottomSheet>
+	);
+}

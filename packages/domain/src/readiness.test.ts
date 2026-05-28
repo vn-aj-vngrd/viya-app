@@ -27,4 +27,25 @@ describe("calculateReadinessScore", () => {
 		expect(score.overallScore).toBe(84);
 		expect(score.summary).toBe("84% ready. Core travel risks are reduced.");
 	});
+
+	it("penalizes missing required readiness categories", () => {
+		const score = calculateReadinessScore([
+			{
+				aiReason: "Flight is confirmed.",
+				assignedToMemberId: null,
+				category: "bookings",
+				description: "Flight confirmation uploaded.",
+				dueDate: "2026-07-10",
+				id: "booking-flight",
+				priority: "medium",
+				source: "system",
+				status: "done",
+				title: "Flight confirmed",
+				tripId: "trip-1",
+			},
+		]);
+
+		expect(score.overallScore).toBeLessThan(80);
+		expect(score.categoryScores.documents).toBe(100);
+	});
 });

@@ -1,4 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
+import { api } from "@viya-app/backend/convex/_generated/api";
+import { useQuery } from "convex/react";
 import { Link } from "expo-router";
 import { Button, Surface, Text } from "heroui-native";
 import { View } from "react-native";
@@ -42,6 +44,9 @@ function VaultDocumentRow({
 }
 
 export default function VaultTabScreen() {
+	const trips = useQuery(api.trips.listTrips);
+	const currentTrip = trips?.find((trip) => !trip.isDemo) ?? null;
+
 	return (
 		<Container className="px-4 pb-28">
 			<View className="gap-5 py-4" style={{ alignSelf: "stretch" }}>
@@ -86,8 +91,15 @@ export default function VaultTabScreen() {
 						))}
 					</View>
 
-					<Link asChild href={VIYA_ROUTES.tripVault}>
-						<Button>
+					<Link
+						asChild
+						href={
+							currentTrip
+								? VIYA_ROUTES.tripVault(currentTrip._id)
+								: VIYA_ROUTES.trips
+						}
+					>
+						<Button isDisabled={trips === undefined}>
 							<Button.Label>Open vault</Button.Label>
 						</Button>
 					</Link>

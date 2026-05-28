@@ -4,7 +4,6 @@ import type { ComponentProps } from "react";
 import type { ColorValue } from "react-native";
 
 import { FloatingTabBar } from "@/src/components/navigation/floating-tab-bar";
-import { ViyaMark } from "@/src/components/viya-mark";
 
 type TabIconName = ComponentProps<typeof Feather>["name"];
 
@@ -19,7 +18,13 @@ function FloatingTabIcon({ color, focused, name }: FloatingTabIconProps) {
 }
 
 function FloatingAiIcon({ focused }: Omit<FloatingTabIconProps, "name">) {
-	return <ViyaMark size={24} variant={focused ? "white" : "blue"} />;
+	return (
+		<Feather
+			color={focused ? "#FFFFFF" : "#0A84FF"}
+			name="message-circle"
+			size={23}
+		/>
+	);
 }
 
 export default function TabLayout() {

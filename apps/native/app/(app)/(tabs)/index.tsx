@@ -1,14 +1,22 @@
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
+import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
 import { useQuery } from "convex/react";
-import { Link } from "expo-router";
+import { Link, useRouter } from "expo-router";
 import { Button, Surface, Text } from "heroui-native";
 import type { ComponentProps, ReactNode } from "react";
-import { View } from "react-native";
+import { useState } from "react";
+import { ScrollView, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Container } from "@/components/container";
 import { AccountAvatarButton } from "@/src/components/account/account-avatar-button";
+import {
+	formatReadableTripDateRange,
+	getDateRangeDurationDays,
+} from "@/src/components/date/date-format-utils";
 import { VIYA_ROUTES } from "@/src/constants/routes";
+import { ManualTripCreateSheet } from "@/src/features/trips/manual-trip-create-sheet";
 
 const readinessCategories = [
 	{ icon: "calendar-outline", label: "Bookings", status: "Needs review" },
@@ -49,30 +57,18 @@ const getTimeGreeting = () => {
 	return "Good evening";
 };
 
-const formatTripDate = (date: string) => {
-	const [, month, day] = date.split("-").map(Number);
-	const monthName = new Intl.DateTimeFormat("en-US", { month: "long" }).format(
-		new Date(Date.UTC(2026, (month ?? 1) - 1, day ?? 1))
-	);
-
-	return `${monthName} ${day ?? 1}`;
-};
-
 const getTripWindow = (startDate?: string, endDate?: string) => {
-	if (!(startDate && endDate)) {
-		return "Dates not set";
-	}
+	const tripWindow = formatReadableTripDateRange({
+		endDate,
+		fallbackLabel: "Dates not set",
+		startDate,
+	});
+	const durationDays =
+		startDate && endDate ? getDateRangeDurationDays(startDate, endDate) : null;
 
-	const start = new Date(`${startDate}T00:00:00.000Z`);
-	const end = new Date(`${endDate}T00:00:00.000Z`);
-	const durationDays = Math.max(
-		1,
-		Math.round((end.getTime() - start.getTime()) / 86_400_000)
-	);
-	const startLabel = formatTripDate(startDate);
-	const endDay = Number(endDate.split("-")[2] ?? 15);
-
-	return `${startLabel}-${endDay} · ${durationDays} days`;
+	return durationDays
+		? `${tripWindow} · ${durationDays} ${durationDays === 1 ? "day" : "days"}`
+		: tripWindow;
 };
 
 const getNextAction = (readinessScore: number) => {
@@ -122,6 +118,7 @@ function ActiveTripCard({
 	budgetCurrency,
 	readinessScore,
 	summary,
+	tripId,
 	tripWindow,
 	title,
 }: {
@@ -129,6 +126,7 @@ function ActiveTripCard({
 	budgetCurrency?: string;
 	readinessScore: number;
 	summary: string;
+	tripId: Id<"trips">;
 	title: string;
 	tripWindow: string;
 }) {
@@ -178,7 +176,7 @@ function ActiveTripCard({
 				</View>
 			</View>
 
-			<Link asChild href={VIYA_ROUTES.trips}>
+			<Link asChild href={VIYA_ROUTES.tripDashboard(tripId)}>
 				<Button>
 					<Button.Label>Open Trip</Button.Label>
 				</Button>
@@ -187,7 +185,13 @@ function ActiveTripCard({
 	);
 }
 
-function ViyaRecommendation({ tripTitle }: { tripTitle: string }) {
+function ViyaRecommendation({
+	tripId,
+	tripTitle,
+}: {
+	tripId: Id<"trips">;
+	tripTitle: string;
+}) {
 	return (
 		<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
 			<SectionTitle title="Viya Recommends" />
@@ -201,12 +205,12 @@ function ViyaRecommendation({ tripTitle }: { tripTitle: string }) {
 				</Text.Paragraph>
 			</View>
 			<View className="flex-row flex-wrap gap-2">
-				<Link asChild href={VIYA_ROUTES.tripReadiness}>
+				<Link asChild href={VIYA_ROUTES.tripReadiness(tripId)}>
 					<Button className="flex-1" size="sm">
 						<Button.Label>Fix readiness</Button.Label>
 					</Button>
 				</Link>
-				<Link asChild href={VIYA_ROUTES.tripVault}>
+				<Link asChild href={VIYA_ROUTES.tripVault(tripId)}>
 					<Button className="flex-1" size="sm" variant="secondary">
 						<Button.Label>Open vault</Button.Label>
 					</Button>
@@ -221,12 +225,12 @@ function ViyaRecommendation({ tripTitle }: { tripTitle: string }) {
 	);
 }
 
-function ReadinessSnapshot() {
+function ReadinessSnapshot({ tripId }: { tripId: Id<"trips"> }) {
 	return (
 		<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
 			<SectionTitle
 				action={
-					<Link asChild href={VIYA_ROUTES.tripReadiness}>
+					<Link asChild href={VIYA_ROUTES.tripReadiness(tripId)}>
 						<Button size="sm" variant="ghost">
 							<Button.Label>Fix my readiness</Button.Label>
 						</Button>
@@ -260,12 +264,12 @@ function ReadinessSnapshot() {
 	);
 }
 
-function UpcomingTimeline() {
+function UpcomingTimeline({ tripId }: { tripId: Id<"trips"> }) {
 	return (
 		<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
 			<SectionTitle
 				action={
-					<Link asChild href={VIYA_ROUTES.tripItinerary}>
+					<Link asChild href={VIYA_ROUTES.tripItinerary(tripId)}>
 						<Button size="sm" variant="ghost">
 							<Button.Label>View itinerary</Button.Label>
 						</Button>
@@ -290,12 +294,12 @@ function UpcomingTimeline() {
 	);
 }
 
-function TripVaultPreview() {
+function TripVaultPreview({ tripId }: { tripId: Id<"trips"> }) {
 	return (
 		<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
 			<SectionTitle
 				action={
-					<Link asChild href={VIYA_ROUTES.tripVault}>
+					<Link asChild href={VIYA_ROUTES.tripVault(tripId)}>
 						<Button size="sm" variant="ghost">
 							<Button.Label>Open vault</Button.Label>
 						</Button>
@@ -382,12 +386,12 @@ function BudgetSnapshot({
 	);
 }
 
-function MemoriesTeaser() {
+function MemoriesTeaser({ tripId }: { tripId: Id<"trips"> }) {
 	return (
 		<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
 			<SectionTitle
 				action={
-					<Link asChild href={VIYA_ROUTES.tripWrapped}>
+					<Link asChild href={VIYA_ROUTES.tripWrapped(tripId)}>
 						<Button size="sm" variant="ghost">
 							<Button.Label>Create Viya Wrapped</Button.Label>
 						</Button>
@@ -423,18 +427,53 @@ function MemoriesTeaser() {
 }
 
 function HomeHeader({ greeting }: { greeting: string }) {
+	const insets = useSafeAreaInsets();
+
 	return (
 		<View
-			className="flex-row items-center gap-4"
+			className="flex-row items-center gap-4 bg-background px-4 pb-3"
 			style={{ alignSelf: "stretch" }}
 		>
-			<Text.Heading type="h2" weight="semibold">
-				{greeting}
-			</Text.Heading>
-			<View style={{ marginLeft: "auto" }}>
-				<AccountAvatarButton size={44} />
+			<View
+				className="flex-1 flex-row items-center gap-4"
+				style={{ paddingTop: Math.max(insets.top, 12) }}
+			>
+				<Text.Heading type="h2" weight="semibold">
+					{greeting}
+				</Text.Heading>
+				<View style={{ marginLeft: "auto" }}>
+					<AccountAvatarButton size={44} />
+				</View>
 			</View>
 		</View>
+	);
+}
+
+function StickyHomeShell({
+	children,
+	greeting,
+}: {
+	children: ReactNode;
+	greeting: string;
+}) {
+	return (
+		<Container className="pb-28" isScrollable={false}>
+			<HomeHeader greeting={greeting} />
+			<ScrollView
+				contentContainerStyle={{
+					flexGrow: 1,
+					gap: 16,
+					paddingBottom: 112,
+					paddingHorizontal: 16,
+					paddingTop: 4,
+				}}
+				contentInsetAdjustmentBehavior="automatic"
+				keyboardShouldPersistTaps="handled"
+				showsVerticalScrollIndicator={false}
+			>
+				{children}
+			</ScrollView>
+		</Container>
 	);
 }
 
@@ -442,28 +481,43 @@ function HomeLoadingState() {
 	const greeting = getTimeGreeting();
 
 	return (
-		<Container className="px-4 pb-28">
-			<View className="gap-4 py-4" style={{ alignSelf: "stretch" }}>
-				<HomeHeader greeting={greeting} />
-				<Surface className="gap-4 rounded-[34px] border border-border bg-surface p-5">
-					<View className="h-4 w-24 rounded-full bg-surface-secondary" />
-					<View className="h-8 w-3/4 rounded-full bg-surface-secondary" />
-					<View className="h-4 w-full rounded-full bg-surface-secondary" />
-					<View className="h-4 w-2/3 rounded-full bg-surface-secondary" />
-				</Surface>
-			</View>
-		</Container>
+		<StickyHomeShell greeting={greeting}>
+			<Surface className="gap-4 rounded-[34px] border border-border bg-surface p-5">
+				<View className="h-4 w-24 rounded-full bg-surface-secondary" />
+				<View className="h-8 w-3/4 rounded-full bg-surface-secondary" />
+				<View className="h-4 w-full rounded-full bg-surface-secondary" />
+				<View className="h-4 w-2/3 rounded-full bg-surface-secondary" />
+			</Surface>
+		</StickyHomeShell>
 	);
 }
 
 function EmptyHomeState() {
 	const greeting = getTimeGreeting();
+	const router = useRouter();
+	const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
+	const handlePlanWithViya = () => {
+		setIsCreateSheetOpen(false);
+		router.push({
+			params: { mode: "plan" },
+			pathname: "/(app)/(tabs)/viya",
+		});
+	};
 
 	return (
-		<Container className="px-4 pb-28">
-			<View className="gap-4 py-4" style={{ alignSelf: "stretch" }}>
-				<HomeHeader greeting={greeting} />
-
+		<Container className="pb-28" isScrollable={false}>
+			<HomeHeader greeting={greeting} />
+			<ScrollView
+				contentContainerStyle={{
+					flexGrow: 1,
+					paddingBottom: 112,
+					paddingHorizontal: 16,
+					paddingTop: 4,
+				}}
+				contentInsetAdjustmentBehavior="automatic"
+				keyboardShouldPersistTaps="handled"
+				showsVerticalScrollIndicator={false}
+			>
 				<Surface className="gap-5 rounded-[34px] border border-border bg-surface p-5">
 					<View className="gap-2">
 						<Text.Heading type="h3" weight="semibold">
@@ -475,14 +529,31 @@ function EmptyHomeState() {
 						</Text.Paragraph>
 					</View>
 					<View className="gap-3">
-						<Link asChild href={VIYA_ROUTES.viya}>
-							<Button>
-								<Button.Label>Plan my first trip</Button.Label>
+						<Button onPress={() => setIsCreateSheetOpen(true)}>
+							<Button.Label>Create manually</Button.Label>
+						</Button>
+						<Link
+							asChild
+							href={{
+								params: { mode: "plan" },
+								pathname: "/(app)/(tabs)/viya",
+							}}
+						>
+							<Button variant="secondary">
+								<Button.Label>Plan with Viya</Button.Label>
 							</Button>
 						</Link>
 					</View>
 				</Surface>
-			</View>
+			</ScrollView>
+			<ManualTripCreateSheet
+				isOpen={isCreateSheetOpen}
+				onCreated={(tripId) => {
+					router.push(VIYA_ROUTES.tripDashboard(tripId));
+				}}
+				onOpenChange={setIsCreateSheetOpen}
+				onPlanWithViya={handlePlanWithViya}
+			/>
 		</Container>
 	);
 }
@@ -503,28 +574,28 @@ export default function HomeScreen() {
 	}
 
 	return (
-		<Container className="px-4 pb-28">
-			<View className="gap-4 py-4" style={{ alignSelf: "stretch" }}>
-				<HomeHeader greeting={greeting} />
-
-				<ActiveTripCard
-					budgetAmount={currentTrip.budgetAmount}
-					budgetCurrency={currentTrip.budgetCurrency}
-					readinessScore={currentTrip.readinessScore}
-					summary={currentTrip.summary}
-					title={currentTrip.title}
-					tripWindow={getTripWindow(currentTrip.startDate, currentTrip.endDate)}
-				/>
-				<ViyaRecommendation tripTitle={currentTrip.title} />
-				<ReadinessSnapshot />
-				<UpcomingTimeline />
-				<TripVaultPreview />
-				<BudgetSnapshot
-					budgetAmount={currentTrip.budgetAmount}
-					budgetCurrency={currentTrip.budgetCurrency}
-				/>
-				<MemoriesTeaser />
-			</View>
-		</Container>
+		<StickyHomeShell greeting={greeting}>
+			<ActiveTripCard
+				budgetAmount={currentTrip.budgetAmount}
+				budgetCurrency={currentTrip.budgetCurrency}
+				readinessScore={currentTrip.readinessScore}
+				summary={currentTrip.summary}
+				title={currentTrip.title}
+				tripId={currentTrip._id}
+				tripWindow={getTripWindow(currentTrip.startDate, currentTrip.endDate)}
+			/>
+			<ViyaRecommendation
+				tripId={currentTrip._id}
+				tripTitle={currentTrip.title}
+			/>
+			<ReadinessSnapshot tripId={currentTrip._id} />
+			<UpcomingTimeline tripId={currentTrip._id} />
+			<TripVaultPreview tripId={currentTrip._id} />
+			<BudgetSnapshot
+				budgetAmount={currentTrip.budgetAmount}
+				budgetCurrency={currentTrip.budgetCurrency}
+			/>
+			<MemoriesTeaser tripId={currentTrip._id} />
+		</StickyHomeShell>
 	);
 }
