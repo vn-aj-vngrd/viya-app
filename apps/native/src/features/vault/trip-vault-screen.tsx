@@ -21,6 +21,7 @@ import { Container } from "@/components/container";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 import { EmptyState } from "@/src/components/empty-state";
 import { RouteHeader } from "@/src/components/navigation/route-header";
+import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 import { TripModuleViyaAssistCard } from "@/src/features/trips/trip-module-viya-assist-card";
 import { useTripIdParam } from "@/src/features/trips/use-trip-id-param";
@@ -274,6 +275,10 @@ export function TripVaultScreen() {
 		);
 	}
 
+	if (vaultItems === undefined) {
+		return <ScreenLoadingState />;
+	}
+
 	const handleUpload = async (kind: "booking" | "document" | "receipt") => {
 		const review = await pickDocument({ kind, tripId });
 		if (review) {
@@ -386,14 +391,6 @@ export function TripVaultScreen() {
 	);
 
 	const savedFilesContent = (() => {
-		if (vaultItems === undefined) {
-			return (
-				<View className="items-center py-6">
-					<Spinner />
-				</View>
-			);
-		}
-
 		if (vaultItems.length === 0) {
 			return (
 				<EmptyState

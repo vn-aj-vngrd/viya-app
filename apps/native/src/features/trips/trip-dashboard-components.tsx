@@ -30,11 +30,7 @@ import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-s
 
 import { NavigationBackButton } from "@/src/components/navigation/navigation-back-button";
 import { VIYA_ROUTES } from "@/src/constants/routes";
-import {
-	TripCardMetaRow,
-	TripMetricBlock,
-	TripRouteLine,
-} from "@/src/features/trips/trip-card-primitives";
+import { TripMetricBlock } from "@/src/features/trips/trip-card-primitives";
 import { TripStatusPill } from "@/src/features/trips/trip-status-pill";
 import { getTripModulesSheetListMaxHeight } from "./trip-dashboard-layout";
 import type {
@@ -52,8 +48,20 @@ const mutedColor = "#71717A";
 const foregroundColor = "#18181B";
 const borderColor = "rgba(24, 24, 27, 0.08)";
 const softBackgroundColor = "rgba(24, 24, 27, 0.04)";
-const composerShadow = "0 10px 28px rgba(15, 23, 42, 0.12)";
-const cardShadow = "0 8px 22px rgba(15, 23, 42, 0.05)";
+
+const tripScreenMeta: Record<TripTab, { icon: IoniconName; label: string }> = {
+	bookings: { icon: "briefcase-outline", label: "Bookings" },
+	budget: { icon: "wallet-outline", label: "Budget" },
+	checklist: { icon: "checkbox-outline", label: "Checklist" },
+	documents: { icon: "folder-open-outline", label: "Documents" },
+	itinerary: { icon: "calendar-outline", label: "Itinerary" },
+	memories: { icon: "images-outline", label: "Memories" },
+	overview: { icon: "speedometer-outline", label: "Overview" },
+	places: { icon: "map-outline", label: "Places" },
+	recap: { icon: "share-social-outline", label: "Recap" },
+	travel: { icon: "navigate-outline", label: "Travel Mode" },
+	viya: { icon: "sparkles-outline", label: "Viya" },
+};
 
 interface ModuleAccent {
 	bg: string;
@@ -706,12 +714,30 @@ export function TripStickyHeader({ model }: { model: TripDashboardModel }) {
 	);
 }
 
+function TripMetaChip({ icon, label }: { icon: IoniconName; label: string }) {
+	return (
+		<View className="max-w-full flex-row items-center gap-1.5 rounded-full bg-surface-secondary px-3 py-1.5">
+			<Ionicons color={mutedColor} name={icon} size={13} />
+			<Text
+				className="shrink"
+				numberOfLines={1}
+				type="body-xs"
+				weight="semibold"
+			>
+				{label}
+			</Text>
+		</View>
+	);
+}
+
 export function TripHero({ model }: { model: TripDashboardModel }) {
 	const { readiness, travelerLabel, tripWindow, workspace } = model;
 	const readinessDisplay = getReadinessDisplay({
 		itemCount: workspace.readinessItems.length,
 		score: readiness.score,
 	});
+	const destinationLabel =
+		workspace.trip.destination.trim() || "Destination TBD";
 	const hasBudget = Boolean(workspace.trip.budgetAmount);
 	const budgetSummary = hasBudget
 		? `${formatMoney(model.budget.remaining, model.currency)} left`
@@ -727,17 +753,18 @@ export function TripHero({ model }: { model: TripDashboardModel }) {
 				)
 			: 0;
 	return (
-		<View className="gap-4 px-1 py-2">
-			<View className="gap-2">
+		<View className="gap-5 px-1 py-2">
+			<View className="gap-3">
 				<View className="flex-row">
 					<TripStatusPill status={workspace.trip.status} />
 				</View>
 				<Text.Heading numberOfLines={2} type="h2" weight="semibold">
 					{workspace.trip.title}
 				</Text.Heading>
-				<View className="gap-1">
-					<TripRouteLine destination={workspace.trip.destination} />
-					<TripCardMetaRow left={tripWindow} right={travelerLabel} />
+				<View className="flex-row flex-wrap items-center gap-2">
+					<TripMetaChip icon="location-outline" label={destinationLabel} />
+					<TripMetaChip icon="calendar-clear-outline" label={tripWindow} />
+					<TripMetaChip icon="people-outline" label={travelerLabel} />
 				</View>
 			</View>
 			<View className="flex-row items-stretch gap-4 border-border border-t pt-4">
@@ -888,7 +915,6 @@ function ModuleLauncherTile({
 			className="min-h-28 flex-1 basis-[47%] rounded-3xl border border-border bg-surface p-4"
 			onPress={onPress}
 			style={({ pressed }) => ({
-				boxShadow: cardShadow,
 				transform: [{ scale: pressed ? 0.985 : 1 }],
 			})}
 		>
@@ -995,10 +1021,17 @@ function TripModulesSheet({
 	);
 }
 
-export function FloatingAskViyaBar({ model }: { model: TripDashboardModel }) {
+export function FloatingAskViyaBar({
+	activeTab,
+	model,
+}: {
+	activeTab: TripTab;
+	model: TripDashboardModel;
+}) {
 	const insets = useSafeAreaInsets();
 	const [isModulesOpen, setIsModulesOpen] = useState(false);
-	const viyaDetail = `${model.workspace.trip.destination} - ${model.tripWindow}`;
+	const activeScreen = tripScreenMeta[activeTab];
+	const activeAccent = getModuleAccent(activeScreen.label);
 	const viyaHref = {
 		params: {
 			mode: "trip",
@@ -1011,60 +1044,69 @@ export function FloatingAskViyaBar({ model }: { model: TripDashboardModel }) {
 	return (
 		<>
 			<View
-				className="absolute right-0 left-0 flex-row items-center gap-2 px-4"
+				className="absolute right-0 left-0 flex-row items-center justify-center gap-3 px-4"
 				pointerEvents="box-none"
 				style={{ bottom: Math.max(insets.bottom + 10, 18) }}
 			>
-				<Link asChild href={viyaHref}>
-					<Pressable
-						accessibilityLabel="Ask Viya"
-						accessibilityRole="button"
-						className="min-w-0 flex-1 overflow-hidden rounded-full"
-						style={{ boxShadow: composerShadow }}
-					>
-						<Surface
-							className="overflow-hidden rounded-full border border-border bg-surface px-2 py-2"
-							style={{ borderColor }}
-						>
-							<View className="h-10 flex-row items-center gap-3 px-2">
-								<View
-									className="h-8 w-8 items-center justify-center rounded-full"
-									style={{ backgroundColor: "rgba(10, 132, 255, 0.12)" }}
-								>
-									<Feather
-										color={accentColor}
-										name="message-circle"
-										size={17}
-									/>
-								</View>
-								<View className="min-w-0 flex-1 flex-row items-center justify-between gap-3">
-									<View className="min-w-0 flex-1">
-										<Text numberOfLines={1} type="body" weight="semibold">
-											Ask Viya
-										</Text>
-										<Text color="muted" numberOfLines={1} type="body-xs">
-											{viyaDetail}
-										</Text>
-									</View>
-									<Ionicons
-										color={accentColor}
-										name="chevron-forward"
-										size={18}
-									/>
-								</View>
-							</View>
-						</Surface>
-					</Pressable>
-				</Link>
-				<Pressable
-					accessibilityLabel="Show trip modules"
-					accessibilityRole="button"
-					className="h-14 w-14 items-center justify-center rounded-full border border-border bg-surface"
-					onPress={() => setIsModulesOpen(true)}
-					style={{ borderColor, boxShadow: composerShadow }}
+				<View
+					className="min-w-0 flex-1 flex-row items-center gap-3"
+					style={{ maxWidth: 430 }}
 				>
-					<Ionicons color={accentColor} name="grid-outline" size={23} />
-				</Pressable>
+					<Surface
+						className="min-w-0 flex-1 overflow-hidden rounded-full border border-border bg-surface px-2 py-2"
+						style={{ borderColor }}
+					>
+						<Pressable
+							accessibilityLabel={`Open trip modules from ${activeScreen.label}`}
+							accessibilityRole="button"
+							className="h-10 flex-row items-center gap-3 px-2"
+							onPress={() => setIsModulesOpen(true)}
+						>
+							<View
+								className="h-8 w-8 items-center justify-center rounded-full"
+								style={{ backgroundColor: activeAccent.bg }}
+							>
+								<Ionicons
+									color={activeAccent.color}
+									name={activeScreen.icon}
+									size={17}
+								/>
+							</View>
+							<View className="min-w-0 flex-1">
+								<Text
+									numberOfLines={1}
+									style={{ lineHeight: 18 }}
+									type="body"
+									weight="semibold"
+								>
+									{activeScreen.label}
+								</Text>
+								<Text
+									color="muted"
+									numberOfLines={1}
+									style={{ lineHeight: 14 }}
+									type="body-xs"
+								>
+									{model.workspace.trip.title}
+								</Text>
+							</View>
+						</Pressable>
+					</Surface>
+					<Surface
+						className="h-14 w-14 items-center justify-center rounded-full border border-border bg-surface"
+						style={{ borderColor }}
+					>
+						<Link asChild href={viyaHref}>
+							<Pressable
+								accessibilityLabel="Ask Viya"
+								accessibilityRole="button"
+								className="h-12 w-12 items-center justify-center rounded-full"
+							>
+								<Feather color={accentColor} name="message-circle" size={23} />
+							</Pressable>
+						</Link>
+					</Surface>
+				</View>
 			</View>
 			<TripModulesSheet
 				isOpen={isModulesOpen}
@@ -1118,7 +1160,7 @@ export function TripAgentDraftPanel({ model }: { model: TripDashboardModel }) {
 	return (
 		<Surface
 			className="gap-4 rounded-[28px] border border-border bg-surface p-4"
-			style={{ borderColor, boxShadow: "0 8px 24px rgba(15, 23, 42, 0.06)" }}
+			style={{ borderColor }}
 		>
 			<View className="flex-row items-start gap-3">
 				<View
@@ -1230,7 +1272,7 @@ export function NextActionCard({
 	return (
 		<Surface
 			className="gap-4 rounded-[28px] border border-border bg-surface p-4"
-			style={{ borderColor, boxShadow: composerShadow }}
+			style={{ borderColor }}
 		>
 			<View className="flex-row items-start gap-3">
 				<View
@@ -1311,7 +1353,6 @@ function WorkspaceModuleTile({ item }: { item: DashboardWorkspaceModule }) {
 				className="min-h-30 flex-1 basis-[47%] rounded-3xl border border-border bg-surface p-4"
 				style={({ pressed }) => ({
 					borderColor,
-					boxShadow: cardShadow,
 					transform: [{ scale: pressed ? 0.985 : 1 }],
 				})}
 			>
@@ -1360,7 +1401,7 @@ function GroupedCard({ children }: { children: ReactNode }) {
 	return (
 		<Surface
 			className="overflow-hidden rounded-3xl border border-border bg-surface"
-			style={{ borderColor, boxShadow: cardShadow }}
+			style={{ borderColor }}
 		>
 			{children}
 		</Surface>
@@ -1441,7 +1482,7 @@ function FeaturedNextCard({ model }: { model: TripDashboardModel }) {
 			>
 				<Surface
 					className="flex-row items-center gap-3.5 rounded-3xl border border-border bg-surface p-4"
-					style={{ borderColor, boxShadow: cardShadow }}
+					style={{ borderColor }}
 				>
 					<View
 						className="h-12 w-12 items-center justify-center rounded-2xl"

@@ -23,6 +23,7 @@ import { Container } from "@/components/container";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 import { EmptyState } from "@/src/components/empty-state";
 import { RouteHeader } from "@/src/components/navigation/route-header";
+import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 
 import { TripModuleViyaAssistCard } from "./trip-module-viya-assist-card";
 import { useTripIdParam } from "./use-trip-id-param";
@@ -475,13 +476,7 @@ export function TripItineraryScreen() {
 	}
 
 	if (workspace === undefined) {
-		return (
-			<Container className="px-4 pb-28">
-				<View className="items-center py-12">
-					<Spinner />
-				</View>
-			</Container>
-		);
+		return <ScreenLoadingState />;
 	}
 
 	const { itineraryDays, itineraryItems, trip } = workspace;

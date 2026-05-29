@@ -27,9 +27,6 @@ import { ManualTripCreateSheet } from "@/src/features/trips/manual-trip-create-s
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
 
-const activeTripCardStyle = {
-	boxShadow: "0 18px 38px rgba(7, 26, 47, 0.18)",
-} as const;
 const primarySoftBackgroundStyle = { backgroundColor: "#EAF2FF" };
 const successSoftBackgroundStyle = { backgroundColor: "#E4F8EF" };
 const warmSoftBackgroundStyle = { backgroundColor: "#FFF7ED" };
@@ -126,10 +123,7 @@ function ActiveTripCard({
 		readinessScore > 0 ? `${readinessScore}% ready` : "Readiness open";
 
 	return (
-		<Surface
-			className="gap-4 rounded-[30px] border border-border bg-surface p-5"
-			style={activeTripCardStyle}
-		>
+		<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
 			<View className="flex-row items-start gap-4">
 				<View
 					className="h-11 w-11 items-center justify-center rounded-full"

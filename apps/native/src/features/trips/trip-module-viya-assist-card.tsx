@@ -85,10 +85,7 @@ export function TripModuleViyaAssistCard({
 	};
 
 	return (
-		<Surface
-			className="gap-4 rounded-[28px] border border-border bg-surface p-4"
-			style={{ boxShadow: "0 8px 24px rgba(15, 23, 42, 0.06)" }}
-		>
+		<Surface className="gap-4 rounded-[28px] border border-border bg-surface p-4">
 			<View className="flex-row items-start gap-3">
 				<View className="h-10 w-10 items-center justify-center rounded-full bg-primary/10">
 					<Ionicons color="#0A84FF" name="sparkles-outline" size={18} />

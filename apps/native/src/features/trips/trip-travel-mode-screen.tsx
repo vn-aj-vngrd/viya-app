@@ -22,6 +22,7 @@ import { View } from "react-native";
 import { Container } from "@/components/container";
 import { EmptyState } from "@/src/components/empty-state";
 import { RouteHeader } from "@/src/components/navigation/route-header";
+import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 
 import { formatMoney } from "./trip-dashboard-utils";
@@ -326,13 +327,7 @@ export function TripTravelModeScreen() {
 	}
 
 	if (workspace === undefined || !wallet) {
-		return (
-			<Container className="px-4 pb-28">
-				<View className="items-center py-12">
-					<Spinner />
-				</View>
-			</Container>
-		);
+		return <ScreenLoadingState />;
 	}
 
 	const currency = workspace.trip.budgetCurrency ?? "PHP";

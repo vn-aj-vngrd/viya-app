@@ -148,14 +148,6 @@ const AUTO_ADVANCE_MS = 4200;
 const PROGRESS_DOT_SIZE = 6;
 const ACTIVE_PROGRESS_DOT_WIDTH = 20;
 
-const previewShadow = {
-	elevation: 12,
-	shadowColor: "#111827",
-	shadowOffset: { height: 18, width: 0 },
-	shadowOpacity: 0.1,
-	shadowRadius: 28,
-};
-
 interface PillProps {
 	accent?: string;
 	children: string;
@@ -268,7 +260,7 @@ function PreviewFrame({ children, isCompact, slide }: PreviewFrameProps) {
 	return (
 		<Animated.View
 			entering={FadeInUp.duration(380).springify().damping(20)}
-			style={[previewShadow, { height: cardHeight }]}
+			style={{ height: cardHeight }}
 		>
 			<Surface className="h-full overflow-hidden rounded-[36px] border border-border bg-surface p-4">
 				<View className="flex-row items-center justify-between">
@@ -309,10 +301,7 @@ function WelcomeGraphic() {
 					className="absolute h-44 w-44 rounded-full"
 					style={{ backgroundColor: "#EAF2FF" }}
 				/>
-				<Surface
-					className="absolute h-28 w-64 rotate-[-10deg] rounded-[36px] border border-border bg-surface p-4"
-					style={previewShadow}
-				>
+				<Surface className="absolute h-28 w-64 rotate-[-10deg] rounded-[36px] border border-border bg-surface p-4">
 					<View className="flex-row items-center justify-between">
 						<Text weight="semibold">Trip plan</Text>
 						<Pill accent="#059669">Ready</Pill>

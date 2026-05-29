@@ -30,6 +30,7 @@ import { Container } from "@/components/container";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 import { EmptyState } from "@/src/components/empty-state";
 import { RouteHeader } from "@/src/components/navigation/route-header";
+import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 import { TripModuleViyaAssistCard } from "@/src/features/trips/trip-module-viya-assist-card";
 import { useTripIdParam } from "@/src/features/trips/use-trip-id-param";
@@ -349,13 +350,7 @@ export function ReadinessScreen() {
 	}
 
 	if (readinessItems === undefined) {
-		return (
-			<Container className="px-4 pb-28">
-				<View className="items-center py-12">
-					<Spinner />
-				</View>
-			</Container>
-		);
+		return <ScreenLoadingState />;
 	}
 
 	const updateForm = (key: keyof ReadinessForm, value: string) => {

@@ -24,7 +24,10 @@ import {
 	travelStyleOptions,
 } from "@viya-app/domain";
 import { useMutation, useQuery } from "convex/react";
-import { launchImageLibraryAsync } from "expo-image-picker";
+import {
+	type ImagePickerAsset,
+	launchImageLibraryAsync,
+} from "expo-image-picker";
 import { useRouter } from "expo-router";
 import {
 	BottomSheet,
@@ -40,7 +43,7 @@ import {
 	useThemeColor,
 } from "heroui-native";
 import type { ComponentProps, ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Image, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -126,6 +129,7 @@ const themeOptions = [
 }[];
 
 const optionSeparatorClassName = "mx-4";
+const photoPickerSheetDismissDelayMs = 320;
 
 const travelPreferenceGroups = [
 	{
@@ -199,6 +203,84 @@ const travelPreferenceCategories = [
 	"Logistics",
 	"Planning",
 ] as const satisfies readonly TravelPreferenceGroup["category"][];
+
+const waitForPhotoPickerSheetDismiss = async () => {
+	await new Promise((resolve) => {
+		setTimeout(resolve, photoPickerSheetDismissDelayMs);
+	});
+};
+
+const pickAvatarAsset = async (): Promise<ImagePickerAsset | null> => {
+	const result = await launchImageLibraryAsync({
+		allowsEditing: true,
+		aspect: [1, 1],
+		mediaTypes: ["images"],
+		quality: 0.9,
+	});
+
+	if (result.canceled || !result.assets[0]) {
+		return null;
+	}
+
+	return result.assets[0];
+};
+
+const getAvatarUploadBlob = async (asset: ImagePickerAsset): Promise<Blob> =>
+	await new Promise((resolve, reject) => {
+		const request = new XMLHttpRequest();
+
+		request.onerror = () => {
+			reject(new Error("Viya could not read that photo."));
+		};
+		request.onload = () => {
+			resolve(request.response as Blob);
+		};
+		request.responseType = "blob";
+		request.open("GET", asset.uri);
+		request.send();
+	});
+
+const consumeBooleanRef = (flagRef: { current: boolean }) => {
+	if (!flagRef.current) {
+		return false;
+	}
+
+	flagRef.current = false;
+	return true;
+};
+
+const getAvatarImageUrl = (
+	localAvatarUri?: string | null,
+	remoteAvatarUrl?: string
+) => localAvatarUri || remoteAvatarUrl;
+
+const getAvatarActionOpacity = ({
+	isLoading,
+	pressed,
+}: {
+	isLoading: boolean;
+	pressed: boolean;
+}) => {
+	if (isLoading) {
+		return 0.72;
+	}
+
+	return pressed ? 0.7 : 1;
+};
+
+const getAppearanceDescription = ({
+	currentTheme,
+	themePreference,
+}: {
+	currentTheme: string;
+	themePreference: ThemePreference;
+}) => {
+	if (themePreference === "system") {
+		return `System (${currentTheme})`;
+	}
+
+	return themeOptions.find((option) => option.value === themePreference)?.title;
+};
 
 function getInitials(name?: string | null) {
 	if (!name) {
@@ -506,36 +588,53 @@ function AvatarUpdateRow({
 	isLoading: boolean;
 	onPress: () => void;
 }) {
-	const [foregroundColor, mutedColor] = useThemeColor(["foreground", "muted"]);
-
 	return (
-		<ListGroup variant="transparent">
-			<ListGroup.Item
+		<View className="items-center gap-2 py-2">
+			<Pressable
+				accessibilityLabel="Change profile photo"
 				accessibilityRole="button"
-				className="px-0 py-1"
+				className="items-center"
 				disabled={isLoading}
 				onPress={onPress}
+				style={({ pressed }) => ({
+					opacity: isLoading ? 0.72 : 1,
+					transform: [{ scale: pressed ? 0.98 : 1 }],
+				})}
 			>
-				<ListGroup.ItemPrefix>
-					<ProfileAvatar imageUrl={imageUrl} name={displayName} size={40} />
-				</ListGroup.ItemPrefix>
-				<ListGroup.ItemContent>
-					<ListGroup.ItemTitle>Photo</ListGroup.ItemTitle>
-				</ListGroup.ItemContent>
-				<ListGroup.ItemSuffix>
-					{isLoading ? (
-						<Spinner color={foregroundColor} size="sm" />
-					) : (
-						<Text color="muted" type="body-sm">
-							Change
-						</Text>
-					)}
-				</ListGroup.ItemSuffix>
-				{isLoading ? null : (
-					<ListGroup.ItemSuffix iconProps={{ color: mutedColor, size: 18 }} />
-				)}
-			</ListGroup.Item>
-		</ListGroup>
+				<View className="relative">
+					<View className="rounded-full border-4 border-background">
+						<ProfileAvatar imageUrl={imageUrl} name={displayName} size={92} />
+					</View>
+					<View className="absolute -right-1 -bottom-1 h-9 w-9 items-center justify-center rounded-full border-4 border-background bg-surface">
+						{isLoading ? (
+							<Spinner color="#0A84FF" size="sm" />
+						) : (
+							<Feather color="#0A84FF" name="camera" size={16} />
+						)}
+					</View>
+				</View>
+			</Pressable>
+			<Pressable
+				accessibilityLabel="Change profile photo"
+				accessibilityRole="button"
+				disabled={isLoading}
+				onPress={onPress}
+				style={({ pressed }) => ({
+					opacity: getAvatarActionOpacity({ isLoading, pressed }),
+				})}
+			>
+				<Text
+					className="text-center text-primary"
+					type="body-sm"
+					weight="semibold"
+				>
+					{isLoading ? "Updating photo..." : "Change profile photo"}
+				</Text>
+			</Pressable>
+			<Text className="text-center" color="muted" type="body-xs">
+				Choose a square photo for best results.
+			</Text>
+		</View>
 	);
 }
 
@@ -621,61 +720,93 @@ function TravelPreferenceOptionRow({
 	);
 }
 
-export default function ProfileScreen() {
-	const { signOut } = useClerk();
-	const { user } = useUser();
-	const router = useRouter();
-	const insets = useSafeAreaInsets();
-	const currentPreferences = useQuery(api.preferences.getCurrentPreferences);
-	const ensureCurrentUser = useMutation(api.users.ensureCurrentUser);
-	const savePreferences = useMutation(api.preferences.upsertCurrentPreferences);
-	const { currentTheme, setTheme, themePreference } = useAppTheme();
-	const foregroundColor = useThemeColor("foreground");
-	const [activeTravelPreferenceKey, setActiveTravelPreferenceKey] =
-		useState<TravelPreferenceKey | null>(null);
-	const [isAppearanceSheetOpen, setIsAppearanceSheetOpen] = useState(false);
-	const [isPersonalInfoSheetOpen, setIsPersonalInfoSheetOpen] = useState(false);
-	const [isTravelSheetOpen, setIsTravelSheetOpen] = useState(false);
-	const [firstName, setFirstName] = useState(user?.firstName ?? "");
-	const [isUpdatingAvatar, setIsUpdatingAvatar] = useState(false);
-	const [isSavingPersonalInfo, setIsSavingPersonalInfo] = useState(false);
-	const [isSigningOut, setIsSigningOut] = useState(false);
-	const [lastName, setLastName] = useState(user?.lastName ?? "");
-	const [nameFieldError, setNameFieldError] = useState<string | null>(null);
-	const [personalInfoError, setPersonalInfoError] = useState<string | null>(
-		null
-	);
-	const [savingPreferenceKey, setSavingPreferenceKey] =
-		useState<TravelPreferenceKey | null>(null);
-	const [travelPreferenceError, setTravelPreferenceError] = useState<
-		string | null
-	>(null);
-	const [travelPreferences, setTravelPreferences] =
-		useState<TravelPreferenceState | null>(null);
-	const displayName = user?.fullName ?? "Viya traveler";
-	const primaryEmail = user?.emailAddresses[0]?.emailAddress ?? "Signed in";
-	const resolvedTravelPreferences =
-		travelPreferences ?? getTravelPreferenceState(currentPreferences);
-	const preferenceSummary = getPreferenceSummary(resolvedTravelPreferences);
-	const appearanceDescription =
-		themePreference === "system"
-			? `System (${currentTheme})`
-			: themeOptions.find((option) => option.value === themePreference)?.title;
-	const activeTravelPreferenceGroup =
-		travelPreferenceGroups.find(
-			(group) => group.key === activeTravelPreferenceKey
-		) ?? null;
+type CurrentUser = NonNullable<ReturnType<typeof useUser>["user"]>;
 
-	useEffect(() => {
-		if (currentPreferences === undefined) {
+function useProfileAvatarUpdater({
+	setIsPersonalInfoSheetOpen,
+	setPersonalInfoError,
+}: {
+	setIsPersonalInfoSheetOpen: (isOpen: boolean) => void;
+	setPersonalInfoError: (message: string | null) => void;
+}) {
+	const isReopeningPersonalInfoAfterPickerRef = useRef(false);
+	const [isUpdatingAvatar, setIsUpdatingAvatar] = useState(false);
+	const [localAvatarUri, setLocalAvatarUri] = useState<string | null>(null);
+	const [selectedAvatarAsset, setSelectedAvatarAsset] =
+		useState<ImagePickerAsset | null>(null);
+
+	const clearAvatarDraft = () => {
+		setLocalAvatarUri(null);
+		setSelectedAvatarAsset(null);
+	};
+
+	const handleAvatarUpdatePress = async () => {
+		if (isUpdatingAvatar) {
 			return;
 		}
 
-		setTravelPreferences(getTravelPreferenceState(currentPreferences));
-	}, [currentPreferences]);
+		setPersonalInfoError(null);
+		setIsUpdatingAvatar(true);
+		isReopeningPersonalInfoAfterPickerRef.current = true;
+		setIsPersonalInfoSheetOpen(false);
+		await waitForPhotoPickerSheetDismiss();
 
+		let selectedAsset: ImagePickerAsset | null;
+
+		try {
+			selectedAsset = await pickAvatarAsset();
+		} catch (error) {
+			setIsPersonalInfoSheetOpen(true);
+			setIsUpdatingAvatar(false);
+			setPersonalInfoError(
+				error instanceof Error
+					? error.message
+					: "Viya could not open your photo library."
+			);
+			return;
+		}
+
+		setIsPersonalInfoSheetOpen(true);
+
+		if (!selectedAsset) {
+			setIsUpdatingAvatar(false);
+			return;
+		}
+
+		setLocalAvatarUri(selectedAsset.uri);
+		setSelectedAvatarAsset(selectedAsset);
+		setIsUpdatingAvatar(false);
+	};
+
+	return {
+		clearAvatarDraft,
+		handleAvatarUpdatePress,
+		isReopeningPersonalInfoAfterPickerRef,
+		isUpdatingAvatar,
+		localAvatarUri,
+		selectedAvatarAsset,
+	};
+}
+
+function usePersonalInfoDraftReset({
+	isOpen,
+	setFirstName,
+	setLastName,
+	setNameFieldError,
+	setPersonalInfoError,
+	skipResetRef,
+	user,
+}: {
+	isOpen: boolean;
+	setFirstName: (value: string) => void;
+	setLastName: (value: string) => void;
+	setNameFieldError: (message: string | null) => void;
+	setPersonalInfoError: (message: string | null) => void;
+	skipResetRef: { current: boolean };
+	user: CurrentUser | null | undefined;
+}) {
 	useEffect(() => {
-		if (!isPersonalInfoSheetOpen) {
+		if (!isOpen || consumeBooleanRef(skipResetRef)) {
 			return;
 		}
 
@@ -683,7 +814,26 @@ export default function ProfileScreen() {
 		setLastName(user?.lastName ?? "");
 		setNameFieldError(null);
 		setPersonalInfoError(null);
-	}, [isPersonalInfoSheetOpen, user?.firstName, user?.lastName]);
+	}, [
+		isOpen,
+		setFirstName,
+		setLastName,
+		setNameFieldError,
+		setPersonalInfoError,
+		skipResetRef,
+		user?.firstName,
+		user?.lastName,
+	]);
+}
+
+function useProfileSignOut({
+	router,
+	signOut,
+}: {
+	router: ReturnType<typeof useRouter>;
+	signOut: ReturnType<typeof useClerk>["signOut"];
+}) {
+	const [isSigningOut, setIsSigningOut] = useState(false);
 
 	const handleSignOutPress = async () => {
 		if (isSigningOut) {
@@ -700,54 +850,111 @@ export default function ProfileScreen() {
 		}
 	};
 
-	const handleAvatarUpdatePress = async () => {
-		if (!(user && !isUpdatingAvatar)) {
-			return;
-		}
+	return {
+		handleSignOutPress,
+		isSigningOut,
+	};
+}
 
-		setPersonalInfoError(null);
+function usePersonalInfoSheetOpenChange({
+	clearAvatarDraft,
+	setIsPersonalInfoSheetOpen,
+	skipDraftResetRef,
+}: {
+	clearAvatarDraft: () => void;
+	setIsPersonalInfoSheetOpen: (isOpen: boolean) => void;
+	skipDraftResetRef: { current: boolean };
+}) {
+	return (isOpen: boolean) => {
+		setIsPersonalInfoSheetOpen(isOpen);
 
-		let result: Awaited<ReturnType<typeof launchImageLibraryAsync>>;
-
-		try {
-			result = await launchImageLibraryAsync({
-				allowsEditing: true,
-				aspect: [1, 1],
-				mediaTypes: ["images"],
-				quality: 0.9,
-			});
-		} catch (error) {
-			setPersonalInfoError(
-				error instanceof Error
-					? error.message
-					: "Viya could not open your photo library."
-			);
-			return;
-		}
-
-		if (result.canceled || !result.assets[0]) {
-			return;
-		}
-
-		setIsUpdatingAvatar(true);
-
-		try {
-			const response = await fetch(result.assets[0].uri);
-			const file = await response.blob();
-
-			await user.setProfileImage({ file });
-			await user.reload();
-			await ensureCurrentUser();
-		} catch (error) {
-			setPersonalInfoError(
-				error instanceof Error
-					? error.message
-					: "Viya could not update your photo."
-			);
-		} finally {
-			setIsUpdatingAvatar(false);
+		if (!(isOpen || skipDraftResetRef.current)) {
+			clearAvatarDraft();
 		}
 	};
+}
+
+export default function ProfileScreen() {
+	const { signOut } = useClerk();
+	const { user } = useUser();
+	const router = useRouter();
+	const insets = useSafeAreaInsets();
+	const currentPreferences = useQuery(api.preferences.getCurrentPreferences);
+	const ensureCurrentUser = useMutation(api.users.ensureCurrentUser);
+	const savePreferences = useMutation(api.preferences.upsertCurrentPreferences);
+	const { currentTheme, setTheme, themePreference } = useAppTheme();
+	const foregroundColor = useThemeColor("foreground");
+	const [activeTravelPreferenceKey, setActiveTravelPreferenceKey] =
+		useState<TravelPreferenceKey | null>(null);
+	const [isAppearanceSheetOpen, setIsAppearanceSheetOpen] = useState(false);
+	const [isPersonalInfoSheetOpen, setIsPersonalInfoSheetOpen] = useState(false);
+	const [isTravelSheetOpen, setIsTravelSheetOpen] = useState(false);
+	const [firstName, setFirstName] = useState(user?.firstName ?? "");
+	const [isSavingPersonalInfo, setIsSavingPersonalInfo] = useState(false);
+	const [lastName, setLastName] = useState(user?.lastName ?? "");
+	const [nameFieldError, setNameFieldError] = useState<string | null>(null);
+	const [personalInfoError, setPersonalInfoError] = useState<string | null>(
+		null
+	);
+	const [savingPreferenceKey, setSavingPreferenceKey] =
+		useState<TravelPreferenceKey | null>(null);
+	const [travelPreferenceError, setTravelPreferenceError] = useState<
+		string | null
+	>(null);
+	const [travelPreferences, setTravelPreferences] =
+		useState<TravelPreferenceState | null>(null);
+	const {
+		clearAvatarDraft,
+		handleAvatarUpdatePress,
+		isReopeningPersonalInfoAfterPickerRef,
+		isUpdatingAvatar,
+		localAvatarUri,
+		selectedAvatarAsset,
+	} = useProfileAvatarUpdater({
+		setIsPersonalInfoSheetOpen,
+		setPersonalInfoError,
+	});
+	const { handleSignOutPress, isSigningOut } = useProfileSignOut({
+		router,
+		signOut,
+	});
+	const displayName = user?.fullName ?? "Viya traveler";
+	const draftAvatarImageUrl = getAvatarImageUrl(localAvatarUri, user?.imageUrl);
+	const primaryEmail = user?.emailAddresses[0]?.emailAddress ?? "Signed in";
+	const resolvedTravelPreferences =
+		travelPreferences ?? getTravelPreferenceState(currentPreferences);
+	const preferenceSummary = getPreferenceSummary(resolvedTravelPreferences);
+	const appearanceDescription = getAppearanceDescription({
+		currentTheme,
+		themePreference,
+	});
+	const activeTravelPreferenceGroup =
+		travelPreferenceGroups.find(
+			(group) => group.key === activeTravelPreferenceKey
+		) ?? null;
+	const handlePersonalInfoSheetOpenChange = usePersonalInfoSheetOpenChange({
+		clearAvatarDraft,
+		setIsPersonalInfoSheetOpen,
+		skipDraftResetRef: isReopeningPersonalInfoAfterPickerRef,
+	});
+
+	useEffect(() => {
+		if (currentPreferences === undefined) {
+			return;
+		}
+
+		setTravelPreferences(getTravelPreferenceState(currentPreferences));
+	}, [currentPreferences]);
+
+	usePersonalInfoDraftReset({
+		isOpen: isPersonalInfoSheetOpen,
+		setFirstName,
+		setLastName,
+		setNameFieldError,
+		setPersonalInfoError,
+		skipResetRef: isReopeningPersonalInfoAfterPickerRef,
+		user,
+	});
 
 	const handlePersonalInfoSavePress = async () => {
 		if (!(user && !isSavingPersonalInfo)) {
@@ -767,11 +974,19 @@ export default function ProfileScreen() {
 		setPersonalInfoError(null);
 
 		try {
+			if (selectedAvatarAsset) {
+				const file = await getAvatarUploadBlob(selectedAvatarAsset);
+
+				await user.setProfileImage({ file });
+				await user.reload();
+			}
+
 			await user.update({
 				firstName: nextFirstName,
 				lastName: nextLastName,
 			});
 			await ensureCurrentUser();
+			clearAvatarDraft();
 			setIsPersonalInfoSheetOpen(false);
 		} catch (error) {
 			setPersonalInfoError(
@@ -1126,7 +1341,7 @@ export default function ProfileScreen() {
 			</BottomSheet>
 			<BottomSheet
 				isOpen={isPersonalInfoSheetOpen}
-				onOpenChange={setIsPersonalInfoSheetOpen}
+				onOpenChange={handlePersonalInfoSheetOpenChange}
 			>
 				<BottomSheet.Portal>
 					<BottomSheet.Overlay />
@@ -1149,15 +1364,15 @@ export default function ProfileScreen() {
 									accessibilityLabel="Close personal information"
 									className="h-10 w-10 rounded-full bg-surface"
 									iconProps={{ color: foregroundColor, size: 22 }}
-									onPress={() => setIsPersonalInfoSheetOpen(false)}
+									onPress={() => handlePersonalInfoSheetOpenChange(false)}
 								/>
 							</View>
 
 							<View className="gap-4">
 								<AvatarUpdateRow
 									displayName={displayName}
-									imageUrl={user?.imageUrl}
-									isLoading={isUpdatingAvatar}
+									imageUrl={draftAvatarImageUrl}
+									isLoading={isUpdatingAvatar || isSavingPersonalInfo}
 									onPress={handleAvatarUpdatePress}
 								/>
 								<PersonalInfoField

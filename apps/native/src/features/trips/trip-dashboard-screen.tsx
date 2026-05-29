@@ -1,11 +1,11 @@
 import { api } from "@viya-app/backend/convex/_generated/api";
 import { useQuery } from "convex/react";
-import { Spinner } from "heroui-native";
 import { useMemo, useState } from "react";
 import { View } from "react-native";
 
 import { Container } from "@/components/container";
 import { EmptyState } from "@/src/components/empty-state";
+import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 
 import {
 	FloatingAskViyaBar,
@@ -57,13 +57,7 @@ export function TripDashboardScreen({
 	}
 
 	if (workspace === undefined || !model) {
-		return (
-			<Container className="px-4 pb-28">
-				<View className="items-center py-12">
-					<Spinner />
-				</View>
-			</Container>
-		);
+		return <ScreenLoadingState />;
 	}
 
 	return (
@@ -93,7 +87,7 @@ export function TripDashboardScreen({
 					) : null}
 				</View>
 			</Container>
-			<FloatingAskViyaBar model={model} />
+			<FloatingAskViyaBar activeTab={activeTab} model={model} />
 		</View>
 	);
 }

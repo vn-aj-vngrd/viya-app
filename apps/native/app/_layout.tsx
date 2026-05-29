@@ -21,6 +21,8 @@ const convex = new ConvexReactClient(env.EXPO_PUBLIC_CONVEX_URL, {
 	unsavedChangesWarning: false,
 });
 
+const APP_SCREEN_BACKGROUND = "#F5F5F5";
+
 function StackLayout() {
 	const themeColorBackground = useThemeColor("background");
 
@@ -49,7 +51,9 @@ export default function Layout() {
 			tokenCache={tokenCache}
 		>
 			<ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-				<GestureHandlerRootView style={{ backgroundColor: "#F4F4F5", flex: 1 }}>
+				<GestureHandlerRootView
+					style={{ backgroundColor: APP_SCREEN_BACKGROUND, flex: 1 }}
+				>
 					<KeyboardProvider>
 						<AppThemeProvider>
 							<HeroUINativeProvider>

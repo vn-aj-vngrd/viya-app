@@ -20,6 +20,7 @@ import { View } from "react-native";
 import { Container } from "@/components/container";
 import { EmptyState } from "@/src/components/empty-state";
 import { RouteHeader } from "@/src/components/navigation/route-header";
+import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 import {
 	formatMoney,
 	formatStatus,
@@ -247,13 +248,7 @@ export function TripBudgetScreen() {
 	}
 
 	if (budget === undefined || !summary) {
-		return (
-			<Container className="px-4 pb-28">
-				<View className="items-center py-12">
-					<Spinner />
-				</View>
-			</Container>
-		);
+		return <ScreenLoadingState />;
 	}
 
 	const currency = budget.trip.budgetCurrency ?? "PHP";
