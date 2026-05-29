@@ -24,6 +24,7 @@ import { EmptyState } from "@/src/components/empty-state";
 import { RouteHeader } from "@/src/components/navigation/route-header";
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 
+import { TripModuleScreenFrame } from "./trip-module-floating-bar";
 import { TripModuleViyaAssistCard } from "./trip-module-viya-assist-card";
 import { useTripIdParam } from "./use-trip-id-param";
 
@@ -296,87 +297,89 @@ export function TripMomentsScreen() {
 	const highlightCount = moments.filter((moment) => moment.isHighlight).length;
 
 	return (
-		<Container
-			className="px-4 pb-28"
-			scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
-		>
-			<View className="gap-4 pb-4">
-				<RouteHeader
-					eyebrow="Remember"
-					icon="images-outline"
-					subtitle="Save trip moments, highlights, and recap source notes."
-					title="Moments"
-				/>
-				<TripModuleViyaAssistCard
-					description="Ask Viya to shape moments into highlights, captions, or recap ideas."
-					moduleLabel="moments"
-					tripId={tripId}
-				/>
-
-				<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
-					<View className="flex-row items-center gap-3">
-						<View className="h-11 w-11 items-center justify-center rounded-full bg-primary/10">
-							<Ionicons color="#0A84FF" name="images-outline" size={20} />
-						</View>
-						<View className="flex-1 gap-1">
-							<Text type="body" weight="bold">
-								{moments.length} moments
-							</Text>
-							<Text color="muted" type="body-sm">
-								{highlightCount} highlights for the recap.
-							</Text>
-						</View>
-					</View>
-					<Button onPress={openCreateSheet}>
-						<Button.Label>Add moment</Button.Label>
-					</Button>
-				</Surface>
-
-				{moments.length === 0 ? (
-					<EmptyState
-						description="Add notes and highlights during or after the trip."
+		<TripModuleScreenFrame activeTab="memories" tripId={tripId}>
+			<Container
+				className="px-4 pb-28"
+				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
+			>
+				<View className="gap-4 pb-4">
+					<RouteHeader
+						eyebrow="Remember"
 						icon="images-outline"
-						title="No moments yet"
+						subtitle="Save trip moments, highlights, and recap source notes."
+						title="Moments"
 					/>
-				) : (
-					<View className="gap-3">
-						{moments.map((moment) => (
-							<MomentCard
-								isPending={pendingMomentId === moment._id}
-								key={moment._id}
-								moment={moment}
-								onDelete={() => {
-									runMomentAction(moment._id, () =>
-										deleteMoment({ momentId: moment._id })
-									).catch(() => undefined);
-								}}
-								onEdit={() => openEditSheet(moment)}
-								onToggleHighlight={() => {
-									runMomentAction(moment._id, () =>
-										toggleMomentHighlight({ momentId: moment._id })
-									).catch(() => undefined);
-								}}
-							/>
-						))}
-					</View>
-				)}
-			</View>
-			<MomentSheet
-				form={form}
-				isOpen={isSheetOpen}
-				isSaving={isSaving}
-				mode={editingMomentId ? "edit" : "create"}
-				onOpenChange={(isOpen) => {
-					setIsSheetOpen(isOpen);
-					if (!isOpen) {
-						setEditingMomentId(null);
-						setForm(initialMomentForm);
-					}
-				}}
-				onSubmit={handleSaveMoment}
-				onUpdateForm={updateForm}
-			/>
-		</Container>
+					<TripModuleViyaAssistCard
+						description="Ask Viya to shape moments into highlights, captions, or recap ideas."
+						moduleLabel="moments"
+						tripId={tripId}
+					/>
+
+					<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
+						<View className="flex-row items-center gap-3">
+							<View className="h-11 w-11 items-center justify-center rounded-full bg-primary/10">
+								<Ionicons color="#0A84FF" name="images-outline" size={20} />
+							</View>
+							<View className="flex-1 gap-1">
+								<Text type="body" weight="bold">
+									{moments.length} moments
+								</Text>
+								<Text color="muted" type="body-sm">
+									{highlightCount} highlights for the recap.
+								</Text>
+							</View>
+						</View>
+						<Button onPress={openCreateSheet}>
+							<Button.Label>Add moment</Button.Label>
+						</Button>
+					</Surface>
+
+					{moments.length === 0 ? (
+						<EmptyState
+							description="Add notes and highlights during or after the trip."
+							icon="images-outline"
+							title="No moments yet"
+						/>
+					) : (
+						<View className="gap-3">
+							{moments.map((moment) => (
+								<MomentCard
+									isPending={pendingMomentId === moment._id}
+									key={moment._id}
+									moment={moment}
+									onDelete={() => {
+										runMomentAction(moment._id, () =>
+											deleteMoment({ momentId: moment._id })
+										).catch(() => undefined);
+									}}
+									onEdit={() => openEditSheet(moment)}
+									onToggleHighlight={() => {
+										runMomentAction(moment._id, () =>
+											toggleMomentHighlight({ momentId: moment._id })
+										).catch(() => undefined);
+									}}
+								/>
+							))}
+						</View>
+					)}
+				</View>
+				<MomentSheet
+					form={form}
+					isOpen={isSheetOpen}
+					isSaving={isSaving}
+					mode={editingMomentId ? "edit" : "create"}
+					onOpenChange={(isOpen) => {
+						setIsSheetOpen(isOpen);
+						if (!isOpen) {
+							setEditingMomentId(null);
+							setForm(initialMomentForm);
+						}
+					}}
+					onSubmit={handleSaveMoment}
+					onUpdateForm={updateForm}
+				/>
+			</Container>
+		</TripModuleScreenFrame>
 	);
 }
 

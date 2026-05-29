@@ -24,6 +24,7 @@ import { EmptyState } from "@/src/components/empty-state";
 import { RouteHeader } from "@/src/components/navigation/route-header";
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 
+import { TripModuleScreenFrame } from "./trip-module-floating-bar";
 import { TripModuleViyaAssistCard } from "./trip-module-viya-assist-card";
 import { useTripIdParam } from "./use-trip-id-param";
 
@@ -310,114 +311,118 @@ export function TripPlacesScreen() {
 	}
 
 	return (
-		<Container
-			className="px-4 pb-28"
-			scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
-		>
-			<View className="gap-4 pb-4">
-				<RouteHeader
-					eyebrow="Map"
-					icon="map-outline"
-					subtitle="Saved places, itinerary stops, and route context for the trip."
-					title="Places"
-				/>
-				<TripModuleViyaAssistCard
-					agentModule="places"
-					description="Ask for better places, neighborhoods, food stops, or a tighter route."
-					moduleLabel="places"
-					tripId={tripId}
-				/>
-
-				<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
-					<View className="h-44 items-center justify-center rounded-[26px] bg-surface-secondary">
-						<Ionicons color="#0A84FF" name="map-outline" size={28} />
-						<Text color="muted" type="body-sm">
-							Map view
-						</Text>
-					</View>
-					<View className="flex-row flex-wrap gap-2">
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>{places.routeStats.placeCount} places</Chip.Label>
-						</Chip>
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>{places.routeStats.savedPlaceCount} saved</Chip.Label>
-						</Chip>
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>
-								{places.routeStats.geocodedPlaceCount} geocoded
-							</Chip.Label>
-						</Chip>
-					</View>
-					<Button onPress={openCreateSheet}>
-						<Button.Label>Add place</Button.Label>
-					</Button>
-				</Surface>
-
-				{places.savedPlaces.length === 0 &&
-				places.itineraryPlaces.length === 0 ? (
-					<EmptyState
-						description="Add saved places or itinerary items to build trip map context."
+		<TripModuleScreenFrame activeTab="places" tripId={tripId}>
+			<Container
+				className="px-4 pb-28"
+				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
+			>
+				<View className="gap-4 pb-4">
+					<RouteHeader
+						eyebrow="Map"
 						icon="map-outline"
-						title="No places yet"
+						subtitle="Saved places, itinerary stops, and route context for the trip."
+						title="Places"
 					/>
-				) : (
-					<View className="gap-4">
-						{places.savedPlaces.length > 0 ? (
-							<PlaceSection
-								deletingPlaceId={deletingPlaceId}
-								onDeletePlace={(placeId) => {
-									handleDeletePlace(placeId).catch(() => undefined);
-								}}
-								onEditPlace={openEditSheet}
-								places={places.savedPlaces}
-								title="Saved places"
-							/>
-						) : null}
+					<TripModuleViyaAssistCard
+						agentModule="places"
+						description="Ask for better places, neighborhoods, food stops, or a tighter route."
+						moduleLabel="places"
+						tripId={tripId}
+					/>
 
-						{places.itineraryPlaces.length > 0 ? (
-							<View className="gap-3">
-								<Text color="muted" type="body-xs" weight="semibold">
-									ITINERARY STOPS
-								</Text>
-								{places.itineraryPlaces.map((place) => (
-									<Surface
-										className="gap-2 rounded-[24px] bg-surface-secondary p-4"
-										key={place.id}
-									>
-										<Text type="body-sm" weight="bold">
-											{place.title}
-										</Text>
-										<Text color="muted" type="body-xs">
-											{place.locationName} · {place.category}
-										</Text>
-										{place.description ? (
-											<Text.Paragraph color="muted" type="body-sm">
-												{place.description}
-											</Text.Paragraph>
-										) : null}
-									</Surface>
-								))}
-							</View>
-						) : null}
-					</View>
-				)}
-			</View>
-			<PlaceSheet
-				form={form}
-				isOpen={isPlaceSheetOpen}
-				isSaving={isSaving}
-				mode={editingPlaceId ? "edit" : "create"}
-				onOpenChange={(isOpen) => {
-					setIsPlaceSheetOpen(isOpen);
-					if (!isOpen) {
-						setEditingPlaceId(null);
-						setForm(initialPlaceForm);
-					}
-				}}
-				onSubmit={handleSavePlace}
-				onUpdateForm={updateForm}
-			/>
-		</Container>
+					<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
+						<View className="h-44 items-center justify-center rounded-[26px] bg-surface-secondary">
+							<Ionicons color="#0A84FF" name="map-outline" size={28} />
+							<Text color="muted" type="body-sm">
+								Map view
+							</Text>
+						</View>
+						<View className="flex-row flex-wrap gap-2">
+							<Chip size="sm" variant="secondary">
+								<Chip.Label>{places.routeStats.placeCount} places</Chip.Label>
+							</Chip>
+							<Chip size="sm" variant="secondary">
+								<Chip.Label>
+									{places.routeStats.savedPlaceCount} saved
+								</Chip.Label>
+							</Chip>
+							<Chip size="sm" variant="secondary">
+								<Chip.Label>
+									{places.routeStats.geocodedPlaceCount} geocoded
+								</Chip.Label>
+							</Chip>
+						</View>
+						<Button onPress={openCreateSheet}>
+							<Button.Label>Add place</Button.Label>
+						</Button>
+					</Surface>
+
+					{places.savedPlaces.length === 0 &&
+					places.itineraryPlaces.length === 0 ? (
+						<EmptyState
+							description="Add saved places or itinerary items to build trip map context."
+							icon="map-outline"
+							title="No places yet"
+						/>
+					) : (
+						<View className="gap-4">
+							{places.savedPlaces.length > 0 ? (
+								<PlaceSection
+									deletingPlaceId={deletingPlaceId}
+									onDeletePlace={(placeId) => {
+										handleDeletePlace(placeId).catch(() => undefined);
+									}}
+									onEditPlace={openEditSheet}
+									places={places.savedPlaces}
+									title="Saved places"
+								/>
+							) : null}
+
+							{places.itineraryPlaces.length > 0 ? (
+								<View className="gap-3">
+									<Text color="muted" type="body-xs" weight="semibold">
+										ITINERARY STOPS
+									</Text>
+									{places.itineraryPlaces.map((place) => (
+										<Surface
+											className="gap-2 rounded-[24px] bg-surface-secondary p-4"
+											key={place.id}
+										>
+											<Text type="body-sm" weight="bold">
+												{place.title}
+											</Text>
+											<Text color="muted" type="body-xs">
+												{place.locationName} · {place.category}
+											</Text>
+											{place.description ? (
+												<Text.Paragraph color="muted" type="body-sm">
+													{place.description}
+												</Text.Paragraph>
+											) : null}
+										</Surface>
+									))}
+								</View>
+							) : null}
+						</View>
+					)}
+				</View>
+				<PlaceSheet
+					form={form}
+					isOpen={isPlaceSheetOpen}
+					isSaving={isSaving}
+					mode={editingPlaceId ? "edit" : "create"}
+					onOpenChange={(isOpen) => {
+						setIsPlaceSheetOpen(isOpen);
+						if (!isOpen) {
+							setEditingPlaceId(null);
+							setForm(initialPlaceForm);
+						}
+					}}
+					onSubmit={handleSavePlace}
+					onUpdateForm={updateForm}
+				/>
+			</Container>
+		</TripModuleScreenFrame>
 	);
 }
 

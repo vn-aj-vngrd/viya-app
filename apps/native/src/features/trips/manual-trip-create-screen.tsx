@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
-import { useAction, useMutation } from "convex/react";
+import { getPreferenceSuggestions } from "@viya-app/domain";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { useRouter } from "expo-router";
 import {
 	Button,
@@ -10,12 +11,20 @@ import {
 	Spinner,
 	Surface,
 	Text,
-	TextArea,
 	TextField,
 } from "heroui-native";
 import type { ComponentProps, ReactNode } from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
+import Animated, {
+	cancelAnimation,
+	Easing,
+	useAnimatedStyle,
+	useSharedValue,
+	withDelay,
+	withRepeat,
+	withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Container } from "@/components/container";
@@ -24,11 +33,13 @@ import {
 	type DateRangeValue,
 } from "@/src/components/date/date-picker-field";
 import { NavigationBackButton } from "@/src/components/navigation/navigation-back-button";
+import { ViyaMark } from "@/src/components/viya-mark";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 
 import { LocationSuggestionField } from "./location-suggestion-field";
 import { fetchTripCoverImageUrl } from "./trip-cover-image";
 import {
+	type BudgetSuggestionSource,
 	budgetScopeOptions,
 	budgetStrictnessOptions,
 	createInitialTripCreateFlowState,
@@ -36,6 +47,8 @@ import {
 	getCreateTripPayload,
 	getCreateTripReviewRows,
 	getStepError,
+	getSuggestedBudgetAmount,
+	getSuggestedBudgetPrefill,
 	getTripCreateOptionLabel,
 	paceOptions,
 	parseBudgetAmount,
@@ -52,23 +65,44 @@ import {
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
 type FlowPhase = "flow" | "generating" | "starter";
+type BudgetSuggestionStatus = "idle" | "loading" | "ready" | "error";
 
-const popularDestinations = [
-	"Hong Kong",
-	"Tokyo",
-	"Singapore",
-	"Seoul",
-	"Bali",
-	"Bangkok",
-] as const;
+interface BudgetSuggestionResult {
+	amount: number;
+	rationale: string;
+	source: BudgetSuggestionSource;
+}
 
 const generationSteps = [
-	"Creating itinerary",
-	"Finding useful places",
-	"Estimating budget",
-	"Preparing checklist",
-	"Checking readiness",
-] as const;
+	{ icon: "map-outline", label: "Creating itinerary" },
+	{ icon: "compass-outline", label: "Finding useful places" },
+	{ icon: "wallet-outline", label: "Estimating budget" },
+	{ icon: "checkbox-outline", label: "Preparing checklist" },
+	{ icon: "shield-checkmark-outline", label: "Checking readiness" },
+] as const satisfies readonly { icon: IconName; label: string }[];
+const stepAdvanceIntervalMs = 1500;
+
+const starterInsights = [
+	{
+		accent: "#0A84FF",
+		icon: "cloud-download-outline",
+		text: "Bookings can be imported through TripSync.",
+	},
+	{
+		accent: "#E97816",
+		icon: "shield-outline",
+		text: "Readiness starts low until documents and bookings are added.",
+	},
+	{
+		accent: "#059669",
+		icon: "receipt-outline",
+		text: "Budget estimates can be refined from real receipts.",
+	},
+] as const satisfies readonly {
+	accent: string;
+	icon: IconName;
+	text: string;
+}[];
 
 const paceDetails = {
 	balanced: "3-5 activities per day",
@@ -95,6 +129,35 @@ const getStepPosition = (step: TripCreateStep) => {
 	const index = tripCreateStepOrder.indexOf(step);
 	return { current: Math.max(index + 1, 1), total: tripCreateStepOrder.length };
 };
+
+function Reveal({
+	children,
+	delayMs = 0,
+}: {
+	children: ReactNode;
+	delayMs?: number;
+}) {
+	const progress = useSharedValue(0);
+
+	useEffect(() => {
+		progress.value = withDelay(
+			delayMs,
+			withTiming(1, { duration: 620, easing: Easing.out(Easing.cubic) })
+		);
+
+		return () => cancelAnimation(progress);
+	}, [delayMs, progress]);
+
+	const animatedStyle = useAnimatedStyle(() => ({
+		opacity: progress.value,
+		transform: [
+			{ translateY: (1 - progress.value) * 18 },
+			{ scale: 0.98 + progress.value * 0.02 },
+		],
+	}));
+
+	return <Animated.View style={animatedStyle}>{children}</Animated.View>;
+}
 
 function ProgressSegments({ step }: { step: TripCreateStep }) {
 	const { current, total } = getStepPosition(step);
@@ -148,9 +211,6 @@ function OptionCard({
 				className="flex-row items-center gap-3 rounded-3xl border bg-surface p-4"
 				style={{
 					borderColor: isSelected ? "#0A84FF" : "rgba(24, 24, 27, 0.08)",
-					boxShadow: isSelected
-						? "0 12px 24px rgba(10, 132, 255, 0.12)"
-						: "0 8px 18px rgba(15, 23, 42, 0.05)",
 				}}
 			>
 				<View
@@ -195,17 +255,17 @@ function ChoiceChip({
 			className="min-h-10 flex-row items-center rounded-full border bg-white px-4"
 			onPress={onPress}
 			style={({ pressed }) => ({
-				borderColor: isSelected
-					? "rgba(10, 132, 255, 0.42)"
-					: "rgba(24, 24, 27, 0.06)",
-				boxShadow: isSelected
-					? "0 8px 18px rgba(10, 132, 255, 0.08)"
-					: "0 6px 14px rgba(15, 23, 42, 0.04)",
+				backgroundColor: isSelected ? "#0A84FF" : "#FFFFFF",
+				borderColor: isSelected ? "#0A84FF" : "rgba(24, 24, 27, 0.06)",
 				opacity: pressed ? 0.82 : 1,
 				transform: [{ scale: pressed ? 0.98 : 1 }],
 			})}
 		>
-			<Text type="body-sm" weight="semibold">
+			<Text
+				style={{ color: isSelected ? "#FFFFFF" : "#18181B" }}
+				type="body-sm"
+				weight="semibold"
+			>
 				{label}
 			</Text>
 		</Pressable>
@@ -215,6 +275,7 @@ function ChoiceChip({
 function InlineTextField({
 	autoCapitalize,
 	errorText,
+	helperText,
 	isInvalid,
 	keyboardType,
 	label,
@@ -224,6 +285,7 @@ function InlineTextField({
 }: {
 	autoCapitalize?: "none" | "sentences" | "words" | "characters";
 	errorText?: string;
+	helperText?: string;
 	isInvalid?: boolean;
 	keyboardType?: "default" | "numeric";
 	label: string;
@@ -254,6 +316,11 @@ function InlineTextField({
 					{errorText}
 				</Text>
 			) : null}
+			{!(isInvalid && errorText) && helperText ? (
+				<Text color="muted" type="body-xs">
+					{helperText}
+				</Text>
+			) : null}
 		</TextField>
 	);
 }
@@ -276,7 +343,11 @@ function CreateFlowShell({
 	const insets = useSafeAreaInsets();
 
 	return (
-		<Container className="bg-background" isScrollable={false}>
+		<Container
+			className="bg-background"
+			includeBottomInset={false}
+			isScrollable={false}
+		>
 			<View className="flex-1">
 				<View
 					className="bg-background px-5 pb-3"
@@ -318,12 +389,14 @@ function CreateFlowShell({
 }
 
 function DestinationStep({
+	destinationSuggestions,
 	errorMessage,
 	onPopularSelect,
 	onUpdate,
 	searchLocationSuggestions,
 	state,
 }: {
+	destinationSuggestions: readonly string[];
 	errorMessage?: string | null;
 	onPopularSelect: (destination: string) => void;
 	onUpdate: <Key extends keyof TripCreateFlowState>(
@@ -350,10 +423,10 @@ function DestinationStep({
 			/>
 			<View className="gap-3">
 				<Text color="muted" type="body-xs" weight="semibold">
-					POPULAR
+					SUGGESTED FOR YOU
 				</Text>
 				<View className="flex-row flex-wrap gap-2">
-					{popularDestinations.map((destination) => (
+					{destinationSuggestions.map((destination) => (
 						<ChoiceChip
 							isSelected={state.destination === destination}
 							key={destination}
@@ -555,6 +628,8 @@ function StylePaceStep({
 function BudgetStep({
 	errorMessage,
 	onUpdate,
+	suggestion,
+	suggestionStatus,
 	state,
 }: {
 	errorMessage?: string | null;
@@ -562,19 +637,51 @@ function BudgetStep({
 		key: Key,
 		value: TripCreateFlowState[Key]
 	) => void;
+	suggestion?: BudgetSuggestionResult | null;
+	suggestionStatus: BudgetSuggestionStatus;
 	state: TripCreateFlowState;
 }) {
+	const aiSuggestion = suggestion?.source === "ai" ? suggestion : null;
+	const suggestedBudgetAmount = aiSuggestion?.amount;
+	const suggestedBudgetLabel = suggestedBudgetAmount
+		? `₱${suggestedBudgetAmount.toLocaleString()}`
+		: undefined;
+	let helperText: string | undefined;
+
+	if (aiSuggestion) {
+		helperText = `AI suggests ${suggestedBudgetLabel} based on your previous answers.`;
+	} else if (
+		suggestion?.source === "fallback" ||
+		suggestionStatus === "error"
+	) {
+		helperText =
+			"AI budget suggestion is unavailable. Enter your budget manually.";
+	}
+
+	const isSuggestionLoading = suggestionStatus === "loading";
+
 	return (
 		<View className="gap-5">
-			<InlineTextField
-				errorText={errorMessage ?? undefined}
-				isInvalid={Boolean(errorMessage)}
-				keyboardType="numeric"
-				label="Budget amount"
-				onChangeText={(value) => onUpdate("budgetAmount", value)}
-				placeholder="0"
-				value={state.budgetAmount}
-			/>
+			<View className="gap-2">
+				<InlineTextField
+					errorText={errorMessage ?? undefined}
+					helperText={helperText}
+					isInvalid={Boolean(errorMessage)}
+					keyboardType="numeric"
+					label="Budget amount"
+					onChangeText={(value) => onUpdate("budgetAmount", value)}
+					placeholder={suggestedBudgetAmount?.toString() ?? "Enter amount"}
+					value={state.budgetAmount}
+				/>
+				{isSuggestionLoading && !errorMessage ? (
+					<View className="flex-row items-center gap-2">
+						<Spinner size="sm" />
+						<Text color="muted" type="body-xs">
+							Viya is estimating a budget...
+						</Text>
+					</View>
+				) : null}
+			</View>
 			<View className="gap-3">
 				<Text color="muted" type="body-xs" weight="semibold">
 					BUDGET TYPE
@@ -609,64 +716,6 @@ function BudgetStep({
 	);
 }
 
-function ContextStep({
-	onSkip,
-	onUpdate,
-	state,
-}: {
-	onSkip: () => void;
-	onUpdate: <Key extends keyof TripCreateFlowState>(
-		key: Key,
-		value: TripCreateFlowState[Key]
-	) => void;
-	state: TripCreateFlowState;
-}) {
-	return (
-		<View className="gap-5">
-			<TextField className="gap-2">
-				<Label>
-					<Label.Text>Must-haves</Label.Text>
-				</Label>
-				<TextArea
-					className="min-h-28 rounded-[18px] border border-border bg-surface px-4 py-3"
-					onChangeText={(value) => onUpdate("mustHaves", value)}
-					placeholder="Disneyland, food trip, shopping, hotel near Mong Kok"
-					value={state.mustHaves}
-					variant="secondary"
-				/>
-			</TextField>
-			<TextField className="gap-2">
-				<Label>
-					<Label.Text>Paste booking details</Label.Text>
-				</Label>
-				<TextArea
-					className="min-h-24 rounded-[18px] border border-border bg-surface px-4 py-3"
-					onChangeText={(value) => onUpdate("pastedBookingText", value)}
-					placeholder="Flight, hotel, confirmation number, arrival time"
-					value={state.pastedBookingText}
-					variant="secondary"
-				/>
-			</TextField>
-			<Surface className="flex-row items-center gap-3 rounded-[24px] border border-border bg-surface p-4">
-				<View className="h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-					<Ionicons color="#0A84FF" name="cloud-upload-outline" size={19} />
-				</View>
-				<View className="min-w-0 flex-1 gap-1">
-					<Text type="body-sm" weight="semibold">
-						File upload is available inside TripSync
-					</Text>
-					<Text color="muted" type="body-xs">
-						Create the trip first, then import PDFs, screenshots, and receipts.
-					</Text>
-				</View>
-			</Surface>
-			<Button onPress={onSkip} variant="tertiary">
-				<Button.Label>Skip</Button.Label>
-			</Button>
-		</View>
-	);
-}
-
 function ReviewStep({ state }: { state: TripCreateFlowState }) {
 	const rows = getCreateTripReviewRows(state);
 
@@ -695,45 +744,218 @@ function ReviewStep({ state }: { state: TripCreateFlowState }) {
 	);
 }
 
+function GeneratingBrandMark() {
+	const pulse = useSharedValue(0);
+
+	useEffect(() => {
+		pulse.value = withRepeat(
+			withTiming(1, { duration: 2400, easing: Easing.inOut(Easing.ease) }),
+			-1,
+			false
+		);
+
+		return () => cancelAnimation(pulse);
+	}, [pulse]);
+
+	const innerRingStyle = useAnimatedStyle(() => ({
+		opacity: 0.4 * (1 - pulse.value),
+		transform: [{ scale: 0.7 + pulse.value * 0.9 }],
+	}));
+	const outerRingStyle = useAnimatedStyle(() => {
+		const phase = (pulse.value + 0.5) % 1;
+		return {
+			opacity: 0.4 * (1 - phase),
+			transform: [{ scale: 0.7 + phase * 0.9 }],
+		};
+	});
+
+	return (
+		<View className="h-24 w-24 items-center justify-center">
+			<Animated.View
+				className="absolute h-24 w-24 rounded-full"
+				style={[{ backgroundColor: "#0A84FF" }, outerRingStyle]}
+			/>
+			<Animated.View
+				className="absolute h-24 w-24 rounded-full"
+				style={[{ backgroundColor: "#0A84FF" }, innerRingStyle]}
+			/>
+			<View
+				className="h-[68px] w-[68px] items-center justify-center rounded-[26px] border border-border bg-surface"
+				style={{
+					shadowColor: "#0A84FF",
+					shadowOffset: { height: 8, width: 0 },
+					shadowOpacity: 0.18,
+					shadowRadius: 18,
+				}}
+			>
+				<ViyaMark size={42} />
+			</View>
+		</View>
+	);
+}
+
+function GenerationProgressBar({ progress }: { progress: number }) {
+	const width = useSharedValue(0);
+
+	useEffect(() => {
+		width.value = withTiming(progress, {
+			duration: 700,
+			easing: Easing.out(Easing.cubic),
+		});
+
+		return () => cancelAnimation(width);
+	}, [progress, width]);
+
+	const fillStyle = useAnimatedStyle(() => ({
+		width: `${width.value * 100}%`,
+	}));
+
+	return (
+		<View
+			className="h-2 w-full overflow-hidden rounded-full"
+			style={{ backgroundColor: "#E4E7EC" }}
+		>
+			<Animated.View
+				className="h-full rounded-full"
+				style={[{ backgroundColor: "#0A84FF" }, fillStyle]}
+			/>
+		</View>
+	);
+}
+
+type GenerationStepStatus = "complete" | "active" | "pending";
+
+function GenerationStepRow({
+	icon,
+	index,
+	label,
+	status,
+}: {
+	icon: IconName;
+	index: number;
+	label: string;
+	status: GenerationStepStatus;
+}) {
+	const reveal = useSharedValue(0);
+
+	useEffect(() => {
+		reveal.value = withDelay(
+			index * 90,
+			withTiming(1, { duration: 500, easing: Easing.out(Easing.cubic) })
+		);
+
+		return () => cancelAnimation(reveal);
+	}, [index, reveal]);
+
+	const rowStyle = useAnimatedStyle(() => ({
+		opacity: reveal.value,
+		transform: [{ translateY: (1 - reveal.value) * 14 }],
+	}));
+
+	const isPending = status === "pending";
+	let chip: ReactNode = <Ionicons color="#A1A1AA" name={icon} size={18} />;
+
+	if (status === "active") {
+		chip = <Spinner size="sm" />;
+	} else if (status === "complete") {
+		chip = <Ionicons color="#0A84FF" name="checkmark" size={18} />;
+	}
+
+	return (
+		<Animated.View style={rowStyle}>
+			<Surface
+				className="flex-row items-center gap-3 rounded-[22px] border bg-surface p-3.5"
+				style={{
+					borderColor:
+						status === "active" ? "#0A84FF" : "rgba(24, 24, 27, 0.08)",
+					opacity: isPending ? 0.55 : 1,
+				}}
+			>
+				<View
+					className="h-9 w-9 items-center justify-center rounded-full"
+					style={{ backgroundColor: isPending ? "#F4F4F5" : "#EAF2FF" }}
+				>
+					{chip}
+				</View>
+				<Text
+					className="flex-1"
+					color={isPending ? "muted" : undefined}
+					type="body-sm"
+					weight="semibold"
+				>
+					{label}
+				</Text>
+				{status === "complete" ? (
+					<Ionicons color="#0A84FF" name="checkmark-circle" size={20} />
+				) : null}
+			</Surface>
+		</Animated.View>
+	);
+}
+
 function GeneratingScreen() {
 	const insets = useSafeAreaInsets();
+	const [activeIndex, setActiveIndex] = useState(0);
+	const lastIndex = generationSteps.length - 1;
+
+	useEffect(() => {
+		if (activeIndex >= lastIndex) {
+			return;
+		}
+
+		const timer = setTimeout(() => {
+			setActiveIndex((current) => Math.min(current + 1, lastIndex));
+		}, stepAdvanceIntervalMs);
+
+		return () => clearTimeout(timer);
+	}, [activeIndex, lastIndex]);
+
+	const progress = (activeIndex + 0.5) / generationSteps.length;
+
+	const getStepStatus = (index: number): GenerationStepStatus => {
+		if (index < activeIndex) {
+			return "complete";
+		}
+
+		if (index === activeIndex) {
+			return "active";
+		}
+
+		return "pending";
+	};
 
 	return (
 		<Container className="bg-background" isScrollable={false}>
 			<View
-				className="flex-1 justify-between px-6 pb-5"
-				style={{ paddingTop: Math.max(insets.top + 24, 44) }}
+				className="flex-1 justify-center gap-9 px-6"
+				style={{
+					paddingBottom: Math.max(insets.bottom + 24, 36),
+					paddingTop: Math.max(insets.top + 24, 44),
+				}}
 			>
-				<View className="flex-1 justify-center gap-8">
-					<View className="h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-						<Spinner />
+				<Reveal>
+					<View className="gap-6">
+						<GeneratingBrandMark />
+						<View className="gap-3">
+							<Text.Heading className="text-5xl leading-14" type="h1">
+								Building your starter trip
+							</Text.Heading>
+							<Text.Paragraph className="max-w-80 leading-6" color="muted">
+								Viya is turning your answers into a workspace you can edit.
+							</Text.Paragraph>
+						</View>
+						<GenerationProgressBar progress={progress} />
 					</View>
-					<View className="gap-3">
-						<Text.Heading className="text-5xl leading-14" type="h1">
-							Viya is building your starter trip
-						</Text.Heading>
-						<Text.Paragraph className="max-w-80 leading-6" color="muted">
-							Creating a useful workspace from your answers.
-						</Text.Paragraph>
-					</View>
-				</View>
-				<View className="gap-3">
+				</Reveal>
+				<View className="gap-2.5">
 					{generationSteps.map((step, index) => (
-						<Surface
-							className="flex-row items-center gap-3 rounded-[22px] border border-border bg-surface p-3"
-							key={step}
-						>
-							<View className="h-8 w-8 items-center justify-center rounded-full bg-primary/10">
-								<Ionicons
-									color="#0A84FF"
-									name={index === 0 ? "sparkles-outline" : "checkmark"}
-									size={16}
-								/>
-							</View>
-							<Text type="body-sm" weight="semibold">
-								{step}
-							</Text>
-						</Surface>
+						<GenerationStepRow
+							icon={step.icon}
+							index={index}
+							key={step.label}
+							label={step.label}
+							status={getStepStatus(index)}
+						/>
 					))}
 				</View>
 			</View>
@@ -741,102 +963,208 @@ function GeneratingScreen() {
 	);
 }
 
+function StarterSuccessBadge() {
+	const scale = useSharedValue(0.6);
+	const opacity = useSharedValue(0);
+	const halo = useSharedValue(0);
+
+	useEffect(() => {
+		opacity.value = withTiming(1, {
+			duration: 420,
+			easing: Easing.out(Easing.cubic),
+		});
+		scale.value = withTiming(1, {
+			duration: 720,
+			easing: Easing.out(Easing.back(1.6)),
+		});
+		halo.value = withRepeat(
+			withTiming(1, { duration: 2600, easing: Easing.inOut(Easing.ease) }),
+			-1,
+			false
+		);
+
+		return () => {
+			cancelAnimation(scale);
+			cancelAnimation(opacity);
+			cancelAnimation(halo);
+		};
+	}, [halo, opacity, scale]);
+
+	const badgeStyle = useAnimatedStyle(() => ({
+		opacity: opacity.value,
+		transform: [{ scale: scale.value }],
+	}));
+	const haloStyle = useAnimatedStyle(() => ({
+		opacity: 0.28 * (1 - halo.value),
+		transform: [{ scale: 0.8 + halo.value * 0.7 }],
+	}));
+
+	return (
+		<View className="h-[76px] w-[76px] items-center justify-center">
+			<Animated.View
+				className="absolute h-[76px] w-[76px] rounded-full"
+				style={[{ backgroundColor: "#0A84FF" }, haloStyle]}
+			/>
+			<Animated.View
+				className="h-[64px] w-[64px] items-center justify-center rounded-[24px]"
+				style={[{ backgroundColor: "#EAF2FF" }, badgeStyle]}
+			>
+				<Ionicons color="#0A84FF" name="checkmark-sharp" size={36} />
+			</Animated.View>
+		</View>
+	);
+}
+
 function StarterPreviewScreen({
-	onEdit,
 	onOpen,
 	state,
 }: {
-	onEdit: () => void;
 	onOpen: () => void;
 	state: TripCreateFlowState;
 }) {
 	const insets = useSafeAreaInsets();
 	const budgetAmount = parseBudgetAmount(state.budgetAmount);
 	const travelerCount = parseTravelerCount(state.travelerCount) ?? 1;
+	const destination = state.destination || "your trip";
 
 	return (
 		<Container className="bg-background" isScrollable={false}>
 			<View className="flex-1">
 				<ScrollView
 					contentContainerStyle={{
-						gap: 24,
+						gap: 20,
 						paddingBottom: 32,
 						paddingHorizontal: 20,
 						paddingTop: Math.max(insets.top + 28, 48),
 					}}
+					showsVerticalScrollIndicator={false}
 				>
-					<View className="gap-3">
-						<Text.Heading className="text-5xl leading-14" type="h1">
-							Your starter trip is ready
-						</Text.Heading>
-						<Text.Paragraph color="muted">
-							Open the workspace to edit everything Viya prepared.
-						</Text.Paragraph>
-					</View>
-					<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
-						<Text type="body" weight="bold">
-							{state.destination || "New trip"} setup
-						</Text>
-						<View className="flex-row flex-wrap gap-3">
-							<PreviewMetric
-								label="Travelers"
-								value={travelerCount.toString()}
-							/>
-							<PreviewMetric
-								label="Pace"
-								value={getTripCreateOptionLabel("pace", state.pace)}
-							/>
-							<PreviewMetric
-								label="Budget"
-								value={
-									budgetAmount ? `₱${budgetAmount.toLocaleString()}` : "Open"
-								}
-							/>
-						</View>
-					</Surface>
-					<Surface className="gap-3 rounded-[30px] border border-border bg-surface p-5">
-						<Text type="body" weight="bold">
-							Viya noticed
-						</Text>
-						{[
-							"Bookings can be imported through TripSync.",
-							"Readiness starts low until documents and bookings are added.",
-							"Budget estimates can be refined from real receipts.",
-						].map((item) => (
-							<View className="flex-row gap-2" key={item}>
-								<Ionicons color="#0A84FF" name="sparkles-outline" size={16} />
-								<Text className="flex-1" color="muted" type="body-sm">
-									{item}
+					<StarterSuccessBadge />
+					<Reveal delayMs={120}>
+						<View className="gap-2.5">
+							<View className="flex-row items-center gap-2">
+								<View
+									className="h-1.5 w-1.5 rounded-full"
+									style={{ backgroundColor: "#059669" }}
+								/>
+								<Text style={{ color: "#059669" }} type="body-xs" weight="bold">
+									READY TO EXPLORE
 								</Text>
 							</View>
-						))}
-					</Surface>
+							<Text.Heading className="text-5xl leading-14" type="h1">
+								Your starter trip is ready
+							</Text.Heading>
+							<Text.Paragraph className="leading-6" color="muted">
+								Open the workspace to fine-tune everything Viya prepared for{" "}
+								{destination}.
+							</Text.Paragraph>
+						</View>
+					</Reveal>
+					<Reveal delayMs={260}>
+						<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
+							<Text type="body" weight="bold">
+								{state.destination || "New trip"} setup
+							</Text>
+							<View className="flex-row">
+								<PreviewMetric
+									accent="#0A84FF"
+									icon="people-outline"
+									label="Travelers"
+									value={travelerCount.toString()}
+								/>
+								<View className="mx-3 w-px self-stretch bg-border" />
+								<PreviewMetric
+									accent="#059669"
+									icon="speedometer-outline"
+									label="Pace"
+									value={getTripCreateOptionLabel("pace", state.pace)}
+								/>
+								<View className="mx-3 w-px self-stretch bg-border" />
+								<PreviewMetric
+									accent="#E97816"
+									icon="wallet-outline"
+									label="Budget"
+									value={
+										budgetAmount ? `₱${budgetAmount.toLocaleString()}` : "Open"
+									}
+								/>
+							</View>
+						</Surface>
+					</Reveal>
+					<Reveal delayMs={400}>
+						<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
+							<Text type="body" weight="bold">
+								Viya noticed
+							</Text>
+							{starterInsights.map((insight) => (
+								<View
+									className="flex-row items-center gap-3"
+									key={insight.text}
+								>
+									<View
+										className="h-9 w-9 items-center justify-center rounded-full"
+										style={{ backgroundColor: `${insight.accent}18` }}
+									>
+										<Ionicons
+											color={insight.accent}
+											name={insight.icon}
+											size={18}
+										/>
+									</View>
+									<Text
+										className="flex-1 leading-5"
+										color="muted"
+										type="body-sm"
+									>
+										{insight.text}
+									</Text>
+								</View>
+							))}
+						</Surface>
+					</Reveal>
 				</ScrollView>
-				<View
-					className="gap-2 border-border border-t bg-background px-5 pt-3"
-					style={{ paddingBottom: Math.max(insets.bottom, 16) }}
-				>
-					<Button onPress={onOpen} size="lg">
-						<Button.Label>Open trip</Button.Label>
-					</Button>
-					<Button onPress={onEdit} size="lg" variant="secondary">
-						<Button.Label>Edit setup</Button.Label>
-					</Button>
-				</View>
+				<Reveal delayMs={520}>
+					<View
+						className="border-border border-t bg-background px-5 pt-3"
+						style={{ paddingBottom: Math.max(insets.bottom, 16) }}
+					>
+						<Button onPress={onOpen} size="lg">
+							<Button.Label>Open trip</Button.Label>
+						</Button>
+					</View>
+				</Reveal>
 			</View>
 		</Container>
 	);
 }
 
-function PreviewMetric({ label, value }: { label: string; value: string }) {
+function PreviewMetric({
+	accent,
+	icon,
+	label,
+	value,
+}: {
+	accent: string;
+	icon: IconName;
+	label: string;
+	value: string;
+}) {
 	return (
-		<View className="min-w-24 flex-1 rounded-[20px] bg-surface-secondary p-3">
-			<Text color="muted" type="body-xs" weight="semibold">
-				{label}
-			</Text>
-			<Text className="mt-1" type="body-sm" weight="bold">
-				{value}
-			</Text>
+		<View className="min-w-0 flex-1 gap-2">
+			<View
+				className="h-8 w-8 items-center justify-center rounded-full"
+				style={{ backgroundColor: `${accent}18` }}
+			>
+				<Ionicons color={accent} name={icon} size={16} />
+			</View>
+			<View className="gap-0.5">
+				<Text color="muted" type="body-xs" weight="semibold">
+					{label}
+				</Text>
+				<Text type="body-sm" weight="bold">
+					{value}
+				</Text>
+			</View>
 		</View>
 	);
 }
@@ -844,6 +1172,10 @@ function PreviewMetric({ label, value }: { label: string; value: string }) {
 export function ManualTripCreateScreen() {
 	const router = useRouter();
 	const createTrip = useMutation(api.trips.createTrip);
+	const currentPreferences = useQuery(api.preferences.getCurrentPreferences);
+	const generateBudgetSuggestion = useAction(
+		api.ai.features.generateBudgetSuggestion
+	);
 	const runLocationSuggestionSearch = useAction(
 		api.locations.searchLocationSuggestions
 	);
@@ -852,6 +1184,11 @@ export function ManualTripCreateScreen() {
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [flowPhase, setFlowPhase] = useState<FlowPhase>("flow");
 	const [isCreating, setIsCreating] = useState(false);
+	const [budgetSuggestion, setBudgetSuggestion] =
+		useState<BudgetSuggestionResult | null>(null);
+	const [budgetSuggestionStatus, setBudgetSuggestionStatus] =
+		useState<BudgetSuggestionStatus>("idle");
+	const lastAppliedBudgetSuggestionRef = useRef<string | null>(null);
 	const [state, setState] = useState<TripCreateFlowState>(() =>
 		createInitialTripCreateFlowState()
 	);
@@ -863,6 +1200,117 @@ export function ManualTripCreateScreen() {
 		() => tripCreateStepOrder.indexOf(activeStep),
 		[activeStep]
 	);
+	const destinationSuggestions = useMemo(() => {
+		const suggestions = getPreferenceSuggestions(currentPreferences ?? {});
+
+		return [
+			...suggestions.countrySuggestions.map((suggestion) => suggestion.country),
+			...suggestions.placeSuggestions.map((suggestion) => suggestion.location),
+		].slice(0, 6);
+	}, [currentPreferences]);
+	const {
+		budgetScope,
+		budgetStrictness,
+		destination,
+		durationPreference,
+		endDate,
+		pace,
+		startDate,
+		styles,
+		travelerCount,
+		travelerType,
+	} = state;
+	const budgetSuggestionRequest = useMemo(() => {
+		const suggestionState: TripCreateFlowState = {
+			...createInitialTripCreateFlowState(),
+			budgetScope,
+			budgetStrictness,
+			destination,
+			durationPreference,
+			endDate,
+			pace,
+			startDate,
+			styles,
+			travelerCount,
+			travelerType,
+		};
+
+		return {
+			budgetScope,
+			budgetStrictness,
+			destination,
+			durationPreference: durationPreference ?? undefined,
+			endDate,
+			heuristicAmount: getSuggestedBudgetAmount(suggestionState),
+			pace,
+			startDate,
+			styles,
+			travelerCount,
+			travelerType,
+		};
+	}, [
+		budgetScope,
+		budgetStrictness,
+		destination,
+		durationPreference,
+		endDate,
+		pace,
+		startDate,
+		styles,
+		travelerCount,
+		travelerType,
+	]);
+
+	useEffect(() => {
+		if (activeStep !== "budget") {
+			return;
+		}
+
+		let isCurrent = true;
+		setBudgetSuggestion(null);
+		setBudgetSuggestionStatus("loading");
+
+		const loadBudgetSuggestion = async () => {
+			try {
+				const suggestion = await generateBudgetSuggestion(
+					budgetSuggestionRequest
+				);
+
+				if (!isCurrent) {
+					return;
+				}
+
+				setBudgetSuggestion(suggestion);
+				setBudgetSuggestionStatus("ready");
+				setState((currentState) => {
+					const nextBudgetAmount = getSuggestedBudgetPrefill(
+						currentState.budgetAmount,
+						suggestion.amount,
+						lastAppliedBudgetSuggestionRef.current ?? undefined,
+						suggestion.source
+					);
+
+					if (nextBudgetAmount === currentState.budgetAmount) {
+						return currentState;
+					}
+
+					lastAppliedBudgetSuggestionRef.current = nextBudgetAmount;
+
+					return { ...currentState, budgetAmount: nextBudgetAmount };
+				});
+			} catch {
+				if (isCurrent) {
+					setBudgetSuggestionStatus("error");
+				}
+			}
+		};
+
+		loadBudgetSuggestion();
+
+		return () => {
+			isCurrent = false;
+		};
+	}, [activeStep, budgetSuggestionRequest, generateBudgetSuggestion]);
 
 	const updateState = <Key extends keyof TripCreateFlowState>(
 		key: Key,
@@ -951,10 +1399,6 @@ export function ManualTripCreateScreen() {
 	if (flowPhase === "starter" && createdTripId) {
 		return (
 			<StarterPreviewScreen
-				onEdit={() => {
-					setFlowPhase("flow");
-					setActiveStep("review");
-				}}
 				onOpen={() => router.replace(VIYA_ROUTES.tripDashboard(createdTripId))}
 				state={state}
 			/>
@@ -966,6 +1410,7 @@ export function ManualTripCreateScreen() {
 		"Choose a destination so Viya can build your trip around the right place.";
 	let content: ReactNode = (
 		<DestinationStep
+			destinationSuggestions={destinationSuggestions}
 			errorMessage={activeStep === "destination" ? errorMessage : null}
 			onPopularSelect={(destination) => {
 				updateState("destination", destination);
@@ -976,7 +1421,6 @@ export function ManualTripCreateScreen() {
 		/>
 	);
 	let primaryLabel = "Continue";
-	let secondaryAction: ReactNode = null;
 
 	if (activeStep === "dates") {
 		title = "When is your trip?";
@@ -1019,16 +1463,8 @@ export function ManualTripCreateScreen() {
 				errorMessage={errorMessage}
 				onUpdate={updateState}
 				state={state}
-			/>
-		);
-	} else if (activeStep === "context") {
-		title = "Anything you already want to include?";
-		helper = "Add places, bookings, or notes you already have in mind.";
-		content = (
-			<ContextStep
-				onSkip={() => setActiveStep("review")}
-				onUpdate={updateState}
-				state={state}
+				suggestion={budgetSuggestion}
+				suggestionStatus={budgetSuggestionStatus}
 			/>
 		);
 	} else if (activeStep === "review") {
@@ -1036,16 +1472,6 @@ export function ManualTripCreateScreen() {
 		helper = "Check the setup before Viya creates your workspace.";
 		content = <ReviewStep state={state} />;
 		primaryLabel = isCreating ? "Creating..." : "Create trip";
-		secondaryAction = (
-			<Button
-				isDisabled={isCreating}
-				onPress={() => setActiveStep("destination")}
-				size="lg"
-				variant="secondary"
-			>
-				<Button.Label>Edit</Button.Label>
-			</Button>
-		);
 	}
 
 	return (
@@ -1056,7 +1482,6 @@ export function ManualTripCreateScreen() {
 						{isCreating ? <Spinner size="sm" /> : null}
 						<Button.Label>{primaryLabel}</Button.Label>
 					</Button>
-					{secondaryAction}
 				</View>
 			}
 			helper={helper}

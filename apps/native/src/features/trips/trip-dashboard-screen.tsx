@@ -65,6 +65,7 @@ export function TripDashboardScreen({
 			<TripStickyHeader model={model} />
 			<Container
 				className="px-4"
+				includeBottomInset={false}
 				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
 			>
 				<View className="gap-3 pb-28">

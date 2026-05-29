@@ -25,6 +25,7 @@ import { EmptyState } from "@/src/components/empty-state";
 import { RouteHeader } from "@/src/components/navigation/route-header";
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 import { VIYA_ROUTES } from "@/src/constants/routes";
+import { TripModuleScreenFrame } from "@/src/features/trips/trip-module-floating-bar";
 import { TripModuleViyaAssistCard } from "@/src/features/trips/trip-module-viya-assist-card";
 import { useTripIdParam } from "@/src/features/trips/use-trip-id-param";
 
@@ -432,61 +433,63 @@ export function BookingHubScreen() {
 	})();
 
 	return (
-		<Container
-			className="px-4 pb-28"
-			scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
-		>
-			<View className="gap-4 pb-4">
-				<RouteHeader
-					eyebrow="Book"
-					icon="ticket-outline"
-					subtitle="Book through your preferred provider. Viya does not process payments in the MVP."
-					title="Booking Hub"
-				/>
-				<TripModuleViyaAssistCard
-					agentModule="bookings"
-					description="Generate booking targets, audit missing confirmations, or ask what to reserve next."
-					moduleLabel="bookings"
-					tripId={tripId}
-				/>
+		<TripModuleScreenFrame activeTab="bookings" tripId={tripId}>
+			<Container
+				className="px-4 pb-28"
+				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
+			>
+				<View className="gap-4 pb-4">
+					<RouteHeader
+						eyebrow="Book"
+						icon="ticket-outline"
+						subtitle="Book through your preferred provider. Viya does not process payments in the MVP."
+						title="Booking Hub"
+					/>
+					<TripModuleViyaAssistCard
+						agentModule="bookings"
+						description="Generate booking targets, audit missing confirmations, or ask what to reserve next."
+						moduleLabel="bookings"
+						tripId={tripId}
+					/>
 
-				<Surface className="gap-3 rounded-[30px] border border-border bg-surface p-5">
-					<View className="flex-row flex-wrap gap-2">
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>
-								{progress.confirmed}/{progress.total} confirmed
-							</Chip.Label>
-						</Chip>
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>{progress.remaining} remaining</Chip.Label>
-						</Chip>
-					</View>
-					<Text.Paragraph color="muted" type="body-sm">
-						Update booking status as you reserve externally, then upload
-						confirmations through TripSync.
-					</Text.Paragraph>
-					<Button onPress={openCreateSheet}>
-						<Button.Label>Add booking target</Button.Label>
-					</Button>
-				</Surface>
+					<Surface className="gap-3 rounded-[30px] border border-border bg-surface p-5">
+						<View className="flex-row flex-wrap gap-2">
+							<Chip size="sm" variant="secondary">
+								<Chip.Label>
+									{progress.confirmed}/{progress.total} confirmed
+								</Chip.Label>
+							</Chip>
+							<Chip size="sm" variant="secondary">
+								<Chip.Label>{progress.remaining} remaining</Chip.Label>
+							</Chip>
+						</View>
+						<Text.Paragraph color="muted" type="body-sm">
+							Update booking status as you reserve externally, then upload
+							confirmations through TripSync.
+						</Text.Paragraph>
+						<Button onPress={openCreateSheet}>
+							<Button.Label>Add booking target</Button.Label>
+						</Button>
+					</Surface>
 
-				{bookingsContent}
-			</View>
-			<BookingTargetSheet
-				form={bookingForm}
-				isOpen={isBookingSheetOpen}
-				isSaving={isCreatingBooking}
-				mode={editingBookingId ? "edit" : "create"}
-				onOpenChange={(isOpen) => {
-					setIsBookingSheetOpen(isOpen);
-					if (!isOpen) {
-						setEditingBookingId(null);
-						setBookingForm(initialBookingForm);
-					}
-				}}
-				onSubmit={saveTarget}
-				onUpdateForm={updateBookingForm}
-			/>
-		</Container>
+					{bookingsContent}
+				</View>
+				<BookingTargetSheet
+					form={bookingForm}
+					isOpen={isBookingSheetOpen}
+					isSaving={isCreatingBooking}
+					mode={editingBookingId ? "edit" : "create"}
+					onOpenChange={(isOpen) => {
+						setIsBookingSheetOpen(isOpen);
+						if (!isOpen) {
+							setEditingBookingId(null);
+							setBookingForm(initialBookingForm);
+						}
+					}}
+					onSubmit={saveTarget}
+					onUpdateForm={updateBookingForm}
+				/>
+			</Container>
+		</TripModuleScreenFrame>
 	);
 }

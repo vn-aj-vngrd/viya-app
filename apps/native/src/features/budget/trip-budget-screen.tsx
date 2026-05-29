@@ -25,6 +25,7 @@ import {
 	formatMoney,
 	formatStatus,
 } from "@/src/features/trips/trip-dashboard-utils";
+import { TripModuleScreenFrame } from "@/src/features/trips/trip-module-floating-bar";
 import { TripModuleViyaAssistCard } from "@/src/features/trips/trip-module-viya-assist-card";
 import { useTripIdParam } from "@/src/features/trips/use-trip-id-param";
 
@@ -353,319 +354,332 @@ export function TripBudgetScreen() {
 	};
 
 	return (
-		<Container
-			className="px-4 pb-28"
-			scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
-		>
-			<View className="gap-4 pb-4">
-				<RouteHeader
-					eyebrow="Track"
-					icon="wallet-outline"
-					subtitle="Budget, bookings, manual expenses, and safe daily spend from this trip."
-					title="Budget Wallet"
-				/>
-				<TripModuleViyaAssistCard
-					agentModule="budget"
-					description="Estimate costs, review overspend risk, or ask Viya where the budget is weakest."
-					moduleLabel="budget"
-					tripId={tripId}
-				/>
+		<TripModuleScreenFrame activeTab="budget" tripId={tripId}>
+			<Container
+				className="px-4 pb-28"
+				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
+			>
+				<View className="gap-4 pb-4">
+					<RouteHeader
+						eyebrow="Track"
+						icon="wallet-outline"
+						subtitle="Budget, bookings, manual expenses, and safe daily spend from this trip."
+						title="Budget Wallet"
+					/>
+					<TripModuleViyaAssistCard
+						agentModule="budget"
+						description="Estimate costs, review overspend risk, or ask Viya where the budget is weakest."
+						moduleLabel="budget"
+						tripId={tripId}
+					/>
 
-				<Surface className="gap-5 rounded-[30px] border border-border bg-surface p-5">
-					<View className="flex-row flex-wrap gap-2">
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>Track</Chip.Label>
-						</Chip>
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>{budgetStatus}</Chip.Label>
-						</Chip>
-					</View>
-
-					<View className="gap-3">
-						<View className="min-w-0 flex-1 gap-1">
-							<Text color="muted" type="body-xs" weight="semibold">
-								REMAINING WALLET
-							</Text>
-							<Text.Heading type="h2" weight="semibold">
-								{formatMoney(summary.remainingAmount, currency)}
-							</Text.Heading>
-							<Text color="muted" type="body-sm">
-								{formatMoney(summary.dailySafeSpend, currency)} daily safe spend
-							</Text>
+					<Surface className="gap-5 rounded-[30px] border border-border bg-surface p-5">
+						<View className="flex-row flex-wrap gap-2">
+							<Chip size="sm" variant="secondary">
+								<Chip.Label>Track</Chip.Label>
+							</Chip>
+							<Chip size="sm" variant="secondary">
+								<Chip.Label>{budgetStatus}</Chip.Label>
+							</Chip>
 						</View>
-						<View className="gap-2">
-							<ProgressBar progress={budgetProgress} />
-							<View className="flex-row justify-between gap-3">
-								<Text color="muted" type="body-xs">
-									{formatMoney(summary.totalTrackedSpend, currency)} tracked
+
+						<View className="gap-3">
+							<View className="min-w-0 flex-1 gap-1">
+								<Text color="muted" type="body-xs" weight="semibold">
+									REMAINING WALLET
 								</Text>
-								<Text color="muted" type="body-xs">
-									{plannedBudgetLabel} planned
+								<Text.Heading type="h2" weight="semibold">
+									{formatMoney(summary.remainingAmount, currency)}
+								</Text.Heading>
+								<Text color="muted" type="body-sm">
+									{formatMoney(summary.dailySafeSpend, currency)} daily safe
+									spend
 								</Text>
 							</View>
+							<View className="gap-2">
+								<ProgressBar progress={budgetProgress} />
+								<View className="flex-row justify-between gap-3">
+									<Text color="muted" type="body-xs">
+										{formatMoney(summary.totalTrackedSpend, currency)} tracked
+									</Text>
+									<Text color="muted" type="body-xs">
+										{plannedBudgetLabel} planned
+									</Text>
+								</View>
+							</View>
 						</View>
-					</View>
 
-					<View className="flex-row flex-wrap gap-3">
-						<MetricTile
-							detail="Trip cap"
-							icon="flag-outline"
-							label="Planned"
-							value={plannedBudgetLabel}
-						/>
-						<MetricTile
-							detail="Confirmed costs"
-							icon="briefcase-outline"
-							label="Booked"
-							value={formatMoney(summary.confirmedBookingCosts, currency)}
-						/>
-						<MetricTile
-							detail="Logged here"
-							icon="receipt-outline"
-							label="Manual spend"
-							value={formatMoney(summary.manualExpenses, currency)}
-						/>
-						<MetricTile
-							detail="Estimated items"
-							icon="calendar-outline"
-							label="Itinerary plan"
-							value={formatMoney(summary.plannedCosts, currency)}
-						/>
-					</View>
-				</Surface>
+						<View className="flex-row flex-wrap gap-3">
+							<MetricTile
+								detail="Trip cap"
+								icon="flag-outline"
+								label="Planned"
+								value={plannedBudgetLabel}
+							/>
+							<MetricTile
+								detail="Confirmed costs"
+								icon="briefcase-outline"
+								label="Booked"
+								value={formatMoney(summary.confirmedBookingCosts, currency)}
+							/>
+							<MetricTile
+								detail="Logged here"
+								icon="receipt-outline"
+								label="Manual spend"
+								value={formatMoney(summary.manualExpenses, currency)}
+							/>
+							<MetricTile
+								detail="Estimated items"
+								icon="calendar-outline"
+								label="Itinerary plan"
+								value={formatMoney(summary.plannedCosts, currency)}
+							/>
+						</View>
+					</Surface>
 
-				<Surface className="gap-4 rounded-[26px] border border-border bg-surface p-5">
-					<SectionTitle icon="create-outline" title="Edit budget" />
-					<TextField className="gap-2">
-						<Label>
-							<Label.Text>Total budget</Label.Text>
-						</Label>
-						<Input
-							className="h-12 rounded-[18px] border-0 bg-surface-secondary px-4"
-							keyboardType="numeric"
-							onChangeText={setBudgetDraft}
-							placeholder={budgetAmount?.toString() ?? "25000"}
-							value={budgetDraft}
-							variant="secondary"
-						/>
-					</TextField>
-					{budgetErrorMessage ? (
-						<Text className="text-danger" type="body-sm">
-							{budgetErrorMessage}
-						</Text>
-					) : null}
-					<Button
-						isDisabled={isSavingBudget}
-						onPress={() => {
-							handleSaveBudget().catch(() => undefined);
-						}}
-					>
-						{isSavingBudget ? <Spinner size="sm" /> : null}
-						<Button.Label>Save budget</Button.Label>
-					</Button>
-				</Surface>
-
-				<Surface className="gap-4 rounded-[26px] border border-border bg-surface p-5">
-					<SectionTitle
-						icon="receipt-outline"
-						title={editingExpenseId ? "Edit expense" : "Add expense"}
-					/>
-					<TextField className="gap-2">
-						<Label>
-							<Label.Text>Title</Label.Text>
-						</Label>
-						<Input
-							className="h-11 rounded-[18px] border-0 bg-surface-secondary px-4"
-							onChangeText={(title) =>
-								setExpenseForm((current) => ({ ...current, title }))
-							}
-							placeholder="Lunch, taxi, museum ticket"
-							value={expenseForm.title}
-							variant="secondary"
-						/>
-					</TextField>
-					<View className="flex-row flex-wrap gap-3">
-						<TextField className="min-w-0 flex-1 gap-2">
+					<Surface className="gap-4 rounded-[26px] border border-border bg-surface p-5">
+						<SectionTitle icon="create-outline" title="Edit budget" />
+						<TextField className="gap-2">
 							<Label>
-								<Label.Text>Amount</Label.Text>
+								<Label.Text>Total budget</Label.Text>
 							</Label>
 							<Input
-								className="h-11 rounded-[18px] border-0 bg-surface-secondary px-4"
+								className="h-12 rounded-[18px] border-0 bg-surface-secondary px-4"
 								keyboardType="numeric"
-								onChangeText={(amount) =>
-									setExpenseForm((current) => ({ ...current, amount }))
-								}
-								placeholder="1200"
-								value={expenseForm.amount}
+								onChangeText={setBudgetDraft}
+								placeholder={budgetAmount?.toString() ?? "25000"}
+								value={budgetDraft}
 								variant="secondary"
 							/>
 						</TextField>
-						<TextField className="min-w-0 flex-1 gap-2">
+						{budgetErrorMessage ? (
+							<Text className="text-danger" type="body-sm">
+								{budgetErrorMessage}
+							</Text>
+						) : null}
+						<Button
+							isDisabled={isSavingBudget}
+							onPress={() => {
+								handleSaveBudget().catch(() => undefined);
+							}}
+						>
+							{isSavingBudget ? <Spinner size="sm" /> : null}
+							<Button.Label>Save budget</Button.Label>
+						</Button>
+					</Surface>
+
+					<Surface className="gap-4 rounded-[26px] border border-border bg-surface p-5">
+						<SectionTitle
+							icon="receipt-outline"
+							title={editingExpenseId ? "Edit expense" : "Add expense"}
+						/>
+						<TextField className="gap-2">
 							<Label>
-								<Label.Text>Date</Label.Text>
+								<Label.Text>Title</Label.Text>
 							</Label>
 							<Input
 								className="h-11 rounded-[18px] border-0 bg-surface-secondary px-4"
-								onChangeText={(spentAt) =>
-									setExpenseForm((current) => ({ ...current, spentAt }))
+								onChangeText={(title) =>
+									setExpenseForm((current) => ({ ...current, title }))
 								}
-								placeholder="2026-07-10"
-								value={expenseForm.spentAt}
+								placeholder="Lunch, taxi, museum ticket"
+								value={expenseForm.title}
 								variant="secondary"
 							/>
 						</TextField>
-					</View>
-					<View className="gap-2">
-						<Text color="muted" type="body-xs" weight="semibold">
-							CATEGORY
-						</Text>
-						<CategoryPicker
-							onChange={(category) =>
-								setExpenseForm((current) => ({ ...current, category }))
-							}
-							value={expenseForm.category}
-						/>
-					</View>
-					<TextField className="gap-2">
-						<Label>
-							<Label.Text>Notes</Label.Text>
-						</Label>
-						<Input
-							className="h-11 rounded-[18px] border-0 bg-surface-secondary px-4"
-							onChangeText={(notes) =>
-								setExpenseForm((current) => ({ ...current, notes }))
-							}
-							placeholder="Optional"
-							value={expenseForm.notes}
-							variant="secondary"
-						/>
-					</TextField>
-					{expenseErrorMessage ? (
-						<Text className="text-danger" type="body-sm">
-							{expenseErrorMessage}
-						</Text>
-					) : null}
-					<Button
-						isDisabled={isAddingExpense}
-						onPress={() => {
-							handleSaveExpense().catch(() => undefined);
-						}}
-					>
-						{isAddingExpense ? <Spinner size="sm" /> : null}
-						<Button.Label>
-							{editingExpenseId ? "Save expense" : "Add expense"}
-						</Button.Label>
-					</Button>
-					{editingExpenseId ? (
+						<View className="flex-row flex-wrap gap-3">
+							<TextField className="min-w-0 flex-1 gap-2">
+								<Label>
+									<Label.Text>Amount</Label.Text>
+								</Label>
+								<Input
+									className="h-11 rounded-[18px] border-0 bg-surface-secondary px-4"
+									keyboardType="numeric"
+									onChangeText={(amount) =>
+										setExpenseForm((current) => ({ ...current, amount }))
+									}
+									placeholder="1200"
+									value={expenseForm.amount}
+									variant="secondary"
+								/>
+							</TextField>
+							<TextField className="min-w-0 flex-1 gap-2">
+								<Label>
+									<Label.Text>Date</Label.Text>
+								</Label>
+								<Input
+									className="h-11 rounded-[18px] border-0 bg-surface-secondary px-4"
+									onChangeText={(spentAt) =>
+										setExpenseForm((current) => ({ ...current, spentAt }))
+									}
+									placeholder="2026-07-10"
+									value={expenseForm.spentAt}
+									variant="secondary"
+								/>
+							</TextField>
+						</View>
+						<View className="gap-2">
+							<Text color="muted" type="body-xs" weight="semibold">
+								CATEGORY
+							</Text>
+							<CategoryPicker
+								onChange={(category) =>
+									setExpenseForm((current) => ({ ...current, category }))
+								}
+								value={expenseForm.category}
+							/>
+						</View>
+						<TextField className="gap-2">
+							<Label>
+								<Label.Text>Notes</Label.Text>
+							</Label>
+							<Input
+								className="h-11 rounded-[18px] border-0 bg-surface-secondary px-4"
+								onChangeText={(notes) =>
+									setExpenseForm((current) => ({ ...current, notes }))
+								}
+								placeholder="Optional"
+								value={expenseForm.notes}
+								variant="secondary"
+							/>
+						</TextField>
+						{expenseErrorMessage ? (
+							<Text className="text-danger" type="body-sm">
+								{expenseErrorMessage}
+							</Text>
+						) : null}
 						<Button
 							isDisabled={isAddingExpense}
 							onPress={() => {
-								setEditingExpenseId(null);
-								setExpenseForm(initialExpenseForm());
+								handleSaveExpense().catch(() => undefined);
 							}}
-							variant="secondary"
 						>
-							<Button.Label>Cancel edit</Button.Label>
+							{isAddingExpense ? <Spinner size="sm" /> : null}
+							<Button.Label>
+								{editingExpenseId ? "Save expense" : "Add expense"}
+							</Button.Label>
 						</Button>
-					) : null}
-				</Surface>
+						{editingExpenseId ? (
+							<Button
+								isDisabled={isAddingExpense}
+								onPress={() => {
+									setEditingExpenseId(null);
+									setExpenseForm(initialExpenseForm());
+								}}
+								variant="secondary"
+							>
+								<Button.Label>Cancel edit</Button.Label>
+							</Button>
+						) : null}
+					</Surface>
 
-				<View className="gap-3">
-					<Text className="px-1" color="muted" type="body-xs" weight="semibold">
-						SPEND BREAKDOWN
-					</Text>
-					<Surface className="overflow-hidden rounded-[26px] border border-border bg-surface">
-						{summary.categoryBreakdown.length === 0 ? (
-							<View className="items-center gap-2 p-6">
-								<Ionicons color="#8E8E93" name="receipt-outline" size={24} />
-								<Text color="muted" type="body-sm">
-									No booked costs or manual expenses yet.
-								</Text>
-							</View>
-						) : (
-							summary.categoryBreakdown.map((item) => (
-								<View
-									className="flex-row items-center justify-between gap-3 border-border border-b px-4 py-3"
-									key={item.category}
-								>
-									<Text type="body-sm" weight="semibold">
-										{formatStatus(item.category)}
-									</Text>
+					<View className="gap-3">
+						<Text
+							className="px-1"
+							color="muted"
+							type="body-xs"
+							weight="semibold"
+						>
+							SPEND BREAKDOWN
+						</Text>
+						<Surface className="overflow-hidden rounded-[26px] border border-border bg-surface">
+							{summary.categoryBreakdown.length === 0 ? (
+								<View className="items-center gap-2 p-6">
+									<Ionicons color="#8E8E93" name="receipt-outline" size={24} />
 									<Text color="muted" type="body-sm">
-										{formatMoney(item.amount, currency)}
+										No booked costs or manual expenses yet.
 									</Text>
 								</View>
-							))
-						)}
-					</Surface>
-				</View>
-
-				<View className="gap-3">
-					<Text className="px-1" color="muted" type="body-xs" weight="semibold">
-						RECENT EXPENSES
-					</Text>
-					<Surface className="overflow-hidden rounded-[26px] border border-border bg-surface">
-						{budget.expenses.length === 0 ? (
-							<View className="p-5">
-								<Text color="muted" type="body-sm">
-									Manual expenses will appear here.
-								</Text>
-							</View>
-						) : (
-							budget.expenses.map((expense) => (
-								<View
-									className="flex-row items-center justify-between gap-3 border-border border-b px-4 py-3"
-									key={expense._id}
-								>
-									<View className="min-w-0 flex-1">
-										<Text numberOfLines={1} type="body-sm" weight="semibold">
-											{expense.title}
+							) : (
+								summary.categoryBreakdown.map((item) => (
+									<View
+										className="flex-row items-center justify-between gap-3 border-border border-b px-4 py-3"
+										key={item.category}
+									>
+										<Text type="body-sm" weight="semibold">
+											{formatStatus(item.category)}
 										</Text>
-										<Text color="muted" numberOfLines={1} type="body-xs">
-											{formatStatus(expense.category)} · {expense.spentAt}
+										<Text color="muted" type="body-sm">
+											{formatMoney(item.amount, currency)}
 										</Text>
 									</View>
-									<View className="items-end gap-2">
-										<Text type="body-sm" weight="semibold">
-											{formatMoney(expense.amount, expense.currency)}
-										</Text>
-										<View className="flex-row gap-2">
-											<Button
-												onPress={() => {
-													setEditingExpenseId(expense._id);
-													setExpenseForm({
-														amount: expense.amount.toString(),
-														category: expense.category as ExpenseCategory,
-														notes: expense.notes ?? "",
-														spentAt: expense.spentAt,
-														title: expense.title,
-													});
-												}}
-												size="sm"
-												variant="secondary"
-											>
-												<Button.Label>Edit</Button.Label>
-											</Button>
-											<Button
-												isDisabled={deletingExpenseId === expense._id}
-												onPress={() => {
-													handleDeleteExpense(expense._id).catch(
-														() => undefined
-													);
-												}}
-												size="sm"
-												variant="tertiary"
-											>
-												<Button.Label>Delete</Button.Label>
-											</Button>
+								))
+							)}
+						</Surface>
+					</View>
+
+					<View className="gap-3">
+						<Text
+							className="px-1"
+							color="muted"
+							type="body-xs"
+							weight="semibold"
+						>
+							RECENT EXPENSES
+						</Text>
+						<Surface className="overflow-hidden rounded-[26px] border border-border bg-surface">
+							{budget.expenses.length === 0 ? (
+								<View className="p-5">
+									<Text color="muted" type="body-sm">
+										Manual expenses will appear here.
+									</Text>
+								</View>
+							) : (
+								budget.expenses.map((expense) => (
+									<View
+										className="flex-row items-center justify-between gap-3 border-border border-b px-4 py-3"
+										key={expense._id}
+									>
+										<View className="min-w-0 flex-1">
+											<Text numberOfLines={1} type="body-sm" weight="semibold">
+												{expense.title}
+											</Text>
+											<Text color="muted" numberOfLines={1} type="body-xs">
+												{formatStatus(expense.category)} · {expense.spentAt}
+											</Text>
+										</View>
+										<View className="items-end gap-2">
+											<Text type="body-sm" weight="semibold">
+												{formatMoney(expense.amount, expense.currency)}
+											</Text>
+											<View className="flex-row gap-2">
+												<Button
+													onPress={() => {
+														setEditingExpenseId(expense._id);
+														setExpenseForm({
+															amount: expense.amount.toString(),
+															category: expense.category as ExpenseCategory,
+															notes: expense.notes ?? "",
+															spentAt: expense.spentAt,
+															title: expense.title,
+														});
+													}}
+													size="sm"
+													variant="secondary"
+												>
+													<Button.Label>Edit</Button.Label>
+												</Button>
+												<Button
+													isDisabled={deletingExpenseId === expense._id}
+													onPress={() => {
+														handleDeleteExpense(expense._id).catch(
+															() => undefined
+														);
+													}}
+													size="sm"
+													variant="tertiary"
+												>
+													<Button.Label>Delete</Button.Label>
+												</Button>
+											</View>
 										</View>
 									</View>
-								</View>
-							))
-						)}
-					</Surface>
+								))
+							)}
+						</Surface>
+					</View>
 				</View>
-			</View>
-		</Container>
+			</Container>
+		</TripModuleScreenFrame>
 	);
 }

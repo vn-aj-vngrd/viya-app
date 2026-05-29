@@ -24,6 +24,7 @@ import { EmptyState } from "@/src/components/empty-state";
 import { RouteHeader } from "@/src/components/navigation/route-header";
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 
+import { TripModuleScreenFrame } from "./trip-module-floating-bar";
 import { TripModuleViyaAssistCard } from "./trip-module-viya-assist-card";
 import { useTripIdParam } from "./use-trip-id-param";
 
@@ -279,120 +280,122 @@ export function TripCompanionsScreen() {
 	}
 
 	return (
-		<Container
-			className="px-4 pb-28"
-			scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
-		>
-			<View className="gap-4 pb-4">
-				<RouteHeader
-					eyebrow="Coordinate"
-					icon="people-outline"
-					subtitle="Travelers, organizers, and emergency contacts for this trip."
-					title="Companions"
-				/>
-				<TripModuleViyaAssistCard
-					description="Ask Viya how to coordinate roles, contacts, and group reminders."
-					moduleLabel="companions"
-					tripId={tripId}
-				/>
-
-				<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
-					<View className="flex-row items-center gap-3">
-						<View className="h-11 w-11 items-center justify-center rounded-full bg-primary/10">
-							<Ionicons color="#0A84FF" name="people-outline" size={20} />
-						</View>
-						<View className="flex-1 gap-1">
-							<Text type="body" weight="bold">
-								{companions.length} companions
-							</Text>
-							<Text color="muted" type="body-sm">
-								Keep group and emergency coordination in the workspace.
-							</Text>
-						</View>
-					</View>
-					<Button onPress={openCreateSheet}>
-						<Button.Label>Add companion</Button.Label>
-					</Button>
-				</Surface>
-
-				{companions.length === 0 ? (
-					<EmptyState
-						description="Add travelers, coordinators, or emergency contacts."
+		<TripModuleScreenFrame activeTab="companions" tripId={tripId}>
+			<Container
+				className="px-4 pb-28"
+				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
+			>
+				<View className="gap-4 pb-4">
+					<RouteHeader
+						eyebrow="Coordinate"
 						icon="people-outline"
-						title="No companions yet"
+						subtitle="Travelers, organizers, and emergency contacts for this trip."
+						title="Companions"
 					/>
-				) : (
-					<View className="gap-3">
-						{companions.map((companion) => (
-							<Surface
-								className="gap-3 rounded-[28px] border border-border bg-surface p-5"
-								key={companion._id}
-							>
-								<View className="flex-row flex-wrap gap-2">
-									<Chip size="sm" variant="secondary">
-										<Chip.Label>{companion.role}</Chip.Label>
-									</Chip>
-								</View>
+					<TripModuleViyaAssistCard
+						description="Ask Viya how to coordinate roles, contacts, and group reminders."
+						moduleLabel="companions"
+						tripId={tripId}
+					/>
+
+					<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
+						<View className="flex-row items-center gap-3">
+							<View className="h-11 w-11 items-center justify-center rounded-full bg-primary/10">
+								<Ionicons color="#0A84FF" name="people-outline" size={20} />
+							</View>
+							<View className="flex-1 gap-1">
 								<Text type="body" weight="bold">
-									{companion.name}
+									{companions.length} companions
 								</Text>
-								{companion.email || companion.phone ? (
-									<Text color="muted" type="body-sm">
-										{[companion.email, companion.phone]
-											.filter(Boolean)
-											.join(" · ")}
+								<Text color="muted" type="body-sm">
+									Keep group and emergency coordination in the workspace.
+								</Text>
+							</View>
+						</View>
+						<Button onPress={openCreateSheet}>
+							<Button.Label>Add companion</Button.Label>
+						</Button>
+					</Surface>
+
+					{companions.length === 0 ? (
+						<EmptyState
+							description="Add travelers, coordinators, or emergency contacts."
+							icon="people-outline"
+							title="No companions yet"
+						/>
+					) : (
+						<View className="gap-3">
+							{companions.map((companion) => (
+								<Surface
+									className="gap-3 rounded-[28px] border border-border bg-surface p-5"
+									key={companion._id}
+								>
+									<View className="flex-row flex-wrap gap-2">
+										<Chip size="sm" variant="secondary">
+											<Chip.Label>{companion.role}</Chip.Label>
+										</Chip>
+									</View>
+									<Text type="body" weight="bold">
+										{companion.name}
 									</Text>
-								) : null}
-								{companion.notes ? (
-									<Text.Paragraph color="muted" type="body-sm">
-										{companion.notes}
-									</Text.Paragraph>
-								) : null}
-								<View className="flex-row flex-wrap gap-2">
-									<Button
-										className="flex-1"
-										onPress={() => openEditSheet(companion)}
-										size="sm"
-										variant="secondary"
-									>
-										<Button.Label>Edit</Button.Label>
-									</Button>
-									<Button
-										className="flex-1"
-										isDisabled={pendingCompanionId === companion._id}
-										onPress={() => {
-											handleDeleteCompanion(companion._id).catch(
-												() => undefined
-											);
-										}}
-										size="sm"
-										variant="tertiary"
-									>
-										<Button.Label>Delete</Button.Label>
-									</Button>
-								</View>
-							</Surface>
-						))}
-					</View>
-				)}
-			</View>
-			<CompanionSheet
-				form={form}
-				isOpen={isSheetOpen}
-				isSaving={isSaving}
-				mode={editingCompanionId ? "edit" : "create"}
-				onOpenChange={(isOpen) => {
-					setIsSheetOpen(isOpen);
-					if (!isOpen) {
-						setEditingCompanionId(null);
-						setForm(initialCompanionForm);
-					}
-				}}
-				onSubmit={() => {
-					handleSaveCompanion().catch(() => undefined);
-				}}
-				onUpdateForm={updateForm}
-			/>
-		</Container>
+									{companion.email || companion.phone ? (
+										<Text color="muted" type="body-sm">
+											{[companion.email, companion.phone]
+												.filter(Boolean)
+												.join(" · ")}
+										</Text>
+									) : null}
+									{companion.notes ? (
+										<Text.Paragraph color="muted" type="body-sm">
+											{companion.notes}
+										</Text.Paragraph>
+									) : null}
+									<View className="flex-row flex-wrap gap-2">
+										<Button
+											className="flex-1"
+											onPress={() => openEditSheet(companion)}
+											size="sm"
+											variant="secondary"
+										>
+											<Button.Label>Edit</Button.Label>
+										</Button>
+										<Button
+											className="flex-1"
+											isDisabled={pendingCompanionId === companion._id}
+											onPress={() => {
+												handleDeleteCompanion(companion._id).catch(
+													() => undefined
+												);
+											}}
+											size="sm"
+											variant="tertiary"
+										>
+											<Button.Label>Delete</Button.Label>
+										</Button>
+									</View>
+								</Surface>
+							))}
+						</View>
+					)}
+				</View>
+				<CompanionSheet
+					form={form}
+					isOpen={isSheetOpen}
+					isSaving={isSaving}
+					mode={editingCompanionId ? "edit" : "create"}
+					onOpenChange={(isOpen) => {
+						setIsSheetOpen(isOpen);
+						if (!isOpen) {
+							setEditingCompanionId(null);
+							setForm(initialCompanionForm);
+						}
+					}}
+					onSubmit={() => {
+						handleSaveCompanion().catch(() => undefined);
+					}}
+					onUpdateForm={updateForm}
+				/>
+			</Container>
+		</TripModuleScreenFrame>
 	);
 }

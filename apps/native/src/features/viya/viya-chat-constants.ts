@@ -229,11 +229,8 @@ export const SLASH_COMMAND_OPTIONS = [
 	},
 ] as const satisfies readonly SlashCommandOption[];
 
-export const composerStyle = {
-	boxShadow: "0 12px 32px rgba(15, 23, 42, 0.12)",
-} satisfies StyleProp<ViewStyle>;
+export const composerStyle = {} satisfies StyleProp<ViewStyle>;
 
 export const questionCardStyle = {
 	borderCurve: "continuous",
-	boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)",
 } satisfies StyleProp<ViewStyle>;

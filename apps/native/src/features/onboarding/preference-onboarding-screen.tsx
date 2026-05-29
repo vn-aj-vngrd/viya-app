@@ -568,9 +568,6 @@ function PreferenceOptionButton({
 					className="flex-row items-center gap-3 rounded-3xl border bg-surface p-4"
 					style={{
 						borderColor: isSelected ? "#0A84FF" : "rgba(24, 24, 27, 0.08)",
-						boxShadow: isSelected
-							? "0 12px 24px rgba(10, 132, 255, 0.12)"
-							: "0 8px 18px rgba(15, 23, 42, 0.05)",
 					}}
 				>
 					<View

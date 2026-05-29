@@ -3,14 +3,15 @@ import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
 import {
 	getPreferenceSuggestions,
-	type PreferenceCountrySuggestion,
 	type PreferenceExploreSuggestion,
 	type PreferencePlaceSuggestion,
 	type PreferenceSuggestions,
 } from "@viya-app/domain";
 import { useQuery } from "convex/react";
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import { Link, useRouter } from "expo-router";
-import { Button, Spinner, Surface, Text } from "heroui-native";
+import { Button, Surface, Text } from "heroui-native";
 import type { ComponentProps, ReactNode } from "react";
 import { useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
@@ -22,7 +23,12 @@ import {
 	formatReadableTripDateRange,
 	getDateRangeDurationDays,
 } from "@/src/components/date/date-format-utils";
+import { ViyaMark } from "@/src/components/viya-mark";
 import { VIYA_ROUTES } from "@/src/constants/routes";
+import { CountrySuggestionCard } from "@/src/features/home/country-suggestion-card";
+import { HomeLoadingState } from "@/src/features/home/home-skeleton";
+import { philippineDestinations } from "@/src/features/home/philippine-destinations";
+import { useDestinationImages } from "@/src/features/home/use-destination-images";
 import { ManualTripCreateSheet } from "@/src/features/trips/manual-trip-create-sheet";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
@@ -30,6 +36,21 @@ type IconName = ComponentProps<typeof Ionicons>["name"];
 const primarySoftBackgroundStyle = { backgroundColor: "#EAF2FF" };
 const successSoftBackgroundStyle = { backgroundColor: "#E4F8EF" };
 const warmSoftBackgroundStyle = { backgroundColor: "#FFF7ED" };
+
+const coverImageTransitionMs = 320;
+const coverScrimColors = ["rgba(0,0,0,0)", "rgba(0,0,0,0.32)"] as const;
+const insightWashColors = [
+	"rgba(10,132,255,0.12)",
+	"rgba(10,132,255,0.02)",
+] as const;
+
+const todayLabelFormatter = new Intl.DateTimeFormat("en-US", {
+	day: "numeric",
+	month: "long",
+	weekday: "long",
+});
+
+const getTodayLabel = () => todayLabelFormatter.format(new Date());
 
 const makeCurrencyFormatter = (currency: string) =>
 	new Intl.NumberFormat("en-PH", {
@@ -104,9 +125,86 @@ function SectionTitle({
 	);
 }
 
+const readinessAccent = "#0A84FF";
+const readinessTrackStyle = { backgroundColor: "rgba(10, 132, 255, 0.14)" };
+
+function ReadinessMeter({ score }: { score: number }) {
+	const clampedScore = Math.max(0, Math.min(100, score));
+
+	return (
+		<View
+			className="mt-1 h-1.5 overflow-hidden rounded-full"
+			style={readinessTrackStyle}
+		>
+			<View
+				className="h-full rounded-full"
+				style={{ backgroundColor: readinessAccent, width: `${clampedScore}%` }}
+			/>
+		</View>
+	);
+}
+
+function ActiveTripCoverBand({
+	coverImageUrl,
+	title,
+	tripWindow,
+}: {
+	coverImageUrl: string;
+	title: string;
+	tripWindow: string;
+}) {
+	return (
+		<View className="h-40 w-full justify-end">
+			<View className="absolute inset-0" style={primarySoftBackgroundStyle} />
+			<Image
+				cachePolicy="memory-disk"
+				contentFit="cover"
+				source={{ uri: coverImageUrl }}
+				style={{ height: "100%", position: "absolute", width: "100%" }}
+				transition={coverImageTransitionMs}
+			/>
+			<LinearGradient
+				colors={coverScrimColors}
+				style={{
+					bottom: 0,
+					height: 120,
+					left: 0,
+					position: "absolute",
+					right: 0,
+				}}
+			/>
+			<View className="gap-1 p-5">
+				<Text
+					style={{ color: "rgba(255,255,255,0.82)" }}
+					type="body-xs"
+					weight="semibold"
+				>
+					ACTIVE TRIP
+				</Text>
+				<Text.Heading
+					numberOfLines={1}
+					style={{ color: "#FFFFFF" }}
+					type="h4"
+					weight="semibold"
+				>
+					{title}
+				</Text.Heading>
+				<Text
+					numberOfLines={1}
+					style={{ color: "rgba(255,255,255,0.88)" }}
+					type="body-sm"
+				>
+					{tripWindow}
+				</Text>
+			</View>
+		</View>
+	);
+}
+
 function ActiveTripCard({
 	budgetAmount,
 	budgetCurrency,
+	coverImageUrl,
 	readinessScore,
 	title,
 	tripId,
@@ -114,6 +212,7 @@ function ActiveTripCard({
 }: {
 	budgetAmount?: number;
 	budgetCurrency?: string;
+	coverImageUrl?: string;
 	readinessScore: number;
 	title: string;
 	tripId: Id<"trips">;
@@ -123,51 +222,63 @@ function ActiveTripCard({
 		readinessScore > 0 ? `${readinessScore}% ready` : "Readiness open";
 
 	return (
-		<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
-			<View className="flex-row items-start gap-4">
-				<View
-					className="h-11 w-11 items-center justify-center rounded-full"
-					style={primarySoftBackgroundStyle}
-				>
-					<Ionicons color="#0A84FF" name="navigate-outline" size={20} />
+		<Surface className="gap-0 overflow-hidden rounded-[30px] border border-border bg-surface p-0">
+			{coverImageUrl ? (
+				<ActiveTripCoverBand
+					coverImageUrl={coverImageUrl}
+					title={title}
+					tripWindow={tripWindow}
+				/>
+			) : (
+				<View className="flex-row items-start gap-4 px-5 pt-5">
+					<View
+						className="h-11 w-11 items-center justify-center rounded-full"
+						style={primarySoftBackgroundStyle}
+					>
+						<Ionicons color="#0A84FF" name="navigate-outline" size={20} />
+					</View>
+					<View className="min-w-0 flex-1 gap-1">
+						<Text color="muted" type="body-xs" weight="semibold">
+							ACTIVE TRIP
+						</Text>
+						<Text.Heading numberOfLines={1} type="h4" weight="semibold">
+							{title}
+						</Text.Heading>
+						<Text color="muted" numberOfLines={1} type="body-sm">
+							{tripWindow}
+						</Text>
+					</View>
 				</View>
-				<View className="min-w-0 flex-1 gap-1">
-					<Text color="muted" type="body-xs" weight="semibold">
-						ACTIVE TRIP
-					</Text>
-					<Text.Heading numberOfLines={1} type="h4" weight="semibold">
-						{title}
-					</Text.Heading>
-					<Text color="muted" numberOfLines={1} type="body-sm">
-						{tripWindow}
-					</Text>
-				</View>
-			</View>
+			)}
 
-			<View className="flex-row gap-3">
-				<View className="flex-1 rounded-2xl bg-surface-secondary p-3">
-					<Text color="muted" type="body-xs" weight="medium">
-						Readiness
-					</Text>
-					<Text type="body-sm" weight="semibold">
-						{readinessLabel}
-					</Text>
+			<View className="gap-5 p-5">
+				<View className="flex-row">
+					<View className="flex-1 gap-1.5">
+						<Text color="muted" type="body-xs" weight="medium">
+							Readiness
+						</Text>
+						<Text type="body" weight="semibold">
+							{readinessLabel}
+						</Text>
+						<ReadinessMeter score={readinessScore} />
+					</View>
+					<View className="mx-5 w-px self-stretch bg-border" />
+					<View className="flex-1 gap-1.5">
+						<Text color="muted" type="body-xs" weight="medium">
+							Budget
+						</Text>
+						<Text numberOfLines={1} type="body" weight="semibold">
+							{formatBudget(budgetAmount, budgetCurrency)}
+						</Text>
+					</View>
 				</View>
-				<View className="flex-1 rounded-2xl bg-surface-secondary p-3">
-					<Text color="muted" type="body-xs" weight="medium">
-						Budget
-					</Text>
-					<Text numberOfLines={1} type="body-sm" weight="semibold">
-						{formatBudget(budgetAmount, budgetCurrency)}
-					</Text>
-				</View>
-			</View>
 
-			<Link asChild href={VIYA_ROUTES.tripDashboard(tripId)}>
-				<Button size="sm" variant="secondary">
-					<Button.Label>View trip</Button.Label>
-				</Button>
-			</Link>
+				<Link asChild href={VIYA_ROUTES.tripDashboard(tripId)}>
+					<Button size="sm">
+						<Button.Label>View trip</Button.Label>
+					</Button>
+				</Link>
+			</View>
 		</Surface>
 	);
 }
@@ -189,7 +300,7 @@ function ExploreTripCard({
 				transform: [{ scale: pressed ? 0.99 : 1 }],
 			})}
 		>
-			<Surface className="min-h-40 gap-4 rounded-[28px] border border-border bg-surface p-4">
+			<Surface className="min-h-40 gap-4 rounded-3xl border border-border bg-surface p-4">
 				<View
 					className="h-10 w-10 items-center justify-center rounded-full"
 					style={{ backgroundColor: `${idea.accent}18` }}
@@ -213,48 +324,6 @@ function ExploreTripCard({
 	);
 }
 
-function CountrySuggestionCard({
-	country,
-	onPress,
-}: {
-	country: PreferenceCountrySuggestion;
-	onPress: (prompt: string) => void;
-}) {
-	return (
-		<Pressable
-			accessibilityLabel={`Explore ${country.country}`}
-			accessibilityRole="button"
-			className="min-h-24 flex-row items-center gap-3 rounded-[24px] border border-border bg-surface p-4"
-			onPress={() => onPress(country.prompt)}
-			style={({ pressed }) => ({
-				transform: [{ scale: pressed ? 0.99 : 1 }],
-			})}
-		>
-			<View
-				className="h-11 w-11 items-center justify-center rounded-full"
-				style={{ backgroundColor: `${country.accent}18` }}
-			>
-				<Ionicons
-					color={country.accent}
-					name={country.icon as IconName}
-					size={20}
-				/>
-			</View>
-			<View className="min-w-0 flex-1 gap-1">
-				<Text type="body" weight="semibold">
-					{country.country}
-				</Text>
-				<Text color="muted" numberOfLines={1} type="body-sm">
-					{country.detail}
-				</Text>
-			</View>
-			<Text color="muted" type="body-xs" weight="semibold">
-				{country.duration}
-			</Text>
-		</Pressable>
-	);
-}
-
 function PlaceSuggestionCard({
 	onPress,
 	place,
@@ -266,7 +335,7 @@ function PlaceSuggestionCard({
 		<Pressable
 			accessibilityLabel={`Plan ${place.location}`}
 			accessibilityRole="button"
-			className="flex-1 gap-3 rounded-[24px] border border-border bg-surface p-4"
+			className="flex-1 gap-3 rounded-3xl border border-border bg-surface p-4"
 			onPress={() => onPress(place.prompt)}
 			style={({ pressed }) => ({
 				transform: [{ scale: pressed ? 0.99 : 1 }],
@@ -302,44 +371,51 @@ function PreferenceInsightCard({
 		"Help me shape a trip plan using my travel preferences.";
 
 	return (
-		<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
-			<View className="flex-row gap-3">
-				<View
-					className="h-10 w-10 items-center justify-center rounded-full"
-					style={primarySoftBackgroundStyle}
-				>
-					<Ionicons color="#0A84FF" name="sparkles-outline" size={19} />
+		<Surface className="overflow-hidden rounded-[30px] border border-border bg-surface">
+			<LinearGradient
+				colors={insightWashColors}
+				end={{ x: 1, y: 1 }}
+				start={{ x: 0, y: 0 }}
+				style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }}
+			/>
+			<View className="gap-4 p-5">
+				<View className="flex-row items-center gap-3">
+					<ViyaMark size={40} variant="blue" />
+					<View className="min-w-0 flex-1 gap-0.5">
+						<Text
+							style={{ color: readinessAccent }}
+							type="body-xs"
+							weight="semibold"
+						>
+							VIYA PICKED FOR YOU
+						</Text>
+						<Text.Heading numberOfLines={2} type="h5" weight="semibold">
+							{suggestions.home.title}
+						</Text.Heading>
+					</View>
 				</View>
-				<View className="min-w-0 flex-1 gap-1">
-					<Text color="muted" type="body-xs" weight="semibold">
-						VIYA PICKED FOR YOU
-					</Text>
-					<Text.Heading type="h5" weight="semibold">
-						{suggestions.home.title}
-					</Text.Heading>
-					<Text.Paragraph color="muted" type="body-sm">
-						{suggestions.home.subtitle}
-					</Text.Paragraph>
-				</View>
-			</View>
-			<View className="flex-row gap-3">
-				<Button
-					className="flex-1"
-					onPress={() => onPromptPress(primaryPrompt)}
-					size="sm"
-				>
-					<Button.Label>Ask Viya</Button.Label>
-				</Button>
-				{onCreatePress ? (
+				<Text.Paragraph color="muted" type="body-sm">
+					{suggestions.home.subtitle}
+				</Text.Paragraph>
+				<View className="flex-row gap-3">
 					<Button
 						className="flex-1"
-						onPress={onCreatePress}
+						onPress={() => onPromptPress(primaryPrompt)}
 						size="sm"
-						variant="secondary"
 					>
-						<Button.Label>Create trip</Button.Label>
+						<Button.Label>Ask Viya</Button.Label>
 					</Button>
-				) : null}
+					{onCreatePress ? (
+						<Button
+							className="flex-1"
+							onPress={onCreatePress}
+							size="sm"
+							variant="secondary"
+						>
+							<Button.Label>Create trip</Button.Label>
+						</Button>
+					) : null}
+				</View>
 			</View>
 		</Surface>
 	);
@@ -352,6 +428,13 @@ function PersonalizedSuggestionSections({
 	onSuggestionPress: (prompt: string) => void;
 	suggestions: PreferenceSuggestions;
 }) {
+	const countryImageUrls = useDestinationImages(
+		suggestions.countrySuggestions.map((country) => country.country)
+	);
+	const philippineImageUrls = useDestinationImages(
+		philippineDestinations.map((destination) => destination.country)
+	);
+
 	return (
 		<>
 			<View className="gap-3">
@@ -376,21 +459,51 @@ function PersonalizedSuggestionSections({
 				</ScrollView>
 			</View>
 
-			<Surface className="gap-4 rounded-[30px] border border-border bg-surface-secondary p-5">
+			<View className="gap-3">
+				<SectionTitle
+					subtitle="Local escapes worth the long weekend, close to home."
+					title="Closer to home"
+				/>
+				<ScrollView
+					horizontal={true}
+					keyboardShouldPersistTaps="handled"
+					showsHorizontalScrollIndicator={false}
+				>
+					<View className="flex-row gap-3 pr-4">
+						{philippineDestinations.map((destination) => (
+							<CountrySuggestionCard
+								country={destination}
+								imageUrl={philippineImageUrls[destination.country]}
+								key={destination.country}
+								onPress={onSuggestionPress}
+							/>
+						))}
+					</View>
+				</ScrollView>
+			</View>
+
+			<View className="gap-3">
 				<SectionTitle
 					subtitle="Countries weighted by your interests, pace, budget, and group style."
 					title="Countries to consider"
 				/>
-				<View className="gap-3">
-					{suggestions.countrySuggestions.map((country) => (
-						<CountrySuggestionCard
-							country={country}
-							key={country.country}
-							onPress={onSuggestionPress}
-						/>
-					))}
-				</View>
-			</Surface>
+				<ScrollView
+					horizontal={true}
+					keyboardShouldPersistTaps="handled"
+					showsHorizontalScrollIndicator={false}
+				>
+					<View className="flex-row gap-3 pr-4">
+						{suggestions.countrySuggestions.map((country) => (
+							<CountrySuggestionCard
+								country={country}
+								imageUrl={countryImageUrls[country.country]}
+								key={country.country}
+								onPress={onSuggestionPress}
+							/>
+						))}
+					</View>
+				</ScrollView>
+			</View>
 
 			<View className="gap-3">
 				<SectionTitle
@@ -468,12 +581,15 @@ function HomeHeader({ greeting }: { greeting: string }) {
 				className="flex-1 flex-row items-center gap-4"
 				style={{ paddingTop: Math.max(insets.top, 12) }}
 			>
-				<Text.Heading type="h2" weight="semibold">
-					{greeting}
-				</Text.Heading>
-				<View style={{ marginLeft: "auto" }}>
-					<AccountAvatarButton size={44} />
+				<View className="min-w-0 flex-1 gap-0.5">
+					<Text.Heading numberOfLines={1} type="h2" weight="semibold">
+						{greeting}
+					</Text.Heading>
+					<Text color="muted" numberOfLines={1} type="body-sm">
+						{getTodayLabel()}
+					</Text>
 				</View>
+				<AccountAvatarButton size={44} />
 			</View>
 		</View>
 	);
@@ -494,10 +610,10 @@ function StickyHomeShell({
 			<ScrollView
 				contentContainerStyle={{
 					flexGrow: 1,
-					gap: 16,
+					gap: 20,
 					paddingBottom: 112,
 					paddingHorizontal: 16,
-					paddingTop: 4,
+					paddingTop: 8,
 				}}
 				contentInsetAdjustmentBehavior="automatic"
 				keyboardShouldPersistTaps="handled"
@@ -507,19 +623,6 @@ function StickyHomeShell({
 			</ScrollView>
 			{overlay}
 		</Container>
-	);
-}
-
-function HomeLoadingState() {
-	return (
-		<StickyHomeShell greeting={getTimeGreeting()}>
-			<Surface className="items-center gap-3 rounded-[30px] border border-border bg-surface p-8">
-				<Spinner color="#0A84FF" />
-				<Text color="muted" type="body-sm" weight="medium">
-					Personalizing home
-				</Text>
-			</Surface>
-		</StickyHomeShell>
 	);
 }
 
@@ -626,16 +729,11 @@ export default function HomeScreen() {
 			<ActiveTripCard
 				budgetAmount={currentTrip.budgetAmount}
 				budgetCurrency={currentTrip.budgetCurrency}
+				coverImageUrl={currentTrip.coverImageUrl}
 				readinessScore={currentTrip.readinessScore}
 				title={currentTrip.title}
 				tripId={currentTrip._id}
 				tripWindow={getTripWindow(currentTrip.startDate, currentTrip.endDate)}
-			/>
-
-			<PreferenceInsightCard
-				onCreatePress={() => setIsCreateSheetOpen(true)}
-				onPromptPress={handleSuggestionPress}
-				suggestions={suggestions}
 			/>
 
 			<PersonalizedSuggestionSections

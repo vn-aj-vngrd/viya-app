@@ -7,13 +7,14 @@ import {
 	TextField,
 	useThemeColor,
 } from "heroui-native";
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
-
-const locationSuggestionDebounceMs = 350;
-const minimumLocationSuggestionQueryLength = 2;
+import {
+	getLocationSuggestionPanelState,
+	type LocationSuggestionStatus,
+} from "./location-suggestion-field-utils";
 
 interface LocationSuggestion {
 	countryCode?: string;
@@ -24,6 +25,8 @@ interface LocationSuggestion {
 	longitude?: number;
 	value: string;
 }
+
+const locationSuggestionDebounceMs = 250;
 
 interface LocationSuggestionFieldProps {
 	errorText?: string;
@@ -38,7 +41,6 @@ interface LocationSuggestionFieldProps {
 	value: string;
 }
 
-type SuggestionStatus = "idle" | "loading" | "error";
 type InputBlurEvent = Parameters<
 	NonNullable<ComponentProps<typeof Input>["onBlur"]>
 >[0];
@@ -64,22 +66,27 @@ export function LocationSuggestionField({
 	const [selectedSuggestionValue, setSelectedSuggestionValue] = useState<
 		string | null
 	>(null);
-	const [status, setStatus] = useState<SuggestionStatus>("idle");
+	const [hasSearched, setHasSearched] = useState(false);
+	const [status, setStatus] = useState<LocationSuggestionStatus>("idle");
 	const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
 	const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const requestIdRef = useRef(0);
-	const trimmedValue = value.trim();
-	const canSearch =
-		trimmedValue.length >= minimumLocationSuggestionQueryLength &&
-		trimmedValue !== selectedSuggestionValue;
-	const shouldShowPanel =
-		isFocused && (suggestions.length > 0 || status === "loading");
+	const panelState = getLocationSuggestionPanelState({
+		hasSearched,
+		isFocused,
+		selectedSuggestionValue,
+		status,
+		suggestionCount: suggestions.length,
+		value,
+	});
 	const inputClassName = isInvalid
 		? "h-12 border border-danger bg-surface px-4"
 		: "h-12 border border-border bg-surface px-4";
 
 	useEffect(() => {
-		if (!canSearch) {
+		if (!panelState.canSearch) {
+			requestIdRef.current += 1;
+			setHasSearched(false);
 			setStatus("idle");
 			setSuggestions([]);
 			return;
@@ -87,17 +94,21 @@ export function LocationSuggestionField({
 
 		const requestId = requestIdRef.current + 1;
 		requestIdRef.current = requestId;
+		setHasSearched(false);
+		setStatus("loading");
+		setSuggestions([]);
 		const timeoutId = setTimeout(() => {
-			setStatus("loading");
-			searchLocationSuggestions(trimmedValue)
+			searchLocationSuggestions(panelState.trimmedValue)
 				.then((nextSuggestions) => {
 					if (requestIdRef.current === requestId) {
+						setHasSearched(true);
 						setSuggestions(nextSuggestions);
 						setStatus("idle");
 					}
 				})
 				.catch(() => {
 					if (requestIdRef.current === requestId) {
+						setHasSearched(true);
 						setSuggestions([]);
 						setStatus("error");
 					}
@@ -107,7 +118,11 @@ export function LocationSuggestionField({
 		return () => {
 			clearTimeout(timeoutId);
 		};
-	}, [canSearch, searchLocationSuggestions, trimmedValue]);
+	}, [
+		panelState.canSearch,
+		panelState.trimmedValue,
+		searchLocationSuggestions,
+	]);
 
 	useEffect(
 		() => () => {
@@ -175,32 +190,59 @@ export function LocationSuggestionField({
 						{helperText}
 					</Text>
 				) : null}
-				{status === "error" && isFocused ? (
-					<Text color="muted" type="body-sm">
-						Location suggestions are unavailable. You can keep typing manually.
-					</Text>
-				) : null}
-				{shouldShowPanel ? (
-					<View className="overflow-hidden rounded-[18px] border border-border bg-surface">
-						{status === "loading" ? (
-							<View className="flex-row items-center gap-2 px-4 py-3">
-								<Spinner size="sm" />
-								<Text color="muted" type="body-sm">
-									Finding places...
-								</Text>
-							</View>
+				{panelState.shouldShowPanel ? (
+					<View
+						className="overflow-hidden rounded-[18px] border border-border bg-surface"
+						style={{ boxShadow: "0 12px 26px rgba(15, 23, 42, 0.08)" }}
+					>
+						{panelState.message === "loading" ? (
+							<LocationSuggestionMessage
+								icon={<Spinner size="sm" />}
+								text="Finding matching destinations..."
+							/>
+						) : null}
+						{panelState.message === "error" ? (
+							<LocationSuggestionMessage
+								icon={
+									<Ionicons
+										color="#71717A"
+										name="alert-circle-outline"
+										size={18}
+									/>
+								}
+								text="Suggestions are unavailable. You can keep this destination."
+							/>
+						) : null}
+						{panelState.message === "empty" ? (
+							<LocationSuggestionMessage
+								icon={
+									<Ionicons color="#71717A" name="search-outline" size={18} />
+								}
+								text="No close matches yet. Keep typing or use your text."
+							/>
 						) : null}
 						{suggestions.map((suggestion, index) => (
 							<Pressable
 								accessibilityLabel={`Use ${suggestion.value}`}
 								accessibilityRole="button"
-								className={`flex-row items-start gap-3 px-4 py-3 ${
+								className={`min-h-16 flex-row items-center gap-3 px-4 py-3 ${
 									index === 0 ? "" : "border-border border-t"
 								}`}
 								key={suggestion.id}
 								onPress={() => handleSuggestionPress(suggestion)}
+								style={({ pressed }) => ({
+									backgroundColor: pressed
+										? "rgba(10, 132, 255, 0.06)"
+										: "#FFFFFF",
+								})}
 							>
-								<Ionicons color={iconColor} name="location-outline" size={18} />
+								<View className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary">
+									<Ionicons
+										color={iconColor}
+										name="location-outline"
+										size={18}
+									/>
+								</View>
 								<View className="min-w-0 flex-1 gap-0.5">
 									<Text numberOfLines={1} type="body-sm" weight="semibold">
 										{suggestion.label}
@@ -211,20 +253,47 @@ export function LocationSuggestionField({
 										</Text>
 									) : null}
 								</View>
+								{suggestion.countryCode ? (
+									<View className="rounded-full bg-surface-secondary px-2 py-1">
+										<Text color="muted" type="body-xs" weight="semibold">
+											{suggestion.countryCode}
+										</Text>
+									</View>
+								) : null}
+								<Ionicons color="#A1A1AA" name="chevron-forward" size={16} />
 							</Pressable>
 						))}
 						{suggestions.length > 0 ? (
 							<Text
 								className="border-border border-t px-4 py-2"
 								color="muted"
-								type="body-sm"
+								type="body-xs"
 							>
-								Powered by Geoapify
+								Geoapify suggestions
 							</Text>
 						) : null}
 					</View>
 				) : null}
 			</View>
 		</TextField>
+	);
+}
+
+function LocationSuggestionMessage({
+	icon,
+	text,
+}: {
+	icon: ReactNode;
+	text: string;
+}) {
+	return (
+		<View className="flex-row items-center gap-3 px-4 py-3">
+			<View className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary">
+				{icon}
+			</View>
+			<Text className="flex-1" color="muted" type="body-sm">
+				{text}
+			</Text>
+		</View>
 	);
 }

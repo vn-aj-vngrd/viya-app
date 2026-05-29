@@ -15,6 +15,7 @@ import { RouteHeader } from "@/src/components/navigation/route-header";
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 import { formatMoney } from "./trip-dashboard-utils";
+import { TripModuleScreenFrame } from "./trip-module-floating-bar";
 import { TripModuleViyaAssistCard } from "./trip-module-viya-assist-card";
 import { TripStatusPill } from "./trip-status-pill";
 import { useTripIdParam } from "./use-trip-id-param";
@@ -228,143 +229,146 @@ export function TripRecapScreen() {
 	};
 
 	return (
-		<Container
-			className="px-4 pb-28"
-			scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
-		>
-			<View className="gap-4 pb-4">
-				<RouteHeader
-					eyebrow="Recap"
-					icon="sparkles-outline"
-					rightContent={<TripStatusPill status={workspace.trip.status} />}
-					subtitle="Review highlights, spend, confirmations, and wrap the trip."
-					title="Trip Story"
-				/>
-				<TripModuleViyaAssistCard
-					agentModule="recap"
-					description="Generate a recap draft, summarize spend, or ask Viya what is missing."
-					moduleLabel="recap"
-					tripId={tripId}
-				/>
+		<TripModuleScreenFrame activeTab="recap" tripId={tripId}>
+			<Container
+				className="px-4 pb-28"
+				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
+			>
+				<View className="gap-4 pb-4">
+					<RouteHeader
+						eyebrow="Recap"
+						icon="sparkles-outline"
+						rightContent={<TripStatusPill status={workspace.trip.status} />}
+						subtitle="Review highlights, spend, confirmations, and wrap the trip."
+						title="Trip Story"
+					/>
+					<TripModuleViyaAssistCard
+						agentModule="recap"
+						description="Generate a recap draft, summarize spend, or ask Viya what is missing."
+						moduleLabel="recap"
+						tripId={tripId}
+					/>
 
-				<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
-					<View className="gap-2">
-						<View className="flex-row flex-wrap gap-2">
-							<RecapPill>{workspace.trip.destination}</RecapPill>
-							<RecapPill>{dateWindow}</RecapPill>
+					<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
+						<View className="gap-2">
+							<View className="flex-row flex-wrap gap-2">
+								<RecapPill>{workspace.trip.destination}</RecapPill>
+								<RecapPill>{dateWindow}</RecapPill>
+							</View>
+							<Text.Heading type="h3" weight="semibold">
+								{workspace.trip.title}
+							</Text.Heading>
+							<Text.Paragraph color="muted" type="body-sm">
+								{workspace.trip.summary ||
+									"Capture the trip outcome once itinerary, spend, and moments are ready."}
+							</Text.Paragraph>
 						</View>
-						<Text.Heading type="h3" weight="semibold">
-							{workspace.trip.title}
+						<View className="flex-row flex-wrap gap-3">
+							<RecapStat
+								detail={`${completedItems} completed`}
+								icon="calendar-outline"
+								label="Itinerary"
+								value={totalItems ? `${completedItems}/${totalItems}` : "0"}
+							/>
+							<RecapStat
+								detail={`${workspace.expenses.length} expenses logged`}
+								icon="wallet-outline"
+								label="Tracked spend"
+								value={formatMoney(wallet.totalTrackedSpend, currency)}
+							/>
+							<RecapStat
+								detail={`${workspace.moments.length} total moments`}
+								icon="images-outline"
+								label="Highlights"
+								value={`${workspace.moments.filter((moment) => moment.isHighlight).length}`}
+							/>
+							<RecapStat
+								detail={`${savedDocumentCount} docs or files`}
+								icon="ticket-outline"
+								label="Bookings"
+								value={`${confirmedBookings}`}
+							/>
+						</View>
+					</Surface>
+
+					<Surface className="gap-3 rounded-[28px] border border-border bg-surface p-5">
+						<View className="flex-row items-center justify-between gap-3">
+							<View className="gap-1">
+								<Text.Heading type="h5" weight="semibold">
+									Moments
+								</Text.Heading>
+								<Text color="muted" type="body-sm">
+									Highlights become the recap source.
+								</Text>
+							</View>
+							<Link asChild href={VIYA_ROUTES.tripMoments(tripId)}>
+								<Button size="sm" variant="secondary">
+									<Button.Label>Open</Button.Label>
+								</Button>
+							</Link>
+						</View>
+						<HighlightRows moments={workspace.moments} />
+					</Surface>
+
+					<Surface className="gap-3 rounded-[28px] border border-border bg-surface p-5">
+						<Text.Heading type="h5" weight="semibold">
+							Wrap-up checklist
+						</Text.Heading>
+						<RecapRow
+							detail={`${workspace.savedPlaces.length} saved places, ${workspace.itineraryDays.length} planned days`}
+							icon="map-outline"
+							label="Route and places"
+						/>
+						<RecapRow
+							detail={`${confirmedBookings} confirmed bookings, ${savedDocumentCount} saved documents`}
+							icon="file-tray-full-outline"
+							label="Confirmations and documents"
+						/>
+						<RecapRow
+							detail={`${formatMoney(wallet.remainingAmount, currency)} remaining from planned budget`}
+							icon="cash-outline"
+							label="Budget outcome"
+						/>
+					</Surface>
+
+					<Surface className="gap-3 rounded-[28px] border border-border bg-surface p-5">
+						<Text.Heading type="h5" weight="semibold">
+							Trip lifecycle
 						</Text.Heading>
 						<Text.Paragraph color="muted" type="body-sm">
-							{workspace.trip.summary ||
-								"Capture the trip outcome once itinerary, spend, and moments are ready."}
+							Mark complete when the recap is ready. Archive hides the trip from
+							active planning without deleting the history.
 						</Text.Paragraph>
-					</View>
-					<View className="flex-row flex-wrap gap-3">
-						<RecapStat
-							detail={`${completedItems} completed`}
-							icon="calendar-outline"
-							label="Itinerary"
-							value={totalItems ? `${completedItems}/${totalItems}` : "0"}
-						/>
-						<RecapStat
-							detail={`${workspace.expenses.length} expenses logged`}
-							icon="wallet-outline"
-							label="Tracked spend"
-							value={formatMoney(wallet.totalTrackedSpend, currency)}
-						/>
-						<RecapStat
-							detail={`${workspace.moments.length} total moments`}
-							icon="images-outline"
-							label="Highlights"
-							value={`${workspace.moments.filter((moment) => moment.isHighlight).length}`}
-						/>
-						<RecapStat
-							detail={`${savedDocumentCount} docs or files`}
-							icon="ticket-outline"
-							label="Bookings"
-							value={`${confirmedBookings}`}
-						/>
-					</View>
-				</Surface>
-
-				<Surface className="gap-3 rounded-[28px] border border-border bg-surface p-5">
-					<View className="flex-row items-center justify-between gap-3">
-						<View className="gap-1">
-							<Text.Heading type="h5" weight="semibold">
-								Moments
-							</Text.Heading>
-							<Text color="muted" type="body-sm">
-								Highlights become the recap source.
-							</Text>
-						</View>
-						<Link asChild href={VIYA_ROUTES.tripMoments(tripId)}>
-							<Button size="sm" variant="secondary">
-								<Button.Label>Open</Button.Label>
+						<View className="flex-row flex-wrap gap-2">
+							<Button
+								className="flex-1"
+								isDisabled={
+									pendingAction !== null ||
+									workspace.trip.status === "completed"
+								}
+								onPress={() => {
+									completeTrip().catch(() => undefined);
+								}}
+								variant="secondary"
+							>
+								{pendingAction === "complete" ? <Spinner size="sm" /> : null}
+								<Button.Label>Mark complete</Button.Label>
 							</Button>
-						</Link>
-					</View>
-					<HighlightRows moments={workspace.moments} />
-				</Surface>
-
-				<Surface className="gap-3 rounded-[28px] border border-border bg-surface p-5">
-					<Text.Heading type="h5" weight="semibold">
-						Wrap-up checklist
-					</Text.Heading>
-					<RecapRow
-						detail={`${workspace.savedPlaces.length} saved places, ${workspace.itineraryDays.length} planned days`}
-						icon="map-outline"
-						label="Route and places"
-					/>
-					<RecapRow
-						detail={`${confirmedBookings} confirmed bookings, ${savedDocumentCount} saved documents`}
-						icon="file-tray-full-outline"
-						label="Confirmations and documents"
-					/>
-					<RecapRow
-						detail={`${formatMoney(wallet.remainingAmount, currency)} remaining from planned budget`}
-						icon="cash-outline"
-						label="Budget outcome"
-					/>
-				</Surface>
-
-				<Surface className="gap-3 rounded-[28px] border border-border bg-surface p-5">
-					<Text.Heading type="h5" weight="semibold">
-						Trip lifecycle
-					</Text.Heading>
-					<Text.Paragraph color="muted" type="body-sm">
-						Mark complete when the recap is ready. Archive hides the trip from
-						active planning without deleting the history.
-					</Text.Paragraph>
-					<View className="flex-row flex-wrap gap-2">
-						<Button
-							className="flex-1"
-							isDisabled={
-								pendingAction !== null || workspace.trip.status === "completed"
-							}
-							onPress={() => {
-								completeTrip().catch(() => undefined);
-							}}
-							variant="secondary"
-						>
-							{pendingAction === "complete" ? <Spinner size="sm" /> : null}
-							<Button.Label>Mark complete</Button.Label>
-						</Button>
-						<Button
-							className="flex-1"
-							isDisabled={pendingAction !== null}
-							onPress={() => {
-								archiveCurrentTrip().catch(() => undefined);
-							}}
-							variant="tertiary"
-						>
-							{pendingAction === "archive" ? <Spinner size="sm" /> : null}
-							<Button.Label>Archive</Button.Label>
-						</Button>
-					</View>
-				</Surface>
-			</View>
-		</Container>
+							<Button
+								className="flex-1"
+								isDisabled={pendingAction !== null}
+								onPress={() => {
+									archiveCurrentTrip().catch(() => undefined);
+								}}
+								variant="tertiary"
+							>
+								{pendingAction === "archive" ? <Spinner size="sm" /> : null}
+								<Button.Label>Archive</Button.Label>
+							</Button>
+						</View>
+					</Surface>
+				</View>
+			</Container>
+		</TripModuleScreenFrame>
 	);
 }

@@ -92,6 +92,23 @@ export const buildItineraryPrompt = (
 		tripContext,
 	].join("\n\n");
 
+export const buildBudgetSuggestionPrompt = (
+	tripContext: string,
+	heuristicAmount: number,
+	runtimeContext?: PromptRuntimeContext
+) =>
+	[
+		VIYA_SYSTEM_PROMPT,
+		buildCurrentDateInstructions(runtimeContext),
+		"Mode: Budget suggestion.",
+		"Return one PHP budget amount for this trip intake as strict structured data.",
+		"Use realistic Filipino traveler costs, destination cost level, duration, traveler count, pace, trip style, and budget scope.",
+		`Heuristic budget estimate: PHP ${heuristicAmount}.`,
+		"Stay close to the heuristic unless the trip details clearly justify adjusting it.",
+		"Round the amount to the nearest 1000 PHP and include one concise rationale.",
+		tripContext,
+	].join("\n\n");
+
 export const buildReadinessPrompt = (
 	tripContext: string,
 	runtimeContext?: PromptRuntimeContext

@@ -115,6 +115,7 @@ export const getTripWorkspace = query({
 			expenses,
 			itineraryDays: sortedItineraryDays,
 			itineraryItems: sortedItineraryItems,
+			moments: sortedMoments,
 			notes,
 			companions,
 			readinessScore: trip.readinessScore,

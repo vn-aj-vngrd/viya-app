@@ -1,6 +1,6 @@
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
-import { useMutation } from "convex/react";
+import { useAction, useMutation } from "convex/react";
 import { type Href, Link, useRouter } from "expo-router";
 import {
 	BottomSheet,
@@ -53,12 +53,15 @@ const tripScreenMeta: Record<TripTab, { icon: IoniconName; label: string }> = {
 	bookings: { icon: "briefcase-outline", label: "Bookings" },
 	budget: { icon: "wallet-outline", label: "Budget" },
 	checklist: { icon: "checkbox-outline", label: "Checklist" },
+	companions: { icon: "people-outline", label: "Companions" },
 	documents: { icon: "folder-open-outline", label: "Documents" },
 	itinerary: { icon: "calendar-outline", label: "Itinerary" },
 	memories: { icon: "images-outline", label: "Memories" },
+	notes: { icon: "document-text-outline", label: "Notes" },
 	overview: { icon: "speedometer-outline", label: "Overview" },
 	places: { icon: "map-outline", label: "Places" },
 	recap: { icon: "share-social-outline", label: "Recap" },
+	risks: { icon: "warning-outline", label: "Risks" },
 	travel: { icon: "navigate-outline", label: "Travel Mode" },
 	viya: { icon: "sparkles-outline", label: "Viya" },
 };
@@ -79,6 +82,7 @@ const moduleAccents: Record<string, ModuleAccent> = {
 	Notes: { bg: "rgba(255, 159, 10, 0.12)", color: "#FF9F0A" },
 	Places: { bg: "rgba(52, 199, 89, 0.12)", color: "#34C759" },
 	Recap: { bg: "rgba(10, 132, 255, 0.1)", color: "#0A84FF" },
+	Risks: { bg: "rgba(255, 59, 48, 0.1)", color: "#FF3B30" },
 	"Travel Mode": { bg: "rgba(0, 122, 255, 0.1)", color: "#007AFF" },
 	Watchouts: { bg: "rgba(255, 59, 48, 0.1)", color: "#FF3B30" },
 };
@@ -87,6 +91,7 @@ const defaultModuleAccent: ModuleAccent = {
 	bg: "rgba(10, 132, 255, 0.1)",
 	color: accentColor,
 };
+const shouldUseFallbackDraft = process.env.NODE_ENV !== "production";
 
 const getModuleAccent = (label: string): ModuleAccent =>
 	moduleAccents[label] ?? defaultModuleAccent;
@@ -108,6 +113,63 @@ interface ParsedDraftChange {
 	title: string;
 	type: string;
 }
+
+const tripAgentShortcutActions = [
+	{
+		action: "generate",
+		label: "Itinerary",
+		module: "itinerary",
+		prompt: "Generate a practical itinerary draft for this trip.",
+	},
+	{
+		action: "generate",
+		label: "Places",
+		module: "places",
+		prompt: "Suggest useful places and route improvements for this trip.",
+	},
+	{
+		action: "generate",
+		label: "Bookings",
+		module: "bookings",
+		prompt: "Create booking targets and confirmation gaps for this trip.",
+	},
+	{
+		action: "generate",
+		label: "Documents",
+		module: "documents",
+		prompt: "Audit the travel documents and files this trip needs.",
+	},
+	{
+		action: "generate",
+		label: "Budget",
+		module: "budget",
+		prompt: "Estimate costs and budget tradeoffs for this trip.",
+	},
+	{
+		action: "audit",
+		label: "Readiness",
+		module: "readiness",
+		prompt: "Audit readiness and suggest checklist fixes for this trip.",
+	},
+	{
+		action: "audit",
+		label: "Risks",
+		module: "risks",
+		prompt: "Find trip risks and backup moves for this trip.",
+	},
+	{
+		action: "generate",
+		label: "Travel",
+		module: "travel",
+		prompt: "Create day-of travel guidance and backup moves for this trip.",
+	},
+	{
+		action: "generate",
+		label: "Recap",
+		module: "recap",
+		prompt: "Draft a recap outline from this trip workspace.",
+	},
+] as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
 	typeof value === "object" && value !== null;
@@ -1118,6 +1180,7 @@ export function FloatingAskViyaBar({
 }
 
 export function TripAgentDraftPanel({ model }: { model: TripDashboardModel }) {
+	const generateDraft = useAction(api.ai.tripAgent.generateTripAgentDraft);
 	const applyDraft = useMutation(api.ai.tripAgent.applyTripAgentDraft);
 	const dismissDraft = useMutation(api.ai.tripAgent.dismissTripAgentDraft);
 	const [pendingAction, setPendingAction] = useState<string | null>(null);
@@ -1149,9 +1212,72 @@ export function TripAgentDraftPanel({ model }: { model: TripDashboardModel }) {
 			setPendingAction(null);
 		}
 	};
+	const handleGenerateShortcut = (
+		shortcut: (typeof tripAgentShortcutActions)[number]
+	) => {
+		const key = `generate:${shortcut.module}`;
+		runDraftAction(key, () =>
+			generateDraft({
+				action: shortcut.action,
+				module: shortcut.module,
+				prompt: shortcut.prompt,
+				tripId: model.tripId,
+				useFallback: shouldUseFallbackDraft,
+			})
+		).catch(() => undefined);
+	};
 
 	if (!activeDraft) {
-		return null;
+		return (
+			<Surface
+				className="gap-4 rounded-[28px] border border-border bg-surface p-4"
+				style={{ borderColor }}
+			>
+				<View className="flex-row items-start gap-3">
+					<View
+						className="h-10 w-10 items-center justify-center rounded-full"
+						style={{ backgroundColor: "rgba(10, 132, 255, 0.12)" }}
+					>
+						<Ionicons color={accentColor} name="sparkles-outline" size={18} />
+					</View>
+					<View className="min-w-0 flex-1 gap-1">
+						<Text color="muted" type="body-xs" weight="semibold">
+							VIYA AGENT
+						</Text>
+						<Text type="body" weight="bold">
+							Draft any trip module
+						</Text>
+						<Text color="muted" type="body-sm">
+							Generate reviewable workspace changes, then apply only what you
+							accept.
+						</Text>
+					</View>
+				</View>
+				<View className="flex-row flex-wrap gap-2">
+					{tripAgentShortcutActions.map((shortcut) => {
+						const key = `generate:${shortcut.module}`;
+
+						return (
+							<Button
+								isDisabled={pendingAction !== null}
+								key={shortcut.module}
+								onPress={() => handleGenerateShortcut(shortcut)}
+								size="sm"
+								variant="secondary"
+							>
+								{pendingAction === key ? <Spinner size="sm" /> : null}
+								<Button.Label>{shortcut.label}</Button.Label>
+							</Button>
+						);
+					})}
+				</View>
+				{agentError ? (
+					<Text className="text-danger" type="body-sm">
+						{agentError}
+					</Text>
+				) : null}
+			</Surface>
+		);
 	}
 
 	const applyKey = `apply:${activeDraft._id}`;

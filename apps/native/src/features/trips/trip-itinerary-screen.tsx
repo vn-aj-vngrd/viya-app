@@ -25,6 +25,7 @@ import { EmptyState } from "@/src/components/empty-state";
 import { RouteHeader } from "@/src/components/navigation/route-header";
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 
+import { TripModuleScreenFrame } from "./trip-module-floating-bar";
 import { TripModuleViyaAssistCard } from "./trip-module-viya-assist-card";
 import { useTripIdParam } from "./use-trip-id-param";
 
@@ -649,269 +650,273 @@ export function TripItineraryScreen() {
 
 	if (itineraryDays.length === 0 && itineraryItems.length === 0) {
 		return (
-			<Container className="px-4 pb-28">
-				<View className="gap-4">
-					<RouteHeader
-						eyebrow="Plan"
-						icon="calendar-outline"
-						subtitle="Start with days, then add timed places, meals, transfers, and buffers."
-						title="Itinerary"
-					/>
-					<TripModuleViyaAssistCard
-						agentModule="itinerary"
-						description="Generate a starter day plan, refine timing, or ask what to add next."
-						moduleLabel="itinerary"
-						tripId={tripId}
-					/>
-					<EmptyState
-						description="Create your first day to start building the trip timeline."
-						icon="calendar-outline"
-						title="No itinerary yet"
-					/>
-					<Button isDisabled={isSavingDay} onPress={handleAddDay}>
-						{isSavingDay ? <Spinner size="sm" /> : null}
-						<Button.Label>Add first day</Button.Label>
-					</Button>
-				</View>
-			</Container>
+			<TripModuleScreenFrame activeTab="itinerary" tripId={tripId}>
+				<Container className="px-4 pb-28">
+					<View className="gap-4">
+						<RouteHeader
+							eyebrow="Plan"
+							icon="calendar-outline"
+							subtitle="Start with days, then add timed places, meals, transfers, and buffers."
+							title="Itinerary"
+						/>
+						<TripModuleViyaAssistCard
+							agentModule="itinerary"
+							description="Generate a starter day plan, refine timing, or ask what to add next."
+							moduleLabel="itinerary"
+							tripId={tripId}
+						/>
+						<EmptyState
+							description="Create your first day to start building the trip timeline."
+							icon="calendar-outline"
+							title="No itinerary yet"
+						/>
+						<Button isDisabled={isSavingDay} onPress={handleAddDay}>
+							{isSavingDay ? <Spinner size="sm" /> : null}
+							<Button.Label>Add first day</Button.Label>
+						</Button>
+					</View>
+				</Container>
+			</TripModuleScreenFrame>
 		);
 	}
 
 	return (
-		<Container
-			className="px-4 pb-28"
-			scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
-		>
-			<View className="gap-4 pb-4">
-				<RouteHeader
-					eyebrow="Plan"
-					icon="calendar-outline"
-					subtitle="Route, timing, buffers, and Viya reasoning from the saved trip."
-					title="Itinerary"
-				/>
-				<TripModuleViyaAssistCard
-					agentModule="itinerary"
-					description="Generate itinerary changes, rebalance days, or ask Viya to explain the route."
-					moduleLabel="itinerary"
-					tripId={tripId}
-				/>
+		<TripModuleScreenFrame activeTab="itinerary" tripId={tripId}>
+			<Container
+				className="px-4 pb-28"
+				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
+			>
+				<View className="gap-4 pb-4">
+					<RouteHeader
+						eyebrow="Plan"
+						icon="calendar-outline"
+						subtitle="Route, timing, buffers, and Viya reasoning from the saved trip."
+						title="Itinerary"
+					/>
+					<TripModuleViyaAssistCard
+						agentModule="itinerary"
+						description="Generate itinerary changes, rebalance days, or ask Viya to explain the route."
+						moduleLabel="itinerary"
+						tripId={tripId}
+					/>
 
-				<Surface className="gap-3 rounded-[30px] border border-border bg-surface p-5">
-					<View className="flex-row flex-wrap gap-2">
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>{itineraryDays.length} days</Chip.Label>
-						</Chip>
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>{itineraryItems.length} items</Chip.Label>
-						</Chip>
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>
-								{formatCost(
-									itineraryItems.reduce(
-										(total, item) => total + item.estimatedCost,
-										0
-									),
-									trip.budgetCurrency
-								)}
-							</Chip.Label>
-						</Chip>
-					</View>
-					<View className="flex-row gap-3">
-						<Button
-							className="flex-1"
-							isDisabled={isSavingDay}
-							onPress={handleAddDay}
-							variant="secondary"
-						>
-							{isSavingDay ? <Spinner size="sm" /> : null}
-							<Button.Label>Add day</Button.Label>
-						</Button>
-						{itineraryDays[0] ? (
+					<Surface className="gap-3 rounded-[30px] border border-border bg-surface p-5">
+						<View className="flex-row flex-wrap gap-2">
+							<Chip size="sm" variant="secondary">
+								<Chip.Label>{itineraryDays.length} days</Chip.Label>
+							</Chip>
+							<Chip size="sm" variant="secondary">
+								<Chip.Label>{itineraryItems.length} items</Chip.Label>
+							</Chip>
+							<Chip size="sm" variant="secondary">
+								<Chip.Label>
+									{formatCost(
+										itineraryItems.reduce(
+											(total, item) => total + item.estimatedCost,
+											0
+										),
+										trip.budgetCurrency
+									)}
+								</Chip.Label>
+							</Chip>
+						</View>
+						<View className="flex-row gap-3">
 							<Button
 								className="flex-1"
-								onPress={() => openItemSheet(itineraryDays[0]._id)}
+								isDisabled={isSavingDay}
+								onPress={handleAddDay}
+								variant="secondary"
 							>
-								<Button.Label>Add item</Button.Label>
+								{isSavingDay ? <Spinner size="sm" /> : null}
+								<Button.Label>Add day</Button.Label>
 							</Button>
-						) : null}
-					</View>
-				</Surface>
+							{itineraryDays[0] ? (
+								<Button
+									className="flex-1"
+									onPress={() => openItemSheet(itineraryDays[0]._id)}
+								>
+									<Button.Label>Add item</Button.Label>
+								</Button>
+							) : null}
+						</View>
+					</Surface>
 
-				{itineraryDays.map((day) => {
-					const dayItems = itineraryItems.filter(
-						(item) => item.dayId === day._id
-					);
+					{itineraryDays.map((day) => {
+						const dayItems = itineraryItems.filter(
+							(item) => item.dayId === day._id
+						);
 
-					return (
-						<Surface
-							className="gap-4 rounded-[30px] border border-border bg-surface p-5"
-							key={day._id}
-						>
-							<View className="flex-row items-start gap-3">
-								<View className="h-11 w-11 items-center justify-center rounded-full bg-primary/10">
-									<Ionicons color="#0A84FF" name="calendar" size={20} />
-								</View>
-								<View className="flex-1 gap-1">
-									<Chip size="sm" variant="secondary">
-										<Chip.Label>Day {day.dayNumber}</Chip.Label>
-									</Chip>
-									<Text type="body" weight="bold">
-										{day.title}
-									</Text>
-									<Text color="muted" type="body-sm">
-										{day.date} · {day.theme}
-									</Text>
-									<Text.Paragraph color="muted" type="body-sm">
-										{day.summary}
-									</Text.Paragraph>
-								</View>
-								<View className="gap-2">
-									<Button
-										onPress={() => openEditDaySheet(day)}
-										size="sm"
-										variant="secondary"
-									>
-										<Button.Label>Edit</Button.Label>
-									</Button>
-									<Button
-										onPress={() => openItemSheet(day._id)}
-										size="sm"
-										variant="secondary"
-									>
-										<Button.Label>Add</Button.Label>
-									</Button>
-									<Button
-										onPress={() => {
-											deleteItineraryDay({ dayId: day._id }).catch(
-												() => undefined
-											);
-										}}
-										size="sm"
-										variant="tertiary"
-									>
-										<Button.Label>Delete</Button.Label>
-									</Button>
-								</View>
-							</View>
-
-							{dayItems.length === 0 ? (
-								<Text color="muted" type="body-sm">
-									No scheduled items yet.
-								</Text>
-							) : (
-								<View className="gap-3">
-									{dayItems.map((item) => (
-										<Surface
-											className="gap-2 rounded-[24px] bg-surface-secondary p-4"
-											key={item._id}
+						return (
+							<Surface
+								className="gap-4 rounded-[30px] border border-border bg-surface p-5"
+								key={day._id}
+							>
+								<View className="flex-row items-start gap-3">
+									<View className="h-11 w-11 items-center justify-center rounded-full bg-primary/10">
+										<Ionicons color="#0A84FF" name="calendar" size={20} />
+									</View>
+									<View className="flex-1 gap-1">
+										<Chip size="sm" variant="secondary">
+											<Chip.Label>Day {day.dayNumber}</Chip.Label>
+										</Chip>
+										<Text type="body" weight="bold">
+											{day.title}
+										</Text>
+										<Text color="muted" type="body-sm">
+											{day.date} · {day.theme}
+										</Text>
+										<Text.Paragraph color="muted" type="body-sm">
+											{day.summary}
+										</Text.Paragraph>
+									</View>
+									<View className="gap-2">
+										<Button
+											onPress={() => openEditDaySheet(day)}
+											size="sm"
+											variant="secondary"
 										>
-											<View className="flex-row flex-wrap gap-2">
-												<Chip size="sm" variant="secondary">
-													<Chip.Label>{item.category}</Chip.Label>
-												</Chip>
-												<Chip size="sm" variant="secondary">
-													<Chip.Label>{item.status}</Chip.Label>
-												</Chip>
-											</View>
-											<Text type="body-sm" weight="bold">
-												{item.startTime} - {item.endTime} · {item.title}
-											</Text>
-											<Text color="muted" type="body-xs">
-												{item.locationName}
-											</Text>
-											<Text.Paragraph color="muted" type="body-sm">
-												{item.description}
-											</Text.Paragraph>
-											<Text color="muted" type="body-xs">
-												{formatCost(item.estimatedCost)}
-												{item.bookingId ? ` · Booking ${item.bookingId}` : ""}
-											</Text>
-											<Text.Paragraph color="muted" type="body-xs">
-												{item.aiReason}
-											</Text.Paragraph>
-											<View className="flex-row flex-wrap gap-2">
-												<Button
-													isDisabled={pendingItemId === item._id}
-													onPress={() => openEditItemSheet(item)}
-													size="sm"
-													variant="secondary"
-												>
-													<Button.Label>Edit</Button.Label>
-												</Button>
-												<Button
-													isDisabled={pendingItemId === item._id}
-													onPress={() => {
-														updateItemStatus(
-															item._id,
-															item.status === "completed"
-																? "planned"
-																: "completed"
-														).catch(() => undefined);
-													}}
-													size="sm"
-													variant="secondary"
-												>
-													<Button.Label>
-														{item.status === "completed"
-															? "Mark planned"
-															: "Complete"}
-													</Button.Label>
-												</Button>
-												<Button
-													isDisabled={pendingItemId === item._id}
-													onPress={() => {
-														updateItemStatus(item._id, "skipped").catch(
-															() => undefined
-														);
-													}}
-													size="sm"
-													variant="secondary"
-												>
-													<Button.Label>Skip</Button.Label>
-												</Button>
-												<Button
-													isDisabled={pendingItemId === item._id}
-													onPress={() => {
-														handleDeleteItem(item._id).catch(() => undefined);
-													}}
-													size="sm"
-													variant="tertiary"
-												>
-													<Button.Label>Delete</Button.Label>
-												</Button>
-											</View>
-										</Surface>
-									))}
+											<Button.Label>Edit</Button.Label>
+										</Button>
+										<Button
+											onPress={() => openItemSheet(day._id)}
+											size="sm"
+											variant="secondary"
+										>
+											<Button.Label>Add</Button.Label>
+										</Button>
+										<Button
+											onPress={() => {
+												deleteItineraryDay({ dayId: day._id }).catch(
+													() => undefined
+												);
+											}}
+											size="sm"
+											variant="tertiary"
+										>
+											<Button.Label>Delete</Button.Label>
+										</Button>
+									</View>
 								</View>
-							)}
-						</Surface>
-					);
-				})}
-			</View>
-			<ItineraryItemSheet
-				day={selectedDay}
-				form={itemForm}
-				isOpen={isItemSheetOpen}
-				isSaving={isSavingItem}
-				mode={editingItemId ? "edit" : "create"}
-				onOpenChange={setIsItemSheetOpen}
-				onSubmit={handleSaveItem}
-				onUpdateForm={updateItemForm}
-			/>
-			<ItineraryDaySheet
-				form={dayForm}
-				isOpen={isDaySheetOpen}
-				isSaving={isSavingDay}
-				onOpenChange={(isOpen) => {
-					setIsDaySheetOpen(isOpen);
-					if (!isOpen) {
-						setEditingDayId(null);
-						setDayForm(initialDayForm);
-					}
-				}}
-				onSubmit={handleSaveDay}
-				onUpdateForm={updateDayForm}
-			/>
-		</Container>
+
+								{dayItems.length === 0 ? (
+									<Text color="muted" type="body-sm">
+										No scheduled items yet.
+									</Text>
+								) : (
+									<View className="gap-3">
+										{dayItems.map((item) => (
+											<Surface
+												className="gap-2 rounded-[24px] bg-surface-secondary p-4"
+												key={item._id}
+											>
+												<View className="flex-row flex-wrap gap-2">
+													<Chip size="sm" variant="secondary">
+														<Chip.Label>{item.category}</Chip.Label>
+													</Chip>
+													<Chip size="sm" variant="secondary">
+														<Chip.Label>{item.status}</Chip.Label>
+													</Chip>
+												</View>
+												<Text type="body-sm" weight="bold">
+													{item.startTime} - {item.endTime} · {item.title}
+												</Text>
+												<Text color="muted" type="body-xs">
+													{item.locationName}
+												</Text>
+												<Text.Paragraph color="muted" type="body-sm">
+													{item.description}
+												</Text.Paragraph>
+												<Text color="muted" type="body-xs">
+													{formatCost(item.estimatedCost)}
+													{item.bookingId ? ` · Booking ${item.bookingId}` : ""}
+												</Text>
+												<Text.Paragraph color="muted" type="body-xs">
+													{item.aiReason}
+												</Text.Paragraph>
+												<View className="flex-row flex-wrap gap-2">
+													<Button
+														isDisabled={pendingItemId === item._id}
+														onPress={() => openEditItemSheet(item)}
+														size="sm"
+														variant="secondary"
+													>
+														<Button.Label>Edit</Button.Label>
+													</Button>
+													<Button
+														isDisabled={pendingItemId === item._id}
+														onPress={() => {
+															updateItemStatus(
+																item._id,
+																item.status === "completed"
+																	? "planned"
+																	: "completed"
+															).catch(() => undefined);
+														}}
+														size="sm"
+														variant="secondary"
+													>
+														<Button.Label>
+															{item.status === "completed"
+																? "Mark planned"
+																: "Complete"}
+														</Button.Label>
+													</Button>
+													<Button
+														isDisabled={pendingItemId === item._id}
+														onPress={() => {
+															updateItemStatus(item._id, "skipped").catch(
+																() => undefined
+															);
+														}}
+														size="sm"
+														variant="secondary"
+													>
+														<Button.Label>Skip</Button.Label>
+													</Button>
+													<Button
+														isDisabled={pendingItemId === item._id}
+														onPress={() => {
+															handleDeleteItem(item._id).catch(() => undefined);
+														}}
+														size="sm"
+														variant="tertiary"
+													>
+														<Button.Label>Delete</Button.Label>
+													</Button>
+												</View>
+											</Surface>
+										))}
+									</View>
+								)}
+							</Surface>
+						);
+					})}
+				</View>
+				<ItineraryItemSheet
+					day={selectedDay}
+					form={itemForm}
+					isOpen={isItemSheetOpen}
+					isSaving={isSavingItem}
+					mode={editingItemId ? "edit" : "create"}
+					onOpenChange={setIsItemSheetOpen}
+					onSubmit={handleSaveItem}
+					onUpdateForm={updateItemForm}
+				/>
+				<ItineraryDaySheet
+					form={dayForm}
+					isOpen={isDaySheetOpen}
+					isSaving={isSavingDay}
+					onOpenChange={(isOpen) => {
+						setIsDaySheetOpen(isOpen);
+						if (!isOpen) {
+							setEditingDayId(null);
+							setDayForm(initialDayForm);
+						}
+					}}
+					onSubmit={handleSaveDay}
+					onUpdateForm={updateDayForm}
+				/>
+			</Container>
+		</TripModuleScreenFrame>
 	);
 }

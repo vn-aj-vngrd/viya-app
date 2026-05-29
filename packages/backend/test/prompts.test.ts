@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+	buildBudgetSuggestionPrompt,
 	buildChatModeSystemPrompt,
 	VIYA_SYSTEM_PROMPT,
 } from "../convex/ai/prompts";
@@ -37,6 +38,9 @@ const preferenceContextPattern = /Traveler preference context:/i;
 const relaxedStylePattern = /Travel style: relaxed/i;
 const tripContext = "Current trip: Palawan family beach trip.";
 const tripContextPattern = /Current trip: Palawan family beach trip/i;
+const budgetSuggestionModePattern = /Mode: Budget suggestion/i;
+const budgetSuggestionAmountPattern = /Heuristic budget estimate: PHP 19000/i;
+const budgetSuggestionCurrencyPattern = /Return one PHP budget amount/i;
 
 describe("Viya prompt guardrails", () => {
 	it("keeps the base agent focused on travel only", () => {
@@ -113,5 +117,16 @@ describe("Viya prompt guardrails", () => {
 		assert.match(prompt, relaxedStylePattern);
 		assert.match(prompt, tripContextPattern);
 		assert.ok(prompt.indexOf(preferenceContext) < prompt.indexOf(tripContext));
+	});
+
+	it("builds a constrained AI prompt for budget suggestions", () => {
+		const prompt = buildBudgetSuggestionPrompt(
+			JSON.stringify({ destination: "Boracay", travelerCount: 2 }),
+			19_000
+		);
+
+		assert.match(prompt, budgetSuggestionModePattern);
+		assert.match(prompt, budgetSuggestionAmountPattern);
+		assert.match(prompt, budgetSuggestionCurrencyPattern);
 	});
 });

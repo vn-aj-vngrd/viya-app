@@ -24,6 +24,7 @@ import { EmptyState } from "@/src/components/empty-state";
 import { RouteHeader } from "@/src/components/navigation/route-header";
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 
+import { TripModuleScreenFrame } from "./trip-module-floating-bar";
 import { TripModuleViyaAssistCard } from "./trip-module-viya-assist-card";
 import { useTripIdParam } from "./use-trip-id-param";
 
@@ -281,113 +282,115 @@ export function TripNotesScreen() {
 	}
 
 	return (
-		<Container
-			className="px-4 pb-28"
-			scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
-		>
-			<View className="gap-4 pb-4">
-				<RouteHeader
-					eyebrow="Remember"
-					icon="document-text-outline"
-					subtitle="Trip decisions, constraints, group reminders, and context."
-					title="Notes"
-				/>
-				<TripModuleViyaAssistCard
-					description="Ask Viya to turn notes into planning tasks, reminders, or itinerary context."
-					moduleLabel="notes"
-					tripId={tripId}
-				/>
-
-				<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
-					<View className="flex-row items-center gap-3">
-						<View className="h-11 w-11 items-center justify-center rounded-full bg-primary/10">
-							<Ionicons
-								color="#0A84FF"
-								name="document-text-outline"
-								size={20}
-							/>
-						</View>
-						<View className="flex-1 gap-1">
-							<Text type="body" weight="bold">
-								{notes.length} notes
-							</Text>
-							<Text color="muted" type="body-sm">
-								Keep shared decisions close to the trip workspace.
-							</Text>
-						</View>
-					</View>
-					<Button onPress={openCreateSheet}>
-						<Button.Label>Add note</Button.Label>
-					</Button>
-				</Surface>
-
-				{notes.length === 0 ? (
-					<EmptyState
-						description="Save group decisions, dietary notes, meeting details, or constraints."
+		<TripModuleScreenFrame activeTab="notes" tripId={tripId}>
+			<Container
+				className="px-4 pb-28"
+				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
+			>
+				<View className="gap-4 pb-4">
+					<RouteHeader
+						eyebrow="Remember"
 						icon="document-text-outline"
-						title="No notes yet"
+						subtitle="Trip decisions, constraints, group reminders, and context."
+						title="Notes"
 					/>
-				) : (
-					<View className="gap-3">
-						{notes.map((note) => (
-							<Surface
-								className="gap-3 rounded-[28px] border border-border bg-surface p-5"
-								key={note._id}
-							>
-								<View className="flex-row flex-wrap gap-2">
-									<Chip size="sm" variant="secondary">
-										<Chip.Label>{note.category}</Chip.Label>
-									</Chip>
-								</View>
+					<TripModuleViyaAssistCard
+						description="Ask Viya to turn notes into planning tasks, reminders, or itinerary context."
+						moduleLabel="notes"
+						tripId={tripId}
+					/>
+
+					<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
+						<View className="flex-row items-center gap-3">
+							<View className="h-11 w-11 items-center justify-center rounded-full bg-primary/10">
+								<Ionicons
+									color="#0A84FF"
+									name="document-text-outline"
+									size={20}
+								/>
+							</View>
+							<View className="flex-1 gap-1">
 								<Text type="body" weight="bold">
-									{note.title}
+									{notes.length} notes
 								</Text>
-								<Text.Paragraph color="muted" type="body-sm">
-									{note.body}
-								</Text.Paragraph>
-								<View className="flex-row flex-wrap gap-2">
-									<Button
-										className="flex-1"
-										onPress={() => openEditSheet(note)}
-										size="sm"
-										variant="secondary"
-									>
-										<Button.Label>Edit</Button.Label>
-									</Button>
-									<Button
-										className="flex-1"
-										isDisabled={pendingNoteId === note._id}
-										onPress={() => {
-											handleDeleteNote(note._id).catch(() => undefined);
-										}}
-										size="sm"
-										variant="tertiary"
-									>
-										<Button.Label>Delete</Button.Label>
-									</Button>
-								</View>
-							</Surface>
-						))}
-					</View>
-				)}
-			</View>
-			<NoteSheet
-				form={form}
-				isOpen={isSheetOpen}
-				isSaving={isSaving}
-				mode={editingNoteId ? "edit" : "create"}
-				onOpenChange={(isOpen) => {
-					setIsSheetOpen(isOpen);
-					if (!isOpen) {
-						setEditingNoteId(null);
-						setForm(initialNoteForm);
-					}
-				}}
-				onSubmit={() => {
-					handleSaveNote().catch(() => undefined);
-				}}
-				onUpdateForm={updateForm}
-			/>
-		</Container>
+								<Text color="muted" type="body-sm">
+									Keep shared decisions close to the trip workspace.
+								</Text>
+							</View>
+						</View>
+						<Button onPress={openCreateSheet}>
+							<Button.Label>Add note</Button.Label>
+						</Button>
+					</Surface>
+
+					{notes.length === 0 ? (
+						<EmptyState
+							description="Save group decisions, dietary notes, meeting details, or constraints."
+							icon="document-text-outline"
+							title="No notes yet"
+						/>
+					) : (
+						<View className="gap-3">
+							{notes.map((note) => (
+								<Surface
+									className="gap-3 rounded-[28px] border border-border bg-surface p-5"
+									key={note._id}
+								>
+									<View className="flex-row flex-wrap gap-2">
+										<Chip size="sm" variant="secondary">
+											<Chip.Label>{note.category}</Chip.Label>
+										</Chip>
+									</View>
+									<Text type="body" weight="bold">
+										{note.title}
+									</Text>
+									<Text.Paragraph color="muted" type="body-sm">
+										{note.body}
+									</Text.Paragraph>
+									<View className="flex-row flex-wrap gap-2">
+										<Button
+											className="flex-1"
+											onPress={() => openEditSheet(note)}
+											size="sm"
+											variant="secondary"
+										>
+											<Button.Label>Edit</Button.Label>
+										</Button>
+										<Button
+											className="flex-1"
+											isDisabled={pendingNoteId === note._id}
+											onPress={() => {
+												handleDeleteNote(note._id).catch(() => undefined);
+											}}
+											size="sm"
+											variant="tertiary"
+										>
+											<Button.Label>Delete</Button.Label>
+										</Button>
+									</View>
+								</Surface>
+							))}
+						</View>
+					)}
+				</View>
+				<NoteSheet
+					form={form}
+					isOpen={isSheetOpen}
+					isSaving={isSaving}
+					mode={editingNoteId ? "edit" : "create"}
+					onOpenChange={(isOpen) => {
+						setIsSheetOpen(isOpen);
+						if (!isOpen) {
+							setEditingNoteId(null);
+							setForm(initialNoteForm);
+						}
+					}}
+					onSubmit={() => {
+						handleSaveNote().catch(() => undefined);
+					}}
+					onUpdateForm={updateForm}
+				/>
+			</Container>
+		</TripModuleScreenFrame>
 	);
 }

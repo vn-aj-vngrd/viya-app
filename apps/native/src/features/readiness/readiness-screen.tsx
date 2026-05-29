@@ -32,6 +32,7 @@ import { EmptyState } from "@/src/components/empty-state";
 import { RouteHeader } from "@/src/components/navigation/route-header";
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 import { VIYA_ROUTES } from "@/src/constants/routes";
+import { TripModuleScreenFrame } from "@/src/features/trips/trip-module-floating-bar";
 import { TripModuleViyaAssistCard } from "@/src/features/trips/trip-module-viya-assist-card";
 import { useTripIdParam } from "@/src/features/trips/use-trip-id-param";
 
@@ -424,116 +425,120 @@ export function ReadinessScreen() {
 		);
 
 	return (
-		<Container
-			className="px-4 pb-28"
-			scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
-		>
-			<View className="gap-4 pb-4">
-				<RouteHeader
-					eyebrow="Check"
-					icon="shield-checkmark-outline"
-					subtitle="Resolve booking, document, budget, packing, schedule, safety, and backup gaps before travel."
-					title="Readiness"
-				/>
-				<TripModuleViyaAssistCard
-					action="audit"
-					agentModule="readiness"
-					description="Audit missing prep, generate checklist fixes, or ask what to close first."
-					moduleLabel="readiness"
-					tripId={tripId}
-				/>
+		<TripModuleScreenFrame activeTab="checklist" tripId={tripId}>
+			<Container
+				className="px-4 pb-28"
+				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
+			>
+				<View className="gap-4 pb-4">
+					<RouteHeader
+						eyebrow="Check"
+						icon="shield-checkmark-outline"
+						subtitle="Resolve booking, document, budget, packing, schedule, safety, and backup gaps before travel."
+						title="Readiness"
+					/>
+					<TripModuleViyaAssistCard
+						action="audit"
+						agentModule="readiness"
+						description="Audit missing prep, generate checklist fixes, or ask what to close first."
+						moduleLabel="readiness"
+						tripId={tripId}
+					/>
 
-				<Surface className="gap-4 rounded-[34px] border border-border bg-surface p-5">
-					<View className="flex-row flex-wrap gap-2">
-						<ReadinessPill>Check</ReadinessPill>
-						<ReadinessPill>{openItems.length} open</ReadinessPill>
-					</View>
-					<View className="flex-row items-end justify-between gap-4">
-						<View className="flex-1 gap-1">
-							<Text.Heading type="h3" weight="semibold">
-								Readiness
-							</Text.Heading>
-							<Text.Paragraph color="muted" type="body-sm">
-								{score.summary}
-							</Text.Paragraph>
+					<Surface className="gap-4 rounded-[34px] border border-border bg-surface p-5">
+						<View className="flex-row flex-wrap gap-2">
+							<ReadinessPill>Check</ReadinessPill>
+							<ReadinessPill>{openItems.length} open</ReadinessPill>
 						</View>
-						<Text.Heading className="text-5xl" type="h1" weight="semibold">
-							{score.overallScore}
-						</Text.Heading>
-					</View>
-					{score.overallScore >= 90 ? (
-						<Link asChild href={VIYA_ROUTES.tripTravelMode(tripId)}>
-							<Button>
-								<Button.Label>Open travel mode</Button.Label>
+						<View className="flex-row items-end justify-between gap-4">
+							<View className="flex-1 gap-1">
+								<Text.Heading type="h3" weight="semibold">
+									Readiness
+								</Text.Heading>
+								<Text.Paragraph color="muted" type="body-sm">
+									{score.summary}
+								</Text.Paragraph>
+							</View>
+							<Text.Heading className="text-5xl" type="h1" weight="semibold">
+								{score.overallScore}
+							</Text.Heading>
+						</View>
+						{score.overallScore >= 90 ? (
+							<Link asChild href={VIYA_ROUTES.tripTravelMode(tripId)}>
+								<Button>
+									<Button.Label>Open travel mode</Button.Label>
+								</Button>
+							</Link>
+						) : (
+							<Button variant="secondary">
+								<Button.Label>Fix highest-priority gap</Button.Label>
 							</Button>
-						</Link>
-					) : (
-						<Button variant="secondary">
-							<Button.Label>Fix highest-priority gap</Button.Label>
+						)}
+						<Button onPress={openCreateSheet}>
+							<Button.Label>Add task</Button.Label>
 						</Button>
-					)}
-					<Button onPress={openCreateSheet}>
-						<Button.Label>Add task</Button.Label>
-					</Button>
-				</Surface>
+					</Surface>
 
-				<View className="flex-row flex-wrap gap-3">
-					{categories.map(([category, categoryScore]) => {
-						const categoryItems = domainItems.filter(
-							(item) => item.category === category
-						);
-						const categoryOpenItems = categoryItems.filter(
-							(item) => item.status !== "done" && item.status !== "ignored"
-						);
+					<View className="flex-row flex-wrap gap-3">
+						{categories.map(([category, categoryScore]) => {
+							const categoryItems = domainItems.filter(
+								(item) => item.category === category
+							);
+							const categoryOpenItems = categoryItems.filter(
+								(item) => item.status !== "done" && item.status !== "ignored"
+							);
 
-						return (
-							<ReadinessCategoryCard
-								category={category}
-								highestPriority={getHighestPriority(categoryItems)}
-								key={category}
-								openCount={categoryOpenItems.length}
-								score={categoryScore}
+							return (
+								<ReadinessCategoryCard
+									category={category}
+									highestPriority={getHighestPriority(categoryItems)}
+									key={category}
+									openCount={categoryOpenItems.length}
+									score={categoryScore}
+								/>
+							);
+						})}
+					</View>
+
+					<View className="gap-3">
+						<Text.Heading type="h5" weight="semibold">
+							Checklist
+						</Text.Heading>
+						{readinessItems.map((item) => (
+							<ReadinessItemRow
+								item={item}
+								key={item._id}
+								onDelete={(readinessItemId) => {
+									deleteReadinessItem({ readinessItemId }).catch(
+										() => undefined
+									);
+								}}
+								onEdit={openEditSheet}
+								onStatusChange={(readinessItemId, status) => {
+									updateReadinessItem({ readinessItemId, status }).catch(
+										() => undefined
+									);
+								}}
 							/>
-						);
-					})}
+						))}
+					</View>
 				</View>
-
-				<View className="gap-3">
-					<Text.Heading type="h5" weight="semibold">
-						Checklist
-					</Text.Heading>
-					{readinessItems.map((item) => (
-						<ReadinessItemRow
-							item={item}
-							key={item._id}
-							onDelete={(readinessItemId) => {
-								deleteReadinessItem({ readinessItemId }).catch(() => undefined);
-							}}
-							onEdit={openEditSheet}
-							onStatusChange={(readinessItemId, status) => {
-								updateReadinessItem({ readinessItemId, status }).catch(
-									() => undefined
-								);
-							}}
-						/>
-					))}
-				</View>
-			</View>
-			<ReadinessTaskSheet
-				form={form}
-				isOpen={isSheetOpen}
-				isSaving={isSaving}
-				mode={editingItemId ? "edit" : "create"}
-				onOpenChange={(isOpen) => {
-					setIsSheetOpen(isOpen);
-					if (!isOpen) {
-						setEditingItemId(null);
-						setForm(initialReadinessForm);
-					}
-				}}
-				onSubmit={handleSaveTask}
-				onUpdateForm={updateForm}
-			/>
-		</Container>
+				<ReadinessTaskSheet
+					form={form}
+					isOpen={isSheetOpen}
+					isSaving={isSaving}
+					mode={editingItemId ? "edit" : "create"}
+					onOpenChange={(isOpen) => {
+						setIsSheetOpen(isOpen);
+						if (!isOpen) {
+							setEditingItemId(null);
+							setForm(initialReadinessForm);
+						}
+					}}
+					onSubmit={handleSaveTask}
+					onUpdateForm={updateForm}
+				/>
+			</Container>
+		</TripModuleScreenFrame>
 	);
 }

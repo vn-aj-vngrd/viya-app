@@ -466,6 +466,7 @@ function AccountRow({
 	]);
 	const isDanger = tone === "danger";
 	const iconColor = isDanger ? dangerColor : foregroundColor;
+	const detailText = rightText ?? description;
 
 	return (
 		<ListGroup.Item
@@ -483,18 +484,18 @@ function AccountRow({
 					)}
 				</View>
 			</ListGroup.ItemPrefix>
-			<ListGroup.ItemContent>
-				<ListGroup.ItemTitle className={isDanger ? "text-danger" : undefined}>
+			<ListGroup.ItemContent className="min-w-0">
+				<ListGroup.ItemTitle
+					className={isDanger ? "text-danger" : undefined}
+					numberOfLines={1}
+				>
 					{title}
 				</ListGroup.ItemTitle>
-				{description ? (
-					<ListGroup.ItemDescription>{description}</ListGroup.ItemDescription>
-				) : null}
 			</ListGroup.ItemContent>
-			{rightText ? (
-				<ListGroup.ItemSuffix>
+			{detailText ? (
+				<ListGroup.ItemSuffix style={{ maxWidth: "58%" }}>
 					<Text color="muted" numberOfLines={1} type="body-sm">
-						{rightText}
+						{detailText}
 					</Text>
 				</ListGroup.ItemSuffix>
 			) : null}
@@ -874,6 +875,74 @@ function usePersonalInfoSheetOpenChange({
 	};
 }
 
+function SignOutConfirmationSheet({
+	bottomInset,
+	foregroundColor,
+	isOpen,
+	isSigningOut,
+	onConfirmPress,
+	onOpenChange,
+}: {
+	bottomInset: number;
+	foregroundColor: string;
+	isOpen: boolean;
+	isSigningOut: boolean;
+	onConfirmPress: () => void;
+	onOpenChange: (isOpen: boolean) => void;
+}) {
+	return (
+		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
+			<BottomSheet.Portal>
+				<BottomSheet.Overlay />
+				<BottomSheet.Content
+					backgroundClassName="rounded-t-[36px] bg-background"
+					enablePanDownToClose={true}
+				>
+					<View
+						className="gap-5 px-5 pt-2"
+						style={{ paddingBottom: Math.max(bottomInset, 18) }}
+					>
+						<View className="flex-row items-start justify-between gap-4">
+							<View className="flex-1 gap-1">
+								<BottomSheet.Title>Sign out?</BottomSheet.Title>
+								<BottomSheet.Description>
+									You will need to sign in again to use Viya on this device.
+								</BottomSheet.Description>
+							</View>
+							<CloseButton
+								accessibilityLabel="Close sign out confirmation"
+								className="h-10 w-10 rounded-full bg-surface"
+								iconProps={{ color: foregroundColor, size: 22 }}
+								onPress={() => onOpenChange(false)}
+							/>
+						</View>
+
+						<View className="gap-3">
+							<Button
+								isDisabled={isSigningOut}
+								onPress={onConfirmPress}
+								variant="danger"
+							>
+								{isSigningOut ? <Spinner color="#FFFFFF" size="sm" /> : null}
+								<Button.Label>
+									{isSigningOut ? "Signing out..." : "Sign out"}
+								</Button.Label>
+							</Button>
+							<Button
+								isDisabled={isSigningOut}
+								onPress={() => onOpenChange(false)}
+								variant="secondary"
+							>
+								<Button.Label>Cancel</Button.Label>
+							</Button>
+						</View>
+					</View>
+				</BottomSheet.Content>
+			</BottomSheet.Portal>
+		</BottomSheet>
+	);
+}
+
 export default function ProfileScreen() {
 	const { signOut } = useClerk();
 	const { user } = useUser();
@@ -888,6 +957,7 @@ export default function ProfileScreen() {
 		useState<TravelPreferenceKey | null>(null);
 	const [isAppearanceSheetOpen, setIsAppearanceSheetOpen] = useState(false);
 	const [isPersonalInfoSheetOpen, setIsPersonalInfoSheetOpen] = useState(false);
+	const [isSignOutSheetOpen, setIsSignOutSheetOpen] = useState(false);
 	const [isTravelSheetOpen, setIsTravelSheetOpen] = useState(false);
 	const [firstName, setFirstName] = useState(user?.firstName ?? "");
 	const [isSavingPersonalInfo, setIsSavingPersonalInfo] = useState(false);
@@ -1123,34 +1193,33 @@ export default function ProfileScreen() {
 							description="Name and account details"
 							icon="user"
 							onPress={() => setIsPersonalInfoSheetOpen(true)}
-							title="Personal information"
+							title="Personal info"
 						/>
 					</AccountSection>
 
 					<AccountSection title="Preferences">
 						<AccountRow
+							description={appearanceDescription}
 							icon="moon"
 							onPress={() => setIsAppearanceSheetOpen(true)}
-							rightText={appearanceDescription}
 							title="Appearance"
 						/>
 						<Separator className={optionSeparatorClassName} />
 						<AccountRow
+							description={preferenceSummary}
 							icon="map"
 							onPress={() => setIsTravelSheetOpen(true)}
-							rightText={preferenceSummary}
 							title="Travel"
 						/>
 					</AccountSection>
 
 					<ListGroup>
 						<AccountRow
+							description={isSigningOut ? "Ending..." : "This device"}
 							icon="log-out"
 							isDisabled={isSigningOut}
 							isLoading={isSigningOut}
-							onPress={handleSignOutPress}
-							rightText={isSigningOut ? "Ending..." : "This device"}
-							showChevron={false}
+							onPress={() => setIsSignOutSheetOpen(true)}
 							title={isSigningOut ? "Signing out..." : "Sign out"}
 							tone="danger"
 						/>
@@ -1339,6 +1408,14 @@ export default function ProfileScreen() {
 					</BottomSheet.Content>
 				</BottomSheet.Portal>
 			</BottomSheet>
+			<SignOutConfirmationSheet
+				bottomInset={insets.bottom}
+				foregroundColor={foregroundColor}
+				isOpen={isSignOutSheetOpen}
+				isSigningOut={isSigningOut}
+				onConfirmPress={handleSignOutPress}
+				onOpenChange={setIsSignOutSheetOpen}
+			/>
 			<BottomSheet
 				isOpen={isPersonalInfoSheetOpen}
 				onOpenChange={handlePersonalInfoSheetOpenChange}

@@ -147,7 +147,7 @@ function SheetOtpInput({ onChange, value }: SheetOtpInputProps) {
 						return (
 							<React.Fragment key={`otp-slot-${slotIndex}`}>
 								<View
-									className="items-center justify-center rounded-2xl border bg-surface shadow-sm"
+									className="items-center justify-center rounded-2xl border bg-surface"
 									style={{
 										borderColor: isActive ? "#0A84FF" : "#E5E7EB",
 										height: OTP_SLOT_SIZE,

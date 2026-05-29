@@ -23,6 +23,7 @@ import { EmptyState } from "@/src/components/empty-state";
 import { RouteHeader } from "@/src/components/navigation/route-header";
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 import { VIYA_ROUTES } from "@/src/constants/routes";
+import { TripModuleScreenFrame } from "@/src/features/trips/trip-module-floating-bar";
 import { TripModuleViyaAssistCard } from "@/src/features/trips/trip-module-viya-assist-card";
 import { useTripIdParam } from "@/src/features/trips/use-trip-id-param";
 import { TripSyncReviewSheet } from "./tripsync-review-sheet";
@@ -428,135 +429,137 @@ export function TripVaultScreen() {
 	})();
 
 	return (
-		<Container
-			className="px-4 pb-28"
-			scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
-		>
-			<View className="gap-4 pb-4">
-				<RouteHeader
-					eyebrow="Sync"
-					icon="cloud-upload-outline"
-					subtitle="Review extracted details before they update bookings, documents, and readiness."
-					title="TripSync Vault"
-				/>
-				<TripModuleViyaAssistCard
-					agentModule="documents"
-					description="Extract booking context, organize documents, or ask what files are still missing."
-					moduleLabel="documents"
-					tripId={tripId}
-				/>
+		<TripModuleScreenFrame activeTab="documents" tripId={tripId}>
+			<Container
+				className="px-4 pb-28"
+				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
+			>
+				<View className="gap-4 pb-4">
+					<RouteHeader
+						eyebrow="Sync"
+						icon="cloud-upload-outline"
+						subtitle="Review extracted details before they update bookings, documents, and readiness."
+						title="TripSync Vault"
+					/>
+					<TripModuleViyaAssistCard
+						agentModule="documents"
+						description="Extract booking context, organize documents, or ask what files are still missing."
+						moduleLabel="documents"
+						tripId={tripId}
+					/>
 
-				<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
-					<View className="flex-row flex-wrap gap-2">
-						<VaultPill>{vaultItems?.length ?? 0} files</VaultPill>
-						<VaultPill>Review before save</VaultPill>
-					</View>
-					<View className="flex-row flex-wrap gap-2">
-						<Button
-							className="flex-1"
-							isDisabled={isUploading}
-							onPress={() => {
-								handleUpload("booking").catch(() => undefined);
-							}}
-							size="sm"
-						>
-							<Button.Label>Booking</Button.Label>
-						</Button>
-						<Button
-							className="flex-1"
-							isDisabled={isUploading}
-							onPress={() => {
-								handleUpload("document").catch(() => undefined);
-							}}
-							size="sm"
-							variant="secondary"
-						>
-							<Button.Label>Document</Button.Label>
-						</Button>
-						<Button
-							className="flex-1"
-							isDisabled={isUploading}
-							onPress={() => {
-								handleUpload("receipt").catch(() => undefined);
-							}}
-							size="sm"
-							variant="secondary"
-						>
-							<Button.Label>Receipt</Button.Label>
-						</Button>
-						<Button
-							className="w-full"
-							isDisabled={isUploading}
-							onPress={() => {
-								handlePhotoUpload().catch(() => undefined);
-							}}
-							size="sm"
-							variant="tertiary"
-						>
-							<Button.Label>Photo or screenshot</Button.Label>
-						</Button>
-					</View>
-					{isUploading ? (
-						<View className="flex-row items-center gap-2">
-							<Spinner size="sm" />
-							<Text color="muted" type="body-sm">
-								Uploading and extracting...
-							</Text>
+					<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
+						<View className="flex-row flex-wrap gap-2">
+							<VaultPill>{vaultItems?.length ?? 0} files</VaultPill>
+							<VaultPill>Review before save</VaultPill>
 						</View>
-					) : null}
-					{errorMessage ? (
-						<Text className="text-danger" type="body-sm">
-							{errorMessage}
-						</Text>
-					) : null}
-					{didSync ? (
-						<Link asChild href={VIYA_ROUTES.tripReadiness(tripId)}>
-							<Button size="sm" variant="secondary">
-								<Button.Label>Review readiness impact</Button.Label>
+						<View className="flex-row flex-wrap gap-2">
+							<Button
+								className="flex-1"
+								isDisabled={isUploading}
+								onPress={() => {
+									handleUpload("booking").catch(() => undefined);
+								}}
+								size="sm"
+							>
+								<Button.Label>Booking</Button.Label>
 							</Button>
-						</Link>
-					) : null}
-				</Surface>
+							<Button
+								className="flex-1"
+								isDisabled={isUploading}
+								onPress={() => {
+									handleUpload("document").catch(() => undefined);
+								}}
+								size="sm"
+								variant="secondary"
+							>
+								<Button.Label>Document</Button.Label>
+							</Button>
+							<Button
+								className="flex-1"
+								isDisabled={isUploading}
+								onPress={() => {
+									handleUpload("receipt").catch(() => undefined);
+								}}
+								size="sm"
+								variant="secondary"
+							>
+								<Button.Label>Receipt</Button.Label>
+							</Button>
+							<Button
+								className="w-full"
+								isDisabled={isUploading}
+								onPress={() => {
+									handlePhotoUpload().catch(() => undefined);
+								}}
+								size="sm"
+								variant="tertiary"
+							>
+								<Button.Label>Photo or screenshot</Button.Label>
+							</Button>
+						</View>
+						{isUploading ? (
+							<View className="flex-row items-center gap-2">
+								<Spinner size="sm" />
+								<Text color="muted" type="body-sm">
+									Uploading and extracting...
+								</Text>
+							</View>
+						) : null}
+						{errorMessage ? (
+							<Text className="text-danger" type="body-sm">
+								{errorMessage}
+							</Text>
+						) : null}
+						{didSync ? (
+							<Link asChild href={VIYA_ROUTES.tripReadiness(tripId)}>
+								<Button size="sm" variant="secondary">
+									<Button.Label>Review readiness impact</Button.Label>
+								</Button>
+							</Link>
+						) : null}
+					</Surface>
 
-				<View className="gap-3">
-					<Text.Heading type="h5" weight="semibold">
-						Saved files
-					</Text.Heading>
-					{savedFilesContent}
+					<View className="gap-3">
+						<Text.Heading type="h5" weight="semibold">
+							Saved files
+						</Text.Heading>
+						{savedFilesContent}
+					</View>
 				</View>
-			</View>
 
-			<TripSyncReviewSheet
-				isConfirming={isConfirming}
-				isOpen={Boolean(pendingReview)}
-				onConfirm={() => {
-					handleConfirm().catch(() => undefined);
-				}}
-				onDiscard={() => setPendingReview(null)}
-				onOpenChange={(isOpen) => {
-					if (!(isOpen || isConfirming)) {
-						setPendingReview(null);
-					}
-				}}
-				review={pendingReview}
-			/>
-			<VaultEditSheet
-				form={editForm}
-				isOpen={Boolean(editingItemId)}
-				isSaving={isSavingEdit}
-				linkOptions={linkOptions}
-				onOpenChange={(isOpen) => {
-					if (!isOpen) {
-						setEditingItemId(null);
-					}
-				}}
-				onSubmit={() => {
-					handleSaveEdit().catch(() => undefined);
-				}}
-				onUpdateForm={(key, value) => {
-					setEditForm((currentForm) => ({ ...currentForm, [key]: value }));
-				}}
-			/>
-		</Container>
+				<TripSyncReviewSheet
+					isConfirming={isConfirming}
+					isOpen={Boolean(pendingReview)}
+					onConfirm={() => {
+						handleConfirm().catch(() => undefined);
+					}}
+					onDiscard={() => setPendingReview(null)}
+					onOpenChange={(isOpen) => {
+						if (!(isOpen || isConfirming)) {
+							setPendingReview(null);
+						}
+					}}
+					review={pendingReview}
+				/>
+				<VaultEditSheet
+					form={editForm}
+					isOpen={Boolean(editingItemId)}
+					isSaving={isSavingEdit}
+					linkOptions={linkOptions}
+					onOpenChange={(isOpen) => {
+						if (!isOpen) {
+							setEditingItemId(null);
+						}
+					}}
+					onSubmit={() => {
+						handleSaveEdit().catch(() => undefined);
+					}}
+					onUpdateForm={(key, value) => {
+						setEditForm((currentForm) => ({ ...currentForm, [key]: value }));
+					}}
+				/>
+			</Container>
+		</TripModuleScreenFrame>
 	);
 }

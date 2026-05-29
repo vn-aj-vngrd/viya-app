@@ -1,16 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import {
 	BottomSheet,
 	Button,
 	Input,
 	Label,
-	Spinner,
 	Text,
 	TextField,
 } from "heroui-native";
 import { useState } from "react";
-import { Platform, Pressable, ScrollView, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
+import type { DateData } from "react-native-calendars";
+import { Calendar } from "react-native-calendars";
+import type { MarkedDates, Theme } from "react-native-calendars/src/types";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 
@@ -20,7 +21,8 @@ const dateNumberFormatter = new Intl.NumberFormat("en", {
 	useGrouping: false,
 });
 const dateDisplayFormats = ["short", "medium", "long", "full"] as const;
-const inlineDatePickerHeight = 360;
+const selectedDateColor = "#0A84FF";
+const rangeFillColor = "#EAF2FF";
 
 type DateDisplayFormat = (typeof dateDisplayFormats)[number];
 
@@ -28,6 +30,24 @@ const getDateFormatter = (
 	dateDisplayFormat: DateDisplayFormat,
 	locale?: string
 ) => new Intl.DateTimeFormat(locale, { dateStyle: dateDisplayFormat });
+
+const calendarTheme = {
+	arrowColor: selectedDateColor,
+	backgroundColor: "transparent",
+	calendarBackground: "transparent",
+	dayTextColor: "#18181B",
+	monthTextColor: "#18181B",
+	selectedDayBackgroundColor: selectedDateColor,
+	selectedDayTextColor: "#FFFFFF",
+	textDayFontSize: 18,
+	textDayHeaderFontSize: 13,
+	textDayHeaderFontWeight: "600",
+	textDisabledColor: "#D4D4D8",
+	textMonthFontSize: 17,
+	textMonthFontWeight: "700",
+	textSectionTitleColor: "#A1A1AA",
+	todayTextColor: selectedDateColor,
+} as const satisfies Theme;
 
 export interface DateRangeValue {
 	end: string;
@@ -71,6 +91,13 @@ export const parseIsoDate = (
 };
 
 export const isIsoDate = (value: string) => isoDatePattern.test(value);
+
+const addDays = (date: Date, days: number) => {
+	const nextDate = new Date(date);
+	nextDate.setDate(nextDate.getDate() + days);
+
+	return nextDate;
+};
 
 const getOrderedDateRange = (range: DateRangeValue): DateRangeValue => {
 	if (!(isIsoDate(range.start) && isIsoDate(range.end))) {
@@ -125,6 +152,59 @@ const formatRangeLabel = ({
 
 	return `${startLabel} ${rangeSeparator} ${endLabel}`;
 };
+
+const getSingleMarkedDate = (value: string): MarkedDates =>
+	isIsoDate(value)
+		? {
+				[value]: {
+					selected: true,
+					selectedColor: selectedDateColor,
+					selectedTextColor: "#FFFFFF",
+				},
+			}
+		: {};
+
+const getRangeMarkedDates = (range: DateRangeValue): MarkedDates => {
+	if (!(isIsoDate(range.start) && isIsoDate(range.end))) {
+		return {};
+	}
+
+	const orderedRange = getOrderedDateRange(range);
+	const startDate = parseIsoDate(orderedRange.start);
+	const endDate = parseIsoDate(orderedRange.end, startDate);
+	const markedDates: MarkedDates = {};
+
+	for (
+		let date = startDate;
+		date.getTime() <= endDate.getTime();
+		date = addDays(date, 1)
+	) {
+		const isoDate = formatIsoDate(date);
+		const isStart = isoDate === orderedRange.start;
+		const isEnd = isoDate === orderedRange.end;
+
+		markedDates[isoDate] = {
+			color: isStart || isEnd ? selectedDateColor : rangeFillColor,
+			endingDay: isEnd,
+			startingDay: isStart,
+			textColor: isStart || isEnd ? "#FFFFFF" : "#18181B",
+		};
+	}
+
+	return markedDates;
+};
+
+function CalendarArrow({ direction }: { direction: "left" | "right" }) {
+	return (
+		<View className="h-9 w-9 items-center justify-center rounded-full bg-surface">
+			<Ionicons
+				color={selectedDateColor}
+				name={direction === "left" ? "chevron-back" : "chevron-forward"}
+				size={22}
+			/>
+		</View>
+	);
+}
 
 function FieldHelperText({
 	errorText,
@@ -218,32 +298,6 @@ function DateTriggerField({
 	);
 }
 
-function WebDateInput({
-	label,
-	onChangeText,
-	value,
-}: {
-	label: string;
-	onChangeText: (value: string) => void;
-	value: string;
-}) {
-	return (
-		<TextField className="gap-2">
-			<Label>
-				<Label.Text>{label}</Label.Text>
-			</Label>
-			<Input
-				autoCapitalize="none"
-				className="h-12 rounded-[18px] border border-border bg-surface px-4"
-				onChangeText={onChangeText}
-				placeholder="YYYY-MM-DD"
-				value={value}
-				variant="secondary"
-			/>
-		</TextField>
-	);
-}
-
 interface DatePickerFieldProps {
 	accentColor?: string;
 	dateDisplayFormat?: DateDisplayFormat;
@@ -265,7 +319,6 @@ interface DatePickerFieldProps {
 }
 
 export function DatePickerField({
-	accentColor,
 	dateDisplayFormat = "medium",
 	errorText,
 	formatDate,
@@ -337,37 +390,22 @@ export function DatePickerField({
 									Select a date for this field.
 								</BottomSheet.Description>
 							</View>
-							<View
-								className="items-center justify-center rounded-[24px] bg-surface-secondary p-2"
-								style={{
-									minHeight:
-										Platform.OS === "ios" ? inlineDatePickerHeight : 160,
-								}}
-							>
-								{Platform.OS === "web" ? (
-									<WebDateInput
-										label={label}
-										onChangeText={onChangeText}
-										value={value}
-									/>
-								) : (
-									<DateTimePicker
-										accentColor={accentColor}
-										display={Platform.OS === "ios" ? "inline" : "default"}
-										maximumDate={maximumDate}
-										minimumDate={minimumDate}
-										mode="date"
-										onChange={(_event, nextDate) => {
-											if (nextDate) {
-												onChangeText(formatIsoDate(nextDate));
-												if (Platform.OS !== "ios") {
-													updateOpen(false);
-												}
-											}
-										}}
-										value={selectedDate}
-									/>
-								)}
+							<View className="overflow-hidden rounded-[28px] bg-surface-secondary px-2 py-3">
+								<Calendar
+									current={formatIsoDate(selectedDate)}
+									enableSwipeMonths={true}
+									hideExtraDays={true}
+									markedDates={getSingleMarkedDate(value)}
+									maxDate={maximumDate ? formatIsoDate(maximumDate) : undefined}
+									minDate={minimumDate ? formatIsoDate(minimumDate) : undefined}
+									monthFormat="MMMM yyyy"
+									onDayPress={(day: DateData) => onChangeText(day.dateString)}
+									renderArrow={(direction) => (
+										<CalendarArrow direction={direction} />
+									)}
+									style={{ backgroundColor: "transparent" }}
+									theme={calendarTheme}
+								/>
 							</View>
 							<Button onPress={() => updateOpen(false)}>
 								<Button.Label>Done</Button.Label>
@@ -402,7 +440,6 @@ interface DateRangePickerFieldProps {
 }
 
 export function DateRangePickerField({
-	accentColor,
 	dateDisplayFormat = "medium",
 	errorText,
 	formatDateRange,
@@ -434,11 +471,6 @@ export function DateRangePickerField({
 		range: orderedValue,
 		rangeSeparator,
 	});
-	const pickerDate = activeSlot === "start" ? startDate : endDate;
-	const activeMinimumDate =
-		activeSlot === "end" && isIsoDate(orderedValue.start)
-			? startDate
-			: minimumDate;
 
 	const updateOpen = (nextIsOpen: boolean) => {
 		if (
@@ -456,56 +488,16 @@ export function DateRangePickerField({
 		onOpenChange?.(nextIsOpen);
 	};
 
-	const updateRange = (slot: keyof DateRangeValue, nextDate: Date) => {
+	const updateRange = (slot: keyof DateRangeValue, nextDateString: string) => {
 		const nextRange = getOrderedDateRange({
 			...orderedValue,
-			[slot]: formatIsoDate(nextDate),
+			[slot]: nextDateString,
 		});
 		onValueChange(nextRange);
-	};
-	const renderRangePickerControl = () => {
-		if (Platform.OS === "web") {
-			return (
-				<View className="w-full gap-3">
-					<WebDateInput
-						label="Start date"
-						onChangeText={(start) => onValueChange({ ...value, start })}
-						value={value.start}
-					/>
-					<WebDateInput
-						label="End date"
-						onChangeText={(end) => onValueChange({ ...value, end })}
-						value={value.end}
-					/>
-				</View>
-			);
+
+		if (slot === "start") {
+			setActiveSlot("end");
 		}
-
-		if (pickerDate) {
-			return (
-				<DateTimePicker
-					accentColor={accentColor}
-					display={Platform.OS === "ios" ? "inline" : "default"}
-					maximumDate={maximumDate}
-					minimumDate={activeMinimumDate}
-					mode="date"
-					onChange={(_event, nextDate) => {
-						if (!nextDate) {
-							return;
-						}
-
-						updateRange(activeSlot, nextDate);
-
-						if (activeSlot === "start") {
-							setActiveSlot("end");
-						}
-					}}
-					value={pickerDate}
-				/>
-			);
-		}
-
-		return <Spinner />;
 	};
 
 	return (
@@ -576,14 +568,25 @@ export function DateRangePickerField({
 								})}
 							</View>
 
-							<View
-								className="items-center justify-center rounded-[24px] bg-surface-secondary p-2"
-								style={{
-									minHeight:
-										Platform.OS === "ios" ? inlineDatePickerHeight : 160,
-								}}
-							>
-								{renderRangePickerControl()}
+							<View className="overflow-hidden rounded-[28px] bg-surface-secondary px-2 py-3">
+								<Calendar
+									current={formatIsoDate(startDate)}
+									enableSwipeMonths={true}
+									hideExtraDays={true}
+									markedDates={getRangeMarkedDates(orderedValue)}
+									markingType="period"
+									maxDate={maximumDate ? formatIsoDate(maximumDate) : undefined}
+									minDate={minimumDate ? formatIsoDate(minimumDate) : undefined}
+									monthFormat="MMMM yyyy"
+									onDayPress={(day: DateData) =>
+										updateRange(activeSlot, day.dateString)
+									}
+									renderArrow={(direction) => (
+										<CalendarArrow direction={direction} />
+									)}
+									style={{ backgroundColor: "transparent" }}
+									theme={calendarTheme}
+								/>
 							</View>
 
 							<Button onPress={() => updateOpen(false)}>

@@ -5,6 +5,8 @@ import { describe, it } from "node:test";
 
 const rootPath = resolve(import.meta.dirname, "../../..");
 const tripAgentDraftHelperPattern = /tripAgentDraftApply/;
+const floatingAskViyaBarPattern = /FloatingAskViyaBar/;
+const tripModuleScreenFramePattern = /TripModuleScreenFrame/;
 
 const readWorkspaceFile = (path: string) =>
 	readFileSync(resolve(rootPath, path), "utf8");
@@ -133,6 +135,57 @@ const requiredAiModules = [
 	"recap",
 ] as const;
 
+const requiredFloatingModuleScreens = [
+	{
+		activeTab: "itinerary",
+		file: "apps/native/src/features/trips/trip-itinerary-screen.tsx",
+	},
+	{
+		activeTab: "places",
+		file: "apps/native/src/features/trips/trip-places-screen.tsx",
+	},
+	{
+		activeTab: "bookings",
+		file: "apps/native/src/features/bookings/booking-hub-screen.tsx",
+	},
+	{
+		activeTab: "documents",
+		file: "apps/native/src/features/vault/trip-vault-screen.tsx",
+	},
+	{
+		activeTab: "budget",
+		file: "apps/native/src/features/budget/trip-budget-screen.tsx",
+	},
+	{
+		activeTab: "checklist",
+		file: "apps/native/src/features/readiness/readiness-screen.tsx",
+	},
+	{
+		activeTab: "risks",
+		file: "apps/native/app/(app)/trips/[tripId]/risks.tsx",
+	},
+	{
+		activeTab: "companions",
+		file: "apps/native/src/features/trips/trip-companions-screen.tsx",
+	},
+	{
+		activeTab: "notes",
+		file: "apps/native/src/features/trips/trip-notes-screen.tsx",
+	},
+	{
+		activeTab: "travel",
+		file: "apps/native/src/features/trips/trip-travel-mode-screen.tsx",
+	},
+	{
+		activeTab: "memories",
+		file: "apps/native/src/features/trips/trip-moments-screen.tsx",
+	},
+	{
+		activeTab: "recap",
+		file: "apps/native/src/features/trips/trip-recap-screen.tsx",
+	},
+] as const;
+
 describe("trip workspace contract", () => {
 	it("keeps every trip workspace route wired to a screen and route constant", () => {
 		const routesSource = readWorkspaceFile(
@@ -165,6 +218,32 @@ describe("trip workspace contract", () => {
 				layoutSource,
 				new RegExp(`name="trips/\\[tripId\\]${route.leaf || "/index"}"`),
 				`${route.file} should be registered in the app stack`
+			);
+		}
+	});
+
+	it("keeps every dedicated trip module screen on the floating module switcher", () => {
+		const floatingBarSource = readWorkspaceFile(
+			"apps/native/src/features/trips/trip-module-floating-bar.tsx"
+		);
+
+		assert.match(
+			floatingBarSource,
+			floatingAskViyaBarPattern,
+			"trip module floating bar should reuse the shared dashboard floating bar"
+		);
+
+		for (const screen of requiredFloatingModuleScreens) {
+			const source = readWorkspaceFile(screen.file);
+			assert.match(
+				source,
+				tripModuleScreenFramePattern,
+				`${screen.file} should render the floating module switcher`
+			);
+			assert.match(
+				source,
+				new RegExp(`activeTab="${screen.activeTab}"`),
+				`${screen.file} should identify the active module as ${screen.activeTab}`
 			);
 		}
 	});

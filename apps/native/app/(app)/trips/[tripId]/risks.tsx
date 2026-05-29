@@ -24,6 +24,7 @@ import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-s
 import { EmptyState } from "@/src/components/empty-state";
 import { RouteHeader } from "@/src/components/navigation/route-header";
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
+import { TripModuleScreenFrame } from "@/src/features/trips/trip-module-floating-bar";
 import { TripModuleViyaAssistCard } from "@/src/features/trips/trip-module-viya-assist-card";
 import { useTripIdParam } from "@/src/features/trips/use-trip-id-param";
 
@@ -351,94 +352,96 @@ export default function TripRisksScreen() {
 	const openRisks = risks.filter((risk) => risk.status === "open");
 
 	return (
-		<Container
-			className="px-4 pb-28"
-			scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
-		>
-			<View className="gap-4 pb-4">
-				<RouteHeader
-					eyebrow="Watch"
-					icon="warning-outline"
-					subtitle="Schedule, safety, budget, transport, and document watch-outs."
-					title="Risks"
-				/>
-				<TripModuleViyaAssistCard
-					action="audit"
-					agentModule="risks"
-					description="Find weak spots, generate mitigations, or ask Viya for a backup plan."
-					moduleLabel="risks"
-					tripId={tripId}
-				/>
-
-				<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
-					<View className="flex-row items-center gap-3">
-						<View className="h-11 w-11 items-center justify-center rounded-full bg-primary/10">
-							<Ionicons color="#0A84FF" name="warning-outline" size={20} />
-						</View>
-						<View className="flex-1 gap-1">
-							<Text type="body" weight="bold">
-								{openRisks.length} open risks
-							</Text>
-							<Text color="muted" type="body-sm">
-								Add risks early so Travel Mode can surface backup actions.
-							</Text>
-						</View>
-					</View>
-					<Button onPress={openCreateSheet}>
-						<Button.Label>Add risk</Button.Label>
-					</Button>
-				</Surface>
-
-				{risks.length === 0 ? (
-					<EmptyState
-						description="No watch-outs yet. Add weather, schedule, budget, document, or safety risks as they appear."
+		<TripModuleScreenFrame activeTab="risks" tripId={tripId}>
+			<Container
+				className="px-4 pb-28"
+				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
+			>
+				<View className="gap-4 pb-4">
+					<RouteHeader
+						eyebrow="Watch"
 						icon="warning-outline"
-						title="No risks"
+						subtitle="Schedule, safety, budget, transport, and document watch-outs."
+						title="Risks"
 					/>
-				) : (
-					<View className="gap-3">
-						{risks.map((risk) => (
-							<RiskCard
-								isPending={pendingRiskId === risk._id}
-								key={risk._id}
-								onDelete={() => {
-									runRiskAction(risk._id, () =>
-										deleteRisk({ riskId: risk._id })
-									).catch(() => undefined);
-								}}
-								onDismiss={() => {
-									runRiskAction(risk._id, () =>
-										dismissRisk({ riskId: risk._id })
-									).catch(() => undefined);
-								}}
-								onEdit={() => openEditSheet(risk)}
-								onMitigate={() => {
-									runRiskAction(risk._id, () =>
-										mitigateRisk({ riskId: risk._id })
-									).catch(() => undefined);
-								}}
-								risk={risk}
-							/>
-						))}
-					</View>
-				)}
-			</View>
-			<RiskSheet
-				form={form}
-				isOpen={isSheetOpen}
-				isSaving={isSaving}
-				mode={editingRiskId ? "edit" : "create"}
-				onOpenChange={(isOpen) => {
-					setIsSheetOpen(isOpen);
-					if (!isOpen) {
-						setEditingRiskId(null);
-						setForm(initialRiskForm);
-					}
-				}}
-				onSubmit={handleSaveRisk}
-				onUpdateForm={updateForm}
-			/>
-		</Container>
+					<TripModuleViyaAssistCard
+						action="audit"
+						agentModule="risks"
+						description="Find weak spots, generate mitigations, or ask Viya for a backup plan."
+						moduleLabel="risks"
+						tripId={tripId}
+					/>
+
+					<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
+						<View className="flex-row items-center gap-3">
+							<View className="h-11 w-11 items-center justify-center rounded-full bg-primary/10">
+								<Ionicons color="#0A84FF" name="warning-outline" size={20} />
+							</View>
+							<View className="flex-1 gap-1">
+								<Text type="body" weight="bold">
+									{openRisks.length} open risks
+								</Text>
+								<Text color="muted" type="body-sm">
+									Add risks early so Travel Mode can surface backup actions.
+								</Text>
+							</View>
+						</View>
+						<Button onPress={openCreateSheet}>
+							<Button.Label>Add risk</Button.Label>
+						</Button>
+					</Surface>
+
+					{risks.length === 0 ? (
+						<EmptyState
+							description="No watch-outs yet. Add weather, schedule, budget, document, or safety risks as they appear."
+							icon="warning-outline"
+							title="No risks"
+						/>
+					) : (
+						<View className="gap-3">
+							{risks.map((risk) => (
+								<RiskCard
+									isPending={pendingRiskId === risk._id}
+									key={risk._id}
+									onDelete={() => {
+										runRiskAction(risk._id, () =>
+											deleteRisk({ riskId: risk._id })
+										).catch(() => undefined);
+									}}
+									onDismiss={() => {
+										runRiskAction(risk._id, () =>
+											dismissRisk({ riskId: risk._id })
+										).catch(() => undefined);
+									}}
+									onEdit={() => openEditSheet(risk)}
+									onMitigate={() => {
+										runRiskAction(risk._id, () =>
+											mitigateRisk({ riskId: risk._id })
+										).catch(() => undefined);
+									}}
+									risk={risk}
+								/>
+							))}
+						</View>
+					)}
+				</View>
+				<RiskSheet
+					form={form}
+					isOpen={isSheetOpen}
+					isSaving={isSaving}
+					mode={editingRiskId ? "edit" : "create"}
+					onOpenChange={(isOpen) => {
+						setIsSheetOpen(isOpen);
+						if (!isOpen) {
+							setEditingRiskId(null);
+							setForm(initialRiskForm);
+						}
+					}}
+					onSubmit={handleSaveRisk}
+					onUpdateForm={updateForm}
+				/>
+			</Container>
+		</TripModuleScreenFrame>
 	);
 }
 

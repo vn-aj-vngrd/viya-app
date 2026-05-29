@@ -26,6 +26,7 @@ import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 
 import { formatMoney } from "./trip-dashboard-utils";
+import { TripModuleScreenFrame } from "./trip-module-floating-bar";
 import { TripModuleViyaAssistCard } from "./trip-module-viya-assist-card";
 import { useTripIdParam } from "./use-trip-id-param";
 
@@ -407,172 +408,190 @@ export function TripTravelModeScreen() {
 	};
 
 	return (
-		<Container
-			className="px-4 pb-28"
-			scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
-		>
-			<View className="gap-4 pb-4">
-				<RouteHeader
-					eyebrow="Travel"
-					icon="navigate-outline"
-					subtitle="Today-first view for itinerary, documents, risks, and spend."
-					title="Travel Mode"
-				/>
-				<TripModuleViyaAssistCard
-					agentModule="travel"
-					description="Ask for day-of help, generate backup moves, or explain what to do next."
-					moduleLabel="Travel Mode"
-					tripId={tripId}
-				/>
-
-				<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
-					<View className="flex-row flex-wrap gap-2">
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>{workspace.trip.destination}</Chip.Label>
-						</Chip>
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>
-								{formatMoney(wallet.dailySafeSpend, currency)} daily safe spend
-							</Chip.Label>
-						</Chip>
-					</View>
-					<TravelInfoRow
-						detail={
-							now
-								? `${getTimeRange(now.item)} · ${
-										now.item.locationName || "Location TBD"
-									}`
-								: "Add timed itinerary items to power Travel Mode."
-						}
-						icon="play-circle-outline"
-						label={now?.item.title ?? "No current item"}
+		<TripModuleScreenFrame activeTab="travel" tripId={tripId}>
+			<Container
+				className="px-4 pb-28"
+				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
+			>
+				<View className="gap-4 pb-4">
+					<RouteHeader
+						eyebrow="Travel"
+						icon="navigate-outline"
+						subtitle="Today-first view for itinerary, documents, risks, and spend."
+						title="Travel Mode"
 					/>
-					{now ? (
-						<Button
-							onPress={() => {
-								updateItineraryItem({
-									itemId: now.item._id,
-									status:
-										now.item.status === "completed" ? "planned" : "completed",
-								}).catch(() => undefined);
-							}}
-							size="sm"
-							variant="secondary"
+					<TripModuleViyaAssistCard
+						agentModule="travel"
+						description="Ask for day-of help, generate backup moves, or explain what to do next."
+						moduleLabel="Travel Mode"
+						tripId={tripId}
+					/>
+
+					<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
+						<View className="flex-row flex-wrap gap-2">
+							<Chip size="sm" variant="secondary">
+								<Chip.Label>{workspace.trip.destination}</Chip.Label>
+							</Chip>
+							<Chip size="sm" variant="secondary">
+								<Chip.Label>
+									{formatMoney(wallet.dailySafeSpend, currency)} daily safe
+									spend
+								</Chip.Label>
+							</Chip>
+						</View>
+						<TravelInfoRow
+							detail={
+								now
+									? `${getTimeRange(now.item)} · ${
+											now.item.locationName || "Location TBD"
+										}`
+									: "Add timed itinerary items to power Travel Mode."
+							}
+							icon="play-circle-outline"
+							label={now?.item.title ?? "No current item"}
+						/>
+						{now ? (
+							<Button
+								onPress={() => {
+									updateItineraryItem({
+										itemId: now.item._id,
+										status:
+											now.item.status === "completed" ? "planned" : "completed",
+									}).catch(() => undefined);
+								}}
+								size="sm"
+								variant="secondary"
+							>
+								<Button.Label>
+									{now.item.status === "completed"
+										? "Mark current planned"
+										: "Complete current item"}
+								</Button.Label>
+							</Button>
+						) : null}
+						<TravelInfoRow
+							detail={
+								next
+									? `${getTimeRange(next.item)} · ${
+											next.item.locationName || "Location TBD"
+										}`
+									: "No upcoming item found."
+							}
+							icon="play-forward-outline"
+							label={next?.item.title ?? "No next item"}
+						/>
+					</Surface>
+
+					<QuickExpensePanel
+						error={expenseError}
+						form={expenseForm}
+						isSaving={isSavingExpense}
+						onSubmit={() => {
+							handleQuickExpense().catch(() => undefined);
+						}}
+						setForm={setExpenseForm}
+						tripId={tripId}
+					/>
+
+					<QuickNotePanel
+						error={noteError}
+						form={noteForm}
+						isSaving={isSavingNote}
+						noteCount={workspace.notes.length}
+						onSubmit={() => {
+							handleQuickNote().catch(() => undefined);
+						}}
+						setForm={setNoteForm}
+						tripId={tripId}
+					/>
+
+					<View className="gap-3">
+						<Text
+							className="px-1"
+							color="muted"
+							type="body-xs"
+							weight="semibold"
 						>
-							<Button.Label>
-								{now.item.status === "completed"
-									? "Mark current planned"
-									: "Complete current item"}
-							</Button.Label>
-						</Button>
-					) : null}
-					<TravelInfoRow
-						detail={
-							next
-								? `${getTimeRange(next.item)} · ${
-										next.item.locationName || "Location TBD"
-									}`
-								: "No upcoming item found."
-						}
-						icon="play-forward-outline"
-						label={next?.item.title ?? "No next item"}
-					/>
-				</Surface>
-
-				<QuickExpensePanel
-					error={expenseError}
-					form={expenseForm}
-					isSaving={isSavingExpense}
-					onSubmit={() => {
-						handleQuickExpense().catch(() => undefined);
-					}}
-					setForm={setExpenseForm}
-					tripId={tripId}
-				/>
-
-				<QuickNotePanel
-					error={noteError}
-					form={noteForm}
-					isSaving={isSavingNote}
-					noteCount={workspace.notes.length}
-					onSubmit={() => {
-						handleQuickNote().catch(() => undefined);
-					}}
-					setForm={setNoteForm}
-					tripId={tripId}
-				/>
-
-				<View className="gap-3">
-					<Text className="px-1" color="muted" type="body-xs" weight="semibold">
-						TICKETS AND CONFIRMATIONS
-					</Text>
-					{activeBookings.length === 0 ? (
-						<TravelInfoRow
-							detail="Upload confirmations or mark booking targets confirmed."
-							icon="ticket-outline"
-							label="No confirmed bookings"
-						/>
-					) : (
-						activeBookings
-							.slice(0, 5)
-							.map((booking) => (
-								<TravelInfoRow
-									detail={`${booking.provider ?? "Provider TBD"} · ${
-										booking.confirmationCode ?? "No code"
-									}`}
-									icon="ticket-outline"
-									key={booking._id}
-									label={booking.title}
-								/>
-							))
-					)}
-				</View>
-
-				<View className="gap-3">
-					<Text className="px-1" color="muted" type="body-xs" weight="semibold">
-						IMPORTANT DOCUMENTS
-					</Text>
-					{activeDocuments.length === 0 ? (
-						<TravelInfoRow
-							detail="Upload IDs, tickets, vouchers, and insurance before travel."
-							icon="documents-outline"
-							label="No documents uploaded"
-						/>
-					) : (
-						activeDocuments.map((document) => (
+							TICKETS AND CONFIRMATIONS
+						</Text>
+						{activeBookings.length === 0 ? (
 							<TravelInfoRow
-								icon="document-outline"
-								key={document.key}
-								label={document.title}
+								detail="Upload confirmations or mark booking targets confirmed."
+								icon="ticket-outline"
+								label="No confirmed bookings"
 							/>
-						))
-					)}
-				</View>
+						) : (
+							activeBookings
+								.slice(0, 5)
+								.map((booking) => (
+									<TravelInfoRow
+										detail={`${booking.provider ?? "Provider TBD"} · ${
+											booking.confirmationCode ?? "No code"
+										}`}
+										icon="ticket-outline"
+										key={booking._id}
+										label={booking.title}
+									/>
+								))
+						)}
+					</View>
 
-				<View className="gap-3">
-					<Text className="px-1" color="muted" type="body-xs" weight="semibold">
-						OPEN RISKS
-					</Text>
-					{openRisks.length === 0 ? (
-						<TravelInfoRow
-							detail="Travel Mode will surface watch-outs here."
-							icon="checkmark-circle-outline"
-							label="No open risks"
-						/>
-					) : (
-						openRisks
-							.slice(0, 4)
-							.map((risk) => (
+					<View className="gap-3">
+						<Text
+							className="px-1"
+							color="muted"
+							type="body-xs"
+							weight="semibold"
+						>
+							IMPORTANT DOCUMENTS
+						</Text>
+						{activeDocuments.length === 0 ? (
+							<TravelInfoRow
+								detail="Upload IDs, tickets, vouchers, and insurance before travel."
+								icon="documents-outline"
+								label="No documents uploaded"
+							/>
+						) : (
+							activeDocuments.map((document) => (
 								<TravelInfoRow
-									detail={risk.suggestedAction}
-									icon="warning-outline"
-									key={risk._id}
-									label={risk.title}
+									icon="document-outline"
+									key={document.key}
+									label={document.title}
 								/>
 							))
-					)}
+						)}
+					</View>
+
+					<View className="gap-3">
+						<Text
+							className="px-1"
+							color="muted"
+							type="body-xs"
+							weight="semibold"
+						>
+							OPEN RISKS
+						</Text>
+						{openRisks.length === 0 ? (
+							<TravelInfoRow
+								detail="Travel Mode will surface watch-outs here."
+								icon="checkmark-circle-outline"
+								label="No open risks"
+							/>
+						) : (
+							openRisks
+								.slice(0, 4)
+								.map((risk) => (
+									<TravelInfoRow
+										detail={risk.suggestedAction}
+										icon="warning-outline"
+										key={risk._id}
+										label={risk.title}
+									/>
+								))
+						)}
+					</View>
 				</View>
-			</View>
-		</Container>
+			</Container>
+		</TripModuleScreenFrame>
 	);
 }

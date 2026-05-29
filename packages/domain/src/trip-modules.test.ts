@@ -9,6 +9,7 @@ const baseInput = {
 	expenses: [],
 	itineraryDays: [],
 	itineraryItems: [],
+	moments: [],
 	readinessScore: 0,
 	risks: [],
 	savedPlaces: [],
@@ -16,6 +17,25 @@ const baseInput = {
 };
 
 describe("trip module summaries", () => {
+	it("returns every trip workspace module in navigation order", () => {
+		const modules = getTripModuleSummaries(baseInput);
+
+		expect(modules.map((module) => module.id)).toEqual([
+			"itinerary",
+			"places",
+			"bookings",
+			"documents",
+			"budget",
+			"readiness",
+			"risks",
+			"companions",
+			"notes",
+			"travel",
+			"memories",
+			"recap",
+		]);
+	});
+
 	it("marks an empty planning workspace as empty or ready where appropriate", () => {
 		const modules = getTripModuleSummaries(baseInput);
 		const byId = new Map(modules.map((module) => [module.id, module]));
@@ -27,6 +47,9 @@ describe("trip module summaries", () => {
 		expect(byId.get("budget")?.health).toBe("empty");
 		expect(byId.get("readiness")?.health).toBe("empty");
 		expect(byId.get("risks")?.health).toBe("ready");
+		expect(byId.get("travel")?.health).toBe("empty");
+		expect(byId.get("memories")?.health).toBe("empty");
+		expect(byId.get("recap")?.health).toBe("empty");
 	});
 
 	it("marks confirmed bookings and high readiness as ready", () => {

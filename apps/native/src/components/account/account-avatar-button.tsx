@@ -9,10 +9,6 @@ interface AccountAvatarButtonProps {
 	size?: number;
 }
 
-const avatarButtonShadowStyle = {
-	boxShadow: "0 10px 22px rgba(15, 23, 42, 0.12)",
-} as const;
-
 function getInitials(name?: string | null) {
 	if (!name) {
 		return "V";
@@ -71,7 +67,6 @@ export function AccountAvatarButton({ size = 48 }: AccountAvatarButtonProps) {
 			className="items-center justify-center rounded-full"
 			onPress={() => router.push(VIYA_ROUTES.profile)}
 			style={({ pressed }) => ({
-				...avatarButtonShadowStyle,
 				height: size,
 				transform: [{ scale: pressed ? 0.97 : 1 }],
 				width: size,

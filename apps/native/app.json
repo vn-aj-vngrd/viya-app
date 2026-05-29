@@ -24,7 +24,7 @@
         "CFBundleDisplayName": ""
       }
     },
-    "plugins": ["expo-font", "@react-native-community/datetimepicker"],
+    "plugins": ["expo-font"],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true

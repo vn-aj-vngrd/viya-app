@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Doc } from "@viya-app/backend/convex/_generated/dataModel";
 import { TRIP_STATUSES } from "@viya-app/domain";
@@ -6,7 +6,13 @@ import { usePaginatedQuery } from "convex/react";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { BottomSheet, Surface, Text, useThemeColor } from "heroui-native";
-import { useCallback, useDeferredValue, useMemo, useState } from "react";
+import {
+	type ComponentProps,
+	useCallback,
+	useDeferredValue,
+	useMemo,
+	useState,
+} from "react";
 import {
 	FlatList,
 	ImageBackground,
@@ -16,12 +22,15 @@ import {
 	TextInput,
 	View,
 } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
 
 import { Container } from "@/components/container";
 import { NavigationIconButton } from "@/src/components/navigation/navigation-icon-button";
 import { VIYA_ROUTES } from "@/src/constants/routes";
+import { useDestinationImages } from "@/src/features/home/use-destination-images";
+import { isDecorativeDestinationImageUrl } from "@/src/features/trips/trip-cover-image";
 import {
 	formatMoney,
 	formatTripWindowWithDuration,
@@ -37,17 +46,18 @@ type PrimaryTripFilter = "all" | "completed" | "upcoming";
 type UserFacingTripStatus = (typeof TRIP_STATUSES)[number];
 type StatusTripFilter = `status:${UserFacingTripStatus}`;
 type ActiveTripFilter = Exclude<PrimaryTripFilter, "all"> | StatusTripFilter;
+type FilterIconName = ComponentProps<typeof Feather>["name"];
 
 const tripsPageSize = 8;
 const skeletonRows = ["first", "second", "third"] as const;
 const primaryTripFilters: Array<{
-	icon: keyof typeof Ionicons.glyphMap;
+	icon: FilterIconName;
 	label: string;
 	value: PrimaryTripFilter;
 }> = [
-	{ icon: "albums-outline", label: "All", value: "all" },
-	{ icon: "calendar-outline", label: "Upcoming", value: "upcoming" },
-	{ icon: "archive-outline", label: "Completed", value: "completed" },
+	{ icon: "map", label: "All", value: "all" },
+	{ icon: "calendar", label: "Upcoming", value: "upcoming" },
+	{ icon: "check-circle", label: "Completed", value: "completed" },
 ];
 const statusFilterOptions = TRIP_STATUSES.map((status) => ({
 	status,
@@ -65,6 +75,18 @@ const getBudgetLabel = (trip: Trip) => {
 	}
 
 	return formatMoney(trip.budgetAmount, trip.budgetCurrency ?? "PHP");
+};
+
+// Titles default to "{destination} Trip", so the destination line usually just
+// echoes the title. Only show it when it carries information the title doesn't.
+const shouldShowDestinationLine = (title: string, destination: string) => {
+	const normalizedDestination = destination.trim().toLowerCase();
+
+	if (!normalizedDestination) {
+		return false;
+	}
+
+	return !title.trim().toLowerCase().includes(normalizedDestination);
 };
 
 function TripsSearchField({
@@ -101,8 +123,8 @@ function TripsSearchField({
 function TripCardSkeleton() {
 	return (
 		<Surface className="rounded-[28px] border border-border bg-surface p-3">
-			<View className="flex-row gap-3">
-				<View className="h-[104px] w-[104px] rounded-[22px] bg-surface-secondary" />
+			<View className="flex-row gap-3.5">
+				<View className="h-[84px] w-[84px] rounded-[18px] bg-surface-secondary" />
 				<View className="min-w-0 flex-1 justify-center gap-2.5 py-0.5">
 					<View className="h-4 w-3/4 rounded-full bg-surface-secondary" />
 					<View className="h-3.5 w-1/2 rounded-full bg-surface-secondary" />
@@ -111,7 +133,7 @@ function TripCardSkeleton() {
 			</View>
 			<View className="mt-3 flex-row items-center justify-between border-border border-t pt-3">
 				<View className="flex-row items-center gap-2.5">
-					<View className="h-[38px] w-[38px] rounded-full bg-surface-secondary" />
+					<View className="h-[34px] w-[34px] rounded-full bg-surface-secondary" />
 					<View className="gap-1.5">
 						<View className="h-3.5 w-24 rounded-full bg-surface-secondary" />
 						<View className="h-3 w-16 rounded-full bg-surface-secondary" />
@@ -186,12 +208,12 @@ function FilterPill({
 	onPress,
 	rightIcon,
 }: {
-	icon: keyof typeof Ionicons.glyphMap;
+	icon: FilterIconName;
 	isIconOnly?: boolean;
 	isSelected: boolean;
 	label: string;
 	onPress: () => void;
-	rightIcon?: keyof typeof Ionicons.glyphMap;
+	rightIcon?: FilterIconName;
 }) {
 	const foregroundColor = useThemeColor("foreground");
 	const selectedColor = "#0A84FF";
@@ -211,19 +233,18 @@ function FilterPill({
 				backgroundColor: isSelected ? "rgba(10, 132, 255, 0.13)" : "#FFFFFF",
 				borderColor: isSelected
 					? "rgba(10, 132, 255, 0.24)"
-					: "rgba(24, 24, 27, 0.04)",
-				boxShadow: "none",
+					: "rgba(24, 24, 27, 0.08)",
 				transform: [{ scale: pressed ? 0.98 : 1 }],
 			})}
 		>
-			<Ionicons color={contentColor} name={icon} size={16} />
+			<Feather color={contentColor} name={icon} size={15} />
 			{isIconOnly ? null : (
 				<Text style={{ color: contentColor }} type="body-sm" weight="semibold">
 					{label}
 				</Text>
 			)}
 			{rightIcon && !isIconOnly ? (
-				<Ionicons color={contentColor} name={rightIcon} size={15} />
+				<Feather color={contentColor} name={rightIcon} size={14} />
 			) : null}
 		</Pressable>
 	);
@@ -265,7 +286,7 @@ function TripsFilterChips({
 					);
 				})}
 				<FilterPill
-					icon="options-outline"
+					icon="sliders"
 					isSelected={activeStatusFilter !== null}
 					label="Status"
 					onPress={onStatusPress}
@@ -451,38 +472,38 @@ const getTripGradientPalette = (destination: string) => {
 	return tripGradientPalettes[charCodeTotal % tripGradientPalettes.length];
 };
 
-const chevronColor = "#C7C7CC";
-const metaIconColor = "#71717A";
-
-function TripThumbnail({ trip }: { trip: Trip }) {
+function TripThumbnail({
+	replacementCoverImageUrl,
+	trip,
+}: {
+	replacementCoverImageUrl?: string;
+	trip: Trip;
+}) {
 	const palette = getTripGradientPalette(trip.destination);
 	const destinationInitial = (
 		trip.destination.trim().charAt(0) || "V"
 	).toUpperCase();
+	const coverImageUrl = isDecorativeDestinationImageUrl(trip.coverImageUrl)
+		? replacementCoverImageUrl
+		: (trip.coverImageUrl ?? replacementCoverImageUrl);
 
-	if (trip.coverImageUrl) {
+	if (coverImageUrl) {
 		return (
-			<View className="h-[104px] w-[104px] overflow-hidden rounded-[22px] bg-surface-secondary">
+			<View className="h-[84px] w-[84px] overflow-hidden rounded-[18px] bg-surface-secondary">
 				<ImageBackground
 					accessibilityIgnoresInvertColors={true}
 					className="h-full w-full"
-					imageStyle={{ borderRadius: 22 }}
-					source={{ uri: trip.coverImageUrl }}
-				>
-					<LinearGradient
-						colors={["transparent", "rgba(9, 12, 24, 0.72)"]}
-						style={{ flex: 1, justifyContent: "flex-end", padding: 9 }}
-					>
-						<Text
-							className="text-white"
-							numberOfLines={1}
-							type="body-xs"
-							weight="bold"
-						>
-							{trip.destination}
-						</Text>
-					</LinearGradient>
-				</ImageBackground>
+					imageStyle={{ borderRadius: 18 }}
+					source={{ uri: coverImageUrl }}
+				/>
+				<View
+					className="absolute inset-0 rounded-[18px]"
+					pointerEvents="none"
+					style={{
+						borderColor: "rgba(0, 0, 0, 0.06)",
+						borderWidth: 1,
+					}}
+				/>
 			</View>
 		);
 	}
@@ -494,29 +515,23 @@ function TripThumbnail({ trip }: { trip: Trip }) {
 			start={{ x: 0, y: 0 }}
 			style={{
 				alignItems: "center",
-				borderRadius: 22,
-				height: 104,
+				borderRadius: 18,
+				height: 84,
 				justifyContent: "center",
-				width: 104,
+				width: 84,
 			}}
 		>
 			<Text
-				style={{ color: "#FFFFFF", fontSize: 38, lineHeight: 44 }}
+				style={{ color: "#FFFFFF", fontSize: 32, lineHeight: 38 }}
 				weight="bold"
 			>
 				{destinationInitial}
 			</Text>
-			<View
-				className="absolute right-2.5 bottom-2.5 h-7 w-7 items-center justify-center rounded-full"
-				style={{ backgroundColor: palette.chip }}
-			>
-				<Ionicons color="#FFFFFF" name="map" size={14} />
-			</View>
 		</LinearGradient>
 	);
 }
 
-const readinessRingSize = 38;
+const readinessRingSize = 34;
 const readinessRingStroke = 3.5;
 const readinessRingRadius = (readinessRingSize - readinessRingStroke) / 2;
 const readinessRingCircumference = 2 * Math.PI * readinessRingRadius;
@@ -596,11 +611,18 @@ function ReadinessRing({
 	);
 }
 
+const cardEntranceDelayStep = 55;
+const cardEntranceMaxStaggered = 6;
+
 function TripRow({
+	index,
 	onPress,
+	replacementCoverImageUrl,
 	trip,
 }: {
+	index: number;
 	onPress: (trip: Trip) => void;
+	replacementCoverImageUrl?: string;
 	trip: Trip;
 }) {
 	const readinessDisplay = getReadinessDisplay({
@@ -616,113 +638,102 @@ function TripRow({
 		startDate: trip.startDate,
 	});
 	const statusPresentation = getTripStatusPresentation(trip.status);
+	const showDestinationLine = shouldShowDestinationLine(
+		trip.title,
+		trip.destination
+	);
 
 	return (
-		<Pressable
-			accessibilityLabel={`Open ${trip.title}`}
-			accessibilityRole="button"
-			onPress={() => onPress(trip)}
-			style={({ pressed }) => ({
-				transform: [{ scale: pressed ? 0.985 : 1 }],
-			})}
+		<Animated.View
+			entering={FadeInDown.duration(420).delay(
+				Math.min(index, cardEntranceMaxStaggered) * cardEntranceDelayStep
+			)}
 		>
-			<Surface
-				className="rounded-[28px] border border-border bg-surface p-3"
-				style={{ boxShadow: "0 12px 28px rgba(15, 23, 42, 0.07)" }}
+			<Pressable
+				accessibilityLabel={`Open ${trip.title}`}
+				accessibilityRole="button"
+				onPress={() => onPress(trip)}
+				style={({ pressed }) => ({
+					transform: [{ scale: pressed ? 0.985 : 1 }],
+				})}
 			>
-				<View className="flex-row gap-3">
-					<TripThumbnail trip={trip} />
-					<View className="min-w-0 flex-1 justify-center gap-2 py-0.5">
-						<View className="flex-row items-center gap-2">
-							<View
-								className="h-2 w-2 rounded-full"
-								style={{ backgroundColor: statusPresentation.color }}
-							/>
-							<Text
-								className="min-w-0 flex-1"
-								numberOfLines={1}
-								type="body"
-								weight="bold"
-							>
-								{trip.title}
-							</Text>
-							<Ionicons color={chevronColor} name="chevron-forward" size={16} />
-						</View>
-						<View className="flex-row items-center gap-1.5">
-							<Ionicons
-								color={metaIconColor}
-								name="location-outline"
-								size={13}
-							/>
-							<Text
-								className="min-w-0 flex-1"
-								numberOfLines={1}
-								type="body-sm"
-								weight="semibold"
-							>
-								{trip.destination}
-							</Text>
-						</View>
-						<View className="flex-row items-center gap-2">
-							<View className="min-w-0 flex-1 flex-row items-center gap-1.5">
-								<Ionicons
-									color={metaIconColor}
-									name="calendar-outline"
-									size={13}
+				<Surface
+					className="rounded-[28px] border border-border bg-surface p-3"
+					style={{
+						elevation: 2,
+						shadowColor: "#0B1220",
+						shadowOffset: { height: 6, width: 0 },
+						shadowOpacity: 0.06,
+						shadowRadius: 16,
+					}}
+				>
+					<View className="flex-row gap-3.5">
+						<TripThumbnail
+							replacementCoverImageUrl={replacementCoverImageUrl}
+							trip={trip}
+						/>
+						<View className="min-w-0 flex-1 justify-center gap-1.5 py-0.5">
+							<View className="flex-row items-center gap-2">
+								<View
+									className="h-2 w-2 rounded-full"
+									style={{ backgroundColor: statusPresentation.color }}
 								/>
 								<Text
 									className="min-w-0 flex-1"
+									numberOfLines={1}
+									type="body"
+									weight="bold"
+								>
+									{trip.title}
+								</Text>
+							</View>
+							{showDestinationLine ? (
+								<Text
 									color="muted"
 									numberOfLines={1}
-									type="body-xs"
+									type="body-sm"
+									weight="semibold"
 								>
-									{tripWindow}
+									{trip.destination}
 								</Text>
-							</View>
-							<View className="flex-row items-center gap-1.5">
-								<Ionicons
-									color={metaIconColor}
-									name="people-outline"
-									size={13}
-								/>
-								<Text color="muted" numberOfLines={1} type="body-xs">
-									{travelerLabel}
+							) : null}
+							<Text color="muted" numberOfLines={1} type="body-xs">
+								{tripWindow} · {travelerLabel}
+							</Text>
+						</View>
+					</View>
+					<View className="mt-3 flex-row items-center justify-between border-border border-t pt-3">
+						<View className="flex-row items-center gap-2.5">
+							<ReadinessRing
+								hasCoverage={hasReadinessCoverage}
+								progress={readinessDisplay.progress}
+							/>
+							<View className="gap-0.5">
+								<Text numberOfLines={1} type="body-sm" weight="bold">
+									{readinessDisplay.detail}
+								</Text>
+								<Text color="muted" type="body-xs">
+									Readiness
 								</Text>
 							</View>
 						</View>
-					</View>
-				</View>
-				<View className="mt-3 flex-row items-center justify-between border-border border-t pt-3">
-					<View className="flex-row items-center gap-2.5">
-						<ReadinessRing
-							hasCoverage={hasReadinessCoverage}
-							progress={readinessDisplay.progress}
-						/>
-						<View>
-							<Text numberOfLines={1} type="body-sm" weight="bold">
-								{readinessDisplay.detail}
+						<View className="items-end gap-0.5">
+							<Text
+								color={hasBudget ? undefined : "muted"}
+								numberOfLines={1}
+								type="body-sm"
+								weight="bold"
+							>
+								{budgetLabel}
 							</Text>
 							<Text color="muted" type="body-xs">
-								Readiness
+								Budget
 							</Text>
 						</View>
 					</View>
-					<View className="items-end">
-						<Text
-							color={hasBudget ? undefined : "muted"}
-							numberOfLines={1}
-							type="body-sm"
-							weight="bold"
-						>
-							{budgetLabel}
-						</Text>
-						<Text color="muted" type="body-xs">
-							Budget
-						</Text>
-					</View>
-				</View>
-			</Surface>
-		</Pressable>
+				</Surface>
+			</Pressable>
+		</Animated.View>
 	);
 }
 export default function TripsScreen() {
@@ -748,6 +759,24 @@ export default function TripsScreen() {
 	const isLoadingMore = status === "LoadingMore";
 	const canLoadMore = status === "CanLoadMore";
 	const hasSearch = deferredSearch.length > 0;
+	const destinationsNeedingCoverImages = useMemo(
+		() =>
+			Array.from(
+				new Set(
+					results
+						.filter(
+							(trip) =>
+								!trip.coverImageUrl ||
+								isDecorativeDestinationImageUrl(trip.coverImageUrl)
+						)
+						.map((trip) => trip.destination)
+				)
+			),
+		[results]
+	);
+	const replacementCoverImageUrls = useDestinationImages(
+		destinationsNeedingCoverImages
+	);
 
 	const handleManualTripPress = () => router.push(VIYA_ROUTES.newTrip);
 	const handleStatusFilterSelect = (filter: StatusTripFilter | null) => {
@@ -765,8 +794,13 @@ export default function TripsScreen() {
 			loadMore(tripsPageSize);
 		}
 	};
-	const renderTrip: ListRenderItem<Trip> = ({ item }) => (
-		<TripRow onPress={handleTripPress} trip={item} />
+	const renderTrip: ListRenderItem<Trip> = ({ index, item }) => (
+		<TripRow
+			index={index}
+			onPress={handleTripPress}
+			replacementCoverImageUrl={replacementCoverImageUrls[item.destination]}
+			trip={item}
+		/>
 	);
 
 	return (
