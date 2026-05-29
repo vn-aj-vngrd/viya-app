@@ -1,6 +1,18 @@
+import {
+	calculateReadinessScore,
+	type Priority,
+	type ReadinessCategory,
+	type ReadinessItem,
+	TRIP_COMPLETED_STATUSES,
+	TRIP_PLANNING_STATUSES,
+	type TripStatus,
+	type WorkStatus,
+} from "@viya-app/domain";
 import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
 
+import type { Doc } from "./_generated/dataModel";
+import type { QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import {
 	ensureTripAccess,
@@ -39,6 +51,41 @@ const joinItems = (items: string[], fallback: string) => {
 
 const normalizeSearchText = (value: string) =>
 	value.replace(whitespacePattern, " ").trim().toLowerCase();
+
+type TripSearchStatusFilter = `status:${TripStatus}`;
+
+const getTripStatusFilter = (status: string): TripSearchStatusFilter =>
+	`status:${status as TripStatus}`;
+
+const toDomainReadinessItem = (item: Doc<"readinessItems">): ReadinessItem => ({
+	aiReason: item.aiReason,
+	assignedToMemberId: item.assignedToMemberId ?? null,
+	category: item.category as ReadinessCategory,
+	description: item.description,
+	dueDate: item.dueDate,
+	id: item._id,
+	priority: item.priority as Priority,
+	source: item.source as ReadinessItem["source"],
+	status: item.status as WorkStatus,
+	title: item.title,
+	tripId: item.tripId,
+});
+
+const withReadinessSnapshot = async (ctx: QueryCtx, trip: Doc<"trips">) => {
+	const readinessItems = await ctx.db
+		.query("readinessItems")
+		.withIndex("by_trip", (q) => q.eq("tripId", trip._id))
+		.collect();
+	const readinessScore = calculateReadinessScore(
+		readinessItems.map(toDomainReadinessItem)
+	);
+
+	return {
+		...trip,
+		readinessItemCount: readinessItems.length,
+		readinessScore: readinessScore.overallScore,
+	};
+};
 
 const getTripSearchText = ({
 	budgetAmount,
@@ -306,6 +353,34 @@ const getRiskSeverity = (item: string) => {
 	return "medium";
 };
 
+const matchesTripFilters = ({
+	filters,
+	isCompleted,
+	isPlanning,
+	isPreparing,
+	isUpcoming,
+	needsReadiness,
+	tripStatus,
+}: {
+	filters: Set<string>;
+	isCompleted: boolean;
+	isPlanning: boolean;
+	isPreparing: boolean;
+	isUpcoming: boolean;
+	needsReadiness: boolean;
+	tripStatus: string;
+}) =>
+	[
+		filters.has("planning") && isPlanning,
+		filters.has("booking") && tripStatus === "booking",
+		filters.has("preparing") && isPreparing,
+		filters.has("traveling") && tripStatus === "traveling",
+		filters.has("needsReadiness") && needsReadiness,
+		filters.has("upcoming") && isUpcoming,
+		filters.has("completed") && isCompleted,
+		filters.has(getTripStatusFilter(tripStatus)),
+	].some(Boolean);
+
 export const listTrips = query({
 	args: {},
 	handler: async (ctx) => {
@@ -324,10 +399,18 @@ export const searchTrips = query({
 			v.array(
 				v.union(
 					v.literal("planning"),
-					v.literal("ready"),
+					v.literal("booking"),
+					v.literal("preparing"),
+					v.literal("traveling"),
 					v.literal("needsReadiness"),
 					v.literal("upcoming"),
-					v.literal("completed")
+					v.literal("completed"),
+					v.literal("status:planning"),
+					v.literal("status:booking"),
+					v.literal("status:preparing"),
+					v.literal("status:traveling"),
+					v.literal("status:completed"),
+					v.literal("status:archived")
 				)
 			)
 		),
@@ -355,23 +438,26 @@ export const searchTrips = query({
 			}
 
 			if (filters.size > 0) {
-				const isPlanning =
-					trip.status === "draft" || trip.status === "planning";
-				const isReady = trip.readinessScore >= 90;
+				const isPlanning = TRIP_PLANNING_STATUSES.includes(
+					trip.status as never
+				);
+				const isPreparing =
+					trip.status === "preparing" || trip.readinessScore >= 90;
 				const needsReadiness = trip.readinessScore < 90;
 				const isUpcoming = !!trip.startDate && trip.startDate >= today;
 				const isCompleted =
-					trip.status === "completed" ||
+					TRIP_COMPLETED_STATUSES.includes(trip.status as never) ||
 					(!!trip.endDate && trip.endDate < today);
-
 				if (
-					!(
-						(filters.has("planning") && isPlanning) ||
-						(filters.has("ready") && isReady) ||
-						(filters.has("needsReadiness") && needsReadiness) ||
-						(filters.has("upcoming") && isUpcoming) ||
-						(filters.has("completed") && isCompleted)
-					)
+					!matchesTripFilters({
+						filters,
+						isCompleted,
+						isPlanning,
+						isPreparing,
+						isUpcoming,
+						needsReadiness,
+						tripStatus: trip.status,
+					})
 				) {
 					return false;
 				}
@@ -384,12 +470,15 @@ export const searchTrips = query({
 			return getTripSearchText(trip).includes(search);
 		});
 		const page = filteredTrips.slice(startIndex, startIndex + pageSize);
+		const pageWithReadiness = await Promise.all(
+			page.map((trip) => withReadinessSnapshot(ctx, trip))
+		);
 		const nextIndex = startIndex + page.length;
 
 		return {
 			continueCursor: nextIndex.toString(),
 			isDone: nextIndex >= filteredTrips.length,
-			page,
+			page: pageWithReadiness,
 		};
 	},
 });
@@ -457,6 +546,137 @@ export const updateTripBudget = mutation({
 		});
 
 		return ctx.db.get(args.tripId);
+	},
+});
+
+export const toggleTripFavorite = mutation({
+	args: {
+		isFavorite: v.optional(v.boolean()),
+		tripId: v.id("trips"),
+	},
+	handler: async (ctx, args) => {
+		const identity = await getRequiredIdentity(ctx);
+		const trip = await ensureTripAccess(ctx, args.tripId, identity.subject);
+		const isFavorite = args.isFavorite ?? !trip.isFavorite;
+
+		await ctx.db.patch(args.tripId, {
+			isFavorite,
+			updatedAt: Date.now(),
+		});
+
+		return ctx.db.get(args.tripId);
+	},
+});
+
+export const archiveTrip = mutation({
+	args: {
+		tripId: v.id("trips"),
+	},
+	handler: async (ctx, args) => {
+		const identity = await getRequiredIdentity(ctx);
+		await ensureTripAccess(ctx, args.tripId, identity.subject);
+
+		await ctx.db.patch(args.tripId, {
+			status: "archived",
+			updatedAt: Date.now(),
+		});
+
+		return ctx.db.get(args.tripId);
+	},
+});
+
+export const deleteTrip = mutation({
+	args: {
+		tripId: v.id("trips"),
+	},
+	handler: async (ctx, args) => {
+		const identity = await getRequiredIdentity(ctx);
+		await ensureTripAccess(ctx, args.tripId, identity.subject);
+		const [
+			bookings,
+			documents,
+			expenses,
+			itineraryDays,
+			itineraryItems,
+			moments,
+			readinessItems,
+			risks,
+			vaultItems,
+		] = await Promise.all([
+			ctx.db
+				.query("bookings")
+				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+				.collect(),
+			ctx.db
+				.query("travelDocuments")
+				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+				.collect(),
+			ctx.db
+				.query("expenses")
+				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+				.collect(),
+			ctx.db
+				.query("itineraryDays")
+				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+				.collect(),
+			ctx.db
+				.query("itineraryItems")
+				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+				.collect(),
+			ctx.db
+				.query("moments")
+				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+				.collect(),
+			ctx.db
+				.query("readinessItems")
+				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+				.collect(),
+			ctx.db
+				.query("risks")
+				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+				.collect(),
+			ctx.db
+				.query("vaultItems")
+				.withIndex("by_owner_trip", (q) =>
+					q.eq("ownerId", identity.subject).eq("tripId", args.tripId)
+				)
+				.collect(),
+		]);
+		const chatThreads = await ctx.db
+			.query("chatThreads")
+			.withIndex("by_owner_updatedAt", (q) => q.eq("ownerId", identity.subject))
+			.collect();
+
+		for (const item of [
+			...bookings,
+			...documents,
+			...expenses,
+			...itineraryDays,
+			...itineraryItems,
+			...moments,
+			...readinessItems,
+			...risks,
+		]) {
+			await ctx.db.delete(item._id);
+		}
+
+		for (const item of vaultItems) {
+			await ctx.storage.delete(item.storageId);
+			await ctx.db.delete(item._id);
+		}
+
+		for (const thread of chatThreads) {
+			if (thread.tripId === args.tripId) {
+				await ctx.db.patch(thread._id, {
+					tripId: undefined,
+					updatedAt: Date.now(),
+				});
+			}
+		}
+
+		await ctx.db.delete(args.tripId);
+
+		return { tripId: args.tripId };
 	},
 });
 
@@ -533,9 +753,9 @@ export const createTrip = mutation({
 			travelStyle: args.travelStyle ?? "balanced",
 			pace: "moderate",
 			groupType: args.groupType ?? "solo",
-			status: "draft",
+			status: "planning",
 			readinessScore: 0,
-			summary: args.summary ?? "Manual trip draft created in Viya.",
+			summary: args.summary ?? "Manual trip planning started in Viya.",
 			isDemo: false,
 			createdAt: now,
 			updatedAt: now,

@@ -12,12 +12,17 @@ import {
 	Text,
 	TextField,
 } from "heroui-native";
+import type { ComponentProps } from "react";
 import { useMemo, useState } from "react";
 import { View } from "react-native";
 
 import { Container } from "@/components/container";
 import { EmptyState } from "@/src/components/empty-state";
 import { RouteHeader } from "@/src/components/navigation/route-header";
+import {
+	formatMoney,
+	formatStatus,
+} from "@/src/features/trips/trip-dashboard-utils";
 import { useTripIdParam } from "@/src/features/trips/use-trip-id-param";
 
 const dateMs = 86_400_000;
@@ -50,9 +55,6 @@ const initialExpenseForm = (): ExpenseFormState => ({
 	spentAt: todayIsoDate(),
 	title: "",
 });
-
-const formatMoney = (amount: number, currency = "PHP") =>
-	`${currency} ${Math.round(amount).toLocaleString()}`;
 
 const parseAmount = (value: string) => Number(value.replaceAll(",", "").trim());
 
@@ -91,16 +93,78 @@ const getBudgetStatusLabel = ({
 	return "On track";
 };
 
-function MetricTile({ label, value }: { label: string; value: string }) {
+const getBudgetProgress = ({
+	budgetAmount,
+	totalTrackedSpend,
+}: {
+	budgetAmount?: number;
+	totalTrackedSpend: number;
+}) => {
+	if (!budgetAmount) {
+		return 0;
+	}
+
+	return Math.min(100, Math.max(0, (totalTrackedSpend / budgetAmount) * 100));
+};
+
+function MetricTile({
+	detail,
+	icon,
+	label,
+	value,
+}: {
+	detail?: string;
+	icon: ComponentProps<typeof Ionicons>["name"];
+	label: string;
+	value: string;
+}) {
 	return (
-		<Surface className="min-w-[46%] flex-1 gap-1 rounded-[22px] border border-border bg-surface-secondary p-4">
-			<Text color="muted" type="body-xs" weight="semibold">
-				{label}
-			</Text>
-			<Text type="body" weight="bold">
-				{value}
-			</Text>
-		</Surface>
+		<View className="min-w-[46%] flex-1 gap-2 rounded-[22px] bg-surface-secondary p-4">
+			<View className="flex-row items-center gap-2">
+				<Ionicons color="#0A84FF" name={icon} size={16} />
+				<Text color="muted" numberOfLines={1} type="body-xs" weight="semibold">
+					{label}
+				</Text>
+			</View>
+			<View className="gap-0.5">
+				<Text numberOfLines={1} type="body" weight="bold">
+					{value}
+				</Text>
+				{detail ? (
+					<Text color="muted" numberOfLines={1} type="body-xs">
+						{detail}
+					</Text>
+				) : null}
+			</View>
+		</View>
+	);
+}
+
+function ProgressBar({ progress }: { progress: number }) {
+	return (
+		<View className="h-2 overflow-hidden rounded-full bg-primary/10">
+			<View
+				className="h-full rounded-full bg-primary"
+				style={{ width: `${progress}%` }}
+			/>
+		</View>
+	);
+}
+
+function SectionTitle({
+	icon,
+	title,
+}: {
+	icon: ComponentProps<typeof Ionicons>["name"];
+	title: string;
+}) {
+	return (
+		<View className="flex-row items-center gap-2">
+			<Ionicons color="#0A84FF" name={icon} size={18} />
+			<Text.Heading type="h5" weight="semibold">
+				{title}
+			</Text.Heading>
+		</View>
 	);
 }
 
@@ -120,7 +184,7 @@ function CategoryPicker({
 					size="sm"
 					variant={category === value ? "primary" : "secondary"}
 				>
-					<Button.Label>{category}</Button.Label>
+					<Button.Label>{formatStatus(category)}</Button.Label>
 				</Button>
 			))}
 		</View>
@@ -138,7 +202,12 @@ export function TripBudgetScreen() {
 	const [budgetDraft, setBudgetDraft] = useState("");
 	const [expenseForm, setExpenseForm] =
 		useState<ExpenseFormState>(initialExpenseForm);
-	const [errorMessage, setErrorMessage] = useState<string | null>(null);
+	const [budgetErrorMessage, setBudgetErrorMessage] = useState<string | null>(
+		null
+	);
+	const [expenseErrorMessage, setExpenseErrorMessage] = useState<string | null>(
+		null
+	);
 	const [isSavingBudget, setIsSavingBudget] = useState(false);
 	const [isAddingExpense, setIsAddingExpense] = useState(false);
 
@@ -186,15 +255,22 @@ export function TripBudgetScreen() {
 		remainingAmount: summary.remainingAmount,
 		totalTrackedSpend: summary.totalTrackedSpend,
 	});
+	const budgetProgress = getBudgetProgress({
+		budgetAmount,
+		totalTrackedSpend: summary.totalTrackedSpend,
+	});
+	const plannedBudgetLabel = budgetAmount
+		? formatMoney(budgetAmount, currency)
+		: "Not set";
 
 	const handleSaveBudget = async () => {
 		const amount = parseAmount(budgetDraft);
 		if (!(Number.isFinite(amount) && amount > 0)) {
-			setErrorMessage("Budget must be a positive number.");
+			setBudgetErrorMessage("Budget must be a positive number.");
 			return;
 		}
 
-		setErrorMessage(null);
+		setBudgetErrorMessage(null);
 		setIsSavingBudget(true);
 		try {
 			await updateTripBudget({
@@ -204,7 +280,7 @@ export function TripBudgetScreen() {
 			});
 			setBudgetDraft("");
 		} catch (error) {
-			setErrorMessage(
+			setBudgetErrorMessage(
 				error instanceof Error ? error.message : "Could not update budget."
 			);
 		} finally {
@@ -216,16 +292,16 @@ export function TripBudgetScreen() {
 		const amount = parseAmount(expenseForm.amount);
 		const title = expenseForm.title.trim();
 		if (!title) {
-			setErrorMessage("Add an expense title.");
+			setExpenseErrorMessage("Add an expense title.");
 			return;
 		}
 
 		if (!(Number.isFinite(amount) && amount > 0)) {
-			setErrorMessage("Expense amount must be positive.");
+			setExpenseErrorMessage("Expense amount must be positive.");
 			return;
 		}
 
-		setErrorMessage(null);
+		setExpenseErrorMessage(null);
 		setIsAddingExpense(true);
 		try {
 			await addTripExpense({
@@ -239,7 +315,7 @@ export function TripBudgetScreen() {
 			});
 			setExpenseForm(initialExpenseForm());
 		} catch (error) {
-			setErrorMessage(
+			setExpenseErrorMessage(
 				error instanceof Error ? error.message : "Could not add expense."
 			);
 		} finally {
@@ -256,15 +332,24 @@ export function TripBudgetScreen() {
 				<RouteHeader
 					eyebrow="Track"
 					icon="wallet-outline"
-					subtitle="Planned budget, booked costs, manual expenses, and safe daily spend."
+					subtitle="Budget, bookings, manual expenses, and safe daily spend from this trip."
 					title="Budget Wallet"
 				/>
 
-				<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
-					<View className="flex-row items-start justify-between gap-3">
+				<Surface className="gap-5 rounded-[30px] border border-border bg-surface p-5">
+					<View className="flex-row flex-wrap gap-2">
+						<Chip size="sm" variant="secondary">
+							<Chip.Label>Track</Chip.Label>
+						</Chip>
+						<Chip size="sm" variant="secondary">
+							<Chip.Label>{budgetStatus}</Chip.Label>
+						</Chip>
+					</View>
+
+					<View className="gap-3">
 						<View className="min-w-0 flex-1 gap-1">
 							<Text color="muted" type="body-xs" weight="semibold">
-								REMAINING
+								REMAINING WALLET
 							</Text>
 							<Text.Heading type="h2" weight="semibold">
 								{formatMoney(summary.remainingAmount, currency)}
@@ -273,68 +358,80 @@ export function TripBudgetScreen() {
 								{formatMoney(summary.dailySafeSpend, currency)} daily safe spend
 							</Text>
 						</View>
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>{budgetStatus}</Chip.Label>
-						</Chip>
+						<View className="gap-2">
+							<ProgressBar progress={budgetProgress} />
+							<View className="flex-row justify-between gap-3">
+								<Text color="muted" type="body-xs">
+									{formatMoney(summary.totalTrackedSpend, currency)} tracked
+								</Text>
+								<Text color="muted" type="body-xs">
+									{plannedBudgetLabel} planned
+								</Text>
+							</View>
+						</View>
 					</View>
 
 					<View className="flex-row flex-wrap gap-3">
 						<MetricTile
+							detail="Trip cap"
+							icon="flag-outline"
 							label="Planned"
-							value={
-								budgetAmount ? formatMoney(budgetAmount, currency) : "Not set"
-							}
+							value={plannedBudgetLabel}
 						/>
 						<MetricTile
+							detail="Confirmed costs"
+							icon="briefcase-outline"
 							label="Booked"
 							value={formatMoney(summary.confirmedBookingCosts, currency)}
 						/>
 						<MetricTile
+							detail="Logged here"
+							icon="receipt-outline"
 							label="Manual spend"
 							value={formatMoney(summary.manualExpenses, currency)}
 						/>
 						<MetricTile
+							detail="Estimated items"
+							icon="calendar-outline"
 							label="Itinerary plan"
 							value={formatMoney(summary.plannedCosts, currency)}
 						/>
 					</View>
 				</Surface>
 
-				<Surface className="gap-3 rounded-[26px] border border-border bg-surface p-5">
-					<Text.Heading type="h5" weight="semibold">
-						Edit budget
-					</Text.Heading>
-					<View className="flex-row gap-2">
-						<TextField className="min-w-0 flex-1">
-							<Label>
-								<Label.Text>Total budget</Label.Text>
-							</Label>
-							<Input
-								className="h-11 rounded-[18px] border-0 bg-surface-secondary px-4"
-								keyboardType="numeric"
-								onChangeText={setBudgetDraft}
-								placeholder={budgetAmount?.toString() ?? "25000"}
-								value={budgetDraft}
-								variant="secondary"
-							/>
-						</TextField>
-						<Button
-							className="self-end"
-							isDisabled={isSavingBudget}
-							onPress={() => {
-								handleSaveBudget().catch(() => undefined);
-							}}
-						>
-							{isSavingBudget ? <Spinner size="sm" /> : null}
-							<Button.Label>Save</Button.Label>
-						</Button>
-					</View>
+				<Surface className="gap-4 rounded-[26px] border border-border bg-surface p-5">
+					<SectionTitle icon="create-outline" title="Edit budget" />
+					<TextField className="gap-2">
+						<Label>
+							<Label.Text>Total budget</Label.Text>
+						</Label>
+						<Input
+							className="h-12 rounded-[18px] border-0 bg-surface-secondary px-4"
+							keyboardType="numeric"
+							onChangeText={setBudgetDraft}
+							placeholder={budgetAmount?.toString() ?? "25000"}
+							value={budgetDraft}
+							variant="secondary"
+						/>
+					</TextField>
+					{budgetErrorMessage ? (
+						<Text className="text-danger" type="body-sm">
+							{budgetErrorMessage}
+						</Text>
+					) : null}
+					<Button
+						isDisabled={isSavingBudget}
+						onPress={() => {
+							handleSaveBudget().catch(() => undefined);
+						}}
+					>
+						{isSavingBudget ? <Spinner size="sm" /> : null}
+						<Button.Label>Save budget</Button.Label>
+					</Button>
 				</Surface>
 
 				<Surface className="gap-4 rounded-[26px] border border-border bg-surface p-5">
-					<Text.Heading type="h5" weight="semibold">
-						Add expense
-					</Text.Heading>
+					<SectionTitle icon="receipt-outline" title="Add expense" />
 					<TextField className="gap-2">
 						<Label>
 							<Label.Text>Title</Label.Text>
@@ -349,7 +446,7 @@ export function TripBudgetScreen() {
 							variant="secondary"
 						/>
 					</TextField>
-					<View className="flex-row gap-3">
+					<View className="flex-row flex-wrap gap-3">
 						<TextField className="min-w-0 flex-1 gap-2">
 							<Label>
 								<Label.Text>Amount</Label.Text>
@@ -405,9 +502,9 @@ export function TripBudgetScreen() {
 							variant="secondary"
 						/>
 					</TextField>
-					{errorMessage ? (
+					{expenseErrorMessage ? (
 						<Text className="text-danger" type="body-sm">
-							{errorMessage}
+							{expenseErrorMessage}
 						</Text>
 					) : null}
 					<Button
@@ -440,7 +537,7 @@ export function TripBudgetScreen() {
 									key={item.category}
 								>
 									<Text type="body-sm" weight="semibold">
-										{item.category}
+										{formatStatus(item.category)}
 									</Text>
 									<Text color="muted" type="body-sm">
 										{formatMoney(item.amount, currency)}
@@ -473,7 +570,7 @@ export function TripBudgetScreen() {
 											{expense.title}
 										</Text>
 										<Text color="muted" numberOfLines={1} type="body-xs">
-											{expense.category} · {expense.spentAt}
+											{formatStatus(expense.category)} · {expense.spentAt}
 										</Text>
 									</View>
 									<Text type="body-sm" weight="semibold">

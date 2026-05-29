@@ -138,6 +138,7 @@ export default defineSchema({
 		status: v.string(),
 		readinessScore: v.number(),
 		coverImageUrl: v.optional(v.string()),
+		isFavorite: v.optional(v.boolean()),
 		summary: v.string(),
 		isDemo: v.boolean(),
 		createdAt: v.number(),

@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
-import { useMutation } from "convex/react";
+import { useAction, useMutation } from "convex/react";
 import {
 	BottomSheet,
 	Button,
@@ -17,7 +17,7 @@ import {
 	useThemeColor,
 } from "heroui-native";
 import type { ComponentProps } from "react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { ScrollView, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -25,6 +25,8 @@ import {
 	DateRangePickerField,
 	type DateRangeValue,
 } from "@/src/components/date/date-picker-field";
+
+import { LocationSuggestionField } from "./location-suggestion-field";
 
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 const travelStyleOptions = [
@@ -286,7 +288,7 @@ const getManualTripSummary = (form: ReturnType<typeof getTrimmedForm>) => {
 	const groupType = getResolvedGroupTypeLabel(form);
 	const travelStyle = getResolvedTravelStyleLabel(form);
 	const details = [
-		"Manual trip draft.",
+		"Manual trip planning started.",
 		form.origin ? `Departing from: ${form.origin}.` : null,
 		form.travelerCount ? `Travelers: ${form.travelerCount}.` : null,
 		groupType ? `Group: ${groupType}.` : null,
@@ -377,6 +379,13 @@ export function ManualTripCreateSheet({
 	const { height } = useWindowDimensions();
 	const foregroundColor = useThemeColor("foreground");
 	const createTrip = useMutation(api.trips.createTrip);
+	const runLocationSuggestionSearch = useAction(
+		api.locations.searchLocationSuggestions
+	);
+	const searchLocationSuggestions = useCallback(
+		(text: string) => runLocationSuggestionSearch({ text }),
+		[runLocationSuggestionSearch]
+	);
 	const [form, setForm] = useState<ManualTripFormState>(initialFormState);
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [isCreating, setIsCreating] = useState(false);
@@ -477,19 +486,19 @@ export function ManualTripCreateSheet({
 								placeholder="Summer getaway"
 								value={form.title}
 							/>
-							<SheetField
-								autoCapitalize="words"
+							<LocationSuggestionField
 								isRequired={true}
 								label="Destination"
 								onChangeText={(value) => updateForm("destination", value)}
 								placeholder="City, country, or region"
+								searchLocationSuggestions={searchLocationSuggestions}
 								value={form.destination}
 							/>
-							<SheetField
-								autoCapitalize="words"
+							<LocationSuggestionField
 								label="Departing from"
 								onChangeText={(value) => updateForm("origin", value)}
 								placeholder="Home city or airport"
+								searchLocationSuggestions={searchLocationSuggestions}
 								value={form.origin}
 							/>
 							<DateRangePickerField

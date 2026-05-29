@@ -12,7 +12,7 @@ interface LifecycleStageInput {
 	vaultItems: readonly VaultStatusLike[];
 }
 
-export type LifecycleStage = "book" | "sync" | "check" | "travel";
+export type LifecycleStage = "booking" | "preparing" | "traveling";
 
 export const getLifecycleStageSummary = ({
 	bookings,
@@ -25,7 +25,7 @@ export const getLifecycleStageSummary = ({
 
 	if (hasBookingGaps) {
 		return {
-			nextStage: "book" as const,
+			nextStage: "booking" as const,
 			primaryActionLabel: "Review booking targets",
 			supportingText:
 				"Book externally, then upload confirmations through TripSync.",
@@ -34,7 +34,7 @@ export const getLifecycleStageSummary = ({
 
 	if (vaultItems.length === 0) {
 		return {
-			nextStage: "sync" as const,
+			nextStage: "preparing" as const,
 			primaryActionLabel: "Upload confirmations",
 			supportingText:
 				"Sync bookings, documents, and receipts before readiness checks.",
@@ -43,14 +43,14 @@ export const getLifecycleStageSummary = ({
 
 	if (readinessScore < 90) {
 		return {
-			nextStage: "check" as const,
+			nextStage: "preparing" as const,
 			primaryActionLabel: "Fix readiness gaps",
 			supportingText: "Close the remaining checklist items before travel.",
 		};
 	}
 
 	return {
-		nextStage: "travel" as const,
+		nextStage: "traveling" as const,
 		primaryActionLabel: "Open travel mode",
 		supportingText: "Core booking, sync, and readiness steps are in shape.",
 	};

@@ -322,7 +322,7 @@ export function ManualTripCreateScreen() {
 				startDate: trimmedForm.startDate,
 				summary:
 					trimmedForm.notes ||
-					"Manual trip draft. Viya can help enrich booking targets and readiness.",
+					"Manual trip planning started. Viya can help enrich booking targets and readiness.",
 				title: tripTitle,
 				travelStyle: trimmedForm.travelStyle,
 			});

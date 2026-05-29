@@ -10,7 +10,7 @@ describe("trip workspace selectors", () => {
 			vaultItems: [],
 		});
 
-		expect(summary.nextStage).toBe("book");
+		expect(summary.nextStage).toBe("booking");
 		expect(summary.primaryActionLabel).toBe("Review booking targets");
 	});
 
@@ -21,7 +21,7 @@ describe("trip workspace selectors", () => {
 			vaultItems: [{ status: "ready" }],
 		});
 
-		expect(summary.nextStage).toBe("check");
+		expect(summary.nextStage).toBe("preparing");
 		expect(summary.primaryActionLabel).toBe("Fix readiness gaps");
 	});
 });

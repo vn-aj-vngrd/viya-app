@@ -67,7 +67,39 @@ export const formatStatus = (value: string) =>
 		.map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
 		.join(" ");
 
-const getReadinessLabel = (score: number) => {
+export const formatDestinationLabel = (destination: string) => {
+	const trimmedDestination = destination.trim();
+
+	return trimmedDestination ? trimmedDestination.toUpperCase() : "TBD";
+};
+
+export const formatTripWindowWithDuration = ({
+	endDate,
+	fallbackLabel = "Dates not set",
+	startDate,
+}: {
+	endDate?: string | null;
+	fallbackLabel?: string;
+	startDate?: string | null;
+}) => {
+	const tripWindow = formatReadableTripDateRange({
+		endDate,
+		fallbackLabel,
+		startDate,
+	});
+	const durationDays =
+		startDate && endDate ? getDateRangeDurationDays(startDate, endDate) : null;
+
+	if (!durationDays) {
+		return tripWindow;
+	}
+
+	const dayLabel = durationDays === 1 ? "day" : "days";
+
+	return `${tripWindow} · ${durationDays} ${dayLabel}`;
+};
+
+export const getReadinessLabel = (score: number) => {
 	if (score >= 90) {
 		return "Ready";
 	}
@@ -83,7 +115,32 @@ const getReadinessLabel = (score: number) => {
 	return "Not ready";
 };
 
-const getTravelerLabel = (groupType: string) => {
+export const getReadinessDisplay = ({
+	itemCount,
+	score,
+}: {
+	itemCount?: number;
+	score: number;
+}) => {
+	const hasReadinessCoverage =
+		itemCount === undefined ? score > 0 : itemCount > 0;
+
+	if (!hasReadinessCoverage) {
+		return {
+			detail: "Start review",
+			progress: 0,
+			value: "Not checked",
+		};
+	}
+
+	return {
+		detail: getReadinessLabel(score),
+		progress: score,
+		value: `${score}%`,
+	};
+};
+
+export const getTravelerLabel = (groupType: string) => {
 	if (groupType === "solo") {
 		return "1 traveler";
 	}
@@ -474,7 +531,7 @@ export const createTripDashboardModel = ({
 		tabs: tripTabs,
 		travelerLabel: getTravelerLabel(workspace.trip.groupType),
 		tripId,
-		tripWindow: formatReadableTripDateRange({
+		tripWindow: formatTripWindowWithDuration({
 			endDate: workspace.trip.endDate,
 			fallbackLabel: "Dates not set",
 			startDate: workspace.trip.startDate,

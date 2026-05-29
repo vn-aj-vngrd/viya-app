@@ -81,6 +81,10 @@ function AppLayout() {
 				name="trips/[tripId]/readiness"
 				options={{ headerShown: false }}
 			/>
+			<Stack.Screen
+				name="trips/[tripId]/budget"
+				options={{ headerShown: false }}
+			/>
 			<Stack.Screen name="trips/[tripId]/risks" options={{ title: "Risks" }} />
 			<Stack.Screen
 				name="trips/[tripId]/travel-mode"

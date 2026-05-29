@@ -21,7 +21,7 @@ const tripBlueprintPattern = /## Trip Blueprint/i;
 const budgetAllocationPattern = /### Budget allocation/i;
 const bookingTargetsPattern = /### Booking targets/i;
 const nextActionsPattern = /### Next actions/i;
-const draftNowPattern = /Generate a Trip Blueprint now/i;
+const blueprintNowPattern = /Generate a Trip Blueprint now/i;
 const assumptionPattern = /assumptions/i;
 const needsConfirmationPattern = /needs confirmation/i;
 const oneQuestionPattern = /Ask at most one direct question/i;
@@ -87,10 +87,10 @@ describe("Viya prompt guardrails", () => {
 		assert.match(prompt, noLaterIntakeQuestionPattern);
 	});
 
-	it("allows users to request a draft blueprint before intake is complete", () => {
+	it("allows users to request a blueprint before intake is complete", () => {
 		const prompt = buildChatModeSystemPrompt("plan");
 
-		assert.match(prompt, draftNowPattern);
+		assert.match(prompt, blueprintNowPattern);
 		assert.match(prompt, assumptionPattern);
 		assert.match(prompt, needsConfirmationPattern);
 	});

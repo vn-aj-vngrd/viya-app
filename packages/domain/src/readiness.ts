@@ -44,6 +44,18 @@ const summarizeScore = (
 export const calculateReadinessScore = (
 	items: ReadinessItem[]
 ): ReadinessScore => {
+	if (items.length === 0) {
+		return {
+			categoryScores: Object.fromEntries(
+				READINESS_CATEGORIES.map((category) => [category, 0])
+			) as Record<ReadinessCategory, number>,
+			overallScore: 0,
+			summary: "Readiness has not been checked yet.",
+			tripId: "unknown",
+			updatedAt: new Date().toISOString(),
+		};
+	}
+
 	const categoryScores = Object.fromEntries(
 		READINESS_CATEGORIES.map((category) => {
 			const categoryItems = items.filter((item) => item.category === category);

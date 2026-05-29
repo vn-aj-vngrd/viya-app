@@ -1154,7 +1154,7 @@ function TripBlueprintReviewCard({
 			) : null}
 
 			<Pressable
-				accessibilityLabel="Create draft trip from blueprint"
+				accessibilityLabel="Create planning trip from blueprint"
 				accessibilityRole="button"
 				className="min-h-12 flex-row items-center justify-center gap-2 rounded-full px-4 py-3"
 				disabled={isCreatingTripFromBlueprint}
@@ -1170,8 +1170,8 @@ function TripBlueprintReviewCard({
 				<Ionicons color="#FFFFFF" name="checkmark-circle-outline" size={17} />
 				<Text className="text-white" type="body-sm" weight="bold">
 					{isCreatingTripFromBlueprint
-						? "Creating draft trip"
-						: "Create draft trip"}
+						? "Creating planning trip"
+						: "Create planning trip"}
 				</Text>
 			</Pressable>
 

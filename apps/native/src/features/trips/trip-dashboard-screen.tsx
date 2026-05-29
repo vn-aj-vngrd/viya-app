@@ -8,10 +8,10 @@ import { Container } from "@/components/container";
 import { EmptyState } from "@/src/components/empty-state";
 
 import {
-	NextActionCard,
-	QuickActions,
-	StatusStrip,
+	FloatingAskViyaBar,
+	MainModules,
 	TripHero,
+	TripStickyHeader,
 	TripTabPicker,
 } from "./trip-dashboard-components";
 import { TripTabContent } from "./trip-dashboard-tabs";
@@ -30,6 +30,7 @@ export function TripDashboardScreen({
 		tripId ? { tripId } : "skip"
 	);
 	const [activeTab, setActiveTab] = useState<TripTab>(initialTab);
+	const shouldShowFocusSections = initialTab !== "overview";
 
 	const model = useMemo(() => {
 		if (!(tripId && workspace)) {
@@ -65,26 +66,32 @@ export function TripDashboardScreen({
 	}
 
 	return (
-		<Container
-			className="px-4 pb-28"
-			scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
-		>
-			<View className="gap-4 pb-4">
-				<TripHero model={model} />
-				<StatusStrip metrics={model.statusMetrics} />
-				<NextActionCard model={model} onSelectTab={setActiveTab} />
-				<QuickActions actions={model.quickActions} onSelectTab={setActiveTab} />
-				<TripTabPicker
-					activeTab={activeTab}
-					model={model}
-					onSelectTab={setActiveTab}
-				/>
-				<TripTabContent
-					activeTab={activeTab}
-					model={model}
-					onSelectTab={setActiveTab}
-				/>
-			</View>
-		</Container>
+		<View className="flex-1 bg-background">
+			<TripStickyHeader model={model} />
+			<Container
+				className="px-4"
+				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
+			>
+				<View className="gap-3 pb-28">
+					<TripHero model={model} />
+					<MainModules model={model} />
+					{shouldShowFocusSections ? (
+						<>
+							<TripTabPicker
+								activeTab={activeTab}
+								model={model}
+								onSelectTab={setActiveTab}
+							/>
+							<TripTabContent
+								activeTab={activeTab}
+								model={model}
+								onSelectTab={setActiveTab}
+							/>
+						</>
+					) : null}
+				</View>
+			</Container>
+			<FloatingAskViyaBar model={model} />
+		</View>
 	);
 }

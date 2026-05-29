@@ -4,6 +4,14 @@ import { palawanDemoTrip } from "./demo/palawan";
 import { calculateReadinessScore } from "./readiness";
 
 describe("calculateReadinessScore", () => {
+	it("keeps trips without readiness items unchecked", () => {
+		const score = calculateReadinessScore([]);
+
+		expect(score.overallScore).toBe(0);
+		expect(score.categoryScores.bookings).toBe(0);
+		expect(score.summary).toBe("Readiness has not been checked yet.");
+	});
+
 	it("returns the seeded Palawan readiness score before fixes", () => {
 		const score = calculateReadinessScore(palawanDemoTrip.readinessItems);
 

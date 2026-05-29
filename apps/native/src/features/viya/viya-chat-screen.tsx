@@ -249,7 +249,7 @@ const createBlueprintTripHandler =
 			onChatModeChange("trip");
 			onAwaitingAssistantMessageCountChange(null);
 			onNoticeMessageChange(
-				"Draft trip created. Booking targets were saved as external booking placeholders."
+				"Planning trip created. Booking targets were saved as external booking placeholders."
 			);
 			runAsyncTask(persistStoredThreadIdsByContext(nextThreadIds));
 		} catch (error) {

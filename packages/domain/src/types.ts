@@ -38,10 +38,10 @@ export type SpecialNeed =
 	| "restBreaks"
 	| "none";
 export type TripStatus =
-	| "draft"
 	| "planning"
-	| "ready"
-	| "active"
+	| "booking"
+	| "preparing"
+	| "traveling"
 	| "completed"
 	| "archived";
 export type ItineraryPace = "light" | "balanced" | "packed";
