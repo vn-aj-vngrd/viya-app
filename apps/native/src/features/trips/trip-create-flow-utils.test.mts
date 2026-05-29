@@ -17,15 +17,6 @@ describe("trip create flow validation", () => {
 		expect(getStepError(state, "destination")).toBe("Choose a destination.");
 	});
 
-	test("allows undecided destination", () => {
-		const state = {
-			...createInitialTripCreateFlowState(),
-			isDestinationUndecided: true,
-		};
-
-		expect(getStepError(state, "destination")).toBeNull();
-	});
-
 	test("requires either dates or a duration preference", () => {
 		const state = {
 			...createInitialTripCreateFlowState(),
@@ -33,6 +24,39 @@ describe("trip create flow validation", () => {
 		};
 
 		expect(getStepError(state, "dates")).toBe("Choose dates or a trip length.");
+	});
+
+	test("keeps solo trips to one traveler", () => {
+		const state = {
+			...createInitialTripCreateFlowState(),
+			travelerCount: "2",
+			travelerType: "solo" as const,
+		};
+
+		expect(getStepError(state, "travelers")).toBe(
+			"Solo trips are set to 1 traveler."
+		);
+	});
+
+	test("keeps couple trips to two travelers", () => {
+		const state = {
+			...createInitialTripCreateFlowState(),
+			travelerCount: "3",
+			travelerType: "couple" as const,
+		};
+
+		expect(getStepError(state, "travelers")).toBe(
+			"Couple trips are set to 2 travelers."
+		);
+	});
+
+	test("requires a budget greater than zero", () => {
+		const state = createInitialTripCreateFlowState();
+
+		expect(state.budgetAmount).toBe("0");
+		expect(getStepError(state, "budget")).toBe(
+			"Enter a budget greater than 0."
+		);
 	});
 });
 

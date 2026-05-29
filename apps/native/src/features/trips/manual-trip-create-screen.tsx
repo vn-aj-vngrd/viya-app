@@ -39,6 +39,7 @@ import {
 	paceOptions,
 	parseBudgetAmount,
 	parseTravelerCount,
+	type TravelerType,
 	type TripCreateFlowState,
 	type TripCreateStep,
 	type TripPace,
@@ -187,18 +188,33 @@ function ChoiceChip({
 	onPress: () => void;
 }) {
 	return (
-		<Button
+		<Pressable
+			accessibilityRole="button"
+			accessibilityState={{ selected: isSelected }}
+			className="min-h-10 flex-row items-center rounded-full border bg-white px-4"
 			onPress={onPress}
-			size="sm"
-			variant={isSelected ? "primary" : "secondary"}
+			style={({ pressed }) => ({
+				borderColor: isSelected
+					? "rgba(10, 132, 255, 0.42)"
+					: "rgba(24, 24, 27, 0.06)",
+				boxShadow: isSelected
+					? "0 8px 18px rgba(10, 132, 255, 0.08)"
+					: "0 6px 14px rgba(15, 23, 42, 0.04)",
+				opacity: pressed ? 0.82 : 1,
+				transform: [{ scale: pressed ? 0.98 : 1 }],
+			})}
 		>
-			<Button.Label>{label}</Button.Label>
-		</Button>
+			<Text type="body-sm" weight="semibold">
+				{label}
+			</Text>
+		</Pressable>
 	);
 }
 
 function InlineTextField({
 	autoCapitalize,
+	errorText,
+	isInvalid,
 	keyboardType,
 	label,
 	onChangeText,
@@ -206,6 +222,8 @@ function InlineTextField({
 	value,
 }: {
 	autoCapitalize?: "none" | "sentences" | "words" | "characters";
+	errorText?: string;
+	isInvalid?: boolean;
 	keyboardType?: "default" | "numeric";
 	label: string;
 	onChangeText: (value: string) => void;
@@ -219,20 +237,28 @@ function InlineTextField({
 			</Label>
 			<Input
 				autoCapitalize={autoCapitalize}
-				className="h-12 border border-border bg-surface px-4"
+				className={
+					isInvalid
+						? "h-12 border border-danger bg-surface px-4"
+						: "h-12 border border-border bg-surface px-4"
+				}
 				keyboardType={keyboardType}
 				onChangeText={onChangeText}
 				placeholder={placeholder}
 				value={value}
 				variant="secondary"
 			/>
+			{isInvalid && errorText ? (
+				<Text className="text-danger" type="body-xs">
+					{errorText}
+				</Text>
+			) : null}
 		</TextField>
 	);
 }
 
 function CreateFlowShell({
 	children,
-	errorMessage,
 	footer,
 	helper,
 	onBack,
@@ -240,7 +266,6 @@ function CreateFlowShell({
 	title,
 }: {
 	children: ReactNode;
-	errorMessage: string | null;
 	footer: ReactNode;
 	helper: string;
 	onBack: () => void;
@@ -252,20 +277,24 @@ function CreateFlowShell({
 	return (
 		<Container className="bg-background" isScrollable={false}>
 			<View className="flex-1">
+				<View
+					className="bg-background px-5 pb-3"
+					style={{ paddingTop: Math.max(insets.top + 6, 20) }}
+				>
+					<NavigationBackButton onPress={onBack} />
+				</View>
 				<ScrollView
+					className="flex-1"
 					contentContainerStyle={{
 						gap: 26,
 						paddingBottom: 32,
 						paddingHorizontal: 20,
-						paddingTop: Math.max(insets.top + 6, 20),
+						paddingTop: 8,
 					}}
 					keyboardShouldPersistTaps="handled"
 					showsVerticalScrollIndicator={false}
 				>
-					<View className="gap-5">
-						<NavigationBackButton onPress={onBack} />
-						<ProgressSegments step={step} />
-					</View>
+					<ProgressSegments step={step} />
 					<View className="gap-3">
 						<Text.Heading className="text-5xl leading-14" type="h1">
 							{title}
@@ -275,15 +304,10 @@ function CreateFlowShell({
 						</Text.Paragraph>
 					</View>
 					<View className="gap-4">{children}</View>
-					{errorMessage ? (
-						<Text className="text-danger" type="body-sm">
-							{errorMessage}
-						</Text>
-					) : null}
 				</ScrollView>
 				<View
-					className="border-border border-t bg-background px-5 pt-3"
-					style={{ paddingBottom: Math.max(insets.bottom, 16) }}
+					className="bg-background px-5 pt-3"
+					style={{ paddingBottom: Math.max(insets.bottom + 8, 18) }}
 				>
 					{footer}
 				</View>
@@ -292,42 +316,14 @@ function CreateFlowShell({
 	);
 }
 
-function DestinationMapPreview({ destination }: { destination: string }) {
-	return (
-		<Surface className="overflow-hidden rounded-[30px] border border-border bg-surface">
-			<View
-				className="relative h-52"
-				style={{
-					backgroundColor: "#EEF6F3",
-				}}
-			>
-				<View className="absolute top-8 left-5 h-8 w-36 rotate-[-12deg] rounded-full bg-primary/10" />
-				<View className="absolute top-24 right-0 h-10 w-48 rotate-[18deg] rounded-full bg-success/15" />
-				<View className="absolute bottom-9 left-0 h-8 w-52 rotate-[24deg] rounded-full bg-warning/15" />
-				<View className="absolute top-1/2 left-1/2 h-14 w-14 -translate-x-7 -translate-y-7 items-center justify-center rounded-full bg-primary/10">
-					<View className="h-8 w-8 items-center justify-center rounded-full bg-primary">
-						<Ionicons color="#FFFFFF" name="location" size={18} />
-					</View>
-				</View>
-				<View className="absolute right-4 bottom-4 left-4 rounded-[22px] bg-white/95 p-4">
-					<Text type="body-sm" weight="semibold">
-						{destination || "Destination anchor"}
-					</Text>
-					<Text color="muted" type="body-xs">
-						Search sets the map anchor. A full map picker can slot in here.
-					</Text>
-				</View>
-			</View>
-		</Surface>
-	);
-}
-
 function DestinationStep({
+	errorMessage,
 	onPopularSelect,
 	onUpdate,
 	searchLocationSuggestions,
 	state,
 }: {
+	errorMessage?: string | null;
 	onPopularSelect: (destination: string) => void;
 	onUpdate: <Key extends keyof TripCreateFlowState>(
 		key: Key,
@@ -343,11 +339,10 @@ function DestinationStep({
 	return (
 		<View className="gap-5">
 			<LocationSuggestionField
+				errorText={errorMessage ?? undefined}
+				isInvalid={Boolean(errorMessage)}
 				label="Destination"
-				onChangeText={(value) => {
-					onUpdate("destination", value);
-					onUpdate("isDestinationUndecided", false);
-				}}
+				onChangeText={(value) => onUpdate("destination", value)}
 				placeholder="Search city, island, or region"
 				searchLocationSuggestions={searchLocationSuggestions}
 				value={state.destination}
@@ -367,24 +362,16 @@ function DestinationStep({
 					))}
 				</View>
 			</View>
-			<DestinationMapPreview destination={state.destination} />
-			<Button
-				onPress={() => {
-					onUpdate("destination", "");
-					onUpdate("isDestinationUndecided", true);
-				}}
-				variant={state.isDestinationUndecided ? "primary" : "secondary"}
-			>
-				<Button.Label>I'm not sure yet</Button.Label>
-			</Button>
 		</View>
 	);
 }
 
 function DatesStep({
+	errorMessage,
 	onUpdate,
 	state,
 }: {
+	errorMessage?: string | null;
 	onUpdate: <Key extends keyof TripCreateFlowState>(
 		key: Key,
 		value: TripCreateFlowState[Key]
@@ -399,7 +386,9 @@ function DatesStep({
 	return (
 		<View className="gap-5">
 			<DateRangePickerField
+				errorText={errorMessage ?? undefined}
 				helperText="Viya uses dates to plan the right number of days."
+				isInvalid={Boolean(errorMessage)}
 				label="Trip dates"
 				onValueChange={(value) => {
 					onUpdate("startDate", value.start);
@@ -432,15 +421,40 @@ function DatesStep({
 }
 
 function TravelersStep({
+	errorMessage,
 	onUpdate,
 	state,
 }: {
+	errorMessage?: string | null;
 	onUpdate: <Key extends keyof TripCreateFlowState>(
 		key: Key,
 		value: TripCreateFlowState[Key]
 	) => void;
 	state: TripCreateFlowState;
 }) {
+	const selectedTravelerCount = parseTravelerCount(state.travelerCount) ?? 1;
+	const hasFixedTravelerCount =
+		state.travelerType === "solo" || state.travelerType === "couple";
+	const fixedTravelerCount = state.travelerType === "couple" ? 2 : 1;
+
+	const handleTravelerTypePress = (option: TravelerType) => {
+		onUpdate("travelerType", option);
+
+		if (option === "solo") {
+			onUpdate("travelerCount", "1");
+			return;
+		}
+
+		if (option === "couple") {
+			onUpdate("travelerCount", "2");
+			return;
+		}
+
+		if (selectedTravelerCount < 2) {
+			onUpdate("travelerCount", "2");
+		}
+	};
+
 	return (
 		<View className="gap-5">
 			<View className="flex-row flex-wrap gap-2">
@@ -449,26 +463,44 @@ function TravelersStep({
 						isSelected={state.travelerType === option}
 						key={option}
 						label={getTripCreateOptionLabel("travelerType", option)}
-						onPress={() => onUpdate("travelerType", option)}
+						onPress={() => handleTravelerTypePress(option)}
 					/>
 				))}
 			</View>
-			<InlineTextField
-				keyboardType="numeric"
-				label="Number of travelers"
-				onChangeText={(value) => onUpdate("travelerCount", value)}
-				placeholder="1"
-				value={state.travelerCount}
-			/>
+			{hasFixedTravelerCount ? (
+				<View className="gap-1">
+					<Text type="body-sm" weight="semibold">
+						{fixedTravelerCount}{" "}
+						{fixedTravelerCount === 1 ? "traveler" : "travelers"}
+					</Text>
+					<Text color="muted" type="body-sm">
+						{state.travelerType === "solo"
+							? "Solo trips are set to 1 traveler."
+							: "Couple trips are set to 2 travelers."}
+					</Text>
+				</View>
+			) : (
+				<InlineTextField
+					errorText={errorMessage ?? undefined}
+					isInvalid={Boolean(errorMessage)}
+					keyboardType="numeric"
+					label="Number of travelers"
+					onChangeText={(value) => onUpdate("travelerCount", value)}
+					placeholder="2"
+					value={state.travelerCount}
+				/>
+			)}
 		</View>
 	);
 }
 
 function StylePaceStep({
+	errorMessage,
 	onToggleStyle,
 	onUpdate,
 	state,
 }: {
+	errorMessage?: string | null;
 	onToggleStyle: (style: TripStyle) => void;
 	onUpdate: <Key extends keyof TripCreateFlowState>(
 		key: Key,
@@ -492,6 +524,11 @@ function StylePaceStep({
 						/>
 					))}
 				</View>
+				{errorMessage ? (
+					<Text className="text-danger" type="body-xs">
+						{errorMessage}
+					</Text>
+				) : null}
 			</View>
 			<View className="gap-3">
 				<Text color="muted" type="body-xs" weight="semibold">
@@ -515,11 +552,11 @@ function StylePaceStep({
 }
 
 function BudgetStep({
-	onSkip,
+	errorMessage,
 	onUpdate,
 	state,
 }: {
-	onSkip: () => void;
+	errorMessage?: string | null;
 	onUpdate: <Key extends keyof TripCreateFlowState>(
 		key: Key,
 		value: TripCreateFlowState[Key]
@@ -529,10 +566,12 @@ function BudgetStep({
 	return (
 		<View className="gap-5">
 			<InlineTextField
+				errorText={errorMessage ?? undefined}
+				isInvalid={Boolean(errorMessage)}
 				keyboardType="numeric"
 				label="Budget amount"
 				onChangeText={(value) => onUpdate("budgetAmount", value)}
-				placeholder="60000"
+				placeholder="0"
 				value={state.budgetAmount}
 			/>
 			<View className="gap-3">
@@ -565,9 +604,6 @@ function BudgetStep({
 					))}
 				</View>
 			</View>
-			<Button onPress={onSkip} variant="tertiary">
-				<Button.Label>Skip for now</Button.Label>
-			</Button>
 		</View>
 	);
 }
@@ -927,9 +963,9 @@ export function ManualTripCreateScreen() {
 		"Choose a destination so Viya can build your trip around the right place.";
 	let content: ReactNode = (
 		<DestinationStep
+			errorMessage={activeStep === "destination" ? errorMessage : null}
 			onPopularSelect={(destination) => {
 				updateState("destination", destination);
-				updateState("isDestinationUndecided", false);
 			}}
 			onUpdate={updateState}
 			searchLocationSuggestions={searchLocationSuggestions}
@@ -943,17 +979,30 @@ export function ManualTripCreateScreen() {
 		title = "When is your trip?";
 		helper =
 			"Viya will use your dates to plan the right pace and number of days.";
-		content = <DatesStep onUpdate={updateState} state={state} />;
+		content = (
+			<DatesStep
+				errorMessage={errorMessage}
+				onUpdate={updateState}
+				state={state}
+			/>
+		);
 	} else if (activeStep === "travelers") {
 		title = "Who's going?";
 		helper = "This helps Viya suggest the right pace, activities, and budget.";
-		content = <TravelersStep onUpdate={updateState} state={state} />;
+		content = (
+			<TravelersStep
+				errorMessage={errorMessage}
+				onUpdate={updateState}
+				state={state}
+			/>
+		);
 	} else if (activeStep === "style") {
 		title = "What kind of trip do you want?";
 		helper =
 			"Pick what matters most. Viya will use this to suggest better days.";
 		content = (
 			<StylePaceStep
+				errorMessage={errorMessage}
 				onToggleStyle={handleToggleStyle}
 				onUpdate={updateState}
 				state={state}
@@ -964,10 +1013,7 @@ export function ManualTripCreateScreen() {
 		helper = "Viya can warn you if the plan becomes too expensive.";
 		content = (
 			<BudgetStep
-				onSkip={() => {
-					updateState("budgetAmount", "");
-					setActiveStep("context");
-				}}
+				errorMessage={errorMessage}
 				onUpdate={updateState}
 				state={state}
 			/>
@@ -1001,7 +1047,6 @@ export function ManualTripCreateScreen() {
 
 	return (
 		<CreateFlowShell
-			errorMessage={errorMessage}
 			footer={
 				<View className="gap-2">
 					<Button isDisabled={isCreating} onPress={handleContinue} size="lg">

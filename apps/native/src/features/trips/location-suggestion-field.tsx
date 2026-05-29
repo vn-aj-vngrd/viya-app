@@ -20,13 +20,19 @@ interface LocationSuggestion {
 	details?: string;
 	id: string;
 	label: string;
+	latitude?: number;
+	longitude?: number;
 	value: string;
 }
 
 interface LocationSuggestionFieldProps {
+	errorText?: string;
+	helperText?: string;
+	isInvalid?: boolean;
 	isRequired?: boolean;
 	label: string;
 	onChangeText: (value: string) => void;
+	onSuggestionSelect?: (suggestion: LocationSuggestion) => void;
 	placeholder: string;
 	searchLocationSuggestions: (text: string) => Promise<LocationSuggestion[]>;
 	value: string;
@@ -41,9 +47,13 @@ type InputFocusEvent = Parameters<
 >[0];
 
 export function LocationSuggestionField({
+	errorText,
+	helperText,
+	isInvalid,
 	isRequired,
 	label,
 	onChangeText,
+	onSuggestionSelect,
 	placeholder,
 	searchLocationSuggestions,
 	value,
@@ -64,6 +74,9 @@ export function LocationSuggestionField({
 		trimmedValue !== selectedSuggestionValue;
 	const shouldShowPanel =
 		isFocused && (suggestions.length > 0 || status === "loading");
+	const inputClassName = isInvalid
+		? "h-12 border border-danger bg-surface px-4"
+		: "h-12 border border-border bg-surface px-4";
 
 	useEffect(() => {
 		if (!canSearch) {
@@ -130,6 +143,7 @@ export function LocationSuggestionField({
 		setSuggestions([]);
 		setIsFocused(false);
 		onChangeText(suggestion.value);
+		onSuggestionSelect?.(suggestion);
 	};
 
 	return (
@@ -143,7 +157,7 @@ export function LocationSuggestionField({
 			<View className="gap-2">
 				<Input
 					autoCapitalize="words"
-					className="h-12 border border-border bg-surface px-4"
+					className={inputClassName}
 					onBlur={handleBlur}
 					onChangeText={handleChangeText}
 					onFocus={handleFocus}
@@ -151,6 +165,16 @@ export function LocationSuggestionField({
 					value={value}
 					variant="secondary"
 				/>
+				{isInvalid && errorText ? (
+					<Text className="text-danger" type="body-xs">
+						{errorText}
+					</Text>
+				) : null}
+				{!(isInvalid && errorText) && helperText ? (
+					<Text color="muted" type="body-sm">
+						{helperText}
+					</Text>
+				) : null}
 				{status === "error" && isFocused ? (
 					<Text color="muted" type="body-sm">
 						Location suggestions are unavailable. You can keep typing manually.

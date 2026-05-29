@@ -61,7 +61,6 @@ export interface TripCreateFlowState {
 	destination: string;
 	durationPreference: DurationPreference | null;
 	endDate: string;
-	isDestinationUndecided: boolean;
 	mustHaves: string;
 	pace: TripPace;
 	pastedBookingText: string;
@@ -91,14 +90,14 @@ export interface ReviewRow {
 
 const labels = {
 	budgetScope: {
-		perPerson: "per person",
-		total: "total",
+		perPerson: "Per person",
+		total: "Total",
 	},
 	durationPreference: {
 		"1-2-weeks": "1-2 weeks",
 		"3-4-days": "3-4 days",
 		"5-7-days": "5-7 days",
-		weekend: "weekend",
+		weekend: "Weekend",
 	},
 	pace: {
 		balanced: "Balanced",
@@ -146,13 +145,12 @@ const getDefaultTitle = (destination: string) =>
 
 export const createInitialTripCreateFlowState = (): TripCreateFlowState =>
 	({
-		budgetAmount: "",
+		budgetAmount: "0",
 		budgetScope: "total",
 		budgetStrictness: "moderate",
 		destination: "",
 		durationPreference: null,
 		endDate: defaultTripDate,
-		isDestinationUndecided: false,
 		mustHaves: "",
 		pace: "balanced",
 		pastedBookingText: "",
@@ -190,9 +188,9 @@ const stepErrorChecks: Record<
 	(state: TripCreateFlowState, context: StepValidationContext) => string | null
 > = {
 	budget: (state) =>
-		state.budgetAmount && !parseBudgetAmount(state.budgetAmount)
-			? "Budget must be a positive number."
-			: null,
+		parseBudgetAmount(state.budgetAmount)
+			? null
+			: "Enter a budget greater than 0.",
 	context: () => null,
 	dates: (state, { hasDates, hasDuration }) => {
 		if (!(hasDates || hasDuration)) {
@@ -203,18 +201,27 @@ const stepErrorChecks: Record<
 			? "End date must be after the start date."
 			: null;
 	},
-	destination: (state, { destination }) =>
-		destination || state.isDestinationUndecided
-			? null
-			: "Choose a destination.",
+	destination: (_state, { destination }) =>
+		destination ? null : "Choose a destination.",
 	review: (state, { hasDates }) =>
 		hasDateOrderError(state, hasDates)
 			? "End date must be after the start date."
 			: null,
 	style: (state) =>
 		state.styles.length > 0 ? null : "Choose at least one trip style.",
-	travelers: (_state, { travelerCount }) =>
-		travelerCount ? null : "Travelers must be a whole number.",
+	travelers: (state, { travelerCount }) => {
+		if (!travelerCount) {
+			return "Travelers must be a whole number.";
+		}
+
+		if (state.travelerType === "solo" && travelerCount !== 1) {
+			return "Solo trips are set to 1 traveler.";
+		}
+
+		return state.travelerType === "couple" && travelerCount !== 2
+			? "Couple trips are set to 2 travelers."
+			: null;
+	},
 };
 
 export const getStepError = (
@@ -242,8 +249,9 @@ export const getTripCreateSummary = (state: TripCreateFlowState) => {
 		: null;
 	const details = [
 		"Mode: Guided trip setup.",
-		state.destination ? `Destination: ${cleanText(state.destination)}.` : null,
-		state.isDestinationUndecided ? "Destination: undecided." : null,
+		state.destination
+			? `Destination: ${cleanText(state.destination)}.`
+			: "Destination: undecided.",
 		state.startDate && state.endDate
 			? `Dates: ${state.startDate} to ${state.endDate}.`
 			: null,

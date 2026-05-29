@@ -8,6 +8,8 @@ export interface LocationSuggestion {
 	details?: string;
 	id: string;
 	label: string;
+	latitude?: number;
+	longitude?: number;
 	value: string;
 }
 
@@ -29,6 +31,31 @@ const getString = (record: Record<string, unknown>, key: string) => {
 	const value = record[key];
 
 	return typeof value === "string" && value.trim() ? value.trim() : undefined;
+};
+
+const getNumber = (record: Record<string, unknown>, key: string) => {
+	const value = record[key];
+
+	return typeof value === "number" && Number.isFinite(value)
+		? value
+		: undefined;
+};
+
+const getGeometryCoordinate = (
+	feature: Record<string, unknown>,
+	index: number
+) => {
+	if (
+		!(isRecord(feature.geometry) && Array.isArray(feature.geometry.coordinates))
+	) {
+		return;
+	}
+
+	const value = feature.geometry.coordinates[index];
+
+	return typeof value === "number" && Number.isFinite(value)
+		? value
+		: undefined;
 };
 
 const getSuggestionDetails = (properties: Record<string, unknown>) => {
@@ -70,12 +97,18 @@ const parseGeoapifyFeature = (
 		feature.properties,
 		"country_code"
 	)?.toUpperCase();
+	const longitude =
+		getNumber(feature.properties, "lon") ?? getGeometryCoordinate(feature, 0);
+	const latitude =
+		getNumber(feature.properties, "lat") ?? getGeometryCoordinate(feature, 1);
 
 	return {
 		countryCode,
 		details: getSuggestionDetails(feature.properties),
 		id: getString(feature.properties, "place_id") ?? formatted,
 		label,
+		...(latitude === undefined ? {} : { latitude }),
+		...(longitude === undefined ? {} : { longitude }),
 		value: formatted,
 	};
 };

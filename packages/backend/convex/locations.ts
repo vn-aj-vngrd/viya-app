@@ -1,4 +1,4 @@
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import {
 	fetchGeoapifyLocationSuggestions,
 	minimumLocationSuggestionQueryLength,
@@ -11,6 +11,8 @@ const locationSuggestionValidator = v.object({
 	details: v.optional(v.string()),
 	id: v.string(),
 	label: v.string(),
+	latitude: v.optional(v.number()),
+	longitude: v.optional(v.number()),
 	value: v.string(),
 });
 
@@ -26,11 +28,7 @@ export const searchLocationSuggestions = action({
 			return [];
 		}
 
-		const apiKey = process.env.GEOAPIFY_API_KEY?.trim();
-
-		if (!apiKey) {
-			throw new ConvexError("GEOAPIFY_API_KEY is not configured.");
-		}
+		const apiKey = process.env.GEOAPIFY_API_KEY?.trim() ?? "";
 
 		return await fetchGeoapifyLocationSuggestions({
 			apiKey,

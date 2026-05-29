@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+	fetchGeoapifyLocationSuggestions,
 	getGeoapifyAutocompleteUrl,
 	parseGeoapifyAutocompleteResponse,
 } from "../src/location-suggestions";
@@ -16,10 +17,15 @@ describe("Geoapify location suggestions", () => {
 						address_line2: "Japan",
 						country_code: "jp",
 						formatted: "Tokyo, Japan",
+						lat: 35.6764,
+						lon: 139.65,
 						place_id: "tokyo-place",
 					},
 				},
 				{
+					geometry: {
+						coordinates: [139.7671, 35.6812],
+					},
 					properties: {
 						address_line1: "Tokyo Station",
 						city: "Tokyo",
@@ -37,6 +43,8 @@ describe("Geoapify location suggestions", () => {
 				details: "Japan",
 				id: "tokyo-place",
 				label: "Tokyo",
+				latitude: 35.6764,
+				longitude: 139.65,
 				value: "Tokyo, Japan",
 			},
 			{
@@ -44,6 +52,8 @@ describe("Geoapify location suggestions", () => {
 				details: "Tokyo, Japan",
 				id: "tokyo-station",
 				label: "Tokyo Station",
+				latitude: 35.6812,
+				longitude: 139.7671,
 				value: "Tokyo Station, Marunouchi, Tokyo, Japan",
 			},
 		]);
@@ -82,5 +92,24 @@ describe("Geoapify location suggestions", () => {
 			url,
 			"https://api.geoapify.com/v1/geocode/autocomplete?text=Manila&limit=5&lang=en&apiKey=geo-key"
 		);
+	});
+
+	it("returns no suggestions when the Geoapify key is missing", async () => {
+		let wasFetcherCalled = false;
+
+		const suggestions = await fetchGeoapifyLocationSuggestions({
+			apiKey: " ",
+			fetcher: (() => {
+				wasFetcherCalled = true;
+				return Promise.reject(
+					new Error("Fetcher should not run without an API key.")
+				);
+			}) as typeof fetch,
+			limit: 5,
+			text: "Manila",
+		});
+
+		assert.deepEqual(suggestions, []);
+		assert.equal(wasFetcherCalled, false);
 	});
 });
