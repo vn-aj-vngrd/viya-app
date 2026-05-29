@@ -10,6 +10,8 @@ const tripRoute = (tripId: Id<"trips">, leaf = "") =>
 export const VIYA_ROUTES = {
 	home: "/(app)/(tabs)",
 	newTrip: "/(app)/trips/new",
+	preferences: "/(app)/onboarding/preferences",
+	profile: "/(app)/(tabs)/profile",
 	trips: "/(app)/(tabs)/trips",
 	viya: "/(app)/(tabs)/viya",
 	tripBookings: (tripId: Id<"trips">) => tripRoute(tripId, "/bookings"),

@@ -24,6 +24,7 @@ import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-s
 import { EmptyState } from "@/src/components/empty-state";
 import { RouteHeader } from "@/src/components/navigation/route-header";
 import { VIYA_ROUTES } from "@/src/constants/routes";
+import { TripModuleViyaAssistCard } from "@/src/features/trips/trip-module-viya-assist-card";
 import { useTripIdParam } from "@/src/features/trips/use-trip-id-param";
 
 import { BookingTargetCard } from "./booking-target-card";
@@ -444,6 +445,12 @@ export function BookingHubScreen() {
 					icon="ticket-outline"
 					subtitle="Book through your preferred provider. Viya does not process payments in the MVP."
 					title="Booking Hub"
+				/>
+				<TripModuleViyaAssistCard
+					agentModule="bookings"
+					description="Generate booking targets, audit missing confirmations, or ask what to reserve next."
+					moduleLabel="bookings"
+					tripId={tripId}
 				/>
 
 				<Surface className="gap-3 rounded-[30px] border border-border bg-surface p-5">

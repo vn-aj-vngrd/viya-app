@@ -3,11 +3,13 @@ import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Doc } from "@viya-app/backend/convex/_generated/dataModel";
 import { TRIP_STATUSES } from "@viya-app/domain";
 import { usePaginatedQuery } from "convex/react";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { BottomSheet, Surface, Text, useThemeColor } from "heroui-native";
 import { useCallback, useDeferredValue, useMemo, useState } from "react";
 import {
 	FlatList,
+	ImageBackground,
 	type ListRenderItem,
 	Pressable,
 	ScrollView,
@@ -15,26 +17,18 @@ import {
 	View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Svg, { Circle } from "react-native-svg";
 
 import { Container } from "@/components/container";
 import { NavigationIconButton } from "@/src/components/navigation/navigation-icon-button";
 import { VIYA_ROUTES } from "@/src/constants/routes";
-import {
-	TripCardMetaRow,
-	TripCardTitleRow,
-	TripMetricBlock,
-	TripRouteLine,
-} from "@/src/features/trips/trip-card-primitives";
 import {
 	formatMoney,
 	formatTripWindowWithDuration,
 	getReadinessDisplay,
 	getTravelerLabel,
 } from "@/src/features/trips/trip-dashboard-utils";
-import {
-	getTripStatusPresentation,
-	TripStatusPill,
-} from "@/src/features/trips/trip-status-pill";
+import { getTripStatusPresentation } from "@/src/features/trips/trip-status-pill";
 
 type Trip = Doc<"trips"> & {
 	readinessItemCount?: number;
@@ -67,7 +61,7 @@ const isStatusTripFilter = (
 
 const getBudgetLabel = (trip: Trip) => {
 	if (!trip.budgetAmount) {
-		return "Set budget";
+		return "Not set";
 	}
 
 	return formatMoney(trip.budgetAmount, trip.budgetCurrency ?? "PHP");
@@ -104,49 +98,28 @@ function TripsSearchField({
 	);
 }
 
-function SkeletonPassportFact({
-	align = "flex-start",
-}: {
-	align?: "center" | "flex-end" | "flex-start";
-}) {
-	return (
-		<View className="min-w-0 flex-1 gap-1.5" style={{ alignItems: align }}>
-			<View className="h-3 w-12 rounded-full bg-surface-secondary" />
-			<View className="h-3.5 w-16 rounded-full bg-surface-secondary" />
-		</View>
-	);
-}
-
 function TripCardSkeleton() {
 	return (
-		<Surface className="gap-3 rounded-[30px] border border-border bg-surface p-4">
-			<View className="gap-1.5">
-				<View className="flex-row items-start gap-3">
-					<View className="h-5 min-w-0 flex-1 rounded-full bg-surface-secondary" />
-					<View className="h-7 w-24 rounded-full bg-accent-soft" />
+		<Surface className="rounded-[28px] border border-border bg-surface p-3">
+			<View className="flex-row gap-3">
+				<View className="h-[104px] w-[104px] rounded-[22px] bg-surface-secondary" />
+				<View className="min-w-0 flex-1 justify-center gap-2.5 py-0.5">
+					<View className="h-4 w-3/4 rounded-full bg-surface-secondary" />
+					<View className="h-3.5 w-1/2 rounded-full bg-surface-secondary" />
+					<View className="h-3.5 w-2/3 rounded-full bg-surface-secondary" />
 				</View>
 			</View>
-
-			<View className="flex-row items-center gap-2.5">
-				<View className="h-3.5 w-10 rounded-full bg-surface-secondary" />
-				<View className="h-1.5 w-1.5 rounded-full bg-surface-secondary" />
-				<View className="min-w-0 flex-1 flex-row items-center">
-					<View className="h-px flex-1 bg-border" />
-					<View className="h-7 w-7 rounded-full bg-accent-soft" />
-					<View className="h-px flex-1 bg-border" />
+			<View className="mt-3 flex-row items-center justify-between border-border border-t pt-3">
+				<View className="flex-row items-center gap-2.5">
+					<View className="h-[38px] w-[38px] rounded-full bg-surface-secondary" />
+					<View className="gap-1.5">
+						<View className="h-3.5 w-24 rounded-full bg-surface-secondary" />
+						<View className="h-3 w-16 rounded-full bg-surface-secondary" />
+					</View>
 				</View>
-				<View className="h-1.5 w-1.5 rounded-full bg-surface-secondary" />
-				<View className="h-3.5 w-8 rounded-full bg-surface-secondary" />
-			</View>
-
-			<View>
-				<View className="h-3.5 w-48 rounded-full bg-surface-secondary" />
-			</View>
-
-			<View className="border-border border-t pt-3">
-				<View className="flex-row gap-4">
-					<SkeletonPassportFact />
-					<SkeletonPassportFact align="flex-end" />
+				<View className="items-end gap-1.5">
+					<View className="h-3.5 w-16 rounded-full bg-surface-secondary" />
+					<View className="h-3 w-12 rounded-full bg-surface-secondary" />
 				</View>
 			</View>
 		</Surface>
@@ -462,6 +435,167 @@ function TripsHeader({
 	);
 }
 
+const tripGradientPalettes = [
+	{ chip: "rgba(255, 255, 255, 0.22)", colors: ["#5AB0FF", "#0A6CFF"] },
+	{ chip: "rgba(255, 255, 255, 0.22)", colors: ["#3FD27E", "#16A34A"] },
+	{ chip: "rgba(255, 255, 255, 0.24)", colors: ["#FFB259", "#F97316"] },
+	{ chip: "rgba(255, 255, 255, 0.22)", colors: ["#C68BF0", "#8E44AD"] },
+	{ chip: "rgba(255, 255, 255, 0.24)", colors: ["#34D6D6", "#0A9CA8"] },
+] as const;
+
+const getTripGradientPalette = (destination: string) => {
+	const charCodeTotal = destination
+		.split("")
+		.reduce((total, character) => total + character.charCodeAt(0), 0);
+
+	return tripGradientPalettes[charCodeTotal % tripGradientPalettes.length];
+};
+
+const chevronColor = "#C7C7CC";
+const metaIconColor = "#71717A";
+
+function TripThumbnail({ trip }: { trip: Trip }) {
+	const palette = getTripGradientPalette(trip.destination);
+	const destinationInitial = (
+		trip.destination.trim().charAt(0) || "V"
+	).toUpperCase();
+
+	if (trip.coverImageUrl) {
+		return (
+			<View className="h-[104px] w-[104px] overflow-hidden rounded-[22px] bg-surface-secondary">
+				<ImageBackground
+					accessibilityIgnoresInvertColors={true}
+					className="h-full w-full"
+					imageStyle={{ borderRadius: 22 }}
+					source={{ uri: trip.coverImageUrl }}
+				>
+					<LinearGradient
+						colors={["transparent", "rgba(9, 12, 24, 0.72)"]}
+						style={{ flex: 1, justifyContent: "flex-end", padding: 9 }}
+					>
+						<Text
+							className="text-white"
+							numberOfLines={1}
+							type="body-xs"
+							weight="bold"
+						>
+							{trip.destination}
+						</Text>
+					</LinearGradient>
+				</ImageBackground>
+			</View>
+		);
+	}
+
+	return (
+		<LinearGradient
+			colors={palette.colors}
+			end={{ x: 1, y: 1 }}
+			start={{ x: 0, y: 0 }}
+			style={{
+				alignItems: "center",
+				borderRadius: 22,
+				height: 104,
+				justifyContent: "center",
+				width: 104,
+			}}
+		>
+			<Text
+				style={{ color: "#FFFFFF", fontSize: 38, lineHeight: 44 }}
+				weight="bold"
+			>
+				{destinationInitial}
+			</Text>
+			<View
+				className="absolute right-2.5 bottom-2.5 h-7 w-7 items-center justify-center rounded-full"
+				style={{ backgroundColor: palette.chip }}
+			>
+				<Ionicons color="#FFFFFF" name="map" size={14} />
+			</View>
+		</LinearGradient>
+	);
+}
+
+const readinessRingSize = 38;
+const readinessRingStroke = 3.5;
+const readinessRingRadius = (readinessRingSize - readinessRingStroke) / 2;
+const readinessRingCircumference = 2 * Math.PI * readinessRingRadius;
+const readinessRingCenter = readinessRingSize / 2;
+
+const getReadinessTone = (progress: number, hasCoverage: boolean) => {
+	if (!hasCoverage) {
+		return "#A1A1AA";
+	}
+
+	if (progress >= 70) {
+		return "#1CCB68";
+	}
+
+	if (progress >= 40) {
+		return "#FF9F0A";
+	}
+
+	return "#FF3B30";
+};
+
+function ReadinessRing({
+	hasCoverage,
+	progress,
+}: {
+	hasCoverage: boolean;
+	progress: number;
+}) {
+	const tone = getReadinessTone(progress, hasCoverage);
+	const boundedProgress = Math.min(100, Math.max(0, Math.round(progress)));
+	const dashOffset = readinessRingCircumference * (1 - boundedProgress / 100);
+
+	return (
+		<View
+			className="items-center justify-center"
+			style={{ height: readinessRingSize, width: readinessRingSize }}
+		>
+			<Svg
+				height={readinessRingSize}
+				style={{ position: "absolute", transform: [{ rotate: "-90deg" }] }}
+				width={readinessRingSize}
+			>
+				<Circle
+					cx={readinessRingCenter}
+					cy={readinessRingCenter}
+					fill="none"
+					r={readinessRingRadius}
+					stroke="rgba(24, 24, 27, 0.08)"
+					strokeWidth={readinessRingStroke}
+				/>
+				{hasCoverage ? (
+					<Circle
+						cx={readinessRingCenter}
+						cy={readinessRingCenter}
+						fill="none"
+						r={readinessRingRadius}
+						stroke={tone}
+						strokeDasharray={readinessRingCircumference}
+						strokeDashoffset={dashOffset}
+						strokeLinecap="round"
+						strokeWidth={readinessRingStroke}
+					/>
+				) : null}
+			</Svg>
+			{hasCoverage && boundedProgress >= 100 ? (
+				<Ionicons color={tone} name="checkmark" size={16} />
+			) : null}
+			{hasCoverage && boundedProgress < 100 ? (
+				<Text style={{ color: tone, fontSize: 11 }} weight="bold">
+					{boundedProgress}
+				</Text>
+			) : null}
+			{hasCoverage ? null : (
+				<Ionicons color={tone} name="sparkles-outline" size={13} />
+			)}
+		</View>
+	);
+}
+
 function TripRow({
 	onPress,
 	trip,
@@ -473,13 +607,15 @@ function TripRow({
 		itemCount: trip.readinessItemCount,
 		score: trip.readinessScore,
 	});
+	const hasReadinessCoverage = readinessDisplay.value !== "Not checked";
+	const hasBudget = Boolean(trip.budgetAmount);
 	const budgetLabel = getBudgetLabel(trip);
-	const budgetDetail = trip.budgetAmount ? "Trip budget" : "No budget yet";
 	const travelerLabel = getTravelerLabel(trip.groupType);
 	const tripWindow = formatTripWindowWithDuration({
 		endDate: trip.endDate,
 		startDate: trip.startDate,
 	});
+	const statusPresentation = getTripStatusPresentation(trip.status);
 
 	return (
 		<Pressable
@@ -487,37 +623,102 @@ function TripRow({
 			accessibilityRole="button"
 			onPress={() => onPress(trip)}
 			style={({ pressed }) => ({
-				transform: [{ scale: pressed ? 0.99 : 1 }],
+				transform: [{ scale: pressed ? 0.985 : 1 }],
 			})}
 		>
-			<Surface className="gap-3 rounded-[30px] border border-border bg-surface p-4">
-				<View className="gap-1.5">
-					<TripCardTitleRow
-						statusSlot={<TripStatusPill status={trip.status} />}
-						title={trip.title}
-					/>
+			<Surface
+				className="rounded-[28px] border border-border bg-surface p-3"
+				style={{ boxShadow: "0 12px 28px rgba(15, 23, 42, 0.07)" }}
+			>
+				<View className="flex-row gap-3">
+					<TripThumbnail trip={trip} />
+					<View className="min-w-0 flex-1 justify-center gap-2 py-0.5">
+						<View className="flex-row items-center gap-2">
+							<View
+								className="h-2 w-2 rounded-full"
+								style={{ backgroundColor: statusPresentation.color }}
+							/>
+							<Text
+								className="min-w-0 flex-1"
+								numberOfLines={1}
+								type="body"
+								weight="bold"
+							>
+								{trip.title}
+							</Text>
+							<Ionicons color={chevronColor} name="chevron-forward" size={16} />
+						</View>
+						<View className="flex-row items-center gap-1.5">
+							<Ionicons
+								color={metaIconColor}
+								name="location-outline"
+								size={13}
+							/>
+							<Text
+								className="min-w-0 flex-1"
+								numberOfLines={1}
+								type="body-sm"
+								weight="semibold"
+							>
+								{trip.destination}
+							</Text>
+						</View>
+						<View className="flex-row items-center gap-2">
+							<View className="min-w-0 flex-1 flex-row items-center gap-1.5">
+								<Ionicons
+									color={metaIconColor}
+									name="calendar-outline"
+									size={13}
+								/>
+								<Text
+									className="min-w-0 flex-1"
+									color="muted"
+									numberOfLines={1}
+									type="body-xs"
+								>
+									{tripWindow}
+								</Text>
+							</View>
+							<View className="flex-row items-center gap-1.5">
+								<Ionicons
+									color={metaIconColor}
+									name="people-outline"
+									size={13}
+								/>
+								<Text color="muted" numberOfLines={1} type="body-xs">
+									{travelerLabel}
+								</Text>
+							</View>
+						</View>
+					</View>
 				</View>
-				<View className="gap-0.5">
-					<TripRouteLine destination={trip.destination} />
-					<TripCardMetaRow left={tripWindow} right={travelerLabel} />
-				</View>
-
-				<View className="border-border border-t pt-3">
-					<View className="flex-row gap-4">
-						<TripMetricBlock
-							detail={readinessDisplay.detail}
-							label="READINESS"
+				<View className="mt-3 flex-row items-center justify-between border-border border-t pt-3">
+					<View className="flex-row items-center gap-2.5">
+						<ReadinessRing
+							hasCoverage={hasReadinessCoverage}
 							progress={readinessDisplay.progress}
-							tone="success"
-							value={readinessDisplay.value}
 						/>
-						<TripMetricBlock
-							align="flex-end"
-							detail={budgetDetail}
-							label="BUDGET"
-							progress={0}
-							value={budgetLabel}
-						/>
+						<View>
+							<Text numberOfLines={1} type="body-sm" weight="bold">
+								{readinessDisplay.detail}
+							</Text>
+							<Text color="muted" type="body-xs">
+								Readiness
+							</Text>
+						</View>
+					</View>
+					<View className="items-end">
+						<Text
+							color={hasBudget ? undefined : "muted"}
+							numberOfLines={1}
+							type="body-sm"
+							weight="bold"
+						>
+							{budgetLabel}
+						</Text>
+						<Text color="muted" type="body-xs">
+							Budget
+						</Text>
 					</View>
 				</View>
 			</Surface>
@@ -569,7 +770,7 @@ export default function TripsScreen() {
 	);
 
 	return (
-		<Container className="pb-28" isScrollable={false}>
+		<Container includeBottomInset={false} isScrollable={false}>
 			<TripsHeader
 				filter={filters}
 				onCreatePress={handleManualTripPress}

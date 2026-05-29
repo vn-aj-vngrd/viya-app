@@ -121,6 +121,9 @@ const chatScrollContentBottomPadding = 18;
 const chatScrollShadowBottomBleed = 12;
 const chatScrollShadowTopBleed = 20;
 
+const getSearchParamValue = (value?: string | string[]) =>
+	Array.isArray(value) ? value[0] : value;
+
 const getChatInputError = ({
 	chatMode,
 	currentTripId,
@@ -355,14 +358,19 @@ function ComposerTextInput({
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Chat screen coordinates streaming, modes, question docks, and blueprint creation until the flow is split into containers.
 export function ViyaChatScreen() {
 	const router = useRouter();
-	const { fromTab, mode, returnTo } = useLocalSearchParams<{
+	const { fromTab, mode, prompt, returnTo, tripId } = useLocalSearchParams<{
 		fromTab?: string | string[];
 		mode?: string | string[];
+		prompt?: string | string[];
 		returnTo?: string | string[];
+		tripId?: string | string[];
 	}>();
+	const requestedMode = getSearchParamValue(mode);
+	const routePrompt = getSearchParamValue(prompt) ?? "";
+	const routeTripId = getSearchParamValue(tripId) as Id<"trips"> | undefined;
 	const insets = useSafeAreaInsets();
 	const { height: windowHeight } = useWindowDimensions();
-	const [input, setInput] = useState("");
+	const [input, setInput] = useState(routePrompt);
 	const [composerContentHeight, setComposerContentHeight] = useState(
 		composerInputMinHeight
 	);
@@ -370,8 +378,7 @@ export function ViyaChatScreen() {
 		useState(expandedComposerInputMinHeight);
 	const [threadIdsByContext, setThreadIdsByContext] =
 		useState<ThreadIdsByContext>({});
-	const initialMode =
-		(Array.isArray(mode) ? mode[0] : mode) === "trip" ? "trip" : "plan";
+	const initialMode = requestedMode === "trip" || routeTripId ? "trip" : "plan";
 	const [chatMode, setChatMode] = useState<ChatModeId>(initialMode);
 	const [createdTripId, setCreatedTripId] = useState<Id<"trips"> | null>(null);
 	const [isHistorySheetOpen, setIsHistorySheetOpen] = useState(false);
@@ -381,7 +388,7 @@ export function ViyaChatScreen() {
 	const [isCreatingTripFromBlueprint, setIsCreatingTripFromBlueprint] =
 		useState(false);
 	const [selectedTripId, setSelectedTripId] = useState<Id<"trips"> | null>(
-		null
+		routeTripId ?? null
 	);
 	const [isLoading, setIsLoading] = useState(false);
 	const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);

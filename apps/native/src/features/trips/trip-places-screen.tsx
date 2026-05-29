@@ -23,6 +23,7 @@ import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-s
 import { EmptyState } from "@/src/components/empty-state";
 import { RouteHeader } from "@/src/components/navigation/route-header";
 
+import { TripModuleViyaAssistCard } from "./trip-module-viya-assist-card";
 import { useTripIdParam } from "./use-trip-id-param";
 
 interface PlaceForm {
@@ -324,6 +325,12 @@ export function TripPlacesScreen() {
 					icon="map-outline"
 					subtitle="Saved places, itinerary stops, and route context for the trip."
 					title="Places"
+				/>
+				<TripModuleViyaAssistCard
+					agentModule="places"
+					description="Ask for better places, neighborhoods, food stops, or a tighter route."
+					moduleLabel="places"
+					tripId={tripId}
 				/>
 
 				<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">

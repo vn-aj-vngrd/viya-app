@@ -27,6 +27,7 @@ import { NavigationBackButton } from "@/src/components/navigation/navigation-bac
 import { VIYA_ROUTES } from "@/src/constants/routes";
 
 import { LocationSuggestionField } from "./location-suggestion-field";
+import { fetchTripCoverImageUrl } from "./trip-cover-image";
 import {
 	budgetScopeOptions,
 	budgetStrictnessOptions,
@@ -907,7 +908,9 @@ export function ManualTripCreateScreen() {
 
 		try {
 			setFlowPhase("generating");
-			const result = await createTrip(getCreateTripPayload(state));
+			const payload = getCreateTripPayload(state);
+			const coverImageUrl = await fetchTripCoverImageUrl(payload.destination);
+			const result = await createTrip({ ...payload, coverImageUrl });
 			setCreatedTripId(result.tripId);
 			setFlowPhase("starter");
 		} catch (error) {

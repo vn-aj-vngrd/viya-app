@@ -25,6 +25,7 @@ import { RouteHeader } from "@/src/components/navigation/route-header";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 
 import { formatMoney } from "./trip-dashboard-utils";
+import { TripModuleViyaAssistCard } from "./trip-module-viya-assist-card";
 import { useTripIdParam } from "./use-trip-id-param";
 
 const dateMs = 86_400_000;
@@ -421,6 +422,12 @@ export function TripTravelModeScreen() {
 					icon="navigate-outline"
 					subtitle="Today-first view for itinerary, documents, risks, and spend."
 					title="Travel Mode"
+				/>
+				<TripModuleViyaAssistCard
+					agentModule="travel"
+					description="Ask for day-of help, generate backup moves, or explain what to do next."
+					moduleLabel="Travel Mode"
+					tripId={tripId}
 				/>
 
 				<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">

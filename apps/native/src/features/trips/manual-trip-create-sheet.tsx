@@ -28,6 +28,7 @@ import {
 } from "@/src/components/date/date-picker-field";
 
 import { LocationSuggestionField } from "./location-suggestion-field";
+import { fetchTripCoverImageUrl } from "./trip-cover-image";
 
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 const travelStyleOptions = [
@@ -402,9 +403,13 @@ export function ManualTripCreateSheet({
 		setIsCreating(true);
 		setErrorMessage(null);
 		try {
+			const coverImageUrl = await fetchTripCoverImageUrl(
+				trimmedForm.destination
+			);
 			const result = await createTrip({
 				budgetAmount,
 				budgetCurrency: "PHP",
+				coverImageUrl,
 				destination: trimmedForm.destination,
 				endDate: trimmedForm.endDate,
 				groupType: resolvedGroupType,

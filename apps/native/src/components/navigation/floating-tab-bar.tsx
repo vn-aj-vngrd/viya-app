@@ -7,7 +7,7 @@ const INACTIVE_TAB_COLOR = "#71717A";
 const AI_TAB_NAME = "viya";
 const TAB_SLOT_WIDTH = 52;
 const TAB_BAR_HORIZONTAL_PADDING = 16;
-const HIDDEN_TAB_NAMES = new Set(["moments", "profile", "vault"]);
+const HIDDEN_TAB_NAMES = new Set(["moments", "vault"]);
 const floatingShadowStyle = {
 	elevation: 4,
 	shadowColor: "#111827",

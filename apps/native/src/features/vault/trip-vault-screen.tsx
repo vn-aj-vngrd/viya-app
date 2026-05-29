@@ -22,6 +22,7 @@ import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-s
 import { EmptyState } from "@/src/components/empty-state";
 import { RouteHeader } from "@/src/components/navigation/route-header";
 import { VIYA_ROUTES } from "@/src/constants/routes";
+import { TripModuleViyaAssistCard } from "@/src/features/trips/trip-module-viya-assist-card";
 import { useTripIdParam } from "@/src/features/trips/use-trip-id-param";
 import { TripSyncReviewSheet } from "./tripsync-review-sheet";
 import type { PendingTripSyncReview } from "./tripsync-types";
@@ -440,6 +441,12 @@ export function TripVaultScreen() {
 					icon="cloud-upload-outline"
 					subtitle="Review extracted details before they update bookings, documents, and readiness."
 					title="TripSync Vault"
+				/>
+				<TripModuleViyaAssistCard
+					agentModule="documents"
+					description="Extract booking context, organize documents, or ask what files are still missing."
+					moduleLabel="documents"
+					tripId={tripId}
 				/>
 
 				<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">

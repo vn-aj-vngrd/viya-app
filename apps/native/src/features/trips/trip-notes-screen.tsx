@@ -23,6 +23,7 @@ import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-s
 import { EmptyState } from "@/src/components/empty-state";
 import { RouteHeader } from "@/src/components/navigation/route-header";
 
+import { TripModuleViyaAssistCard } from "./trip-module-viya-assist-card";
 import { useTripIdParam } from "./use-trip-id-param";
 
 interface NoteForm {
@@ -295,6 +296,11 @@ export function TripNotesScreen() {
 					icon="document-text-outline"
 					subtitle="Trip decisions, constraints, group reminders, and context."
 					title="Notes"
+				/>
+				<TripModuleViyaAssistCard
+					description="Ask Viya to turn notes into planning tasks, reminders, or itinerary context."
+					moduleLabel="notes"
+					tripId={tripId}
 				/>
 
 				<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">

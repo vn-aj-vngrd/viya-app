@@ -14,6 +14,7 @@ import { EmptyState } from "@/src/components/empty-state";
 import { RouteHeader } from "@/src/components/navigation/route-header";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 import { formatMoney } from "./trip-dashboard-utils";
+import { TripModuleViyaAssistCard } from "./trip-module-viya-assist-card";
 import { TripStatusPill } from "./trip-status-pill";
 import { useTripIdParam } from "./use-trip-id-param";
 
@@ -243,6 +244,12 @@ export function TripRecapScreen() {
 					rightContent={<TripStatusPill status={workspace.trip.status} />}
 					subtitle="Review highlights, spend, confirmations, and wrap the trip."
 					title="Trip Story"
+				/>
+				<TripModuleViyaAssistCard
+					agentModule="recap"
+					description="Generate a recap draft, summarize spend, or ask Viya what is missing."
+					moduleLabel="recap"
+					tripId={tripId}
 				/>
 
 				<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">

@@ -23,6 +23,7 @@ import { Container } from "@/components/container";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 import { EmptyState } from "@/src/components/empty-state";
 import { RouteHeader } from "@/src/components/navigation/route-header";
+import { TripModuleViyaAssistCard } from "@/src/features/trips/trip-module-viya-assist-card";
 import { useTripIdParam } from "@/src/features/trips/use-trip-id-param";
 
 interface RiskForm {
@@ -365,6 +366,13 @@ export default function TripRisksScreen() {
 					icon="warning-outline"
 					subtitle="Schedule, safety, budget, transport, and document watch-outs."
 					title="Risks"
+				/>
+				<TripModuleViyaAssistCard
+					action="audit"
+					agentModule="risks"
+					description="Find weak spots, generate mitigations, or ask Viya for a backup plan."
+					moduleLabel="risks"
+					tripId={tripId}
 				/>
 
 				<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">

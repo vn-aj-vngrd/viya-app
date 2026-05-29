@@ -30,8 +30,35 @@ export interface PreferenceHomeSuggestion {
 	tone: string;
 }
 
+export interface PreferenceExploreSuggestion {
+	accent: string;
+	icon: string;
+	prompt: string;
+	subtitle: string;
+	title: string;
+}
+
+export interface PreferenceCountrySuggestion {
+	accent: string;
+	country: string;
+	detail: string;
+	duration: string;
+	icon: string;
+	prompt: string;
+}
+
+export interface PreferencePlaceSuggestion {
+	accent: string;
+	location: string;
+	prompt: string;
+	tag: string;
+}
+
 export interface PreferenceSuggestions {
+	countrySuggestions: PreferenceCountrySuggestion[];
+	exploreIdeas: PreferenceExploreSuggestion[];
 	home: PreferenceHomeSuggestion;
+	placeSuggestions: PreferencePlaceSuggestion[];
 	prompts: PreferencePromptSuggestion[];
 }
 
@@ -288,6 +315,409 @@ const normalizePreferences = (
 			: defaultUserPreferences.specialNeeds,
 });
 
+const joinList = (values: readonly string[]) =>
+	values.length > 0 ? values.join(", ") : "none";
+
+interface PreferenceRecommendationProfile {
+	budgetPreferences?: readonly BudgetPreference[];
+	country: Omit<PreferenceCountrySuggestion, "prompt"> & { prompt: string };
+	exploreIdea: PreferenceExploreSuggestion;
+	foodPreferences?: readonly FoodPreference[];
+	groupPreferences?: readonly UserGroupPreference[];
+	interests?: readonly TravelInterest[];
+	pacePreferences?: readonly PacePreference[];
+	place: PreferencePlaceSuggestion;
+	planningStyles?: readonly PlanningStyle[];
+	specialNeeds?: readonly SpecialNeed[];
+	travelStyles?: readonly TravelStyle[];
+}
+
+const preferenceRecommendationProfiles = [
+	{
+		country: {
+			accent: "#0A84FF",
+			country: "Japan",
+			detail: "Clean transit, food alleys, design shops",
+			duration: "5-7 days",
+			icon: "train-outline",
+			prompt:
+				"Suggest a Japan route with clean transit, food neighborhoods, design shops, and realistic day pacing.",
+		},
+		exploreIdea: {
+			accent: "#0A84FF",
+			icon: "storefront-outline",
+			prompt:
+				"Suggest city trips with culture, shopping, excellent transit, and meals that anchor each day.",
+			subtitle: "Transit-friendly cities with food and design stops.",
+			title: "City culture loops",
+		},
+		interests: ["culture", "shopping", "food"],
+		pacePreferences: ["moderate", "fast"],
+		place: {
+			accent: "#0A84FF",
+			location: "Tokyo side streets",
+			prompt:
+				"Build a Tokyo plan around side streets, neighborhood food, design shops, and simple transit hops.",
+			tag: "City wander",
+		},
+		travelStyles: ["balanced", "luxury"],
+	},
+	{
+		country: {
+			accent: "#059669",
+			country: "Vietnam",
+			detail: "Street food, old quarters, coastal add-ons",
+			duration: "4-6 days",
+			icon: "cafe-outline",
+			prompt:
+				"Suggest a Vietnam trip with street food, old quarters, local cafes, and one easy coastal add-on.",
+		},
+		exploreIdea: {
+			accent: "#059669",
+			icon: "restaurant-outline",
+			prompt:
+				"Suggest food-first destinations with neighborhood routes, local markets, and memorable dinners.",
+			subtitle: "Local meals, markets, and compact routes.",
+			title: "Food-led routes",
+		},
+		foodPreferences: ["localEats"],
+		interests: ["food", "culture", "hiddenGems"],
+		pacePreferences: ["moderate", "fast"],
+		place: {
+			accent: "#059669",
+			location: "Hanoi food lanes",
+			prompt:
+				"Build a Hanoi itinerary around local food lanes, coffee stops, old-quarter walks, and low-friction timing.",
+			tag: "Local eats",
+		},
+		travelStyles: ["adventure", "budget", "balanced"],
+	},
+	{
+		budgetPreferences: ["budget"],
+		country: {
+			accent: "#E97816",
+			country: "Taiwan",
+			detail: "Night markets, trains, mountain towns",
+			duration: "4-6 days",
+			icon: "map-outline",
+			prompt:
+				"Suggest a Taiwan route with night markets, trains, mountain towns, and clear value tradeoffs.",
+		},
+		exploreIdea: {
+			accent: "#E97816",
+			icon: "cash-outline",
+			prompt:
+				"Suggest value-first routes with easy transit, strong food options, and visible daily budget tradeoffs.",
+			subtitle: "Good food, reliable transit, and cost control.",
+			title: "Smart value routes",
+		},
+		interests: ["food", "shopping", "culture"],
+		place: {
+			accent: "#E97816",
+			location: "Taipei night markets",
+			prompt:
+				"Build a Taipei plan around night markets, easy train rides, and budget-aware neighborhood days.",
+			tag: "Value trip",
+		},
+		travelStyles: ["budget", "balanced"],
+	},
+	{
+		country: {
+			accent: "#DB2777",
+			country: "Thailand",
+			detail: "Islands, night markets, wellness days",
+			duration: "5-8 days",
+			icon: "sunny-outline",
+			prompt:
+				"Suggest a Thailand trip with islands, night markets, wellness time, and a flexible daily rhythm.",
+		},
+		exploreIdea: {
+			accent: "#DB2777",
+			icon: "sunny-outline",
+			prompt:
+				"Suggest beach trips with sunset time, relaxed logistics, and food stops that do not crowd the day.",
+			subtitle: "Coasts, swims, and room to breathe.",
+			title: "Slow beach escapes",
+		},
+		interests: ["beaches", "wellness", "food"],
+		pacePreferences: ["slow", "moderate"],
+		place: {
+			accent: "#DB2777",
+			location: "Koh Samui slow coast",
+			prompt:
+				"Build a Koh Samui route with quiet beaches, wellness mornings, sunset meals, and simple transfers.",
+			tag: "Slow coast",
+		},
+		travelStyles: ["relaxed", "luxury", "balanced"],
+	},
+	{
+		country: {
+			accent: "#7C3AED",
+			country: "South Korea",
+			detail: "Cafe districts, shopping streets, late nights",
+			duration: "5-7 days",
+			icon: "sparkles-outline",
+			prompt:
+				"Suggest a South Korea trip with cafe districts, shopping streets, culture stops, and optional late nights.",
+		},
+		exploreIdea: {
+			accent: "#7C3AED",
+			icon: "moon-outline",
+			prompt:
+				"Suggest city trips with shopping, cafes, nightlife options, and enough structure for a group.",
+			subtitle: "Cafe districts, shopping, and optional late nights.",
+			title: "After-dark city breaks",
+		},
+		groupPreferences: ["friends", "couple"],
+		interests: ["shopping", "nightlife", "food"],
+		pacePreferences: ["moderate", "fast"],
+		place: {
+			accent: "#7C3AED",
+			location: "Seoul cafe districts",
+			prompt:
+				"Build a Seoul trip around cafe districts, local shopping, culture stops, and calm evening walks.",
+			tag: "City social",
+		},
+		travelStyles: ["balanced", "packed"],
+	},
+	{
+		country: {
+			accent: "#0F766E",
+			country: "Singapore",
+			detail: "Simple transit, family logistics, polished food",
+			duration: "3-5 days",
+			icon: "people-outline",
+			prompt:
+				"Suggest a Singapore trip with simple transit, family-friendly pacing, polished food, and weather backups.",
+		},
+		exploreIdea: {
+			accent: "#0F766E",
+			icon: "people-outline",
+			prompt:
+				"Suggest group-friendly city trips with simple transit, flexible stops, and reliable food options.",
+			subtitle: "Low-friction logistics for mixed interests.",
+			title: "Group-friendly picks",
+		},
+		groupPreferences: ["family", "friends", "work"],
+		interests: ["food", "culture", "shopping"],
+		place: {
+			accent: "#0F766E",
+			location: "Singapore garden loop",
+			prompt:
+				"Build a Singapore plan with garden time, hawker meals, easy transit, and flexible group breaks.",
+			tag: "Easy logistics",
+		},
+		specialNeeds: ["accessibility", "restBreaks"],
+		travelStyles: ["balanced", "luxury"],
+	},
+	{
+		country: {
+			accent: "#16A34A",
+			country: "New Zealand",
+			detail: "Scenic drives, easy hikes, nature stays",
+			duration: "7-10 days",
+			icon: "leaf-outline",
+			prompt:
+				"Suggest a New Zealand route with scenic drives, easy hikes, nature stays, and protected rest time.",
+		},
+		exploreIdea: {
+			accent: "#16A34A",
+			icon: "leaf-outline",
+			prompt:
+				"Suggest nature-focused trips with scenic stays, easy hikes, and a balanced daily pace.",
+			subtitle: "Fresh air, scenic stays, and slower days.",
+			title: "Nature resets",
+		},
+		interests: ["nature", "wellness", "hiddenGems"],
+		pacePreferences: ["slow", "moderate"],
+		place: {
+			accent: "#16A34A",
+			location: "Queenstown scenic base",
+			prompt:
+				"Build a Queenstown plan with scenic drives, light hikes, view-led meals, and buffer time.",
+			tag: "Nature base",
+		},
+		travelStyles: ["adventure", "relaxed", "luxury"],
+	},
+	{
+		country: {
+			accent: "#C2410C",
+			country: "Indonesia",
+			detail: "Slow coasts, wellness stays, local food",
+			duration: "5-8 days",
+			icon: "flower-outline",
+			prompt:
+				"Suggest an Indonesia trip with slow coasts, wellness stays, local food, and easy transfer days.",
+		},
+		exploreIdea: {
+			accent: "#C2410C",
+			icon: "flower-outline",
+			prompt:
+				"Suggest wellness-focused routes with quiet mornings, local food, and plenty of recovery time.",
+			subtitle: "Wellness mornings and gentle coast days.",
+			title: "Wellness coast days",
+		},
+		interests: ["wellness", "beaches", "nature"],
+		pacePreferences: ["slow"],
+		place: {
+			accent: "#C2410C",
+			location: "Bali slow coast",
+			prompt:
+				"Build a Bali route with quiet beaches, wellness mornings, local food, and simple logistics.",
+			tag: "Slow travel",
+		},
+		specialNeeds: ["restBreaks"],
+		travelStyles: ["relaxed", "luxury"],
+	},
+] as const satisfies readonly PreferenceRecommendationProfile[];
+
+const scoreProfile = (
+	preferences: UserPreferences,
+	profile: PreferenceRecommendationProfile
+) => {
+	let score = 0;
+
+	for (const interest of profile.interests ?? []) {
+		if (preferences.interests.includes(interest)) {
+			score += 4;
+		}
+	}
+
+	if (profile.travelStyles?.includes(preferences.travelStyle)) {
+		score += 3;
+	}
+
+	if (profile.pacePreferences?.includes(preferences.pacePreference)) {
+		score += 3;
+	}
+
+	if (profile.budgetPreferences?.includes(preferences.budgetPreference)) {
+		score += 2;
+	}
+
+	if (profile.foodPreferences?.includes(preferences.foodPreference)) {
+		score += 2;
+	}
+
+	if (profile.groupPreferences?.includes(preferences.groupPreference)) {
+		score += 2;
+	}
+
+	if (profile.planningStyles?.includes(preferences.planningStyle)) {
+		score += 2;
+	}
+
+	if (
+		profile.specialNeeds?.some((specialNeed) =>
+			preferences.specialNeeds.includes(specialNeed)
+		)
+	) {
+		score += 2;
+	}
+
+	return score;
+};
+
+const rankPreferenceProfiles = (preferences: UserPreferences) =>
+	preferenceRecommendationProfiles
+		.map((profile, index) => ({
+			index,
+			profile,
+			score: scoreProfile(preferences, profile),
+		}))
+		.sort(
+			(first, second) =>
+				second.score - first.score || first.index - second.index
+		)
+		.map(({ profile }) => profile);
+
+const collectUniqueRecommendations = <TRecommendation>(
+	profiles: readonly PreferenceRecommendationProfile[],
+	getRecommendation: (
+		profile: PreferenceRecommendationProfile
+	) => TRecommendation,
+	getKey: (recommendation: TRecommendation) => string,
+	limit: number
+) => {
+	const recommendations: TRecommendation[] = [];
+	const seenKeys = new Set<string>();
+
+	for (const profile of profiles) {
+		const recommendation = getRecommendation(profile);
+		const key = getKey(recommendation);
+
+		if (seenKeys.has(key)) {
+			continue;
+		}
+
+		seenKeys.add(key);
+		recommendations.push(recommendation);
+
+		if (recommendations.length >= limit) {
+			return recommendations;
+		}
+	}
+
+	return recommendations;
+};
+
+const createPersonalizedPrompt = (
+	preferences: UserPreferences,
+	request: string
+) => {
+	const interests = joinList(preferences.interests);
+	const specialNeeds = preferences.specialNeeds.includes("none")
+		? "no special constraints"
+		: joinList(preferences.specialNeeds);
+
+	return [
+		request,
+		`Use my travel preferences: ${preferences.travelStyle} style, ${preferences.pacePreference} pace, ${preferences.budgetPreference} budget comfort, interests in ${interests}, ${preferences.groupPreference} travel, and ${specialNeeds}.`,
+	].join(" ");
+};
+
+const getPreferenceHomeRecommendations = (
+	preferences: UserPreferences
+): Pick<
+	PreferenceSuggestions,
+	"countrySuggestions" | "exploreIdeas" | "placeSuggestions"
+> => {
+	const rankedProfiles = rankPreferenceProfiles(preferences);
+	const exploreIdeas = collectUniqueRecommendations(
+		rankedProfiles,
+		(profile) => profile.exploreIdea,
+		(idea) => idea.title,
+		4
+	).map((idea) => ({
+		...idea,
+		prompt: createPersonalizedPrompt(preferences, idea.prompt),
+	}));
+	const countrySuggestions = collectUniqueRecommendations(
+		rankedProfiles,
+		(profile) => profile.country,
+		(country) => country.country,
+		4
+	).map((country) => ({
+		...country,
+		prompt: createPersonalizedPrompt(preferences, country.prompt),
+	}));
+	const placeSuggestions = collectUniqueRecommendations(
+		rankedProfiles,
+		(profile) => profile.place,
+		(place) => place.location,
+		3
+	).map((place) => ({
+		...place,
+		prompt: createPersonalizedPrompt(preferences, place.prompt),
+	}));
+
+	return {
+		countrySuggestions,
+		exploreIdeas,
+		placeSuggestions,
+	};
+};
+
 const getHomeSuggestion = (
 	preferences: UserPreferences
 ): PreferenceHomeSuggestion => {
@@ -370,6 +800,9 @@ export const getPreferenceSuggestions = (
 ): PreferenceSuggestions => {
 	const normalizedPreferences = normalizePreferences(preferences);
 	const home = getHomeSuggestion(normalizedPreferences);
+	const homeRecommendations = getPreferenceHomeRecommendations(
+		normalizedPreferences
+	);
 	const primaryPrompt = getPrimaryPrompt(normalizedPreferences);
 	const foodPrompt =
 		normalizedPreferences.foodPreference === "localEats"
@@ -386,6 +819,7 @@ export const getPreferenceSuggestions = (
 			: "Check what I should prepare before this trip.";
 
 	return {
+		...homeRecommendations,
 		home,
 		prompts: [
 			{
@@ -419,9 +853,6 @@ export const getPreferenceSuggestions = (
 		],
 	};
 };
-
-const joinList = (values: readonly string[]) =>
-	values.length > 0 ? values.join(", ") : "none";
 
 export const formatPreferenceContext = (
 	preferences: Partial<UserPreferences>

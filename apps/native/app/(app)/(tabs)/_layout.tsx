@@ -64,12 +64,20 @@ export default function TabLayout() {
 				}}
 			/>
 			<Tabs.Screen
+				name="profile"
+				options={{
+					title: "Profile",
+					tabBarIcon: ({ color, focused }) => (
+						<FloatingTabIcon color={color} focused={focused} name="user" />
+					),
+				}}
+			/>
+			<Tabs.Screen
 				name="moments"
 				options={{
 					href: null,
 				}}
 			/>
-			<Tabs.Screen name="profile" options={{ href: null }} />
 			<Tabs.Screen name="vault" options={{ href: null }} />
 		</Tabs>
 	);

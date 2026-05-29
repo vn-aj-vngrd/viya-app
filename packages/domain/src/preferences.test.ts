@@ -19,6 +19,11 @@ describe("getPreferenceSuggestions", () => {
 
 		expect(suggestions.home.title).toBe("Plan a slower beach escape");
 		expect(suggestions.home.subtitle).toContain("room for rest");
+		expect(suggestions.exploreIdeas[0]?.title).toBe("Slow beach escapes");
+		expect(suggestions.countrySuggestions[0]?.country).toBe("Thailand");
+		expect(suggestions.placeSuggestions[0]?.location).toBe(
+			"Koh Samui slow coast"
+		);
 		expect(primaryPrompt?.prompt).toContain("slow beach trip");
 	});
 
@@ -34,6 +39,9 @@ describe("getPreferenceSuggestions", () => {
 
 		expect(suggestions.home.title).toBe("Build a fast local discovery plan");
 		expect(suggestions.home.subtitle).toContain("food stops");
+		expect(suggestions.exploreIdeas[0]?.title).toBe("Food-led routes");
+		expect(suggestions.countrySuggestions[0]?.country).toBe("Vietnam");
+		expect(suggestions.placeSuggestions[0]?.location).toBe("Hanoi food lanes");
 		expect(primaryPrompt?.prompt).toContain("hidden gems");
 	});
 
@@ -54,6 +62,9 @@ describe("getPreferenceSuggestions", () => {
 		} as Partial<UserPreferences>);
 
 		expect(suggestions.home.title).toBe("Shape a balanced trip plan");
+		expect(suggestions.exploreIdeas).toHaveLength(4);
+		expect(suggestions.countrySuggestions).toHaveLength(4);
+		expect(suggestions.placeSuggestions).toHaveLength(3);
 		expect(suggestions.prompts).toHaveLength(4);
 	});
 });

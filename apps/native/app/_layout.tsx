@@ -6,7 +6,8 @@ import { env } from "@viya-app/env/native";
 import { ConvexReactClient } from "convex/react";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { Stack } from "expo-router";
-import { HeroUINativeProvider } from "heroui-native";
+import { HeroUINativeProvider, useThemeColor } from "heroui-native";
+import { View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 
@@ -21,15 +22,23 @@ const convex = new ConvexReactClient(env.EXPO_PUBLIC_CONVEX_URL, {
 });
 
 function StackLayout() {
+	const themeColorBackground = useThemeColor("background");
+
 	return (
-		<Stack screenOptions={{}}>
-			<Stack.Screen name="(app)" options={{ headerShown: false }} />
-			<Stack.Screen name="(auth)" options={{ headerShown: false }} />
-			<Stack.Screen
-				name="modal"
-				options={{ title: "Modal", presentation: "modal" }}
-			/>
-		</Stack>
+		<View className="flex-1" style={{ backgroundColor: themeColorBackground }}>
+			<Stack
+				screenOptions={{
+					contentStyle: { backgroundColor: themeColorBackground },
+				}}
+			>
+				<Stack.Screen name="(app)" options={{ headerShown: false }} />
+				<Stack.Screen name="(auth)" options={{ headerShown: false }} />
+				<Stack.Screen
+					name="modal"
+					options={{ title: "Modal", presentation: "modal" }}
+				/>
+			</Stack>
+		</View>
 	);
 }
 
@@ -40,7 +49,7 @@ export default function Layout() {
 			tokenCache={tokenCache}
 		>
 			<ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-				<GestureHandlerRootView style={{ flex: 1 }}>
+				<GestureHandlerRootView style={{ backgroundColor: "#F4F4F5", flex: 1 }}>
 					<KeyboardProvider>
 						<AppThemeProvider>
 							<HeroUINativeProvider>

@@ -24,6 +24,7 @@ import {
 	formatMoney,
 	formatStatus,
 } from "@/src/features/trips/trip-dashboard-utils";
+import { TripModuleViyaAssistCard } from "@/src/features/trips/trip-module-viya-assist-card";
 import { useTripIdParam } from "@/src/features/trips/use-trip-id-param";
 
 const dateMs = 86_400_000;
@@ -367,6 +368,12 @@ export function TripBudgetScreen() {
 					icon="wallet-outline"
 					subtitle="Budget, bookings, manual expenses, and safe daily spend from this trip."
 					title="Budget Wallet"
+				/>
+				<TripModuleViyaAssistCard
+					agentModule="budget"
+					description="Estimate costs, review overspend risk, or ask Viya where the budget is weakest."
+					moduleLabel="budget"
+					tripId={tripId}
 				/>
 
 				<Surface className="gap-5 rounded-[30px] border border-border bg-surface p-5">

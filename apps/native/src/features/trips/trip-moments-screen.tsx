@@ -23,6 +23,7 @@ import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-s
 import { EmptyState } from "@/src/components/empty-state";
 import { RouteHeader } from "@/src/components/navigation/route-header";
 
+import { TripModuleViyaAssistCard } from "./trip-module-viya-assist-card";
 import { useTripIdParam } from "./use-trip-id-param";
 
 interface MomentForm {
@@ -310,6 +311,11 @@ export function TripMomentsScreen() {
 					icon="images-outline"
 					subtitle="Save trip moments, highlights, and recap source notes."
 					title="Moments"
+				/>
+				<TripModuleViyaAssistCard
+					description="Ask Viya to shape moments into highlights, captions, or recap ideas."
+					moduleLabel="moments"
+					tripId={tripId}
 				/>
 
 				<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">

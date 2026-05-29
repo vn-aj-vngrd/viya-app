@@ -23,6 +23,7 @@ import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-s
 import { EmptyState } from "@/src/components/empty-state";
 import { RouteHeader } from "@/src/components/navigation/route-header";
 
+import { TripModuleViyaAssistCard } from "./trip-module-viya-assist-card";
 import { useTripIdParam } from "./use-trip-id-param";
 
 interface CompanionForm {
@@ -293,6 +294,11 @@ export function TripCompanionsScreen() {
 					icon="people-outline"
 					subtitle="Travelers, organizers, and emergency contacts for this trip."
 					title="Companions"
+				/>
+				<TripModuleViyaAssistCard
+					description="Ask Viya how to coordinate roles, contacts, and group reminders."
+					moduleLabel="companions"
+					tripId={tripId}
 				/>
 
 				<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">

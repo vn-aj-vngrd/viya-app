@@ -13,6 +13,7 @@ const AnimatedView = Animated.createAnimatedComponent(View);
 
 type Props = AnimatedProps<ViewProps> & {
 	className?: string;
+	includeBottomInset?: boolean;
 	isScrollable?: boolean;
 	scrollViewProps?: Omit<ScrollViewProps, "contentContainerStyle">;
 };
@@ -20,8 +21,10 @@ type Props = AnimatedProps<ViewProps> & {
 export function Container({
 	children,
 	className,
+	includeBottomInset = true,
 	isScrollable = true,
 	scrollViewProps,
+	style,
 	...props
 }: PropsWithChildren<Props>) {
 	const insets = useSafeAreaInsets();
@@ -29,9 +32,7 @@ export function Container({
 	return (
 		<AnimatedView
 			className={cn("flex-1 bg-background", className)}
-			style={{
-				paddingBottom: insets.bottom,
-			}}
+			style={[{ paddingBottom: includeBottomInset ? insets.bottom : 0 }, style]}
 			{...props}
 		>
 			{isScrollable ? (

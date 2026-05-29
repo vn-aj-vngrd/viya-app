@@ -31,6 +31,7 @@ import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-s
 import { EmptyState } from "@/src/components/empty-state";
 import { RouteHeader } from "@/src/components/navigation/route-header";
 import { VIYA_ROUTES } from "@/src/constants/routes";
+import { TripModuleViyaAssistCard } from "@/src/features/trips/trip-module-viya-assist-card";
 import { useTripIdParam } from "@/src/features/trips/use-trip-id-param";
 
 import { ReadinessCategoryCard } from "./readiness-category-card";
@@ -438,6 +439,13 @@ export function ReadinessScreen() {
 					icon="shield-checkmark-outline"
 					subtitle="Resolve booking, document, budget, packing, schedule, safety, and backup gaps before travel."
 					title="Readiness"
+				/>
+				<TripModuleViyaAssistCard
+					action="audit"
+					agentModule="readiness"
+					description="Audit missing prep, generate checklist fixes, or ask what to close first."
+					moduleLabel="readiness"
+					tripId={tripId}
 				/>
 
 				<Surface className="gap-4 rounded-[34px] border border-border bg-surface p-5">

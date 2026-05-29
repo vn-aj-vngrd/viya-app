@@ -24,6 +24,7 @@ import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-s
 import { EmptyState } from "@/src/components/empty-state";
 import { RouteHeader } from "@/src/components/navigation/route-header";
 
+import { TripModuleViyaAssistCard } from "./trip-module-viya-assist-card";
 import { useTripIdParam } from "./use-trip-id-param";
 
 const formatCost = (amount: number, currency = "PHP") =>
@@ -661,6 +662,12 @@ export function TripItineraryScreen() {
 						subtitle="Start with days, then add timed places, meals, transfers, and buffers."
 						title="Itinerary"
 					/>
+					<TripModuleViyaAssistCard
+						agentModule="itinerary"
+						description="Generate a starter day plan, refine timing, or ask what to add next."
+						moduleLabel="itinerary"
+						tripId={tripId}
+					/>
 					<EmptyState
 						description="Create your first day to start building the trip timeline."
 						icon="calendar-outline"
@@ -686,6 +693,12 @@ export function TripItineraryScreen() {
 					icon="calendar-outline"
 					subtitle="Route, timing, buffers, and Viya reasoning from the saved trip."
 					title="Itinerary"
+				/>
+				<TripModuleViyaAssistCard
+					agentModule="itinerary"
+					description="Generate itinerary changes, rebalance days, or ask Viya to explain the route."
+					moduleLabel="itinerary"
+					tripId={tripId}
 				/>
 
 				<Surface className="gap-3 rounded-[30px] border border-border bg-surface p-5">
