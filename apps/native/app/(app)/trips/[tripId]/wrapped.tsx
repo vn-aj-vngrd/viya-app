@@ -1,5 +1,5 @@
-import { TripDashboardScreen } from "@/src/features/trips/trip-dashboard-screen";
+import { TripRecapScreen } from "@/src/features/trips/trip-recap-screen";
 
 export default function WrappedScreen() {
-	return <TripDashboardScreen initialTab="recap" />;
+	return <TripRecapScreen />;
 }

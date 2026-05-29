@@ -37,13 +37,7 @@ export type SpecialNeed =
 	| "earlyStarts"
 	| "restBreaks"
 	| "none";
-export type TripStatus =
-	| "planning"
-	| "booking"
-	| "preparing"
-	| "traveling"
-	| "completed"
-	| "archived";
+export type TripStatus = "planning" | "traveling" | "completed" | "archived";
 export type ItineraryPace = "light" | "balanced" | "packed";
 export type ItineraryItemCategory =
 	| "activity"

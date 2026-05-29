@@ -135,7 +135,12 @@ export default defineSchema({
 		travelStyle: v.string(),
 		pace: v.string(),
 		groupType: v.string(),
-		status: v.string(),
+		status: v.union(
+			v.literal("planning"),
+			v.literal("traveling"),
+			v.literal("completed"),
+			v.literal("archived")
+		),
 		readinessScore: v.number(),
 		coverImageUrl: v.optional(v.string()),
 		isFavorite: v.optional(v.boolean()),
@@ -177,6 +182,20 @@ export default defineSchema({
 		status: v.string(),
 		aiReason: v.string(),
 	}).index("by_trip", ["tripId"]),
+	savedPlaces: defineTable({
+		tripId: v.id("trips"),
+		title: v.string(),
+		description: v.optional(v.string()),
+		locationName: v.string(),
+		address: v.optional(v.string()),
+		latitude: v.optional(v.number()),
+		longitude: v.optional(v.number()),
+		assignedDayId: v.optional(v.id("itineraryDays")),
+		category: v.string(),
+		source: v.union(v.literal("user"), v.literal("ai"), v.literal("itinerary")),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	}).index("by_trip", ["tripId"]),
 	readinessItems: defineTable({
 		tripId: v.id("trips"),
 		category: v.string(),
@@ -212,6 +231,24 @@ export default defineSchema({
 		locationName: v.string(),
 		isHighlight: v.boolean(),
 		createdAt: v.number(),
+	}).index("by_trip", ["tripId"]),
+	tripNotes: defineTable({
+		tripId: v.id("trips"),
+		title: v.string(),
+		body: v.string(),
+		category: v.string(),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	}).index("by_trip", ["tripId"]),
+	tripCompanions: defineTable({
+		tripId: v.id("trips"),
+		name: v.string(),
+		role: v.string(),
+		email: v.optional(v.string()),
+		phone: v.optional(v.string()),
+		notes: v.optional(v.string()),
+		createdAt: v.number(),
+		updatedAt: v.number(),
 	}).index("by_trip", ["tripId"]),
 	vaultItems: defineTable({
 		ownerId: v.string(),
@@ -279,4 +316,35 @@ export default defineSchema({
 		createdAt: v.number(),
 		updatedAt: v.number(),
 	}).index("by_trip", ["tripId"]),
+	tripAgentDrafts: defineTable({
+		tripId: v.id("trips"),
+		ownerId: v.string(),
+		module: v.union(
+			v.literal("itinerary"),
+			v.literal("places"),
+			v.literal("bookings"),
+			v.literal("documents"),
+			v.literal("budget"),
+			v.literal("readiness"),
+			v.literal("risks"),
+			v.literal("travel"),
+			v.literal("recap")
+		),
+		action: v.union(
+			v.literal("generate"),
+			v.literal("refine"),
+			v.literal("audit"),
+			v.literal("explain")
+		),
+		title: v.string(),
+		rationale: v.string(),
+		payloadJson: v.string(),
+		status: v.union(
+			v.literal("draft"),
+			v.literal("applied"),
+			v.literal("dismissed")
+		),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	}).index("by_trip_status", ["tripId", "status"]),
 });

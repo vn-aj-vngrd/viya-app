@@ -1,5 +1,5 @@
-import { TripDashboardScreen } from "@/src/features/trips/trip-dashboard-screen";
+import { TripMomentsScreen as TripMomentsFeatureScreen } from "@/src/features/trips/trip-moments-screen";
 
 export default function TripMomentsScreen() {
-	return <TripDashboardScreen initialTab="memories" />;
+	return <TripMomentsFeatureScreen />;
 }

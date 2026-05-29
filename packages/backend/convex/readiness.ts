@@ -68,6 +68,26 @@ const baselineReadinessItems: Record<
 	},
 };
 
+const readinessCategoryValidator = v.union(
+	v.literal("documents"),
+	v.literal("bookings"),
+	v.literal("packing"),
+	v.literal("budget"),
+	v.literal("schedule"),
+	v.literal("transport"),
+	v.literal("weather"),
+	v.literal("safety"),
+	v.literal("group"),
+	v.literal("backupPlan")
+);
+
+const priorityValidator = v.union(
+	v.literal("low"),
+	v.literal("medium"),
+	v.literal("high"),
+	v.literal("critical")
+);
+
 const toDomainReadinessItem = (item: Doc<"readinessItems">): ReadinessItem => ({
 	id: item._id,
 	tripId: item.tripId,
@@ -141,6 +161,92 @@ export const updateReadinessItem = mutation({
 		await updateTripReadinessScore(ctx, item.tripId);
 
 		return ctx.db.get(args.readinessItemId);
+	},
+});
+
+export const createReadinessItem = mutation({
+	args: {
+		tripId: v.id("trips"),
+		category: readinessCategoryValidator,
+		description: v.string(),
+		dueDate: v.string(),
+		priority: priorityValidator,
+		title: v.string(),
+	},
+	handler: async (ctx, args) => {
+		const identity = await getRequiredIdentity(ctx);
+		await ensureTripAccess(ctx, args.tripId, identity.subject);
+		const itemId = await ctx.db.insert("readinessItems", {
+			aiReason: "Created by the traveler.",
+			assignedToMemberId: undefined,
+			category: args.category,
+			description: args.description,
+			dueDate: args.dueDate,
+			priority: args.priority,
+			source: "user",
+			status: "todo",
+			title: args.title,
+			tripId: args.tripId,
+		});
+		await updateTripReadinessScore(ctx, args.tripId);
+
+		return ctx.db.get(itemId);
+	},
+});
+
+export const updateReadinessItemDetails = mutation({
+	args: {
+		readinessItemId: v.id("readinessItems"),
+		assignedToMemberId: v.optional(v.string()),
+		category: v.optional(readinessCategoryValidator),
+		description: v.optional(v.string()),
+		dueDate: v.optional(v.string()),
+		priority: v.optional(priorityValidator),
+		status: v.optional(
+			v.union(
+				v.literal("todo"),
+				v.literal("inProgress"),
+				v.literal("done"),
+				v.literal("blocked"),
+				v.literal("ignored")
+			)
+		),
+		title: v.optional(v.string()),
+	},
+	handler: async (ctx, args) => {
+		const identity = await getRequiredIdentity(ctx);
+		const item = await ctx.db.get(args.readinessItemId);
+
+		if (!item) {
+			throw new ConvexError("READINESS_ITEM_NOT_FOUND");
+		}
+
+		await ensureTripAccess(ctx, item.tripId, identity.subject);
+		const { readinessItemId, ...patch } = args;
+		await ctx.db.patch(readinessItemId, patch);
+		await updateTripReadinessScore(ctx, item.tripId);
+
+		return ctx.db.get(readinessItemId);
+	},
+});
+
+export const deleteReadinessItem = mutation({
+	args: {
+		readinessItemId: v.id("readinessItems"),
+	},
+	handler: async (ctx, args) => {
+		const identity = await getRequiredIdentity(ctx);
+		const item = await ctx.db.get(args.readinessItemId);
+
+		if (!item) {
+			throw new ConvexError("READINESS_ITEM_NOT_FOUND");
+		}
+
+		await ensureTripAccess(ctx, item.tripId, identity.subject);
+		await ctx.db.delete(args.readinessItemId);
+		await updateTripReadinessScore(ctx, item.tripId);
+
+		return { deletedReadinessItemId: args.readinessItemId };
 	},
 });
 

@@ -878,7 +878,7 @@ export function QuestionOptionsDock({
 										setIsCustomAnswerVisible(false);
 									}}
 									size="sm"
-									variant="ghost"
+									variant="tertiary"
 								>
 									<Button.Label>Cancel</Button.Label>
 								</Button>

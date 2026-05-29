@@ -6,6 +6,7 @@ import type { ComponentProps } from "react";
 export type TripTab =
 	| "overview"
 	| "itinerary"
+	| "places"
 	| "bookings"
 	| "documents"
 	| "checklist"
@@ -18,14 +19,18 @@ export type TripTab =
 export type IoniconName = ComponentProps<typeof Ionicons>["name"];
 
 export interface TripWorkspace {
+	agentDrafts?: Doc<"tripAgentDrafts">[];
 	bookings: Doc<"bookings">[];
+	companions: Doc<"tripCompanions">[];
 	documents: Doc<"travelDocuments">[];
 	expenses: Doc<"expenses">[];
 	itineraryDays: Doc<"itineraryDays">[];
 	itineraryItems: Doc<"itineraryItems">[];
 	moments: Doc<"moments">[];
+	notes: Doc<"tripNotes">[];
 	readinessItems: Doc<"readinessItems">[];
 	risks: Doc<"risks">[];
+	savedPlaces: Doc<"savedPlaces">[];
 	trip: Doc<"trips">;
 	vaultItems: Array<Doc<"vaultItems"> & { url: string | null }>;
 }

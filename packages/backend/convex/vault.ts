@@ -102,6 +102,88 @@ const recalculateTripReadiness = async (
 	});
 };
 
+const touchTrip = async (ctx: MutationCtx, tripId: Id<"trips">) => {
+	await ctx.db.patch(tripId, { updatedAt: Date.now() });
+};
+
+const getRequiredVaultItem = async (
+	ctx: MutationCtx,
+	vaultItemId: Id<"vaultItems">,
+	ownerId: string
+) => {
+	const item = await ctx.db.get(vaultItemId);
+
+	if (!item || item.ownerId !== ownerId) {
+		throw new ConvexError("VAULT_ITEM_NOT_FOUND");
+	}
+
+	return item;
+};
+
+interface LinkedEntityInput {
+	ctx: MutationCtx;
+	linkedEntityId?: string;
+	linkedEntityType?: string;
+	tripId?: Id<"trips">;
+}
+
+const getLinkedEntityTripId = async ({
+	ctx,
+	linkedEntityId,
+	linkedEntityType,
+}: LinkedEntityInput) => {
+	if (!(linkedEntityId && linkedEntityType)) {
+		return null;
+	}
+
+	if (linkedEntityType === "booking") {
+		const bookingId = ctx.db.normalizeId("bookings", linkedEntityId);
+		const booking = bookingId ? await ctx.db.get(bookingId) : null;
+
+		return booking?.tripId ?? null;
+	}
+
+	if (linkedEntityType === "travelDocument") {
+		const documentId = ctx.db.normalizeId("travelDocuments", linkedEntityId);
+		const document = documentId ? await ctx.db.get(documentId) : null;
+
+		return document?.tripId ?? null;
+	}
+
+	if (linkedEntityType === "moment") {
+		const momentId = ctx.db.normalizeId("moments", linkedEntityId);
+		const moment = momentId ? await ctx.db.get(momentId) : null;
+
+		return moment?.tripId ?? null;
+	}
+
+	if (linkedEntityType === "readinessItem") {
+		const readinessItemId = ctx.db.normalizeId(
+			"readinessItems",
+			linkedEntityId
+		);
+		const readinessItem = readinessItemId
+			? await ctx.db.get(readinessItemId)
+			: null;
+
+		return readinessItem?.tripId ?? null;
+	}
+
+	return null;
+};
+
+const ensureLinkedEntityBelongsToTrip = async (input: LinkedEntityInput) => {
+	if (!(input.linkedEntityId && input.linkedEntityType && input.tripId)) {
+		return;
+	}
+
+	const linkedTripId = await getLinkedEntityTripId(input);
+
+	if (linkedTripId !== input.tripId) {
+		throw new ConvexError("LINKED_ENTITY_TRIP_MISMATCH");
+	}
+};
+
 export const generateUploadUrl = mutation({
 	args: {},
 	handler: async (ctx) => {
@@ -334,6 +416,88 @@ export const deleteVaultItem = mutation({
 		await ctx.storage.delete(item.storageId);
 		await ctx.db.delete(args.vaultItemId);
 
+		if (item.tripId) {
+			await touchTrip(ctx, item.tripId);
+		}
+
 		return { vaultItemId: args.vaultItemId };
+	},
+});
+
+export const updateVaultItem = mutation({
+	args: {
+		vaultItemId: v.id("vaultItems"),
+		kind: v.optional(vaultKindValidator),
+		linkedEntityId: v.optional(v.string()),
+		linkedEntityType: v.optional(v.string()),
+		note: v.optional(v.string()),
+		status: v.optional(
+			v.union(
+				v.literal("uploaded"),
+				v.literal("processing"),
+				v.literal("ready"),
+				v.literal("failed"),
+				v.literal("archived")
+			)
+		),
+		title: v.optional(v.string()),
+	},
+	handler: async (ctx, args) => {
+		const identity = await getRequiredIdentity(ctx);
+		const item = await getRequiredVaultItem(
+			ctx,
+			args.vaultItemId,
+			identity.subject
+		);
+		await ensureLinkedEntityBelongsToTrip({
+			ctx,
+			linkedEntityId: args.linkedEntityId,
+			linkedEntityType: args.linkedEntityType,
+			tripId: item.tripId,
+		});
+		const { vaultItemId, ...patch } = args;
+		await ctx.db.patch(vaultItemId, {
+			...patch,
+			updatedAt: Date.now(),
+		});
+
+		if (item.tripId) {
+			await touchTrip(ctx, item.tripId);
+		}
+
+		return ctx.db.get(vaultItemId);
+	},
+});
+
+export const linkVaultItem = mutation({
+	args: {
+		vaultItemId: v.id("vaultItems"),
+		linkedEntityId: v.string(),
+		linkedEntityType: v.string(),
+	},
+	handler: async (ctx, args) => {
+		const identity = await getRequiredIdentity(ctx);
+		const item = await getRequiredVaultItem(
+			ctx,
+			args.vaultItemId,
+			identity.subject
+		);
+		await ensureLinkedEntityBelongsToTrip({
+			ctx,
+			linkedEntityId: args.linkedEntityId,
+			linkedEntityType: args.linkedEntityType,
+			tripId: item.tripId,
+		});
+		await ctx.db.patch(args.vaultItemId, {
+			linkedEntityId: args.linkedEntityId,
+			linkedEntityType: args.linkedEntityType,
+			updatedAt: Date.now(),
+		});
+
+		if (item.tripId) {
+			await touchTrip(ctx, item.tripId);
+		}
+
+		return ctx.db.get(args.vaultItemId);
 	},
 });

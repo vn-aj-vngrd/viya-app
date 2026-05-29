@@ -8,11 +8,11 @@ import {
 	Spinner,
 	Text,
 	TextField,
-	useBottomSheetAwareHandlers,
 } from "heroui-native";
 import { useState } from "react";
 import { Platform, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 
 const isoDatePattern = /^\d{4}-\d{2}-\d{2}$/;
 const dateNumberFormatter = new Intl.NumberFormat("en", {
@@ -184,7 +184,7 @@ function DateTriggerField({
 	placeholder: string;
 	valueLabel: string | null;
 }) {
-	const { onBlur, onFocus } = useBottomSheetAwareHandlers();
+	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
 	const inputClassName = isInvalid
 		? "h-12 border border-danger bg-surface px-4 pr-11"
 		: "h-12 border border-border bg-surface px-4 pr-11";
@@ -215,6 +215,32 @@ function DateTriggerField({
 				<Ionicons color="#71717A" name="calendar-outline" size={18} />
 			</View>
 		</Pressable>
+	);
+}
+
+function WebDateInput({
+	label,
+	onChangeText,
+	value,
+}: {
+	label: string;
+	onChangeText: (value: string) => void;
+	value: string;
+}) {
+	return (
+		<TextField className="gap-2">
+			<Label>
+				<Label.Text>{label}</Label.Text>
+			</Label>
+			<Input
+				autoCapitalize="none"
+				className="h-12 rounded-[18px] border border-border bg-surface px-4"
+				onChangeText={onChangeText}
+				placeholder="YYYY-MM-DD"
+				value={value}
+				variant="secondary"
+			/>
+		</TextField>
 	);
 }
 
@@ -318,22 +344,30 @@ export function DatePickerField({
 										Platform.OS === "ios" ? inlineDatePickerHeight : 160,
 								}}
 							>
-								<DateTimePicker
-									accentColor={accentColor}
-									display={Platform.OS === "ios" ? "inline" : "default"}
-									maximumDate={maximumDate}
-									minimumDate={minimumDate}
-									mode="date"
-									onChange={(_event, nextDate) => {
-										if (nextDate) {
-											onChangeText(formatIsoDate(nextDate));
-											if (Platform.OS !== "ios") {
-												updateOpen(false);
+								{Platform.OS === "web" ? (
+									<WebDateInput
+										label={label}
+										onChangeText={onChangeText}
+										value={value}
+									/>
+								) : (
+									<DateTimePicker
+										accentColor={accentColor}
+										display={Platform.OS === "ios" ? "inline" : "default"}
+										maximumDate={maximumDate}
+										minimumDate={minimumDate}
+										mode="date"
+										onChange={(_event, nextDate) => {
+											if (nextDate) {
+												onChangeText(formatIsoDate(nextDate));
+												if (Platform.OS !== "ios") {
+													updateOpen(false);
+												}
 											}
-										}
-									}}
-									value={selectedDate}
-								/>
+										}}
+										value={selectedDate}
+									/>
+								)}
 							</View>
 							<Button onPress={() => updateOpen(false)}>
 								<Button.Label>Done</Button.Label>
@@ -407,6 +441,17 @@ export function DateRangePickerField({
 			: minimumDate;
 
 	const updateOpen = (nextIsOpen: boolean) => {
+		if (
+			nextIsOpen &&
+			!(isIsoDate(orderedValue.start) && isIsoDate(orderedValue.end))
+		) {
+			const fallbackIsoDate = formatIsoDate(fallbackDate);
+			onValueChange({
+				end: fallbackIsoDate,
+				start: fallbackIsoDate,
+			});
+		}
+
 		setIsOpen(nextIsOpen);
 		onOpenChange?.(nextIsOpen);
 	};
@@ -417,6 +462,50 @@ export function DateRangePickerField({
 			[slot]: formatIsoDate(nextDate),
 		});
 		onValueChange(nextRange);
+	};
+	const renderRangePickerControl = () => {
+		if (Platform.OS === "web") {
+			return (
+				<View className="w-full gap-3">
+					<WebDateInput
+						label="Start date"
+						onChangeText={(start) => onValueChange({ ...value, start })}
+						value={value.start}
+					/>
+					<WebDateInput
+						label="End date"
+						onChangeText={(end) => onValueChange({ ...value, end })}
+						value={value.end}
+					/>
+				</View>
+			);
+		}
+
+		if (pickerDate) {
+			return (
+				<DateTimePicker
+					accentColor={accentColor}
+					display={Platform.OS === "ios" ? "inline" : "default"}
+					maximumDate={maximumDate}
+					minimumDate={activeMinimumDate}
+					mode="date"
+					onChange={(_event, nextDate) => {
+						if (!nextDate) {
+							return;
+						}
+
+						updateRange(activeSlot, nextDate);
+
+						if (activeSlot === "start") {
+							setActiveSlot("end");
+						}
+					}}
+					value={pickerDate}
+				/>
+			);
+		}
+
+		return <Spinner />;
 	};
 
 	return (
@@ -472,7 +561,7 @@ export function DateRangePickerField({
 											key={slot}
 											onPress={() => setActiveSlot(slot)}
 											size="sm"
-											variant={isSelected ? "primary" : "ghost"}
+											variant={isSelected ? "primary" : "secondary"}
 										>
 											<Button.Label>
 												{slot === "start" ? "Start" : "End"} ·{" "}
@@ -494,29 +583,7 @@ export function DateRangePickerField({
 										Platform.OS === "ios" ? inlineDatePickerHeight : 160,
 								}}
 							>
-								{pickerDate ? (
-									<DateTimePicker
-										accentColor={accentColor}
-										display={Platform.OS === "ios" ? "inline" : "default"}
-										maximumDate={maximumDate}
-										minimumDate={activeMinimumDate}
-										mode="date"
-										onChange={(_event, nextDate) => {
-											if (!nextDate) {
-												return;
-											}
-
-											updateRange(activeSlot, nextDate);
-
-											if (activeSlot === "start") {
-												setActiveSlot("end");
-											}
-										}}
-										value={pickerDate}
-									/>
-								) : (
-									<Spinner />
-								)}
+								{renderRangePickerControl()}
 							</View>
 
 							<Button onPress={() => updateOpen(false)}>

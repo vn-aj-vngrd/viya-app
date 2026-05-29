@@ -9,21 +9,22 @@ import {
 	Input,
 	Label,
 	Spinner,
-	TagGroup,
 	Text,
 	TextArea,
 	TextField,
-	useBottomSheetAwareHandlers,
 	useThemeColor,
 } from "heroui-native";
 import type { ComponentProps } from "react";
 import { useCallback, useState } from "react";
 import { ScrollView, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 
 import {
 	DateRangePickerField,
 	type DateRangeValue,
+	formatIsoDate,
+	getStartOfToday,
 } from "@/src/components/date/date-picker-field";
 
 import { LocationSuggestionField } from "./location-suggestion-field";
@@ -65,6 +66,7 @@ const groupTypeIcons: Record<GroupType, IoniconName> = {
 	friends: "people-outline",
 	solo: "person-outline",
 };
+const defaultTripDate = formatIsoDate(getStartOfToday());
 
 interface ManualTripFormState {
 	budgetAmount: string;
@@ -95,13 +97,13 @@ const initialFormState: ManualTripFormState = {
 	customGroupType: "",
 	customTravelStyle: "",
 	destination: "",
-	endDate: "",
+	endDate: defaultTripDate,
 	groupType: "",
 	interests: "",
 	notes: "",
 	origin: "",
 	requirements: "",
-	startDate: "",
+	startDate: defaultTripDate,
 	title: "",
 	travelerCount: "",
 	travelStyle: "",
@@ -191,7 +193,7 @@ function SheetField({
 	placeholder: string;
 	value: string;
 }) {
-	const { onBlur, onFocus } = useBottomSheetAwareHandlers();
+	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
 
 	return (
 		<TextField className="gap-2">
@@ -229,7 +231,7 @@ function SheetTextAreaField({
 	placeholder: string;
 	value: string;
 }) {
-	const { onBlur, onFocus } = useBottomSheetAwareHandlers();
+	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
 
 	return (
 		<TextField className="gap-2">
@@ -318,53 +320,32 @@ function OptionRow<Value extends string>({
 	options: readonly Value[];
 	value: Value | "";
 }) {
-	const selectedKeys = value ? new Set([value]) : new Set<string>();
-	const [accentSoftForegroundColor, fieldForegroundColor] = useThemeColor([
-		"accent-soft-foreground",
-		"field-foreground",
-	]);
-
 	return (
 		<TextField className="gap-2">
 			<Label>
 				<Label.Text>{label}</Label.Text>
 			</Label>
-			<TagGroup
-				onSelectionChange={(keys) => {
-					const nextValue = Array.from(keys)[0];
+			<View className="flex-row flex-wrap gap-2">
+				{options.map((option) => {
+					const isSelected = option === value;
 
-					if (options.includes(nextValue as Value)) {
-						onChange(nextValue as Value);
-					}
-				}}
-				selectedKeys={selectedKeys}
-				selectionMode="single"
-				size="lg"
-				variant="surface"
-			>
-				<TagGroup.List className="flex-row flex-wrap gap-2">
-					{options.map((option) => (
-						<TagGroup.Item id={option} key={option}>
-							{({ isSelected }) => (
-								<>
-									<Ionicons
-										color={
-											isSelected
-												? accentSoftForegroundColor
-												: fieldForegroundColor
-										}
-										name={icons[option]}
-										size={16}
-									/>
-									<TagGroup.ItemLabel>
-										{getOptionLabel(option)}
-									</TagGroup.ItemLabel>
-								</>
-							)}
-						</TagGroup.Item>
-					))}
-				</TagGroup.List>
-			</TagGroup>
+					return (
+						<Button
+							key={option}
+							onPress={() => onChange(option)}
+							size="sm"
+							variant={isSelected ? "primary" : "secondary"}
+						>
+							<Ionicons
+								color={isSelected ? "#FFFFFF" : "#71717A"}
+								name={icons[option]}
+								size={15}
+							/>
+							<Button.Label>{getOptionLabel(option)}</Button.Label>
+						</Button>
+					);
+				})}
+			</View>
 		</TextField>
 	);
 }

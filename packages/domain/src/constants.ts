@@ -56,8 +56,6 @@ export const RISK_SEVERITY_RANK: Record<RiskSeverity, number> = {
 
 export const TRIP_STATUS_LABELS: Record<TripStatus, string> = {
 	planning: "Planning",
-	booking: "Booking",
-	preparing: "Preparing",
 	traveling: "Traveling",
 	completed: "Completed",
 	archived: "Archived",
@@ -65,8 +63,6 @@ export const TRIP_STATUS_LABELS: Record<TripStatus, string> = {
 
 export const TRIP_STATUSES = [
 	"planning",
-	"booking",
-	"preparing",
 	"traveling",
 	"completed",
 	"archived",
@@ -74,8 +70,6 @@ export const TRIP_STATUSES = [
 
 export const TRIP_PLANNING_STATUSES = [
 	"planning",
-	"booking",
-	"preparing",
 ] as const satisfies TripStatus[];
 
 export const TRIP_COMPLETED_STATUSES = [

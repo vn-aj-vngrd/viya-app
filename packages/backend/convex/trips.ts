@@ -34,6 +34,12 @@ const expenseCategoryValidator = v.union(
 	v.literal("documents"),
 	v.literal("other")
 );
+const tripLifecycleValidator = v.union(
+	v.literal("planning"),
+	v.literal("traveling"),
+	v.literal("completed"),
+	v.literal("archived")
+);
 
 const blueprintItemsValidator = v.array(v.string());
 
@@ -52,10 +58,16 @@ const joinItems = (items: string[], fallback: string) => {
 const normalizeSearchText = (value: string) =>
 	value.replace(whitespacePattern, " ").trim().toLowerCase();
 
+const assertValidDateRange = (startDate: string, endDate: string) => {
+	if (startDate && endDate && startDate > endDate) {
+		throw new ConvexError("INVALID_TRIP_DATE_RANGE");
+	}
+};
+
 type TripSearchStatusFilter = `status:${TripStatus}`;
 
-const getTripStatusFilter = (status: string): TripSearchStatusFilter =>
-	`status:${status as TripStatus}`;
+const getTripStatusFilter = (status: TripStatus): TripSearchStatusFilter =>
+	`status:${status}`;
 
 const toDomainReadinessItem = (item: Doc<"readinessItems">): ReadinessItem => ({
 	aiReason: item.aiReason,
@@ -357,7 +369,6 @@ const matchesTripFilters = ({
 	filters,
 	isCompleted,
 	isPlanning,
-	isPreparing,
 	isUpcoming,
 	needsReadiness,
 	tripStatus,
@@ -365,15 +376,12 @@ const matchesTripFilters = ({
 	filters: Set<string>;
 	isCompleted: boolean;
 	isPlanning: boolean;
-	isPreparing: boolean;
 	isUpcoming: boolean;
 	needsReadiness: boolean;
-	tripStatus: string;
+	tripStatus: TripStatus;
 }) =>
 	[
 		filters.has("planning") && isPlanning,
-		filters.has("booking") && tripStatus === "booking",
-		filters.has("preparing") && isPreparing,
 		filters.has("traveling") && tripStatus === "traveling",
 		filters.has("needsReadiness") && needsReadiness,
 		filters.has("upcoming") && isUpcoming,
@@ -399,15 +407,11 @@ export const searchTrips = query({
 			v.array(
 				v.union(
 					v.literal("planning"),
-					v.literal("booking"),
-					v.literal("preparing"),
 					v.literal("traveling"),
 					v.literal("needsReadiness"),
 					v.literal("upcoming"),
 					v.literal("completed"),
 					v.literal("status:planning"),
-					v.literal("status:booking"),
-					v.literal("status:preparing"),
 					v.literal("status:traveling"),
 					v.literal("status:completed"),
 					v.literal("status:archived")
@@ -441,8 +445,6 @@ export const searchTrips = query({
 				const isPlanning = TRIP_PLANNING_STATUSES.includes(
 					trip.status as never
 				);
-				const isPreparing =
-					trip.status === "preparing" || trip.readinessScore >= 90;
 				const needsReadiness = trip.readinessScore < 90;
 				const isUpcoming = !!trip.startDate && trip.startDate >= today;
 				const isCompleted =
@@ -453,10 +455,9 @@ export const searchTrips = query({
 						filters,
 						isCompleted,
 						isPlanning,
-						isPreparing,
 						isUpcoming,
 						needsReadiness,
-						tripStatus: trip.status,
+						tripStatus: trip.status as TripStatus,
 					})
 				) {
 					return false;
@@ -542,6 +543,78 @@ export const updateTripBudget = mutation({
 		await ctx.db.patch(args.tripId, {
 			budgetAmount: args.budgetAmount,
 			budgetCurrency: args.budgetCurrency ?? "PHP",
+			updatedAt: Date.now(),
+		});
+
+		return ctx.db.get(args.tripId);
+	},
+});
+
+export const updateTripProfile = mutation({
+	args: {
+		tripId: v.id("trips"),
+		arrivalTime: v.optional(v.string()),
+		budgetAmount: v.optional(v.number()),
+		budgetCurrency: v.optional(v.string()),
+		departureTime: v.optional(v.string()),
+		destination: v.optional(v.string()),
+		endDate: v.optional(v.string()),
+		groupType: v.optional(v.string()),
+		pace: v.optional(v.string()),
+		startDate: v.optional(v.string()),
+		summary: v.optional(v.string()),
+		title: v.optional(v.string()),
+		travelStyle: v.optional(v.string()),
+	},
+	handler: async (ctx, args) => {
+		const identity = await getRequiredIdentity(ctx);
+		const trip = await ensureTripAccess(ctx, args.tripId, identity.subject);
+		const title = args.title?.trim();
+		const destination = args.destination?.trim();
+
+		if (args.title !== undefined && !title) {
+			throw new ConvexError("INVALID_TRIP_TITLE");
+		}
+
+		if (args.destination !== undefined && !destination) {
+			throw new ConvexError("INVALID_TRIP_DESTINATION");
+		}
+
+		assertValidDateRange(
+			args.startDate ?? trip.startDate,
+			args.endDate ?? trip.endDate
+		);
+
+		await ctx.db.patch(args.tripId, {
+			arrivalTime: args.arrivalTime,
+			budgetAmount: args.budgetAmount,
+			budgetCurrency: args.budgetCurrency,
+			departureTime: args.departureTime,
+			destination,
+			endDate: args.endDate,
+			groupType: args.groupType,
+			pace: args.pace,
+			startDate: args.startDate,
+			summary: args.summary,
+			title,
+			travelStyle: args.travelStyle,
+			updatedAt: Date.now(),
+		});
+
+		return ctx.db.get(args.tripId);
+	},
+});
+
+export const updateTripLifecycle = mutation({
+	args: {
+		status: tripLifecycleValidator,
+		tripId: v.id("trips"),
+	},
+	handler: async (ctx, args) => {
+		const identity = await getRequiredIdentity(ctx);
+		await ensureTripAccess(ctx, args.tripId, identity.subject);
+		await ctx.db.patch(args.tripId, {
+			status: args.status,
 			updatedAt: Date.now(),
 		});
 
@@ -716,8 +789,78 @@ export const addTripExpense = mutation({
 			tripId: args.tripId,
 			updatedAt: now,
 		});
+		await ctx.db.patch(args.tripId, { updatedAt: now });
 
 		return ctx.db.get(expenseId);
+	},
+});
+
+export const updateTripExpense = mutation({
+	args: {
+		expenseId: v.id("expenses"),
+		amount: v.optional(v.number()),
+		bookingId: v.optional(v.id("bookings")),
+		category: v.optional(expenseCategoryValidator),
+		currency: v.optional(v.string()),
+		notes: v.optional(v.string()),
+		spentAt: v.optional(v.string()),
+		title: v.optional(v.string()),
+		vaultItemId: v.optional(v.id("vaultItems")),
+	},
+	handler: async (ctx, args) => {
+		const identity = await getRequiredIdentity(ctx);
+		const expense = await ctx.db.get(args.expenseId);
+
+		if (!expense) {
+			throw new ConvexError("EXPENSE_NOT_FOUND");
+		}
+
+		await ensureTripAccess(ctx, expense.tripId, identity.subject);
+
+		if (
+			args.amount !== undefined &&
+			!(Number.isFinite(args.amount) && args.amount > 0)
+		) {
+			throw new ConvexError("INVALID_EXPENSE_AMOUNT");
+		}
+
+		const title = args.title?.trim();
+		if (args.title !== undefined && !title) {
+			throw new ConvexError("INVALID_EXPENSE_TITLE");
+		}
+
+		await ctx.db.patch(args.expenseId, {
+			amount: args.amount,
+			bookingId: args.bookingId,
+			category: args.category,
+			currency: args.currency,
+			notes: args.notes?.trim() || undefined,
+			spentAt: args.spentAt,
+			title,
+			updatedAt: Date.now(),
+			vaultItemId: args.vaultItemId,
+		});
+		await ctx.db.patch(expense.tripId, { updatedAt: Date.now() });
+
+		return ctx.db.get(args.expenseId);
+	},
+});
+
+export const deleteTripExpense = mutation({
+	args: { expenseId: v.id("expenses") },
+	handler: async (ctx, args) => {
+		const identity = await getRequiredIdentity(ctx);
+		const expense = await ctx.db.get(args.expenseId);
+
+		if (!expense) {
+			throw new ConvexError("EXPENSE_NOT_FOUND");
+		}
+
+		await ensureTripAccess(ctx, expense.tripId, identity.subject);
+		await ctx.db.delete(args.expenseId);
+		await ctx.db.patch(expense.tripId, { updatedAt: Date.now() });
+
+		return { deletedExpenseId: args.expenseId };
 	},
 });
 
@@ -738,6 +881,7 @@ export const createTrip = mutation({
 	handler: async (ctx, args) => {
 		const identity = await getRequiredIdentity(ctx);
 		await ensureUserRecord(ctx);
+		assertValidDateRange(args.startDate, args.endDate);
 
 		const now = Date.now();
 		const tripId = await ctx.db.insert("trips", {

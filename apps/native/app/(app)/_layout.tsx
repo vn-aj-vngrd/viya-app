@@ -78,6 +78,10 @@ function AppLayout() {
 				options={{ headerShown: false }}
 			/>
 			<Stack.Screen
+				name="trips/[tripId]/places"
+				options={{ headerShown: false }}
+			/>
+			<Stack.Screen
 				name="trips/[tripId]/readiness"
 				options={{ headerShown: false }}
 			/>
@@ -85,18 +89,29 @@ function AppLayout() {
 				name="trips/[tripId]/budget"
 				options={{ headerShown: false }}
 			/>
-			<Stack.Screen name="trips/[tripId]/risks" options={{ title: "Risks" }} />
+			<Stack.Screen
+				name="trips/[tripId]/companions"
+				options={{ headerShown: false }}
+			/>
+			<Stack.Screen
+				name="trips/[tripId]/notes"
+				options={{ headerShown: false }}
+			/>
+			<Stack.Screen
+				name="trips/[tripId]/risks"
+				options={{ headerShown: false }}
+			/>
 			<Stack.Screen
 				name="trips/[tripId]/travel-mode"
-				options={{ title: "Travel Mode" }}
+				options={{ headerShown: false }}
 			/>
 			<Stack.Screen
 				name="trips/[tripId]/moments"
-				options={{ title: "Moments" }}
+				options={{ headerShown: false }}
 			/>
 			<Stack.Screen
 				name="trips/[tripId]/wrapped"
-				options={{ title: "Trip Story" }}
+				options={{ headerShown: false }}
 			/>
 			<Stack.Screen
 				name="trips/[tripId]/vault"

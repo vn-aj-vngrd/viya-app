@@ -1,16 +1,20 @@
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
 import { TRIP_STATUSES, type TripStatus } from "@viya-app/domain";
-import { useMutation } from "convex/react";
+import { useAction, useMutation } from "convex/react";
 import { type Href, Link, useRouter } from "expo-router";
 import {
 	BottomSheet,
 	Button,
 	CloseButton,
-	Menu,
+	Input,
+	Label,
 	Separator,
+	Spinner,
 	Surface,
 	Text,
+	TextArea,
+	TextField,
 	useThemeColor,
 } from "heroui-native";
 import type { ReactNode } from "react";
@@ -23,6 +27,7 @@ import {
 	View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 
 import { NavigationBackButton } from "@/src/components/navigation/navigation-back-button";
 import { VIYA_ROUTES } from "@/src/constants/routes";
@@ -51,6 +56,324 @@ const softBackgroundColor = "rgba(24, 24, 27, 0.04)";
 const composerShadow = "0 10px 28px rgba(15, 23, 42, 0.12)";
 const checklistIconBackgroundColor = "rgba(10, 132, 255, 0.1)";
 const checklistSuccessBackgroundColor = "rgba(48, 209, 88, 0.13)";
+const shouldUseFallbackDraft = process.env.NODE_ENV !== "production";
+
+interface TripProfileForm {
+	budgetAmount: string;
+	destination: string;
+	endDate: string;
+	groupType: string;
+	pace: string;
+	startDate: string;
+	summary: string;
+	title: string;
+	travelStyle: string;
+}
+
+type TripAgentModule =
+	| "itinerary"
+	| "places"
+	| "bookings"
+	| "documents"
+	| "budget"
+	| "readiness"
+	| "risks"
+	| "travel"
+	| "recap";
+
+type TripAgentAction = "generate" | "refine" | "audit" | "explain";
+
+interface ParsedDraftChange {
+	detail: string;
+	title: string;
+	type: string;
+}
+
+const tripAgentActions = [
+	{
+		action: "generate",
+		icon: "calendar-outline",
+		label: "Itinerary",
+		module: "itinerary",
+	},
+	{
+		action: "generate",
+		icon: "briefcase-outline",
+		label: "Bookings",
+		module: "bookings",
+	},
+	{
+		action: "generate",
+		icon: "map-outline",
+		label: "Places",
+		module: "places",
+	},
+	{
+		action: "generate",
+		icon: "wallet-outline",
+		label: "Budget",
+		module: "budget",
+	},
+	{
+		action: "generate",
+		icon: "folder-open-outline",
+		label: "Docs",
+		module: "documents",
+	},
+	{
+		action: "audit",
+		icon: "checkbox-outline",
+		label: "Checklist",
+		module: "readiness",
+	},
+	{
+		action: "audit",
+		icon: "warning-outline",
+		label: "Risks",
+		module: "risks",
+	},
+	{
+		action: "generate",
+		icon: "navigate-outline",
+		label: "Backup",
+		module: "travel",
+	},
+	{
+		action: "generate",
+		icon: "share-social-outline",
+		label: "Recap",
+		module: "recap",
+	},
+] as const satisfies Array<{
+	action: TripAgentAction;
+	icon: IoniconName;
+	label: string;
+	module: TripAgentModule;
+}>;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+	typeof value === "object" && value !== null;
+
+const readDraftString = (value: unknown, fallback: string) =>
+	typeof value === "string" && value.trim() ? value.trim() : fallback;
+
+const getDraftChanges = (payloadJson: string): ParsedDraftChange[] => {
+	try {
+		const payload: unknown = JSON.parse(payloadJson);
+
+		if (!(isRecord(payload) && Array.isArray(payload.changes))) {
+			return [];
+		}
+
+		return payload.changes
+			.filter(isRecord)
+			.slice(0, 4)
+			.map((change) => ({
+				detail: readDraftString(change.detail, "Review before applying."),
+				title: readDraftString(change.title, "Draft change"),
+				type: readDraftString(change.type, "change"),
+			}));
+	} catch {
+		return [];
+	}
+};
+
+function SheetField({
+	label,
+	onChangeText,
+	placeholder,
+	value,
+}: {
+	label: string;
+	onChangeText: (value: string) => void;
+	placeholder: string;
+	value: string;
+}) {
+	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
+
+	return (
+		<TextField className="gap-2">
+			<Label>
+				<Label.Text>{label}</Label.Text>
+			</Label>
+			<Input
+				className="h-12 border border-border bg-surface px-4"
+				onBlur={onBlur}
+				onChangeText={onChangeText}
+				onFocus={onFocus}
+				placeholder={placeholder}
+				value={value}
+				variant="secondary"
+			/>
+		</TextField>
+	);
+}
+
+function SheetTextArea({
+	label,
+	onChangeText,
+	placeholder,
+	value,
+}: {
+	label: string;
+	onChangeText: (value: string) => void;
+	placeholder: string;
+	value: string;
+}) {
+	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
+
+	return (
+		<TextField className="gap-2">
+			<Label>
+				<Label.Text>{label}</Label.Text>
+			</Label>
+			<TextArea
+				className="min-h-20 rounded-[18px] border border-border bg-surface px-4 py-3"
+				onBlur={onBlur}
+				onChangeText={onChangeText}
+				onFocus={onFocus}
+				placeholder={placeholder}
+				value={value}
+				variant="secondary"
+			/>
+		</TextField>
+	);
+}
+
+function TripProfileEditSheet({
+	form,
+	isOpen,
+	isSaving,
+	onOpenChange,
+	onSubmit,
+	onUpdateForm,
+}: {
+	form: TripProfileForm;
+	isOpen: boolean;
+	isSaving: boolean;
+	onOpenChange: (isOpen: boolean) => void;
+	onSubmit: () => void;
+	onUpdateForm: (key: keyof TripProfileForm, value: string) => void;
+}) {
+	const insets = useSafeAreaInsets();
+
+	return (
+		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
+			<BottomSheet.Portal>
+				<BottomSheet.Overlay />
+				<BottomSheet.Content
+					backgroundClassName="rounded-t-[36px] bg-background"
+					enablePanDownToClose={true}
+					snapPoints={["88%"]}
+				>
+					<View
+						className="gap-4 px-5 pt-2"
+						style={{ paddingBottom: Math.max(insets.bottom, 18) }}
+					>
+						<View className="flex-row items-start justify-between gap-4">
+							<View className="flex-1 gap-1">
+								<BottomSheet.Title>Edit trip profile</BottomSheet.Title>
+								<BottomSheet.Description>
+									Update the core trip details used across every module.
+								</BottomSheet.Description>
+							</View>
+							<CloseButton
+								accessibilityLabel="Close trip profile form"
+								className="h-10 w-10 rounded-full bg-surface"
+								onPress={() => onOpenChange(false)}
+							/>
+						</View>
+						<ScrollView
+							contentContainerStyle={{ gap: 14, paddingBottom: 8 }}
+							keyboardShouldPersistTaps="handled"
+							showsVerticalScrollIndicator={false}
+							style={{ maxHeight: 560 }}
+						>
+							<SheetField
+								label="Title"
+								onChangeText={(value) => onUpdateForm("title", value)}
+								placeholder="Summer getaway"
+								value={form.title}
+							/>
+							<SheetField
+								label="Destination"
+								onChangeText={(value) => onUpdateForm("destination", value)}
+								placeholder="Tokyo, Japan"
+								value={form.destination}
+							/>
+							<View className="flex-row gap-3">
+								<View className="min-w-0 flex-1">
+									<SheetField
+										label="Start date"
+										onChangeText={(value) => onUpdateForm("startDate", value)}
+										placeholder="2026-07-10"
+										value={form.startDate}
+									/>
+								</View>
+								<View className="min-w-0 flex-1">
+									<SheetField
+										label="End date"
+										onChangeText={(value) => onUpdateForm("endDate", value)}
+										placeholder="2026-07-14"
+										value={form.endDate}
+									/>
+								</View>
+							</View>
+							<View className="flex-row gap-3">
+								<View className="min-w-0 flex-1">
+									<SheetField
+										label="Budget"
+										onChangeText={(value) =>
+											onUpdateForm("budgetAmount", value)
+										}
+										placeholder="25000"
+										value={form.budgetAmount}
+									/>
+								</View>
+								<View className="min-w-0 flex-1">
+									<SheetField
+										label="Travelers"
+										onChangeText={(value) => onUpdateForm("groupType", value)}
+										placeholder="couple"
+										value={form.groupType}
+									/>
+								</View>
+							</View>
+							<View className="flex-row gap-3">
+								<View className="min-w-0 flex-1">
+									<SheetField
+										label="Style"
+										onChangeText={(value) => onUpdateForm("travelStyle", value)}
+										placeholder="balanced"
+										value={form.travelStyle}
+									/>
+								</View>
+								<View className="min-w-0 flex-1">
+									<SheetField
+										label="Pace"
+										onChangeText={(value) => onUpdateForm("pace", value)}
+										placeholder="moderate"
+										value={form.pace}
+									/>
+								</View>
+							</View>
+							<SheetTextArea
+								label="Notes"
+								onChangeText={(value) => onUpdateForm("summary", value)}
+								placeholder="What should Viya remember?"
+								value={form.summary}
+							/>
+						</ScrollView>
+						<Button isDisabled={isSaving} onPress={onSubmit} size="lg">
+							{isSaving ? <Spinner size="sm" /> : null}
+							<Button.Label>Save profile</Button.Label>
+						</Button>
+					</View>
+				</BottomSheet.Content>
+			</BottomSheet.Portal>
+		</BottomSheet>
+	);
+}
 
 const tripStatusProgressSteps = TRIP_STATUSES.map((status) => {
 	const presentation = getTripStatusPresentation(status);
@@ -241,11 +564,81 @@ function MetricPill({ metric }: { metric: DashboardMetric }) {
 
 function TripHeaderActionGroup({ model }: { model: TripDashboardModel }) {
 	const router = useRouter();
+	const updateTripProfile = useMutation(api.trips.updateTripProfile);
 	const toggleTripFavorite = useMutation(api.trips.toggleTripFavorite);
 	const archiveTrip = useMutation(api.trips.archiveTrip);
 	const deleteTrip = useMutation(api.trips.deleteTrip);
 	const isFavorite = model.workspace.trip.isFavorite ?? false;
 	const isArchived = model.workspace.trip.status === "archived";
+	const [isProfileSheetOpen, setIsProfileSheetOpen] = useState(false);
+	const [isOptionsSheetOpen, setIsOptionsSheetOpen] = useState(false);
+	const [isSavingProfile, setIsSavingProfile] = useState(false);
+	const [profileForm, setProfileForm] = useState<TripProfileForm>({
+		budgetAmount: model.workspace.trip.budgetAmount?.toString() ?? "",
+		destination: model.workspace.trip.destination,
+		endDate: model.workspace.trip.endDate,
+		groupType: model.workspace.trip.groupType,
+		pace: model.workspace.trip.pace,
+		startDate: model.workspace.trip.startDate,
+		summary: model.workspace.trip.summary,
+		title: model.workspace.trip.title,
+		travelStyle: model.workspace.trip.travelStyle,
+	});
+
+	const updateProfileForm = (key: keyof TripProfileForm, value: string) => {
+		setProfileForm((currentForm) => ({ ...currentForm, [key]: value }));
+	};
+
+	const openProfileSheet = () => {
+		setIsOptionsSheetOpen(false);
+		setProfileForm({
+			budgetAmount: model.workspace.trip.budgetAmount?.toString() ?? "",
+			destination: model.workspace.trip.destination,
+			endDate: model.workspace.trip.endDate,
+			groupType: model.workspace.trip.groupType,
+			pace: model.workspace.trip.pace,
+			startDate: model.workspace.trip.startDate,
+			summary: model.workspace.trip.summary,
+			title: model.workspace.trip.title,
+			travelStyle: model.workspace.trip.travelStyle,
+		});
+		setIsProfileSheetOpen(true);
+	};
+
+	const handleSaveProfile = async () => {
+		const title = profileForm.title.trim();
+		const destination = profileForm.destination.trim();
+
+		if (!(title && destination)) {
+			return;
+		}
+
+		const budgetAmount = Number(profileForm.budgetAmount.replaceAll(",", ""));
+		setIsSavingProfile(true);
+		try {
+			await updateTripProfile({
+				budgetAmount:
+					Number.isFinite(budgetAmount) && budgetAmount > 0
+						? budgetAmount
+						: undefined,
+				budgetCurrency: model.workspace.trip.budgetCurrency ?? "PHP",
+				destination,
+				endDate: profileForm.endDate.trim(),
+				groupType: profileForm.groupType.trim() || "solo",
+				pace: profileForm.pace.trim() || "moderate",
+				startDate: profileForm.startDate.trim(),
+				summary: profileForm.summary.trim(),
+				title,
+				travelStyle: profileForm.travelStyle.trim() || "balanced",
+				tripId: model.tripId,
+			});
+			setIsProfileSheetOpen(false);
+		} catch {
+			Alert.alert("Unable to update trip profile", "Please try again.");
+		} finally {
+			setIsSavingProfile(false);
+		}
+	};
 
 	const handleFavoritePress = () => {
 		toggleTripFavorite({
@@ -288,119 +681,194 @@ function TripHeaderActionGroup({ model }: { model: TripDashboardModel }) {
 	};
 
 	return (
-		<View className="h-12 flex-row items-center gap-1 rounded-full border border-border bg-surface px-1">
-			<Pressable
-				accessibilityLabel="Share trip"
-				accessibilityRole="button"
-				className="h-10 w-11 items-center justify-center rounded-full"
-				onPress={() => router.push(VIYA_ROUTES.tripWrapped(model.tripId))}
-			>
-				<Ionicons color={foregroundColor} name="share-outline" size={22} />
-			</Pressable>
-			<Menu>
-				<Menu.Trigger asChild={true}>
-					<Pressable
-						accessibilityLabel="Open trip options"
-						accessibilityRole="button"
-						className="h-10 w-11 items-center justify-center rounded-full"
+		<>
+			<View className="h-12 flex-row items-center gap-1 rounded-full border border-border bg-surface px-1">
+				<Pressable
+					accessibilityLabel="Share trip"
+					accessibilityRole="button"
+					className="h-10 w-11 items-center justify-center rounded-full"
+					onPress={() => router.push(VIYA_ROUTES.tripWrapped(model.tripId))}
+				>
+					<Ionicons color={foregroundColor} name="share-outline" size={22} />
+				</Pressable>
+				<Pressable
+					accessibilityLabel="Open trip options"
+					accessibilityRole="button"
+					className="h-10 w-11 items-center justify-center rounded-full"
+					onPress={() => setIsOptionsSheetOpen(true)}
+				>
+					<Ionicons
+						color={foregroundColor}
+						name="ellipsis-horizontal"
+						size={22}
+					/>
+				</Pressable>
+			</View>
+			<TripOptionsSheet
+				isArchived={isArchived}
+				isFavorite={isFavorite}
+				isOpen={isOptionsSheetOpen}
+				onArchive={handleArchivePress}
+				onDelete={handleDeletePress}
+				onEditProfile={openProfileSheet}
+				onFavorite={handleFavoritePress}
+				onOpenChange={setIsOptionsSheetOpen}
+			/>
+			<TripProfileEditSheet
+				form={profileForm}
+				isOpen={isProfileSheetOpen}
+				isSaving={isSavingProfile}
+				onOpenChange={setIsProfileSheetOpen}
+				onSubmit={() => {
+					handleSaveProfile().catch(() => undefined);
+				}}
+				onUpdateForm={updateProfileForm}
+			/>
+		</>
+	);
+}
+
+function TripOptionsSheet({
+	isArchived,
+	isFavorite,
+	isOpen,
+	onArchive,
+	onDelete,
+	onEditProfile,
+	onFavorite,
+	onOpenChange,
+}: {
+	isArchived: boolean;
+	isFavorite: boolean;
+	isOpen: boolean;
+	onArchive: () => void;
+	onDelete: () => void;
+	onEditProfile: () => void;
+	onFavorite: () => void;
+	onOpenChange: (isOpen: boolean) => void;
+}) {
+	const insets = useSafeAreaInsets();
+
+	return (
+		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
+			<BottomSheet.Portal>
+				<BottomSheet.Overlay />
+				<BottomSheet.Content
+					backgroundClassName="rounded-t-[36px] bg-background"
+					enablePanDownToClose={true}
+					snapPoints={["48%"]}
+				>
+					<View
+						className="gap-4 px-5 pt-2"
+						style={{ paddingBottom: Math.max(insets.bottom, 18) }}
 					>
-						<Ionicons
-							color={foregroundColor}
-							name="ellipsis-horizontal"
-							size={22}
-						/>
-					</Pressable>
-				</Menu.Trigger>
-				<Menu.Portal>
-					<Menu.Overlay />
-					<Menu.Content
-						align="end"
-						className="rounded-[28px] border border-border bg-surface p-3"
-						offset={10}
-						placement="bottom"
-						presentation="popover"
-						width={304}
-					>
-						<Menu.Label className="px-1 pt-1 pb-2 text-muted text-sm">
-							Actions
-						</Menu.Label>
-						<Menu.Item
-							accessibilityLabel={
-								isFavorite ? "Remove trip from favorites" : "Favorite trip"
-							}
-							className="min-h-14 flex-row items-center gap-3 rounded-[20px] px-3 py-2.5"
-							isAnimatedStyleActive={false}
-							onPress={handleFavoritePress}
-						>
-							<View className="h-9 w-9 items-center justify-center rounded-full bg-warning/10">
-								<Ionicons
-									color="#FF9F0A"
-									name={isFavorite ? "heart" : "heart-outline"}
-									size={18}
-								/>
+						<View className="flex-row items-start justify-between gap-4">
+							<View className="flex-1 gap-1">
+								<BottomSheet.Title>Trip actions</BottomSheet.Title>
+								<BottomSheet.Description>
+									Update the profile, favorite, archive, or delete this trip.
+								</BottomSheet.Description>
 							</View>
-							<View className="flex-1">
-								<Menu.ItemTitle className="font-semibold text-sm">
-									{isFavorite ? "Favorited" : "Add to favorites"}
-								</Menu.ItemTitle>
-								<Menu.ItemDescription className="text-xs">
-									{isFavorite
+							<CloseButton
+								accessibilityLabel="Close trip options"
+								className="h-10 w-10 rounded-full bg-surface"
+								onPress={() => onOpenChange(false)}
+							/>
+						</View>
+						<View className="gap-2">
+							<TripOptionsRow
+								detail="Update dates, destination, budget, and notes."
+								icon="create-outline"
+								iconColor={accentColor}
+								label="Edit profile"
+								onPress={onEditProfile}
+							/>
+							<TripOptionsRow
+								detail={
+									isFavorite
 										? "Keep this trip in favorites."
-										: "Pin this trip for quick access."}
-								</Menu.ItemDescription>
-							</View>
-						</Menu.Item>
-						<Menu.Item
-							accessibilityLabel="Archive trip"
-							className="min-h-14 flex-row items-center gap-3 rounded-[20px] px-3 py-2.5"
-							isAnimatedStyleActive={false}
-							isDisabled={isArchived}
-							onPress={handleArchivePress}
-							style={{ opacity: isArchived ? 0.5 : 1 }}
-						>
-							<View className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary">
-								<Ionicons color={mutedColor} name="archive-outline" size={18} />
-							</View>
-							<View className="flex-1">
-								<Menu.ItemTitle className="font-semibold text-sm">
-									{isArchived ? "Archived" : "Archive"}
-								</Menu.ItemTitle>
-								<Menu.ItemDescription className="text-xs">
-									Move this trip out of active planning.
-								</Menu.ItemDescription>
-							</View>
-						</Menu.Item>
-						<Separator className="mx-1 my-2" />
-						<Menu.Label className="px-1 pb-2 text-muted text-sm">
-							Danger zone
-						</Menu.Label>
-						<Menu.Item
-							accessibilityLabel="Delete trip"
-							className="min-h-14 flex-row items-center gap-3 rounded-[20px] px-3 py-2.5"
-							isAnimatedStyleActive={false}
-							onPress={handleDeletePress}
-							variant="danger"
-						>
-							<View className="h-9 w-9 items-center justify-center rounded-full bg-danger/10">
-								<Ionicons color="#FF3B30" name="trash-outline" size={18} />
-							</View>
-							<View className="flex-1">
-								<Menu.ItemTitle className="font-semibold text-sm">
-									Delete trip
-								</Menu.ItemTitle>
-								<Menu.ItemDescription className="text-xs">
-									Remove this trip permanently.
-								</Menu.ItemDescription>
-							</View>
-						</Menu.Item>
-					</Menu.Content>
-				</Menu.Portal>
-			</Menu>
-		</View>
+										: "Pin this trip for quick access."
+								}
+								icon={isFavorite ? "heart" : "heart-outline"}
+								iconColor="#FF9F0A"
+								label={isFavorite ? "Favorited" : "Add to favorites"}
+								onPress={() => {
+									onFavorite();
+									onOpenChange(false);
+								}}
+							/>
+							<TripOptionsRow
+								detail="Move this trip out of active planning."
+								icon="archive-outline"
+								iconColor={mutedColor}
+								isDisabled={isArchived}
+								label={isArchived ? "Archived" : "Archive"}
+								onPress={() => {
+									onArchive();
+									onOpenChange(false);
+								}}
+							/>
+						</View>
+						<Separator />
+						<TripOptionsRow
+							detail="Remove this trip permanently."
+							icon="trash-outline"
+							iconColor="#FF3B30"
+							label="Delete trip"
+							onPress={() => {
+								onDelete();
+								onOpenChange(false);
+							}}
+						/>
+					</View>
+				</BottomSheet.Content>
+			</BottomSheet.Portal>
+		</BottomSheet>
+	);
+}
+
+function TripOptionsRow({
+	detail,
+	icon,
+	iconColor,
+	isDisabled = false,
+	label,
+	onPress,
+}: {
+	detail: string;
+	icon: IoniconName;
+	iconColor: string;
+	isDisabled?: boolean;
+	label: string;
+	onPress: () => void;
+}) {
+	return (
+		<Pressable
+			accessibilityLabel={label}
+			accessibilityRole="button"
+			className="min-h-14 flex-row items-center gap-3 rounded-[22px] bg-surface px-3 py-2.5"
+			disabled={isDisabled}
+			onPress={onPress}
+			style={{ opacity: isDisabled ? 0.5 : 1 }}
+		>
+			<View className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary">
+				<Ionicons color={iconColor} name={icon} size={18} />
+			</View>
+			<View className="min-w-0 flex-1">
+				<Text type="body-sm" weight="semibold">
+					{label}
+				</Text>
+				<Text color="muted" numberOfLines={2} type="body-xs">
+					{detail}
+				</Text>
+			</View>
+		</Pressable>
 	);
 }
 
 function TripHeaderStatusPill({ status }: { status: string }) {
+	const [isSheetOpen, setIsSheetOpen] = useState(false);
+	const insets = useSafeAreaInsets();
 	const presentation = getTripStatusPresentation(status);
 	const currentStepIndex = Math.max(
 		0,
@@ -408,51 +876,65 @@ function TripHeaderStatusPill({ status }: { status: string }) {
 	);
 
 	return (
-		<Menu>
-			<Menu.Trigger asChild={true}>
-				<Pressable
-					accessibilityLabel="View trip status progress"
-					accessibilityRole="button"
-					className="h-12 flex-row items-center gap-2 rounded-full border border-border bg-surface px-4"
+		<>
+			<Pressable
+				accessibilityLabel="View trip status progress"
+				accessibilityRole="button"
+				className="h-12 flex-row items-center gap-2 rounded-full border border-border bg-surface px-4"
+				onPress={() => setIsSheetOpen(true)}
+			>
+				<Ionicons color={presentation.color} name="map-outline" size={17} />
+				<Text
+					numberOfLines={1}
+					style={{ color: presentation.color }}
+					type="body-sm"
+					weight="bold"
 				>
-					<Ionicons color={presentation.color} name="map-outline" size={17} />
-					<Text
-						numberOfLines={1}
-						style={{ color: presentation.color }}
-						type="body-sm"
-						weight="bold"
+					{presentation.label}
+				</Text>
+				<Ionicons color={presentation.color} name="chevron-down" size={14} />
+			</Pressable>
+			<BottomSheet isOpen={isSheetOpen} onOpenChange={setIsSheetOpen}>
+				<BottomSheet.Portal>
+					<BottomSheet.Overlay />
+					<BottomSheet.Content
+						backgroundClassName="rounded-t-[36px] bg-background"
+						enablePanDownToClose={true}
+						snapPoints={["42%"]}
 					>
-						{presentation.label}
-					</Text>
-					<Ionicons color={presentation.color} name="chevron-down" size={14} />
-				</Pressable>
-			</Menu.Trigger>
-			<Menu.Portal>
-				<Menu.Overlay />
-				<Menu.Content
-					align="start"
-					className="rounded-[28px] border border-border bg-surface p-2"
-					offset={10}
-					placement="bottom"
-					presentation="popover"
-					width={304}
-				>
-					<Menu.Label className="px-1 pt-1 pb-2 text-muted text-sm">
-						Trip status
-					</Menu.Label>
-					<View className="gap-0 px-2 pb-2">
-						{tripStatusProgressSteps.map((step, index) => (
-							<TripStatusProgressStep
-								currentStepIndex={currentStepIndex}
-								index={index}
-								key={step.id}
-								step={step}
-							/>
-						))}
-					</View>
-				</Menu.Content>
-			</Menu.Portal>
-		</Menu>
+						<View
+							className="gap-4 px-5 pt-2"
+							style={{ paddingBottom: Math.max(insets.bottom, 18) }}
+						>
+							<View className="flex-row items-start justify-between gap-4">
+								<View className="flex-1 gap-1">
+									<BottomSheet.Title>Trip status</BottomSheet.Title>
+									<BottomSheet.Description>
+										Trip status tracks the broad lifecycle. Work modules can
+										move in any order.
+									</BottomSheet.Description>
+								</View>
+								<CloseButton
+									accessibilityLabel="Close trip status"
+									className="h-10 w-10 rounded-full bg-surface"
+									onPress={() => setIsSheetOpen(false)}
+								/>
+							</View>
+							<View className="gap-0 rounded-[28px] bg-surface px-4 py-3">
+								{tripStatusProgressSteps.map((step, index) => (
+									<TripStatusProgressStep
+										currentStepIndex={currentStepIndex}
+										index={index}
+										key={step.id}
+										step={step}
+									/>
+								))}
+							</View>
+						</View>
+					</BottomSheet.Content>
+				</BottomSheet.Portal>
+			</BottomSheet>
+		</>
 	);
 }
 
@@ -603,6 +1085,205 @@ export function FloatingAskViyaBar({ model }: { model: TripDashboardModel }) {
 				</Pressable>
 			</Link>
 		</View>
+	);
+}
+
+export function TripAgentDraftPanel({ model }: { model: TripDashboardModel }) {
+	const generateDraft = useAction(api.ai.tripAgent.generateTripAgentDraft);
+	const applyDraft = useMutation(api.ai.tripAgent.applyTripAgentDraft);
+	const dismissDraft = useMutation(api.ai.tripAgent.dismissTripAgentDraft);
+	const [pendingAction, setPendingAction] = useState<string | null>(null);
+	const [agentError, setAgentError] = useState<string | null>(null);
+	const activeDraft = (model.workspace.agentDrafts ?? [])
+		.filter((draft) => draft.status === "draft")
+		.sort(
+			(firstDraft, secondDraft) => secondDraft.createdAt - firstDraft.createdAt
+		)[0];
+	const draftChanges = activeDraft
+		? getDraftChanges(activeDraft.payloadJson)
+		: [];
+
+	const runDraftAction = async (
+		key: string,
+		action: () => Promise<unknown>
+	) => {
+		setPendingAction(key);
+		setAgentError(null);
+		try {
+			await action();
+		} catch (error) {
+			setAgentError(
+				error instanceof Error
+					? error.message
+					: "Viya could not update the draft."
+			);
+		} finally {
+			setPendingAction(null);
+		}
+	};
+
+	if (!activeDraft) {
+		return (
+			<Surface
+				className="gap-4 rounded-[28px] border border-border bg-surface p-4"
+				style={{ borderColor, boxShadow: "0 8px 24px rgba(15, 23, 42, 0.06)" }}
+			>
+				<View className="flex-row items-start gap-3">
+					<View
+						className="h-10 w-10 items-center justify-center rounded-full"
+						style={{ backgroundColor: "rgba(10, 132, 255, 0.12)" }}
+					>
+						<Ionicons color={accentColor} name="sparkles-outline" size={18} />
+					</View>
+					<View className="min-w-0 flex-1 gap-1">
+						<Text color="muted" type="body-xs" weight="semibold">
+							VIYA AGENT
+						</Text>
+						<Text type="body" weight="bold">
+							Generate a reviewable draft
+						</Text>
+						<Text color="muted" type="body-sm">
+							Viya can draft module changes, but you review them before they
+							touch the trip.
+						</Text>
+					</View>
+				</View>
+				<View className="flex-row flex-wrap gap-2">
+					{tripAgentActions.map((item) => {
+						const actionKey = `${item.module}:${item.action}`;
+						const isPending = pendingAction === actionKey;
+
+						return (
+							<Button
+								isDisabled={pendingAction !== null}
+								key={actionKey}
+								onPress={() => {
+									runDraftAction(actionKey, () =>
+										generateDraft({
+											action: item.action,
+											module: item.module,
+											tripId: model.tripId,
+											useFallback: shouldUseFallbackDraft ? true : undefined,
+										})
+									).catch(() => undefined);
+								}}
+								size="sm"
+								variant="secondary"
+							>
+								{isPending ? (
+									<Ionicons color={accentColor} name="sync-outline" size={15} />
+								) : (
+									<Ionicons color={accentColor} name={item.icon} size={15} />
+								)}
+								<Button.Label>{item.label}</Button.Label>
+							</Button>
+						);
+					})}
+				</View>
+				{agentError ? (
+					<Text className="text-danger" type="body-sm">
+						{agentError}
+					</Text>
+				) : null}
+			</Surface>
+		);
+	}
+
+	const applyKey = `apply:${activeDraft._id}`;
+	const dismissKey = `dismiss:${activeDraft._id}`;
+
+	return (
+		<Surface
+			className="gap-4 rounded-[28px] border border-border bg-surface p-4"
+			style={{ borderColor, boxShadow: "0 8px 24px rgba(15, 23, 42, 0.06)" }}
+		>
+			<View className="flex-row items-start gap-3">
+				<View
+					className="h-10 w-10 items-center justify-center rounded-full"
+					style={{ backgroundColor: "rgba(10, 132, 255, 0.12)" }}
+				>
+					<Ionicons color={accentColor} name="sparkles-outline" size={18} />
+				</View>
+				<View className="min-w-0 flex-1 gap-1">
+					<View className="flex-row flex-wrap gap-2">
+						<View className="rounded-full bg-primary/10 px-2.5 py-1">
+							<Text
+								numberOfLines={1}
+								style={{ color: accentColor }}
+								type="body-xs"
+								weight="semibold"
+							>
+								{activeDraft.module.toUpperCase()} DRAFT
+							</Text>
+						</View>
+					</View>
+					<Text type="body" weight="bold">
+						{activeDraft.title}
+					</Text>
+					<Text.Paragraph color="muted" type="body-sm">
+						{activeDraft.rationale}
+					</Text.Paragraph>
+				</View>
+			</View>
+			{draftChanges.length > 0 ? (
+				<View className="gap-2">
+					{draftChanges.map((change) => (
+						<View
+							className="flex-row items-start gap-3 rounded-[20px] bg-surface-secondary p-3"
+							key={`${change.type}:${change.title}`}
+						>
+							<View className="mt-0.5 h-7 w-7 items-center justify-center rounded-full bg-surface">
+								<Ionicons color={accentColor} name="add-outline" size={15} />
+							</View>
+							<View className="min-w-0 flex-1 gap-0.5">
+								<Text type="body-sm" weight="semibold">
+									{change.title}
+								</Text>
+								<Text color="muted" type="body-xs">
+									{change.detail}
+								</Text>
+							</View>
+						</View>
+					))}
+				</View>
+			) : null}
+			<View className="flex-row flex-wrap gap-2">
+				<Button
+					className="flex-1"
+					isDisabled={pendingAction !== null}
+					onPress={() => {
+						runDraftAction(applyKey, () =>
+							applyDraft({ draftId: activeDraft._id })
+						).catch(() => undefined);
+					}}
+					size="sm"
+					variant="primary"
+				>
+					{pendingAction === applyKey ? (
+						<Ionicons color="#FFFFFF" name="sync-outline" size={15} />
+					) : null}
+					<Button.Label>Apply draft</Button.Label>
+				</Button>
+				<Button
+					className="flex-1"
+					isDisabled={pendingAction !== null}
+					onPress={() => {
+						runDraftAction(dismissKey, () =>
+							dismissDraft({ draftId: activeDraft._id })
+						).catch(() => undefined);
+					}}
+					size="sm"
+					variant="tertiary"
+				>
+					<Button.Label>Dismiss</Button.Label>
+				</Button>
+			</View>
+			{agentError ? (
+				<Text className="text-danger" type="body-sm">
+					{agentError}
+				</Text>
+			) : null}
+		</Surface>
 	);
 }
 
@@ -971,6 +1652,8 @@ export function MainModules({ model }: { model: TripDashboardModel }) {
 	const hasTodayPlan = Boolean(
 		model.nowScheduledItem || model.nextScheduledItem || hasItinerary
 	);
+	const hasCompanions = model.workspace.companions.length > 0;
+	const hasNotes = model.workspace.notes.length > 0;
 	const hasTrackedSpend =
 		model.workspace.expenses.length > 0 || model.budget.totalTrackedSpend > 0;
 	const hasOpenWatchOutItems = model.watchOutItems.length > 0;
@@ -1078,6 +1761,28 @@ export function MainModules({ model }: { model: TripDashboardModel }) {
 			isComplete: hasBudget && model.budget.remaining >= 0,
 			label: "Review budget",
 		},
+		companions: {
+			description:
+				"Keep the travel party, coordinators, and emergency contacts tied to this trip.",
+			detail:
+				model.workspace.companions.length === 1
+					? "1 companion saved"
+					: `${model.workspace.companions.length} companions saved`,
+			href: VIYA_ROUTES.tripCompanions(model.tripId),
+			icon: "people-outline" as const,
+			isComplete: hasCompanions,
+			label: "Add companions",
+			primaryActionLabel: "Manage companions",
+			requirements: [
+				{
+					detail: hasCompanions
+						? "Travel party is saved."
+						: "Add travelers, organizers, or emergency contacts.",
+					isComplete: hasCompanions,
+					label: "Travel party",
+				},
+			],
+		},
 		detailsBudget: {
 			detail: hasBudget
 				? `${model.tripWindow} - ${model.budget.status}`
@@ -1133,6 +1838,28 @@ export function MainModules({ model }: { model: TripDashboardModel }) {
 			icon: "images-outline" as const,
 			isComplete: model.workspace.moments.length > 0,
 			label: "Save moments",
+		},
+		notes: {
+			description:
+				"Save group decisions, constraints, reminders, and context that do not belong in the itinerary.",
+			detail:
+				model.workspace.notes.length === 1
+					? "1 note saved"
+					: `${model.workspace.notes.length} notes saved`,
+			href: VIYA_ROUTES.tripNotes(model.tripId),
+			icon: "document-text-outline" as const,
+			isComplete: hasNotes,
+			label: "Add trip notes",
+			primaryActionLabel: "Manage notes",
+			requirements: [
+				{
+					detail: hasNotes
+						? "Trip context is saved."
+						: "Add shared decisions, dietary notes, constraints, or reminders.",
+					isComplete: hasNotes,
+					label: "Shared context",
+				},
+			],
 		},
 		offline: {
 			detail: hasActiveDocuments
@@ -1253,25 +1980,6 @@ export function MainModules({ model }: { model: TripDashboardModel }) {
 		},
 	} satisfies Record<string, StatusChecklistItem>;
 	const checklistItems = (() => {
-		if (status === "booking") {
-			return [
-				checklistItemsByKey.accommodation,
-				checklistItemsByKey.transportBooking,
-				checklistItemsByKey.activityBookings,
-				checklistItemsByKey.bookingProofs,
-			];
-		}
-
-		if (status === "preparing") {
-			return [
-				checklistItemsByKey.readiness,
-				checklistItemsByKey.packing,
-				checklistItemsByKey.safety,
-				checklistItemsByKey.offline,
-				checklistItemsByKey.budgetReview,
-			];
-		}
-
 		if (status === "traveling") {
 			return [
 				checklistItemsByKey.travel,
@@ -1295,6 +2003,17 @@ export function MainModules({ model }: { model: TripDashboardModel }) {
 			checklistItemsByKey.itinerary,
 			checklistItemsByKey.bookings,
 			checklistItemsByKey.vault,
+			checklistItemsByKey.accommodation,
+			checklistItemsByKey.transportBooking,
+			checklistItemsByKey.activityBookings,
+			checklistItemsByKey.bookingProofs,
+			checklistItemsByKey.readiness,
+			checklistItemsByKey.packing,
+			checklistItemsByKey.safety,
+			checklistItemsByKey.companions,
+			checklistItemsByKey.notes,
+			checklistItemsByKey.offline,
+			checklistItemsByKey.budgetReview,
 		];
 	})();
 	const completedItemCount = checklistItems.filter(

@@ -5,12 +5,12 @@ import {
 	Spinner,
 	Text,
 	TextField,
-	useBottomSheetAwareHandlers,
 	useThemeColor,
 } from "heroui-native";
 import type { ComponentProps } from "react";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
+import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 
 const locationSuggestionDebounceMs = 350;
 const minimumLocationSuggestionQueryLength = 2;
@@ -48,7 +48,7 @@ export function LocationSuggestionField({
 	searchLocationSuggestions,
 	value,
 }: LocationSuggestionFieldProps) {
-	const bottomSheetHandlers = useBottomSheetAwareHandlers();
+	const bottomSheetHandlers = useCompatibleBottomSheetAwareHandlers();
 	const iconColor = useThemeColor("field-foreground");
 	const [isFocused, setIsFocused] = useState(false);
 	const [selectedSuggestionValue, setSelectedSuggestionValue] = useState<

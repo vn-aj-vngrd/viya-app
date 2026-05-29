@@ -55,3 +55,13 @@ export const getLanguageModel = (purpose: AiModelPurpose): LanguageModel => {
 
 	return openrouter(modelId);
 };
+
+export const hasConfiguredAiProvider = (): boolean => {
+	const provider = getProviderName();
+
+	if (provider === "google") {
+		return Boolean(process.env.GOOGLE_GENERATIVE_AI_API_KEY);
+	}
+
+	return Boolean(process.env.OPENROUTER_API_KEY);
+};

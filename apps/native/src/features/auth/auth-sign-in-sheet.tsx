@@ -9,12 +9,12 @@ import {
 	Spinner,
 	Text,
 	TextField,
-	useBottomSheetAwareHandlers,
 	useThemeColor,
 } from "heroui-native";
 import React from "react";
 import { Pressable, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 
 import { ViyaMark } from "@/src/components/viya-mark";
 import {
@@ -32,8 +32,9 @@ const OTP_SEPARATOR_WIDTH = 8;
 const DIGITS_ONLY_PATTERN = /\D/g;
 const RESEND_CODE_COOLDOWN_SECONDS = 30;
 const OTP_SLOT_INDEXES = [0, 1, 2, 3, 4, 5] as const;
+const SIGNED_IN_HOME = "/(app)/(tabs)";
+const SIGN_UP_TRANSFER_ERROR_CODE = "sign_up_if_missing_transfer";
 
-type EmailAuthFlow = "sign-in" | "sign-up";
 type PendingAuthAction = "resend" | "send" | "verify";
 
 interface AuthSignInSheetProps {
@@ -60,20 +61,14 @@ const getErrorCode = (error: unknown) => {
 	return null;
 };
 
-const isMissingAccountError = (error: unknown) => {
-	const errorCode = getErrorCode(error);
-
-	if (errorCode === "form_identifier_not_found") {
+const isSignUpTransferError = (error: unknown) => {
+	if (getErrorCode(error) === SIGN_UP_TRANSFER_ERROR_CODE) {
 		return true;
 	}
 
 	const message = getAuthErrorMessage(error, "").toLowerCase();
 
-	return (
-		message.includes("couldn't find your account") ||
-		message.includes("could not find your account") ||
-		message.includes("identifier is invalid")
-	);
+	return message.includes("perform a transfer to sign up");
 };
 
 interface SheetInputProps {
@@ -93,7 +88,7 @@ function SheetInput({
 	secureTextEntry,
 	value,
 }: SheetInputProps) {
-	const { onBlur, onFocus } = useBottomSheetAwareHandlers();
+	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
 
 	return (
 		<TextField>
@@ -118,7 +113,7 @@ interface SheetOtpInputProps {
 }
 
 function SheetOtpInput({ onChange, value }: SheetOtpInputProps) {
-	const { onBlur, onFocus } = useBottomSheetAwareHandlers();
+	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
 	const inputRef = React.useRef<TextInput>(null);
 	const [isFocused, setIsFocused] = React.useState(false);
 
@@ -221,9 +216,9 @@ export function AuthSignInSheet({
 	const accentForegroundColor = useThemeColor("accent-foreground");
 	const [emailAddress, setEmailAddress] = React.useState("");
 	const [code, setCode] = React.useState("");
-	const [emailAuthFlow, setEmailAuthFlow] =
-		React.useState<EmailAuthFlow>("sign-in");
+	const [signUpPassword, setSignUpPassword] = React.useState("");
 	const [isEmailCodeSent, setIsEmailCodeSent] = React.useState(false);
+	const [needsSignUpPassword, setNeedsSignUpPassword] = React.useState(false);
 	const [pendingAuthAction, setPendingAuthAction] =
 		React.useState<PendingAuthAction | null>(null);
 	const [resendCooldownSeconds, setResendCooldownSeconds] = React.useState(0);
@@ -243,11 +238,24 @@ export function AuthSignInSheet({
 	const isSendingCode = pendingAuthAction === "send";
 	const isResendingCode = pendingAuthAction === "resend";
 	const isVerifyingCode = pendingAuthAction === "verify";
-	const isResendDisabled = isAuthBusy || resendCooldownSeconds > 0;
+	const isResendDisabled =
+		isAuthBusy || needsSignUpPassword || resendCooldownSeconds > 0;
+	const canVerify =
+		(needsSignUpPassword && signUpPassword.trim().length >= 8) ||
+		(!needsSignUpPassword && code.length >= EMAIL_CODE_LENGTH);
 	const resendCodeLabel =
 		resendCooldownSeconds > 0
 			? `Send a new code in ${resendCooldownSeconds}s`
 			: "Send a new code";
+	let verifyButtonLabel = "Verify";
+
+	if (needsSignUpPassword) {
+		verifyButtonLabel = "Finish account";
+	}
+
+	if (isVerifyingCode) {
+		verifyButtonLabel = "Finishing...";
+	}
 
 	React.useEffect(() => {
 		if (resendCooldownSeconds <= 0) {
@@ -273,7 +281,7 @@ export function AuthSignInSheet({
 		await signIn.finalize({
 			navigate: ({ session, decorateUrl }) => {
 				if (!session?.currentTask) {
-					pushDecoratedUrl(router, decorateUrl, "/(app)/(tabs)");
+					pushDecoratedUrl(router, decorateUrl, SIGNED_IN_HOME);
 				}
 			},
 		});
@@ -283,7 +291,7 @@ export function AuthSignInSheet({
 		const { error } = await signUp.finalize({
 			navigate: ({ session, decorateUrl }) => {
 				if (!session?.currentTask) {
-					pushDecoratedUrl(router, decorateUrl, "/(app)/(tabs)");
+					pushDecoratedUrl(router, decorateUrl, SIGNED_IN_HOME);
 				}
 			},
 		});
@@ -303,60 +311,38 @@ export function AuthSignInSheet({
 		setPendingAuthAction("send");
 		setStatusMessage(null);
 		setCode("");
+		setNeedsSignUpPassword(false);
+		setSignUpPassword("");
+		const trimmedEmailAddress = emailAddress.trim();
 
 		try {
-			const { error } = await signIn.emailCode.sendCode({
-				emailAddress,
+			const { error: createError } = await signIn.create({
+				identifier: trimmedEmailAddress,
+				signUpIfMissing: true,
 			});
 
-			if (error) {
-				if (!isMissingAccountError(error)) {
-					setStatusMessage(
-						getAuthErrorMessage(
-							error,
-							"Unable to send a code. Please try again."
-						)
-					);
-					return;
-				}
-
-				const { error: createError } = await signUp.create({ emailAddress });
-
-				if (createError) {
-					setStatusMessage(
-						getAuthErrorMessage(
-							createError,
-							"Unable to create your account. Please try again."
-						)
-					);
-					return;
-				}
-
-				const { error: sendCodeError } =
-					await signUp.verifications.sendEmailCode();
-
-				if (sendCodeError) {
-					setStatusMessage(
-						getAuthErrorMessage(
-							sendCodeError,
-							"Unable to send a code. Please try again."
-						)
-					);
-					return;
-				}
-
-				setEmailAuthFlow("sign-up");
-				setIsEmailCodeSent(true);
-				startResendCooldown();
+			if (createError) {
+				setStatusMessage(
+					getAuthErrorMessage(
+						createError,
+						"Unable to start email sign-in. Please try again."
+					)
+				);
 				return;
 			}
 
-			if (signIn.status === "complete") {
-				await finalizeSignIn();
+			const { error: sendCodeError } = await signIn.emailCode.sendCode();
+
+			if (sendCodeError) {
+				setStatusMessage(
+					getAuthErrorMessage(
+						sendCodeError,
+						"Unable to send a code. Please try again."
+					)
+				);
 				return;
 			}
 
-			setEmailAuthFlow("sign-in");
 			setIsEmailCodeSent(true);
 			startResendCooldown();
 		} finally {
@@ -374,20 +360,6 @@ export function AuthSignInSheet({
 		setCode("");
 
 		try {
-			if (emailAuthFlow === "sign-up") {
-				const { error } = await signUp.verifications.sendEmailCode();
-
-				if (error) {
-					setStatusMessage(
-						getAuthErrorMessage(error, "Unable to send a new code.")
-					);
-					return;
-				}
-
-				startResendCooldown();
-				return;
-			}
-
 			if (requiresMfaEmailCode) {
 				const { error } = await signIn.mfa.sendEmailCode();
 
@@ -402,7 +374,7 @@ export function AuthSignInSheet({
 				return;
 			}
 
-			const { error } = await signIn.emailCode.sendCode({ emailAddress });
+			const { error } = await signIn.emailCode.sendCode();
 
 			if (error) {
 				setStatusMessage(
@@ -417,8 +389,75 @@ export function AuthSignInSheet({
 		}
 	};
 
+	const completeSignUpIfReady = async () => {
+		if (signUp.status === "complete") {
+			await finalizeSignUp();
+			return true;
+		}
+
+		if (signUp.status !== "missing_requirements") {
+			setStatusMessage("Viya could not finish account setup yet.");
+			return true;
+		}
+
+		if (signUp.missingFields.includes("password")) {
+			setNeedsSignUpPassword(true);
+			setStatusMessage("Create a password to finish setting up this account.");
+			return true;
+		}
+
+		if (
+			signUp.missingFields.length === 1 &&
+			signUp.missingFields[0] === "legal_accepted"
+		) {
+			const { error: updateError } = await signUp.update({
+				legalAccepted: true,
+			});
+
+			if (updateError) {
+				setStatusMessage(
+					getAuthErrorMessage(updateError, "Unable to finish account setup.")
+				);
+				return true;
+			}
+
+			await finalizeSignUp();
+			return true;
+		}
+
+		setStatusMessage(
+			`Viya needs these account details before sign-up can finish: ${signUp.missingFields.join(", ")}.`
+		);
+		return true;
+	};
+
+	const handleSignUpTransfer = async () => {
+		const trimmedPassword = signUpPassword.trim();
+
+		if (!trimmedPassword) {
+			setNeedsSignUpPassword(true);
+			setStatusMessage("Create a password to finish setting up this account.");
+			return;
+		}
+
+		const { error } = await signUp.create({
+			legalAccepted: true,
+			password: trimmedPassword,
+			transfer: true,
+		});
+
+		if (error) {
+			setStatusMessage(
+				getAuthErrorMessage(error, "Unable to create your account.")
+			);
+			return;
+		}
+
+		await completeSignUpIfReady();
+	};
+
 	const handleVerify = async () => {
-		if (isAuthBusy || code.length < EMAIL_CODE_LENGTH) {
+		if (isAuthBusy || !canVerify) {
 			return;
 		}
 
@@ -426,20 +465,8 @@ export function AuthSignInSheet({
 		setStatusMessage(null);
 
 		try {
-			if (emailAuthFlow === "sign-up") {
-				const { error } = await signUp.verifications.verifyEmailCode({ code });
-
-				if (error) {
-					setStatusMessage(
-						getAuthErrorMessage(
-							error,
-							"That code did not work. Please try again."
-						)
-					);
-					return;
-				}
-
-				await finalizeSignUp();
+			if (needsSignUpPassword) {
+				await handleSignUpTransfer();
 				return;
 			}
 
@@ -448,6 +475,11 @@ export function AuthSignInSheet({
 				: await signIn.emailCode.verifyCode({ code });
 
 			if (error) {
+				if (isSignUpTransferError(error)) {
+					await handleSignUpTransfer();
+					return;
+				}
+
 				setStatusMessage(
 					getAuthErrorMessage(
 						error,
@@ -484,7 +516,8 @@ export function AuthSignInSheet({
 
 		if (!nextIsOpen) {
 			setCode("");
-			setEmailAuthFlow("sign-in");
+			setNeedsSignUpPassword(false);
+			setSignUpPassword("");
 			setIsEmailCodeSent(false);
 			setResendCooldownSeconds(0);
 			setStatusMessage(null);
@@ -544,29 +577,48 @@ export function AuthSignInSheet({
 						{isCodeStep ? (
 							<View className="gap-5">
 								<Text.Paragraph align="center" color="muted" type="body-sm">
-									Enter the {EMAIL_CODE_LENGTH}-digit code sent to{" "}
-									<Text weight="semibold">{codeDeliveryAddress}</Text>.
+									{needsSignUpPassword ? (
+										<>
+											Finish the account for{" "}
+											<Text weight="semibold">{codeDeliveryAddress}</Text>.
+										</>
+									) : (
+										<>
+											Enter the {EMAIL_CODE_LENGTH}-digit code sent to{" "}
+											<Text weight="semibold">{codeDeliveryAddress}</Text>.
+										</>
+									)}
 								</Text.Paragraph>
-								<SheetOtpInput onChange={setCode} value={code} />
+								{needsSignUpPassword ? (
+									<SheetInput
+										autoCapitalize="none"
+										onChangeText={setSignUpPassword}
+										placeholder="Create password"
+										secureTextEntry={true}
+										value={signUpPassword}
+									/>
+								) : (
+									<SheetOtpInput onChange={setCode} value={code} />
+								)}
 								<Button
-									isDisabled={isAuthBusy || code.length < EMAIL_CODE_LENGTH}
+									isDisabled={isAuthBusy || !canVerify}
 									onPress={handleVerify}
 								>
 									{isVerifyingCode ? (
 										<Spinner color={accentForegroundColor} size="sm" />
 									) : null}
-									<Button.Label>
-										{isVerifyingCode ? "Verifying..." : "Verify"}
-									</Button.Label>
+									<Button.Label>{verifyButtonLabel}</Button.Label>
 								</Button>
-								<Button
-									isDisabled={isResendDisabled}
-									onPress={handleResendEmailCode}
-									variant="ghost"
-								>
-									{isResendingCode ? <Spinner size="sm" /> : null}
-									<Button.Label>{resendCodeLabel}</Button.Label>
-								</Button>
+								{needsSignUpPassword ? null : (
+									<Button
+										isDisabled={isResendDisabled}
+										onPress={handleResendEmailCode}
+										variant="tertiary"
+									>
+										{isResendingCode ? <Spinner size="sm" /> : null}
+										<Button.Label>{resendCodeLabel}</Button.Label>
+									</Button>
+								)}
 							</View>
 						) : (
 							<View className="gap-4">

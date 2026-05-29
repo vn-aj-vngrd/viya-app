@@ -4,7 +4,7 @@ import {
 	READINESS_CATEGORY_LABELS,
 	type ReadinessCategory,
 } from "@viya-app/domain";
-import { Chip, Surface, Text } from "heroui-native";
+import { Surface, Text } from "heroui-native";
 import { View } from "react-native";
 
 interface ReadinessCategoryCardProps {
@@ -26,9 +26,11 @@ export function ReadinessCategoryCard({
 				<Text className="flex-1" type="body-sm" weight="bold">
 					{READINESS_CATEGORY_LABELS[category]}
 				</Text>
-				<Chip size="sm" variant="secondary">
-					<Chip.Label>{score}%</Chip.Label>
-				</Chip>
+				<View className="rounded-full bg-surface-secondary px-2.5 py-1">
+					<Text color="muted" type="body-xs" weight="semibold">
+						{score}%
+					</Text>
+				</View>
 			</View>
 			<View className="gap-1">
 				<Text color="muted" type="body-xs">

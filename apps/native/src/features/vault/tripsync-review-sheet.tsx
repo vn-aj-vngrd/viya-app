@@ -1,11 +1,5 @@
-import {
-	BottomSheet,
-	Button,
-	Chip,
-	Spinner,
-	Surface,
-	Text,
-} from "heroui-native";
+import { BottomSheet, Button, Spinner, Surface, Text } from "heroui-native";
+import type { ReactNode } from "react";
 import { View } from "react-native";
 
 import type { PendingTripSyncReview } from "./tripsync-types";
@@ -17,6 +11,16 @@ interface TripSyncReviewSheetProps {
 	onDiscard: () => void;
 	onOpenChange: (isOpen: boolean) => void;
 	review: PendingTripSyncReview | null;
+}
+
+function ReviewPill({ children }: { children: ReactNode }) {
+	return (
+		<View className="rounded-full bg-surface px-2.5 py-1">
+			<Text color="muted" type="body-xs" weight="semibold">
+				{children}
+			</Text>
+		</View>
+	);
 }
 
 export function TripSyncReviewSheet({
@@ -49,14 +53,10 @@ export function TripSyncReviewSheet({
 							<View className="gap-3">
 								<Surface className="gap-2 rounded-[24px] bg-surface-secondary p-4">
 									<View className="flex-row flex-wrap gap-2">
-										<Chip size="sm" variant="secondary">
-											<Chip.Label>{review.upload.kind}</Chip.Label>
-										</Chip>
-										<Chip size="sm" variant="secondary">
-											<Chip.Label>
-												{Math.round(extraction.confidence * 100)}% confidence
-											</Chip.Label>
-										</Chip>
+										<ReviewPill>{review.upload.kind}</ReviewPill>
+										<ReviewPill>
+											{Math.round(extraction.confidence * 100)}% confidence
+										</ReviewPill>
 									</View>
 									<Text type="body" weight="bold">
 										{extraction.extractedTitle}

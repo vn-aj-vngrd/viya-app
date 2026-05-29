@@ -222,6 +222,39 @@ export function ItineraryTab({ model }: { model: TripDashboardModel }) {
 	);
 }
 
+export function PlacesTab({ model }: { model: TripDashboardModel }) {
+	const itineraryPlaceCount = model.workspace.itineraryItems.filter((item) =>
+		Boolean(item.locationName)
+	).length;
+
+	return (
+		<View className="gap-4">
+			<Section icon="map-outline" title="Map / Places">
+				<Text color="muted" type="body-sm">
+					Review saved places and itinerary stops before assigning them to days.
+				</Text>
+				<LinkButton href={VIYA_ROUTES.tripPlaces(model.tripId)}>
+					Open places
+				</LinkButton>
+			</Section>
+			<Section icon="location-outline" title="Route Context">
+				<View className="gap-2">
+					<InfoRow
+						detail="Saved by the traveler"
+						icon="bookmark-outline"
+						label={`${model.workspace.savedPlaces.length} saved places`}
+					/>
+					<InfoRow
+						detail="From itinerary item locations"
+						icon="calendar-outline"
+						label={`${itineraryPlaceCount} itinerary stops`}
+					/>
+				</View>
+			</Section>
+		</View>
+	);
+}
+
 export function BookingsTab({ model }: { model: TripDashboardModel }) {
 	return (
 		<View className="gap-4">
@@ -568,6 +601,10 @@ export function TripTabContent({
 
 	if (activeTab === "itinerary") {
 		return <ItineraryTab model={model} />;
+	}
+
+	if (activeTab === "places") {
+		return <PlacesTab model={model} />;
 	}
 
 	if (activeTab === "bookings") {

@@ -10,6 +10,7 @@ import { EmptyState } from "@/src/components/empty-state";
 import {
 	FloatingAskViyaBar,
 	MainModules,
+	TripAgentDraftPanel,
 	TripHero,
 	TripStickyHeader,
 	TripTabPicker,
@@ -74,6 +75,7 @@ export function TripDashboardScreen({
 			>
 				<View className="gap-3 pb-28">
 					<TripHero model={model} />
+					<TripAgentDraftPanel model={model} />
 					<MainModules model={model} />
 					{shouldShowFocusSections ? (
 						<>

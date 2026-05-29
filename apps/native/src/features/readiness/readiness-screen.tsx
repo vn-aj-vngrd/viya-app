@@ -10,11 +10,24 @@ import {
 } from "@viya-app/domain";
 import { useMutation, useQuery } from "convex/react";
 import { Link } from "expo-router";
-import { Button, Chip, Spinner, Surface, Text } from "heroui-native";
+import {
+	BottomSheet,
+	Button,
+	CloseButton,
+	Input,
+	Label,
+	Spinner,
+	Surface,
+	Text,
+	TextArea,
+	TextField,
+} from "heroui-native";
+import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { View } from "react-native";
-
+import { ScrollView, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Container } from "@/components/container";
+import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 import { EmptyState } from "@/src/components/empty-state";
 import { RouteHeader } from "@/src/components/navigation/route-header";
 import { VIYA_ROUTES } from "@/src/constants/routes";
@@ -57,6 +70,228 @@ const getHighestPriority = (items: ReadinessItem[]) =>
 		return highest;
 	}, null);
 
+interface ReadinessForm {
+	category: string;
+	description: string;
+	dueDate: string;
+	priority: string;
+	title: string;
+}
+
+const initialReadinessForm: ReadinessForm = {
+	category: "documents",
+	description: "",
+	dueDate: "",
+	priority: "medium",
+	title: "",
+};
+
+const readinessCategories = new Set<string>([
+	"documents",
+	"bookings",
+	"packing",
+	"budget",
+	"schedule",
+	"transport",
+	"weather",
+	"safety",
+	"group",
+	"backupPlan",
+]);
+
+const priorities = new Set<string>(["low", "medium", "high", "critical"]);
+
+const getReadinessCategory = (value: string): ReadinessCategory => {
+	const category = value.trim();
+
+	return readinessCategories.has(category)
+		? (category as ReadinessCategory)
+		: "documents";
+};
+
+const getPriority = (value: string): Priority => {
+	const priority = value.trim();
+
+	return priorities.has(priority) ? (priority as Priority) : "medium";
+};
+
+function SheetField({
+	label,
+	onChangeText,
+	placeholder,
+	value,
+}: {
+	label: string;
+	onChangeText: (value: string) => void;
+	placeholder: string;
+	value: string;
+}) {
+	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
+
+	return (
+		<TextField className="gap-2">
+			<Label>
+				<Label.Text>{label}</Label.Text>
+			</Label>
+			<Input
+				className="h-12 border border-border bg-surface px-4"
+				onBlur={onBlur}
+				onChangeText={onChangeText}
+				onFocus={onFocus}
+				placeholder={placeholder}
+				value={value}
+				variant="secondary"
+			/>
+		</TextField>
+	);
+}
+
+function SheetTextArea({
+	label,
+	onChangeText,
+	placeholder,
+	value,
+}: {
+	label: string;
+	onChangeText: (value: string) => void;
+	placeholder: string;
+	value: string;
+}) {
+	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
+
+	return (
+		<TextField className="gap-2">
+			<Label>
+				<Label.Text>{label}</Label.Text>
+			</Label>
+			<TextArea
+				className="min-h-20 rounded-[18px] border border-border bg-surface px-4 py-3"
+				onBlur={onBlur}
+				onChangeText={onChangeText}
+				onFocus={onFocus}
+				placeholder={placeholder}
+				value={value}
+				variant="secondary"
+			/>
+		</TextField>
+	);
+}
+
+function ReadinessPill({ children }: { children: ReactNode }) {
+	return (
+		<View className="rounded-full bg-surface-secondary px-3 py-1.5">
+			<Text color="muted" type="body-xs" weight="semibold">
+				{children}
+			</Text>
+		</View>
+	);
+}
+
+function ReadinessTaskSheet({
+	form,
+	isOpen,
+	isSaving,
+	mode,
+	onOpenChange,
+	onSubmit,
+	onUpdateForm,
+}: {
+	form: ReadinessForm;
+	isOpen: boolean;
+	isSaving: boolean;
+	mode: "create" | "edit";
+	onOpenChange: (isOpen: boolean) => void;
+	onSubmit: () => void;
+	onUpdateForm: (key: keyof ReadinessForm, value: string) => void;
+}) {
+	const insets = useSafeAreaInsets();
+
+	return (
+		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
+			<BottomSheet.Portal>
+				<BottomSheet.Overlay />
+				<BottomSheet.Content
+					backgroundClassName="rounded-t-[36px] bg-background"
+					enablePanDownToClose={true}
+					snapPoints={["82%"]}
+				>
+					<View
+						className="gap-4 px-5 pt-2"
+						style={{ paddingBottom: Math.max(insets.bottom, 18) }}
+					>
+						<View className="flex-row items-start justify-between gap-4">
+							<View className="flex-1 gap-1">
+								<BottomSheet.Title>
+									{mode === "edit"
+										? "Edit checklist task"
+										: "Add checklist task"}
+								</BottomSheet.Title>
+								<BottomSheet.Description>
+									Add a concrete requirement before travel.
+								</BottomSheet.Description>
+							</View>
+							<CloseButton
+								accessibilityLabel="Close readiness task form"
+								className="h-10 w-10 rounded-full bg-surface"
+								onPress={() => onOpenChange(false)}
+							/>
+						</View>
+						<ScrollView
+							contentContainerStyle={{ gap: 14, paddingBottom: 8 }}
+							keyboardShouldPersistTaps="handled"
+							showsVerticalScrollIndicator={false}
+							style={{ maxHeight: 480 }}
+						>
+							<SheetField
+								label="Task"
+								onChangeText={(value) => onUpdateForm("title", value)}
+								placeholder="Upload passport copy"
+								value={form.title}
+							/>
+							<View className="flex-row gap-3">
+								<View className="min-w-0 flex-1">
+									<SheetField
+										label="Category"
+										onChangeText={(value) => onUpdateForm("category", value)}
+										placeholder="documents"
+										value={form.category}
+									/>
+								</View>
+								<View className="min-w-0 flex-1">
+									<SheetField
+										label="Priority"
+										onChangeText={(value) => onUpdateForm("priority", value)}
+										placeholder="medium"
+										value={form.priority}
+									/>
+								</View>
+							</View>
+							<SheetField
+								label="Due date"
+								onChangeText={(value) => onUpdateForm("dueDate", value)}
+								placeholder="2026-06-01"
+								value={form.dueDate}
+							/>
+							<SheetTextArea
+								label="Details"
+								onChangeText={(value) => onUpdateForm("description", value)}
+								placeholder="What needs to be true for this to be done?"
+								value={form.description}
+							/>
+						</ScrollView>
+						<Button isDisabled={isSaving} onPress={onSubmit} size="lg">
+							{isSaving ? <Spinner size="sm" /> : null}
+							<Button.Label>
+								{mode === "edit" ? "Save task" : "Add task"}
+							</Button.Label>
+						</Button>
+					</View>
+				</BottomSheet.Content>
+			</BottomSheet.Portal>
+		</BottomSheet>
+	);
+}
+
 export function ReadinessScreen() {
 	const tripId = useTripIdParam();
 	const readinessItems = useQuery(
@@ -66,9 +301,19 @@ export function ReadinessScreen() {
 	const ensureBaselineReadinessItems = useMutation(
 		api.readiness.ensureBaselineReadinessItems
 	);
+	const createReadinessItem = useMutation(api.readiness.createReadinessItem);
+	const deleteReadinessItem = useMutation(api.readiness.deleteReadinessItem);
 	const updateReadinessItem = useMutation(api.readiness.updateReadinessItem);
+	const updateReadinessItemDetails = useMutation(
+		api.readiness.updateReadinessItemDetails
+	);
+	const [form, setForm] = useState<ReadinessForm>(initialReadinessForm);
+	const [editingItemId, setEditingItemId] =
+		useState<Id<"readinessItems"> | null>(null);
 	const [baselineRequestedTripId, setBaselineRequestedTripId] =
 		useState<Id<"trips"> | null>(null);
+	const [isSheetOpen, setIsSheetOpen] = useState(false);
+	const [isSaving, setIsSaving] = useState(false);
 
 	useEffect(() => {
 		if (!(tripId && readinessItems)) {
@@ -112,6 +357,63 @@ export function ReadinessScreen() {
 		);
 	}
 
+	const updateForm = (key: keyof ReadinessForm, value: string) => {
+		setForm((currentForm) => ({ ...currentForm, [key]: value }));
+	};
+	const openCreateSheet = () => {
+		setEditingItemId(null);
+		setForm(initialReadinessForm);
+		setIsSheetOpen(true);
+	};
+	const openEditSheet = (item: Doc<"readinessItems">) => {
+		setEditingItemId(item._id);
+		setForm({
+			category: item.category,
+			description: item.description,
+			dueDate: item.dueDate,
+			priority: item.priority,
+			title: item.title,
+		});
+		setIsSheetOpen(true);
+	};
+	const handleSaveTask = async () => {
+		if (!tripId) {
+			return;
+		}
+
+		const title = form.title.trim();
+		if (!title) {
+			return;
+		}
+
+		setIsSaving(true);
+		try {
+			const taskPatch = {
+				category: getReadinessCategory(form.category),
+				description: form.description.trim() || title,
+				dueDate: form.dueDate.trim(),
+				priority: getPriority(form.priority),
+				title,
+			};
+
+			if (editingItemId) {
+				await updateReadinessItemDetails({
+					...taskPatch,
+					readinessItemId: editingItemId,
+				});
+			} else {
+				await createReadinessItem({
+					...taskPatch,
+					tripId,
+				});
+			}
+			setForm(initialReadinessForm);
+			setEditingItemId(null);
+			setIsSheetOpen(false);
+		} finally {
+			setIsSaving(false);
+		}
+	};
 	const domainItems = readinessItems.map(toDomainReadinessItem);
 	const score = calculateReadinessScore(domainItems);
 	const categories = Object.entries(score.categoryScores) as [
@@ -140,12 +442,8 @@ export function ReadinessScreen() {
 
 				<Surface className="gap-4 rounded-[34px] border border-border bg-surface p-5">
 					<View className="flex-row flex-wrap gap-2">
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>Check</Chip.Label>
-						</Chip>
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>{openItems.length} open</Chip.Label>
-						</Chip>
+						<ReadinessPill>Check</ReadinessPill>
+						<ReadinessPill>{openItems.length} open</ReadinessPill>
 					</View>
 					<View className="flex-row items-end justify-between gap-4">
 						<View className="flex-1 gap-1">
@@ -171,6 +469,9 @@ export function ReadinessScreen() {
 							<Button.Label>Fix highest-priority gap</Button.Label>
 						</Button>
 					)}
+					<Button onPress={openCreateSheet}>
+						<Button.Label>Add task</Button.Label>
+					</Button>
 				</Surface>
 
 				<View className="flex-row flex-wrap gap-3">
@@ -202,6 +503,10 @@ export function ReadinessScreen() {
 						<ReadinessItemRow
 							item={item}
 							key={item._id}
+							onDelete={(readinessItemId) => {
+								deleteReadinessItem({ readinessItemId }).catch(() => undefined);
+							}}
+							onEdit={openEditSheet}
 							onStatusChange={(readinessItemId, status) => {
 								updateReadinessItem({ readinessItemId, status }).catch(
 									() => undefined
@@ -211,6 +516,21 @@ export function ReadinessScreen() {
 					))}
 				</View>
 			</View>
+			<ReadinessTaskSheet
+				form={form}
+				isOpen={isSheetOpen}
+				isSaving={isSaving}
+				mode={editingItemId ? "edit" : "create"}
+				onOpenChange={(isOpen) => {
+					setIsSheetOpen(isOpen);
+					if (!isOpen) {
+						setEditingItemId(null);
+						setForm(initialReadinessForm);
+					}
+				}}
+				onSubmit={handleSaveTask}
+				onUpdateForm={updateForm}
+			/>
 		</Container>
 	);
 }

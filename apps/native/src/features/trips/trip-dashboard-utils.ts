@@ -37,6 +37,7 @@ const priorityRank: Record<string, number> = {
 const tripTabs: DashboardTab[] = [
 	{ icon: "speedometer-outline", id: "overview", label: "Today" },
 	{ icon: "calendar-outline", id: "itinerary", label: "Plan" },
+	{ icon: "map-outline", id: "places", label: "Map" },
 	{ icon: "briefcase-outline", id: "bookings", label: "Bookings" },
 	{ icon: "folder-open-outline", id: "documents", label: "Docs" },
 	{ icon: "checkbox-outline", id: "checklist", label: "Checklist" },
@@ -379,6 +380,11 @@ const getRecentUpdates = (workspace: TripWorkspace): RecentUpdate[] =>
 			icon: "images-outline" as const,
 			message: `Saved ${moment.title}`,
 		})),
+		...workspace.notes.map((note) => ({
+			createdAt: note.updatedAt,
+			icon: "document-text-outline" as const,
+			message: `Noted ${note.title}`,
+		})),
 	]
 		.sort((left, right) => right.createdAt - left.createdAt)
 		.slice(0, 4);
@@ -398,6 +404,16 @@ const getQuickActions = (tripId: Id<"trips">): DashboardAction[] => [
 		href: VIYA_ROUTES.tripBudget(tripId),
 		icon: "receipt-outline",
 		label: "Log spend",
+	},
+	{
+		href: VIYA_ROUTES.tripCompanions(tripId),
+		icon: "people-outline",
+		label: "People",
+	},
+	{
+		href: VIYA_ROUTES.tripNotes(tripId),
+		icon: "document-text-outline",
+		label: "Notes",
 	},
 	{
 		href: VIYA_ROUTES.tripReadiness(tripId),
@@ -525,6 +541,9 @@ export const createTripDashboardModel = ({
 			checklist: openReadinessItems.length,
 			documents: workspace.vaultItems.length + workspace.documents.length,
 			itinerary: workspace.itineraryItems.length,
+			places:
+				workspace.savedPlaces.length +
+				workspace.itineraryItems.filter((item) => item.locationName).length,
 			memories: workspace.moments.length,
 			travel: watchOutItems.length,
 		},

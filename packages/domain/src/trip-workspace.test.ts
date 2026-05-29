@@ -1,27 +1,45 @@
 import { describe, expect, it } from "vitest";
 
-import { getLifecycleStageSummary } from "./trip-workspace";
+import { getTripWorkspaceNextAction } from "./trip-workspace";
+
+const baseInput = {
+	bookings: [],
+	budgetAmount: 50_000,
+	itineraryItemCount: 3,
+	readinessScore: 95,
+	risks: [],
+	vaultItems: [{ status: "ready" }],
+};
 
 describe("trip workspace selectors", () => {
-	it("marks booking as next when booking targets remain", () => {
-		const summary = getLifecycleStageSummary({
+	it("prioritizes open risks before other module gaps", () => {
+		const summary = getTripWorkspaceNextAction({
+			...baseInput,
 			bookings: [{ status: "target" }],
-			readinessScore: 0,
-			vaultItems: [],
+			risks: [{ status: "open" }],
 		});
 
-		expect(summary.nextStage).toBe("booking");
-		expect(summary.primaryActionLabel).toBe("Review booking targets");
+		expect(summary.target).toBe("risks");
+		expect(summary.label).toBe("Review open risks");
 	});
 
-	it("marks readiness as next after synced files exist", () => {
-		const summary = getLifecycleStageSummary({
-			bookings: [{ status: "confirmed" }],
-			readinessScore: 72,
-			vaultItems: [{ status: "ready" }],
+	it("marks bookings as next when booking targets remain", () => {
+		const summary = getTripWorkspaceNextAction({
+			...baseInput,
+			bookings: [{ status: "target" }],
 		});
 
-		expect(summary.nextStage).toBe("preparing");
-		expect(summary.primaryActionLabel).toBe("Fix readiness gaps");
+		expect(summary.target).toBe("bookings");
+		expect(summary.label).toBe("Review booking targets");
+	});
+
+	it("marks readiness as next after required planning modules exist", () => {
+		const summary = getTripWorkspaceNextAction({
+			...baseInput,
+			readinessScore: 72,
+		});
+
+		expect(summary.target).toBe("readiness");
+		expect(summary.label).toBe("Fix readiness gaps");
 	});
 });

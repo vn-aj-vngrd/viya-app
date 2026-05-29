@@ -1,5 +1,5 @@
-import { TripDashboardScreen } from "@/src/features/trips/trip-dashboard-screen";
+import { TripTravelModeScreen } from "@/src/features/trips/trip-travel-mode-screen";
 
 export default function TravelModeScreen() {
-	return <TripDashboardScreen initialTab="travel" />;
+	return <TripTravelModeScreen />;
 }

@@ -57,6 +57,14 @@ interface AccountAvatarButtonProps {
 	size?: number;
 }
 
+const avatarButtonShadowStyle = {
+	elevation: 3,
+	shadowColor: "#0F172A",
+	shadowOffset: { height: 10, width: 0 },
+	shadowOpacity: 0.12,
+	shadowRadius: 22,
+} as const;
+
 type AccountSheetScreen =
 	| "account"
 	| "appearance"
@@ -761,7 +769,7 @@ export function AccountAvatarButton({ size = 48 }: AccountAvatarButtonProps) {
 				className="items-center justify-center rounded-full"
 				onPress={() => setIsOpen(true)}
 				style={{
-					boxShadow: "0 10px 22px rgba(15, 23, 42, 0.12)",
+					...avatarButtonShadowStyle,
 					height: size,
 					width: size,
 				}}

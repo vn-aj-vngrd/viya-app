@@ -28,6 +28,8 @@ const formatCost = (cost?: number, currency = "PHP") => {
 interface BookingTargetCardProps {
 	booking: Doc<"bookings">;
 	isUpdating: boolean;
+	onDelete: (booking: Doc<"bookings">) => void;
+	onEdit: (booking: Doc<"bookings">) => void;
 	onMarkBooked: (booking: Doc<"bookings">) => void;
 	onMarkConfirmed: (booking: Doc<"bookings">) => void;
 	onUploadConfirmation: () => void;
@@ -36,6 +38,8 @@ interface BookingTargetCardProps {
 export function BookingTargetCard({
 	booking,
 	isUpdating,
+	onDelete,
+	onEdit,
 	onMarkBooked,
 	onMarkConfirmed,
 	onUploadConfirmation,
@@ -135,9 +139,27 @@ export function BookingTargetCard({
 					className="w-full"
 					onPress={onUploadConfirmation}
 					size="sm"
-					variant="ghost"
+					variant="tertiary"
 				>
 					<Button.Label>Upload confirmation</Button.Label>
+				</Button>
+				<Button
+					className="flex-1"
+					isDisabled={isUpdating}
+					onPress={() => onEdit(booking)}
+					size="sm"
+					variant="secondary"
+				>
+					<Button.Label>Edit target</Button.Label>
+				</Button>
+				<Button
+					className="flex-1"
+					isDisabled={isUpdating}
+					onPress={() => onDelete(booking)}
+					size="sm"
+					variant="tertiary"
+				>
+					<Button.Label>Delete target</Button.Label>
 				</Button>
 			</View>
 		</Surface>

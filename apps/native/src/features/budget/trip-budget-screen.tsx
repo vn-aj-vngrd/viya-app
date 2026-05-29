@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
+import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
 import { getBudgetWalletSummary } from "@viya-app/domain";
 import { useMutation, useQuery } from "convex/react";
 import {
@@ -199,9 +200,13 @@ export function TripBudgetScreen() {
 	);
 	const updateTripBudget = useMutation(api.trips.updateTripBudget);
 	const addTripExpense = useMutation(api.trips.addTripExpense);
+	const deleteTripExpense = useMutation(api.trips.deleteTripExpense);
+	const updateTripExpense = useMutation(api.trips.updateTripExpense);
 	const [budgetDraft, setBudgetDraft] = useState("");
 	const [expenseForm, setExpenseForm] =
 		useState<ExpenseFormState>(initialExpenseForm);
+	const [editingExpenseId, setEditingExpenseId] =
+		useState<Id<"expenses"> | null>(null);
 	const [budgetErrorMessage, setBudgetErrorMessage] = useState<string | null>(
 		null
 	);
@@ -210,6 +215,8 @@ export function TripBudgetScreen() {
 	);
 	const [isSavingBudget, setIsSavingBudget] = useState(false);
 	const [isAddingExpense, setIsAddingExpense] = useState(false);
+	const [deletingExpenseId, setDeletingExpenseId] =
+		useState<Id<"expenses"> | null>(null);
 
 	const summary = useMemo(() => {
 		if (!budget) {
@@ -288,7 +295,7 @@ export function TripBudgetScreen() {
 		}
 	};
 
-	const handleAddExpense = async () => {
+	const handleSaveExpense = async () => {
 		const amount = parseAmount(expenseForm.amount);
 		const title = expenseForm.title.trim();
 		if (!title) {
@@ -304,22 +311,48 @@ export function TripBudgetScreen() {
 		setExpenseErrorMessage(null);
 		setIsAddingExpense(true);
 		try {
-			await addTripExpense({
-				amount,
-				category: expenseForm.category,
-				currency,
-				notes: expenseForm.notes.trim() || undefined,
-				spentAt: expenseForm.spentAt,
-				title,
-				tripId,
-			});
+			if (editingExpenseId) {
+				await updateTripExpense({
+					amount,
+					category: expenseForm.category,
+					currency,
+					expenseId: editingExpenseId,
+					notes: expenseForm.notes.trim() || undefined,
+					spentAt: expenseForm.spentAt,
+					title,
+				});
+			} else {
+				await addTripExpense({
+					amount,
+					category: expenseForm.category,
+					currency,
+					notes: expenseForm.notes.trim() || undefined,
+					spentAt: expenseForm.spentAt,
+					title,
+					tripId,
+				});
+			}
 			setExpenseForm(initialExpenseForm());
+			setEditingExpenseId(null);
 		} catch (error) {
 			setExpenseErrorMessage(
-				error instanceof Error ? error.message : "Could not add expense."
+				error instanceof Error ? error.message : "Could not save expense."
 			);
 		} finally {
 			setIsAddingExpense(false);
+		}
+	};
+
+	const handleDeleteExpense = async (expenseId: Id<"expenses">) => {
+		setDeletingExpenseId(expenseId);
+		try {
+			await deleteTripExpense({ expenseId });
+			if (editingExpenseId === expenseId) {
+				setEditingExpenseId(null);
+				setExpenseForm(initialExpenseForm());
+			}
+		} finally {
+			setDeletingExpenseId(null);
 		}
 	};
 
@@ -431,7 +464,10 @@ export function TripBudgetScreen() {
 				</Surface>
 
 				<Surface className="gap-4 rounded-[26px] border border-border bg-surface p-5">
-					<SectionTitle icon="receipt-outline" title="Add expense" />
+					<SectionTitle
+						icon="receipt-outline"
+						title={editingExpenseId ? "Edit expense" : "Add expense"}
+					/>
 					<TextField className="gap-2">
 						<Label>
 							<Label.Text>Title</Label.Text>
@@ -510,12 +546,26 @@ export function TripBudgetScreen() {
 					<Button
 						isDisabled={isAddingExpense}
 						onPress={() => {
-							handleAddExpense().catch(() => undefined);
+							handleSaveExpense().catch(() => undefined);
 						}}
 					>
 						{isAddingExpense ? <Spinner size="sm" /> : null}
-						<Button.Label>Add expense</Button.Label>
+						<Button.Label>
+							{editingExpenseId ? "Save expense" : "Add expense"}
+						</Button.Label>
 					</Button>
+					{editingExpenseId ? (
+						<Button
+							isDisabled={isAddingExpense}
+							onPress={() => {
+								setEditingExpenseId(null);
+								setExpenseForm(initialExpenseForm());
+							}}
+							variant="secondary"
+						>
+							<Button.Label>Cancel edit</Button.Label>
+						</Button>
+					) : null}
 				</Surface>
 
 				<View className="gap-3">
@@ -573,9 +623,41 @@ export function TripBudgetScreen() {
 											{formatStatus(expense.category)} · {expense.spentAt}
 										</Text>
 									</View>
-									<Text type="body-sm" weight="semibold">
-										{formatMoney(expense.amount, expense.currency)}
-									</Text>
+									<View className="items-end gap-2">
+										<Text type="body-sm" weight="semibold">
+											{formatMoney(expense.amount, expense.currency)}
+										</Text>
+										<View className="flex-row gap-2">
+											<Button
+												onPress={() => {
+													setEditingExpenseId(expense._id);
+													setExpenseForm({
+														amount: expense.amount.toString(),
+														category: expense.category as ExpenseCategory,
+														notes: expense.notes ?? "",
+														spentAt: expense.spentAt,
+														title: expense.title,
+													});
+												}}
+												size="sm"
+												variant="secondary"
+											>
+												<Button.Label>Edit</Button.Label>
+											</Button>
+											<Button
+												isDisabled={deletingExpenseId === expense._id}
+												onPress={() => {
+													handleDeleteExpense(expense._id).catch(
+														() => undefined
+													);
+												}}
+												size="sm"
+												variant="tertiary"
+											>
+												<Button.Label>Delete</Button.Label>
+											</Button>
+										</View>
+									</View>
 								</View>
 							))
 						)}

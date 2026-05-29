@@ -28,6 +28,21 @@ const readinessCategories = [
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
 
+const activeTripCardStyle = {
+	backgroundColor: "#071A2F",
+	elevation: 4,
+	shadowColor: "#071A2F",
+	shadowOffset: { height: 22, width: 0 },
+	shadowOpacity: 0.22,
+	shadowRadius: 42,
+} as const;
+const activeTripMutedTextStyle = { color: "#A9B4C0" };
+const activeTripSecondaryTextStyle = { color: "#B4BECA" };
+const activeTripParagraphStyle = { color: "#D0D7DF" };
+const activeTripMetricStyle = { backgroundColor: "#2B3B4E" };
+const primarySoftBackgroundStyle = { backgroundColor: "#EAF2FF" };
+const warningSoftBackgroundStyle = { backgroundColor: "#FFF7ED" };
+
 const makeCurrencyFormatter = (currency: string) =>
 	new Intl.NumberFormat("en-PH", {
 		currency,
@@ -102,8 +117,11 @@ function SectionTitle({
 
 function MetricPill({ label, value }: { label: string; value: string }) {
 	return (
-		<View className="flex-1 gap-1 rounded-2xl bg-white/14 p-3">
-			<Text className="text-white/72" type="body-xs" weight="medium">
+		<View
+			className="flex-1 gap-1 rounded-2xl p-3"
+			style={activeTripMetricStyle}
+		>
+			<Text style={activeTripSecondaryTextStyle} type="body-xs" weight="medium">
 				{label}
 			</Text>
 			<Text className="text-white" type="body-sm" weight="semibold">
@@ -135,20 +153,28 @@ function ActiveTripCard({
 
 	return (
 		<Surface
-			className="gap-5 overflow-hidden rounded-[34px] bg-[#071A2F] p-5"
-			style={{ boxShadow: "0 22px 42px rgba(7, 26, 47, 0.22)" }}
+			className="gap-5 overflow-hidden rounded-[34px] p-5"
+			style={activeTripCardStyle}
 		>
 			<View className="gap-1">
-				<Text className="text-white/68" type="body-xs" weight="semibold">
+				<Text style={activeTripMutedTextStyle} type="body-xs" weight="semibold">
 					ACTIVE TRIP
 				</Text>
 				<Text.Heading className="text-white" type="h2" weight="semibold">
 					{title}
 				</Text.Heading>
-				<Text className="text-white/72" type="body-sm" weight="medium">
+				<Text
+					style={activeTripSecondaryTextStyle}
+					type="body-sm"
+					weight="medium"
+				>
 					{tripWindow}
 				</Text>
-				<Text.Paragraph className="mt-2 text-white/82 leading-5" type="body-sm">
+				<Text.Paragraph
+					className="mt-2 leading-5"
+					style={activeTripParagraphStyle}
+					type="body-sm"
+				>
 					{summary}
 				</Text.Paragraph>
 			</View>
@@ -162,7 +188,10 @@ function ActiveTripCard({
 					/>
 				</View>
 				<View className="flex-row items-center gap-3 rounded-3xl bg-white p-4">
-					<View className="h-10 w-10 items-center justify-center rounded-full bg-[#EAF2FF]">
+					<View
+						className="h-10 w-10 items-center justify-center rounded-full"
+						style={primarySoftBackgroundStyle}
+					>
 						<Ionicons color="#0A84FF" name="flash-outline" size={18} />
 					</View>
 					<View className="flex-1">
@@ -196,7 +225,10 @@ function ViyaRecommendation({
 		<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
 			<SectionTitle title="Viya Recommends" />
 			<View className="flex-row gap-3">
-				<View className="h-10 w-10 items-center justify-center rounded-full bg-[#EAF2FF]">
+				<View
+					className="h-10 w-10 items-center justify-center rounded-full"
+					style={primarySoftBackgroundStyle}
+				>
 					<Ionicons color="#0A84FF" name="sparkles" size={18} />
 				</View>
 				<Text.Paragraph className="flex-1 leading-5" type="body-sm">
@@ -216,7 +248,7 @@ function ViyaRecommendation({
 					</Button>
 				</Link>
 				<Link asChild href={VIYA_ROUTES.viya}>
-					<Button className="w-full" size="sm" variant="ghost">
+					<Button className="w-full" size="sm" variant="tertiary">
 						<Button.Label>Ask Viya</Button.Label>
 					</Button>
 				</Link>
@@ -231,7 +263,7 @@ function ReadinessSnapshot({ tripId }: { tripId: Id<"trips"> }) {
 			<SectionTitle
 				action={
 					<Link asChild href={VIYA_ROUTES.tripReadiness(tripId)}>
-						<Button size="sm" variant="ghost">
+						<Button size="sm" variant="tertiary">
 							<Button.Label>Fix my readiness</Button.Label>
 						</Button>
 					</Link>
@@ -270,7 +302,7 @@ function UpcomingTimeline({ tripId }: { tripId: Id<"trips"> }) {
 			<SectionTitle
 				action={
 					<Link asChild href={VIYA_ROUTES.tripItinerary(tripId)}>
-						<Button size="sm" variant="ghost">
+						<Button size="sm" variant="tertiary">
 							<Button.Label>View itinerary</Button.Label>
 						</Button>
 					</Link>
@@ -300,7 +332,7 @@ function TripVaultPreview({ tripId }: { tripId: Id<"trips"> }) {
 			<SectionTitle
 				action={
 					<Link asChild href={VIYA_ROUTES.tripVault(tripId)}>
-						<Button size="sm" variant="ghost">
+						<Button size="sm" variant="tertiary">
 							<Button.Label>Open vault</Button.Label>
 						</Button>
 					</Link>
@@ -319,7 +351,10 @@ function TripVaultPreview({ tripId }: { tripId: Id<"trips"> }) {
 						</Text>
 					</View>
 				</View>
-				<View className="flex-row items-center gap-3 rounded-2xl bg-[#FFF7ED] p-3">
+				<View
+					className="flex-row items-center gap-3 rounded-2xl p-3"
+					style={warningSoftBackgroundStyle}
+				>
 					<Ionicons color="#E97816" name="alert-circle-outline" size={19} />
 					<View className="flex-1">
 						<Text type="body-sm" weight="semibold">
@@ -349,7 +384,7 @@ function BudgetSnapshot({
 			<SectionTitle
 				action={
 					<Link asChild href={VIYA_ROUTES.viya}>
-						<Button size="sm" variant="ghost">
+						<Button size="sm" variant="tertiary">
 							<Button.Label>Add expense</Button.Label>
 						</Button>
 					</Link>
@@ -376,7 +411,7 @@ function BudgetSnapshot({
 					</View>
 				))}
 			</View>
-			<View className="rounded-2xl bg-[#FFF7ED] p-3">
+			<View className="rounded-2xl p-3" style={warningSoftBackgroundStyle}>
 				<Text.Paragraph className="leading-5" type="body-sm">
 					Add expenses so Viya can watch your budget and warn you before
 					spending gets tight.
@@ -392,7 +427,7 @@ function MemoriesTeaser({ tripId }: { tripId: Id<"trips"> }) {
 			<SectionTitle
 				action={
 					<Link asChild href={VIYA_ROUTES.tripWrapped(tripId)}>
-						<Button size="sm" variant="ghost">
+						<Button size="sm" variant="tertiary">
 							<Button.Label>Create Viya Wrapped</Button.Label>
 						</Button>
 					</Link>

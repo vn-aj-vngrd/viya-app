@@ -12,5 +12,6 @@ export * from "./schemas/readiness";
 export * from "./schemas/risks";
 export * from "./schemas/vault";
 export * from "./schemas/wrapped";
+export * from "./trip-modules";
 export * from "./trip-workspace";
 export * from "./types";

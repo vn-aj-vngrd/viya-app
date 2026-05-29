@@ -8,6 +8,13 @@ const AI_TAB_NAME = "viya";
 const TAB_SLOT_WIDTH = 52;
 const TAB_BAR_HORIZONTAL_PADDING = 16;
 const HIDDEN_TAB_NAMES = new Set(["moments", "profile", "vault"]);
+const floatingShadowStyle = {
+	elevation: 4,
+	shadowColor: "#111827",
+	shadowOffset: { height: 12, width: 0 },
+	shadowOpacity: 0.14,
+	shadowRadius: 30,
+} as const;
 
 function emitTabPress({
 	isFocused,
@@ -81,7 +88,7 @@ export function FloatingTabBar({
 			<Surface
 				className="flex-row items-center rounded-full border border-border bg-surface px-2 py-2"
 				style={{
-					boxShadow: "0 12px 30px rgba(17, 24, 39, 0.14)",
+					...floatingShadowStyle,
 					width: floatingTabWidth,
 				}}
 			>
@@ -126,9 +133,7 @@ export function FloatingTabBar({
 			{aiRoute && aiDescriptor ? (
 				<Surface
 					className="h-14 w-14 items-center justify-center rounded-full border border-border bg-surface"
-					style={{
-						boxShadow: "0 12px 30px rgba(17, 24, 39, 0.14)",
-					}}
+					style={floatingShadowStyle}
 				>
 					<Pressable
 						accessibilityLabel={aiDescriptor.options.tabBarAccessibilityLabel}

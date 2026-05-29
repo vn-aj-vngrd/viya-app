@@ -25,6 +25,7 @@
       "!**/.svelte-kit",
       "!**/bun.lock",
       "!**/bun.lockb",
+      "!apps/native/uniwind-types.d.ts",
       "!**/wrangler.jsonc",
       "!**/.source",
       "!**/convex/_generated"

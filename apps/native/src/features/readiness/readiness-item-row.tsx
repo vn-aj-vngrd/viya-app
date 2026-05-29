@@ -6,8 +6,8 @@ import {
 	READINESS_CATEGORY_LABELS,
 	type ReadinessCategory,
 } from "@viya-app/domain";
-import { Button, Chip, Menu, type MenuKey, Surface, Text } from "heroui-native";
-import { Pressable, View } from "react-native";
+import { Button, Surface, Text } from "heroui-native";
+import { View } from "react-native";
 
 const statusLabels: Record<string, string> = {
 	blocked: "Blocked",
@@ -25,8 +25,20 @@ const statusOptions = [
 	"ignored",
 ] as const;
 
+function RowPill({ label }: { label: string }) {
+	return (
+		<View className="rounded-full bg-surface-secondary px-2.5 py-1">
+			<Text color="muted" type="body-xs" weight="semibold">
+				{label}
+			</Text>
+		</View>
+	);
+}
+
 interface ReadinessItemRowProps {
 	item: Doc<"readinessItems">;
+	onDelete: (readinessItemId: Id<"readinessItems">) => void;
+	onEdit: (item: Doc<"readinessItems">) => void;
 	onStatusChange: (
 		readinessItemId: Id<"readinessItems">,
 		status: (typeof statusOptions)[number]
@@ -35,10 +47,10 @@ interface ReadinessItemRowProps {
 
 export function ReadinessItemRow({
 	item,
+	onDelete,
+	onEdit,
 	onStatusChange,
 }: ReadinessItemRowProps) {
-	const selectedKeys = new Set<MenuKey>([item.status]);
-
 	return (
 		<Surface className="gap-3 rounded-[24px] border border-border bg-surface p-4">
 			<View className="flex-row items-start gap-3">
@@ -47,16 +59,12 @@ export function ReadinessItemRow({
 				</View>
 				<View className="flex-1 gap-2">
 					<View className="flex-row flex-wrap gap-2">
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>
-								{READINESS_CATEGORY_LABELS[item.category as ReadinessCategory]}
-							</Chip.Label>
-						</Chip>
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>
-								{PRIORITY_LABELS[item.priority as Priority]}
-							</Chip.Label>
-						</Chip>
+						<RowPill
+							label={
+								READINESS_CATEGORY_LABELS[item.category as ReadinessCategory]
+							}
+						/>
+						<RowPill label={PRIORITY_LABELS[item.priority as Priority]} />
 					</View>
 					<Text type="body-sm" weight="bold">
 						{item.title}
@@ -69,54 +77,58 @@ export function ReadinessItemRow({
 					</Text>
 				</View>
 			</View>
-			<Menu>
-				<Menu.Trigger asChild={true}>
-					<Pressable accessibilityRole="button">
-						<Button size="sm" variant="secondary">
-							<Button.Label>
-								{statusLabels[item.status] ?? item.status}
-							</Button.Label>
-						</Button>
-					</Pressable>
-				</Menu.Trigger>
-				<Menu.Portal>
-					<Menu.Overlay />
-					<Menu.Content
-						className="rounded-[24px] border border-border bg-surface p-2"
-						presentation="popover"
-						width={220}
+			<View className="flex-row flex-wrap items-center gap-2">
+				<View className="rounded-full bg-surface-secondary px-3 py-2">
+					<Text type="body-sm" weight="semibold">
+						{statusLabels[item.status] ?? item.status}
+					</Text>
+				</View>
+				{item.status === "inProgress" ? null : (
+					<Button
+						onPress={() => onStatusChange(item._id, "inProgress")}
+						size="sm"
+						variant="secondary"
 					>
-						<Menu.Group
-							onSelectionChange={(keys) => {
-								const [status] = keys;
-								if (statusOptions.includes(status as never)) {
-									onStatusChange(
-										item._id,
-										status as (typeof statusOptions)[number]
-									);
-								}
-							}}
-							selectedKeys={selectedKeys}
-							selectionMode="single"
-						>
-							{statusOptions.map((status) => (
-								<Menu.Item
-									className="rounded-[18px] p-3"
-									id={status}
-									key={status}
-								>
-									<Menu.ItemTitle className="font-semibold text-sm">
-										{statusLabels[status]}
-									</Menu.ItemTitle>
-									<Menu.ItemIndicator
-										iconProps={{ color: "#18181B", size: 18 }}
-									/>
-								</Menu.Item>
-							))}
-						</Menu.Group>
-					</Menu.Content>
-				</Menu.Portal>
-			</Menu>
+						<Button.Label>Start</Button.Label>
+					</Button>
+				)}
+				{item.status === "done" ? null : (
+					<Button
+						onPress={() => onStatusChange(item._id, "done")}
+						size="sm"
+						variant="secondary"
+					>
+						<Button.Label>Done</Button.Label>
+					</Button>
+				)}
+				{item.status === "ignored" ? null : (
+					<Button
+						onPress={() => onStatusChange(item._id, "ignored")}
+						size="sm"
+						variant="tertiary"
+					>
+						<Button.Label>Ignore</Button.Label>
+					</Button>
+				)}
+			</View>
+			<View className="flex-row flex-wrap gap-2">
+				<Button
+					className="flex-1"
+					onPress={() => onEdit(item)}
+					size="sm"
+					variant="secondary"
+				>
+					<Button.Label>Edit task</Button.Label>
+				</Button>
+				<Button
+					className="flex-1"
+					onPress={() => onDelete(item._id)}
+					size="sm"
+					variant="tertiary"
+				>
+					<Button.Label>Delete task</Button.Label>
+				</Button>
+			</View>
 		</Surface>
 	);
 }

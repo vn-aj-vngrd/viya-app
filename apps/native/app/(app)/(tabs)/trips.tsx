@@ -19,7 +19,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Container } from "@/components/container";
 import { NavigationIconButton } from "@/src/components/navigation/navigation-icon-button";
 import { VIYA_ROUTES } from "@/src/constants/routes";
-import { ManualTripCreateSheet } from "@/src/features/trips/manual-trip-create-sheet";
 import {
 	TripCardMetaRow,
 	TripCardTitleRow,
@@ -529,7 +528,6 @@ export default function TripsScreen() {
 	const router = useRouter();
 	const [search, setSearch] = useState("");
 	const [filters, setFilters] = useState<ActiveTripFilter[]>([]);
-	const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
 	const [isStatusSheetOpen, setIsStatusSheetOpen] = useState(false);
 	const deferredSearch = useDeferredValue(search.trim());
 	const activeStatusFilter = getActiveStatusFilter(filters);
@@ -550,17 +548,10 @@ export default function TripsScreen() {
 	const canLoadMore = status === "CanLoadMore";
 	const hasSearch = deferredSearch.length > 0;
 
-	const handleManualTripPress = () => setIsCreateSheetOpen(true);
+	const handleManualTripPress = () => router.push(VIYA_ROUTES.newTrip);
 	const handleStatusFilterSelect = (filter: StatusTripFilter | null) => {
 		setFilters(filter ? [filter] : []);
 		setIsStatusSheetOpen(false);
-	};
-	const handlePlanTripPress = () => {
-		setIsCreateSheetOpen(false);
-		router.push({
-			params: { mode: "plan" },
-			pathname: "/(app)/(tabs)/viya",
-		});
 	};
 	const handleTripPress = useCallback(
 		(trip: Trip) => {
@@ -616,14 +607,6 @@ export default function TripsScreen() {
 				onEndReached={handleEndReached}
 				onEndReachedThreshold={0.45}
 				renderItem={renderTrip}
-			/>
-			<ManualTripCreateSheet
-				isOpen={isCreateSheetOpen}
-				onCreated={(tripId) => {
-					router.push(VIYA_ROUTES.tripDashboard(tripId));
-				}}
-				onOpenChange={setIsCreateSheetOpen}
-				onPlanWithViya={handlePlanTripPress}
 			/>
 			<StatusFilterSheet
 				isOpen={isStatusSheetOpen}
