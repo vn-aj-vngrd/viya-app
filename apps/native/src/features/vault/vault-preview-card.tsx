@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { Href } from "expo-router";
 import { Link } from "expo-router";
-import { Button, Surface, Text } from "heroui-native";
-import { View } from "react-native";
+import { Button, Menu, Text } from "heroui-native";
+import { Pressable, View } from "react-native";
 
 import { formatReadableDate } from "@/src/components/date/date-format-utils";
 
@@ -23,30 +23,13 @@ const vaultKindMeta: Record<
 	string,
 	{
 		accent: string;
-		backgroundColor: string;
 		icon: keyof typeof Ionicons.glyphMap;
 	}
 > = {
-	booking: {
-		accent: "#FF9F0A",
-		backgroundColor: "rgba(255, 159, 10, 0.12)",
-		icon: "ticket-outline",
-	},
-	document: {
-		accent: "#0A84FF",
-		backgroundColor: "rgba(10, 132, 255, 0.1)",
-		icon: "document-outline",
-	},
-	momentPhoto: {
-		accent: "#AF52DE",
-		backgroundColor: "rgba(175, 82, 222, 0.12)",
-		icon: "images-outline",
-	},
-	receipt: {
-		accent: "#34C759",
-		backgroundColor: "rgba(52, 199, 89, 0.12)",
-		icon: "receipt-outline",
-	},
+	booking: { accent: "#FF9F0A", icon: "ticket-outline" },
+	document: { accent: "#0A84FF", icon: "document-outline" },
+	momentPhoto: { accent: "#AF52DE", icon: "images-outline" },
+	receipt: { accent: "#34C759", icon: "receipt-outline" },
 };
 
 const formatVaultKindLabel = (value: string) =>
@@ -74,20 +57,14 @@ export function VaultPreviewCard({
 	const canOpenFile = Boolean(url && onOpenFile);
 	const kindMeta = vaultKindMeta[kind] ?? {
 		accent: "#6B7280",
-		backgroundColor: "rgba(107, 114, 128, 0.12)",
 		icon: "document-attach-outline" as const,
 	};
+	const hasMenu = Boolean(onEdit || onDelete);
 
 	return (
-		<Surface
-			className="gap-3 rounded-[26px] border border-border bg-surface p-4"
-			variant="secondary"
-		>
+		<View className="gap-3 rounded-[26px] border border-border bg-surface p-4">
 			<View className="flex-row items-start gap-3">
-				<View
-					className="h-11 w-11 items-center justify-center rounded-2xl"
-					style={{ backgroundColor: kindMeta.backgroundColor }}
-				>
+				<View className="h-11 w-11 items-center justify-center rounded-2xl bg-surface-secondary">
 					<Ionicons color={kindMeta.accent} name={kindMeta.icon} size={21} />
 				</View>
 				<View className="min-w-0 flex-1 gap-1">
@@ -113,8 +90,81 @@ export function VaultPreviewCard({
 						</Text>
 					) : null}
 				</View>
+				{hasMenu ? (
+					<Menu>
+						<Menu.Trigger asChild={true}>
+							<Pressable
+								accessibilityLabel="File options"
+								accessibilityRole="button"
+								className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary"
+								style={({ pressed }) => ({
+									transform: [{ scale: pressed ? 0.94 : 1 }],
+								})}
+							>
+								<Ionicons
+									color="#71717A"
+									name="ellipsis-horizontal"
+									size={17}
+								/>
+							</Pressable>
+						</Menu.Trigger>
+						<Menu.Portal>
+							<Menu.Overlay />
+							<Menu.Content
+								align="end"
+								className="rounded-[24px] border border-border bg-surface p-2"
+								offset={8}
+								placement="bottom"
+								presentation="popover"
+								width={200}
+							>
+								{onEdit ? (
+									<Menu.Item
+										accessibilityLabel="Edit file"
+										className="flex-row items-center gap-3 rounded-[18px] p-2.5"
+										isAnimatedStyleActive={false}
+										onPress={onEdit}
+									>
+										<View className="h-8 w-8 items-center justify-center rounded-full bg-surface-secondary">
+											<Ionicons
+												color="#0A84FF"
+												name="create-outline"
+												size={16}
+											/>
+										</View>
+										<Menu.ItemTitle className="font-semibold text-sm">
+											Edit
+										</Menu.ItemTitle>
+									</Menu.Item>
+								) : null}
+								{onEdit && onDelete ? (
+									<View className="mx-2 my-1 h-px bg-border" />
+								) : null}
+								{onDelete ? (
+									<Menu.Item
+										accessibilityLabel="Delete file"
+										className="flex-row items-center gap-3 rounded-[18px] p-2.5"
+										isAnimatedStyleActive={false}
+										onPress={onDelete}
+									>
+										<View className="h-8 w-8 items-center justify-center rounded-full bg-danger/10">
+											<Ionicons
+												color="#FF3B30"
+												name="trash-outline"
+												size={16}
+											/>
+										</View>
+										<Menu.ItemTitle className="font-semibold text-danger text-sm">
+											Delete
+										</Menu.ItemTitle>
+									</Menu.Item>
+								) : null}
+							</Menu.Content>
+						</Menu.Portal>
+					</Menu>
+				) : null}
 			</View>
-			{canOpenFile || linkedEntityHref || onDelete || onEdit ? (
+			{canOpenFile || linkedEntityHref ? (
 				<View className="flex-row flex-wrap gap-2">
 					{canOpenFile ? (
 						<Button
@@ -135,20 +185,8 @@ export function VaultPreviewCard({
 							</Button>
 						</Link>
 					) : null}
-					{onEdit ? (
-						<Button onPress={onEdit} size="sm" variant="secondary">
-							<Ionicons color="#0A84FF" name="create-outline" size={16} />
-							<Button.Label>Edit</Button.Label>
-						</Button>
-					) : null}
-					{onDelete ? (
-						<Button onPress={onDelete} size="sm" variant="tertiary">
-							<Ionicons color="#6B7280" name="trash-outline" size={16} />
-							<Button.Label>Delete</Button.Label>
-						</Button>
-					) : null}
 				</View>
 			) : null}
-		</Surface>
+		</View>
 	);
 }
