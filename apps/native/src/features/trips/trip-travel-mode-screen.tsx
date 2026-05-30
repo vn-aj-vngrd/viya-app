@@ -455,7 +455,7 @@ function QuickExpensePanel({
 	tripId: Id<"trips">;
 }) {
 	return (
-		<Surface className="gap-3 rounded-[26px] border border-border bg-surface p-5">
+		<View className="gap-3 rounded-[26px] border border-border bg-surface p-5">
 			<Text.Heading type="h5" weight="semibold">
 				Quick expense
 			</Text.Heading>
@@ -517,7 +517,7 @@ function QuickExpensePanel({
 					<Button.Label>Open budget</Button.Label>
 				</Button>
 			</Link>
-		</Surface>
+		</View>
 	);
 }
 
@@ -541,7 +541,7 @@ function QuickNotePanel({
 	tripId: Id<"trips">;
 }) {
 	return (
-		<Surface className="gap-3 rounded-[26px] border border-border bg-surface p-5">
+		<View className="gap-3 rounded-[26px] border border-border bg-surface p-5">
 			<View className="flex-row items-start justify-between gap-3">
 				<View className="min-w-0 flex-1 gap-1">
 					<Text.Heading type="h5" weight="semibold">
@@ -607,7 +607,7 @@ function QuickNotePanel({
 					<Button.Label>Open notes</Button.Label>
 				</Button>
 			</Link>
-		</Surface>
+		</View>
 	);
 }
 
@@ -882,7 +882,7 @@ export function TripTravelModeScreen() {
 						</Text>
 					) : null}
 
-					<Surface className="gap-4 rounded-[30px] bg-surface-secondary p-4">
+					<View className="gap-4 rounded-[30px] bg-surface-secondary p-4">
 						<View className="flex-row items-start justify-between gap-3">
 							<View className="min-w-0 flex-1 flex-row items-center gap-3">
 								<View className="h-11 w-11 items-center justify-center rounded-full bg-primary/10">
@@ -986,7 +986,7 @@ export function TripTravelModeScreen() {
 								label="Notes"
 							/>
 						</View>
-					</Surface>
+					</View>
 
 					<QuickExpensePanel
 						error={expenseError}
