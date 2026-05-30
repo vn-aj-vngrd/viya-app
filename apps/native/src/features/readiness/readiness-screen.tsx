@@ -22,7 +22,6 @@ import {
 	Input,
 	Label,
 	Spinner,
-	Surface,
 	Text,
 	TextArea,
 	TextField,
@@ -34,6 +33,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Container } from "@/components/container";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 import { EmptyState } from "@/src/components/empty-state";
+import { NavigationIconButton } from "@/src/components/navigation/navigation-icon-button";
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 import { TripModuleScreenFrame } from "@/src/features/trips/trip-module-floating-bar";
@@ -292,7 +292,7 @@ function ReadinessAssigneePicker({
 
 function ReadinessPill({ children }: { children: ReactNode }) {
 	return (
-		<View className="rounded-full bg-surface px-3 py-1.5">
+		<View className="rounded-full border border-border bg-white px-3 py-1.5">
 			<Text color="muted" type="body-xs" weight="semibold">
 				{children}
 			</Text>
@@ -302,7 +302,7 @@ function ReadinessPill({ children }: { children: ReactNode }) {
 
 function ReadinessMetric({ label, value }: { label: string; value: string }) {
 	return (
-		<View className="min-w-[47%] flex-1 gap-1 rounded-[20px] bg-surface p-3">
+		<View className="min-w-[47%] flex-1 gap-0.5">
 			<Text color="muted" type="body-xs" weight="semibold">
 				{label.toUpperCase()}
 			</Text>
@@ -708,7 +708,17 @@ export function ReadinessScreen() {
 	);
 
 	return (
-		<TripModuleScreenFrame activeTab="checklist" tripId={tripId}>
+		<TripModuleScreenFrame
+			activeTab="checklist"
+			headerAction={
+				<NavigationIconButton
+					accessibilityLabel="Add readiness task"
+					icon="add"
+					onPress={openCreateSheet}
+				/>
+			}
+			tripId={tripId}
+		>
 			<Container includeBottomInset={false} isScrollable={false}>
 				<ScrollView
 					contentContainerStyle={{
@@ -734,7 +744,7 @@ export function ReadinessScreen() {
 						</Text>
 					) : null}
 
-					<Surface className="gap-4 rounded-[30px] bg-surface-secondary p-4">
+					<View className="gap-4">
 						<View className="flex-row items-start justify-between gap-3">
 							<View className="min-w-0 flex-1 gap-1">
 								<Text.Heading type="h5" weight="semibold">
@@ -744,7 +754,7 @@ export function ReadinessScreen() {
 									Resolve blockers before switching into Travel Mode.
 								</Text>
 							</View>
-							<View className="h-11 w-11 items-center justify-center rounded-full bg-primary/10">
+							<View className="h-11 w-11 items-center justify-center rounded-full bg-surface-secondary">
 								<Ionicons
 									color="#0A84FF"
 									name="shield-checkmark-outline"
@@ -831,7 +841,7 @@ export function ReadinessScreen() {
 								<Button.Label>Fix highest-priority gap</Button.Label>
 							</Button>
 						)}
-					</Surface>
+					</View>
 
 					<View className="flex-row flex-wrap gap-3">
 						{categories.map(([category, categoryScore]) => {
