@@ -7,6 +7,7 @@ import {
 import {
 	extractTripBlueprint,
 	getDraftTripBlueprintPrompt,
+	getPromptSuggestions,
 	getSelectableTripContexts,
 	getSelectedTripContext,
 	getTripBlueprintCreateInput,
@@ -84,6 +85,30 @@ describe("Viya chat modes", () => {
 		expect(commands.map((command) => command.id)).not.toContain("chat");
 		expect(commands.map((command) => command.id)).not.toContain("plan");
 		expect(commands.map((command) => command.id)).not.toContain("ask");
+	});
+
+	test("prioritizes trip-scoped suggestions for the active workspace module", () => {
+		const suggestions = getPromptSuggestions("trip", [], {
+			destination: "Japan",
+			title: "Japan Trip",
+			workspaceTab: "budget",
+		});
+
+		expect(suggestions[0]?.title).toBe("Review this budget");
+		expect(suggestions[0]?.prompt).toContain("Japan Trip");
+		expect(suggestions[0]?.prompt).toContain("booked costs");
+	});
+
+	test("maps readiness workspace suggestions from the legacy checklist tab", () => {
+		const suggestions = getPromptSuggestions("trip", [], {
+			destination: "Japan",
+			title: "Japan Trip",
+			workspaceTab: "checklist",
+		});
+
+		expect(suggestions[0]?.title).toBe("Check this readiness");
+		expect(suggestions[0]?.prompt).toContain("Japan Trip");
+		expect(suggestions[0]?.prompt).toContain("open checklist items");
 	});
 });
 

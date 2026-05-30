@@ -381,16 +381,19 @@ function ComposerTextInput({
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Chat screen coordinates streaming, modes, question docks, and blueprint creation until the flow is split into containers.
 export function ViyaChatScreen() {
 	const router = useRouter();
-	const { fromTab, mode, prompt, returnTo, tripId } = useLocalSearchParams<{
-		fromTab?: string | string[];
-		mode?: string | string[];
-		prompt?: string | string[];
-		returnTo?: string | string[];
-		tripId?: string | string[];
-	}>();
+	const { fromTab, mode, prompt, returnTo, tripId, workspaceTab } =
+		useLocalSearchParams<{
+			fromTab?: string | string[];
+			mode?: string | string[];
+			prompt?: string | string[];
+			returnTo?: string | string[];
+			tripId?: string | string[];
+			workspaceTab?: string | string[];
+		}>();
 	const requestedMode = getSearchParamValue(mode);
 	const routePrompt = getSearchParamValue(prompt) ?? "";
 	const routeTripId = getSearchParamValue(tripId) as Id<"trips"> | undefined;
+	const routeWorkspaceTab = getSearchParamValue(workspaceTab);
 	const isTripModeLocked = Boolean(routeTripId);
 	const insets = useSafeAreaInsets();
 	const { height: windowHeight } = useWindowDimensions();
@@ -445,7 +448,14 @@ export function ViyaChatScreen() {
 	})) satisfies PromptSuggestion[];
 	const promptSuggestions = getPromptSuggestions(
 		chatMode,
-		preferencePromptSuggestions
+		preferencePromptSuggestions,
+		chatMode === "trip" && currentTrip
+			? {
+					destination: currentTrip.destination,
+					title: currentTrip.title,
+					workspaceTab: routeWorkspaceTab,
+				}
+			: undefined
 	);
 	const activeSlashCommand = getActiveSlashCommand(input);
 	const visibleSlashCommands = getVisibleSlashCommands(
@@ -1254,7 +1264,7 @@ export function ViyaChatScreen() {
 										accessibilityLabel="Send message"
 										accessibilityRole="button"
 										accessibilityState={{ disabled: true }}
-										className="h-[38px] w-[38px] items-center justify-center rounded-full"
+										className="h-[38px] w-[38px] items-center justify-center rounded-full bg-default"
 										disabled={true}
 									>
 										<Ionicons color="#A1A1AA" name="arrow-up" size={18} />

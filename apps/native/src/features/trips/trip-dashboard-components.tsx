@@ -812,6 +812,7 @@ export function TripFloatingViyaButton({
 						? `/(app)/trips/${tripId}`
 						: `/(app)/trips/${tripId}/${activeTab}`,
 				tripId: String(tripId),
+				workspaceTab: activeTab,
 			},
 			pathname: VIYA_ROUTES.ai,
 		});

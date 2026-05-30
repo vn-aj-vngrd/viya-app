@@ -97,6 +97,13 @@ const tripBlueprintSectionAliases = new Map<string, TripBlueprintSectionId>([
 ]);
 
 const fallbackTripDestination = "Planned trip";
+const fallbackTripSuggestionLabel = "this trip";
+
+interface TripPromptSuggestionContext {
+	destination?: string | null;
+	title?: string | null;
+	workspaceTab?: string | null;
+}
 
 const getFirstSearchParamValue = (value?: string | string[]) =>
 	Array.isArray(value) ? value[0] : value;
@@ -502,16 +509,140 @@ export const applySlashCommandSelection = ({
 	);
 };
 
+const getTripSuggestionLabel = ({
+	destination,
+	title,
+}: TripPromptSuggestionContext) => {
+	const cleanedTitle = title?.trim();
+
+	if (cleanedTitle) {
+		return cleanedTitle;
+	}
+
+	const cleanedDestination = destination?.trim();
+
+	return cleanedDestination
+		? `${cleanedDestination} trip`
+		: fallbackTripSuggestionLabel;
+};
+
+const getNormalizedWorkspaceTab = (workspaceTab?: string | null) => {
+	if (workspaceTab === "documents") {
+		return "vault";
+	}
+
+	if (workspaceTab === "checklist") {
+		return "readiness";
+	}
+
+	return workspaceTab ?? null;
+};
+
+const tripWorkspaceSuggestionByTab = {
+	budget: ({ tripLabel }: { tripLabel: string }) =>
+		({
+			accent: "#0AA5B5",
+			icon: "wallet-outline",
+			prompt: `Centralize the budget for ${tripLabel}. Show booked costs, manual expenses, remaining spend, daily safe spend, and what needs a receipt or confirmation.`,
+			soft: "rgba(10, 165, 181, 0.12)",
+			summary: "Use this trip's spend, bookings, and receipts.",
+			title: "Review this budget",
+		}) satisfies PromptSuggestion,
+	itinerary: ({ tripLabel }: { tripLabel: string }) =>
+		({
+			accent: "#0A84FF",
+			icon: "calendar-outline",
+			prompt: `Generate or refine the Wanderlog-style itinerary for ${tripLabel}. Use the current trip days, places, meals, transfers, and realistic pacing.`,
+			soft: "rgba(10, 132, 255, 0.12)",
+			summary: "Work from this trip's current route.",
+			title: "Refine this itinerary",
+		}) satisfies PromptSuggestion,
+	overview: ({ tripLabel }: { tripLabel: string }) =>
+		({
+			accent: "#0A84FF",
+			icon: "speedometer-outline",
+			prompt: `Review the current ${tripLabel} workspace. Summarize itinerary, budget, vault, and readiness, then tell me the next best action.`,
+			soft: "rgba(10, 132, 255, 0.12)",
+			summary: "Summarize this trip and pick the next move.",
+			title: "Review this workspace",
+		}) satisfies PromptSuggestion,
+	readiness: ({ tripLabel }: { tripLabel: string }) =>
+		({
+			accent: "#34C759",
+			icon: "shield-checkmark-outline",
+			prompt: `Check readiness for ${tripLabel}. Use the current trip status, itinerary, budget, bookings, vault coverage, and open checklist items to pick what Viya should fix first.`,
+			soft: "rgba(52, 199, 89, 0.12)",
+			summary: "Use this trip's live readiness state.",
+			title: "Check this readiness",
+		}) satisfies PromptSuggestion,
+	vault: ({ tripLabel }: { tripLabel: string }) =>
+		({
+			accent: "#FF9F0A",
+			icon: "folder-open-outline",
+			prompt: `Audit the vault for ${tripLabel}. Identify saved bookings, documents, passport or ID coverage, missing links, and the next upload or link Viya should handle.`,
+			soft: "rgba(255, 159, 10, 0.14)",
+			summary: "Inspect this trip's bookings and documents.",
+			title: "Audit this vault",
+		}) satisfies PromptSuggestion,
+} as const;
+
+const getTripWorkspaceSuggestion = (
+	workspaceTab: string | null,
+	tripLabel: string
+) => {
+	if (!workspaceTab) {
+		return null;
+	}
+
+	return (
+		tripWorkspaceSuggestionByTab[
+			workspaceTab as keyof typeof tripWorkspaceSuggestionByTab
+		]?.({ tripLabel }) ?? null
+	);
+};
+
+const getTripFocusedSuggestions = (
+	context?: TripPromptSuggestionContext
+): readonly PromptSuggestion[] => {
+	const tripLabel = context
+		? getTripSuggestionLabel(context)
+		: fallbackTripSuggestionLabel;
+	const normalizedWorkspaceTab = getNormalizedWorkspaceTab(
+		context?.workspaceTab
+	);
+	const activeSuggestion = getTripWorkspaceSuggestion(
+		normalizedWorkspaceTab,
+		tripLabel
+	);
+	const suggestions = tripPromptSuggestions.map((suggestion) => ({
+		...suggestion,
+		prompt: suggestion.prompt.replaceAll("this trip", tripLabel),
+		summary: suggestion.summary?.replaceAll("this trip", tripLabel),
+	}));
+
+	if (!activeSuggestion) {
+		return suggestions;
+	}
+
+	return [
+		activeSuggestion,
+		...suggestions.filter(
+			(suggestion) => suggestion.title !== activeSuggestion.title
+		),
+	].slice(0, tripPromptSuggestions.length);
+};
+
 export const getPromptSuggestions = (
 	mode: ChatModeId,
-	preferenceSuggestions: PromptSuggestion[]
+	preferenceSuggestions: PromptSuggestion[],
+	tripContext?: TripPromptSuggestionContext
 ) => {
 	if (mode === "plan") {
 		return planPromptSuggestions;
 	}
 
 	if (mode === "trip") {
-		return tripPromptSuggestions;
+		return getTripFocusedSuggestions(tripContext);
 	}
 
 	return preferenceSuggestions.length > 0
