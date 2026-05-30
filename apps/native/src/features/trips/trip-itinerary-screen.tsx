@@ -1006,7 +1006,9 @@ function ItineraryItemCard({
 	].filter(Boolean);
 
 	return (
-		<View className="flex-row gap-3">
+		<View
+			className={`flex-row gap-3 ${isLast ? "" : "border-border border-b pb-2"}`}
+		>
 			<View className="w-11 items-end pt-1">
 				<Text
 					style={{ color: ITINERARY_ACCENT_COLOR }}
@@ -1028,7 +1030,7 @@ function ItineraryItemCard({
 				onToggleComplete={onToggleComplete}
 			/>
 			<View
-				className={`min-w-0 flex-1 gap-1.5 ${isLast ? "pb-1" : "pb-6"}`}
+				className={`min-w-0 flex-1 gap-1.5 ${isLast ? "pb-1" : "pb-4"}`}
 				style={{ opacity: isSkipped ? 0.55 : 1 }}
 			>
 				<View className="flex-row items-start justify-between gap-2">
@@ -1160,11 +1162,8 @@ function ItineraryDaySurface({
 
 function EmptyPlannedDayContent({ onAddStop }: { onAddStop: () => void }) {
 	return (
-		<View className="items-center gap-3 rounded-[24px] bg-surface-secondary px-5 py-7">
-			<View
-				className="h-10 w-10 items-center justify-center rounded-full"
-				style={{ backgroundColor: "rgba(10, 132, 255, 0.1)" }}
-			>
+		<View className="items-center gap-3 py-6">
+			<View className="h-10 w-10 items-center justify-center rounded-full bg-surface-secondary">
 				<Ionicons
 					color={ITINERARY_ACCENT_COLOR}
 					name="time-outline"
@@ -1241,7 +1240,6 @@ function ItineraryPlannedDayContent({
 	onOpenMaps,
 	onToggleComplete,
 	onToggleSkip,
-	pendingDayId,
 	pendingItemId,
 }: {
 	bookingLabelById: Map<string, string>;
@@ -1256,11 +1254,9 @@ function ItineraryPlannedDayContent({
 	onOpenMaps: (item: Doc<"itineraryItems">) => void;
 	onToggleComplete: (item: Doc<"itineraryItems">) => void;
 	onToggleSkip: (item: Doc<"itineraryItems">) => void;
-	pendingDayId: Id<"itineraryDays"> | null;
 	pendingItemId: Id<"itineraryItems"> | null;
 }) {
 	const stopCount = dayItems.length;
-	const isDeletingDay = pendingDayId === day._id;
 
 	return (
 		<View className="gap-4">
@@ -1276,43 +1272,48 @@ function ItineraryPlannedDayContent({
 						</Text>
 					</View>
 					<View className="flex-row items-center gap-2">
-						<Pressable
-							accessibilityLabel="Edit itinerary day"
-							accessibilityRole="button"
-							className="h-10 w-10 items-center justify-center rounded-full bg-surface-secondary"
-							onPress={() => onEditDay(day)}
-							style={({ pressed }) => ({
-								transform: [{ scale: pressed ? 0.94 : 1 }],
-							})}
-						>
-							<Ionicons
-								color={ITINERARY_ACCENT_COLOR}
-								name="create-outline"
-								size={19}
-							/>
-						</Pressable>
-						<Pressable
-							accessibilityLabel="Delete itinerary day"
-							accessibilityRole="button"
-							accessibilityState={{ disabled: isDeletingDay }}
-							className="h-10 w-10 items-center justify-center rounded-full bg-surface-secondary"
-							disabled={isDeletingDay}
-							onPress={() => onDeleteDay(day._id)}
-							style={({ pressed }) => ({
-								opacity: isDeletingDay ? 0.5 : 1,
-								transform: [{ scale: pressed ? 0.94 : 1 }],
-							})}
-						>
-							{isDeletingDay ? (
-								<Spinner size="sm" />
-							) : (
-								<Ionicons
-									color={ITINERARY_DANGER_COLOR}
-									name="trash-outline"
-									size={19}
-								/>
-							)}
-						</Pressable>
+						<Menu>
+							<Menu.Trigger asChild={true}>
+								<Pressable
+									accessibilityLabel="Day options"
+									accessibilityRole="button"
+									className="h-10 w-10 items-center justify-center rounded-full bg-surface-secondary"
+									style={({ pressed }) => ({
+										transform: [{ scale: pressed ? 0.94 : 1 }],
+									})}
+								>
+									<Ionicons
+										color={ITINERARY_MUTED_COLOR}
+										name="ellipsis-horizontal"
+										size={18}
+									/>
+								</Pressable>
+							</Menu.Trigger>
+							<Menu.Portal>
+								<Menu.Overlay />
+								<Menu.Content
+									align="end"
+									className="rounded-[24px] border border-border bg-surface p-2"
+									offset={8}
+									placement="bottom"
+									presentation="popover"
+									width={200}
+								>
+									<ItineraryMenuItem
+										icon="create-outline"
+										label="Edit day"
+										onPress={() => onEditDay(day)}
+									/>
+									<View className="mx-2 my-1 h-px bg-border" />
+									<ItineraryMenuItem
+										icon="trash-outline"
+										label="Delete day"
+										onPress={() => onDeleteDay(day._id)}
+										tone="danger"
+									/>
+								</Menu.Content>
+							</Menu.Portal>
+						</Menu>
 						<Pressable
 							accessibilityLabel="Add itinerary stop"
 							accessibilityRole="button"
@@ -1361,7 +1362,7 @@ function ItineraryPlannedDayContent({
 			{dayItems.length === 0 ? (
 				<EmptyPlannedDayContent onAddStop={onAddStop} />
 			) : (
-				<View className="rounded-[28px] border border-border bg-white p-4">
+				<View>
 					{dayItems.map((item, index) => (
 						<ItineraryItemCard
 							bookingLabel={
@@ -1614,7 +1615,7 @@ export function TripItineraryDayScreen() {
 	const [isItemSheetOpen, setIsItemSheetOpen] = useState(false);
 	const [isSavingDay, setIsSavingDay] = useState(false);
 	const [isSavingItem, setIsSavingItem] = useState(false);
-	const [pendingDayId, setPendingDayId] = useState<Id<"itineraryDays"> | null>(
+	const [_pendingDayId, setPendingDayId] = useState<Id<"itineraryDays"> | null>(
 		null
 	);
 	const [pendingItemId, setPendingItemId] =
@@ -2022,7 +2023,6 @@ export function TripItineraryDayScreen() {
 									item.status === "skipped" ? "planned" : "skipped"
 								).catch(() => undefined);
 							}}
-							pendingDayId={pendingDayId}
 							pendingItemId={pendingItemId}
 						/>
 					) : (
