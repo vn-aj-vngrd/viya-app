@@ -11,6 +11,7 @@ import {
 	CloseButton,
 	Input,
 	Label,
+	Menu,
 	Spinner,
 	Surface,
 	Text,
@@ -18,11 +19,12 @@ import {
 	TextField,
 } from "heroui-native";
 import { useState } from "react";
-import { Linking, ScrollView, View } from "react-native";
+import { Linking, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Container } from "@/components/container";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 import { EmptyState } from "@/src/components/empty-state";
+import { NavigationIconButton } from "@/src/components/navigation/navigation-icon-button";
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 import {
@@ -287,10 +289,7 @@ function SpotlightMomentSummary({
 	return (
 		<View className="gap-3 rounded-[24px] bg-surface p-4">
 			<View className="flex-row items-center gap-3">
-				<View
-					className="h-9 w-9 items-center justify-center rounded-full"
-					style={{ backgroundColor: "rgba(191, 90, 242, 0.14)" }}
-				>
+				<View className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary">
 					<Ionicons
 						color="#BF5AF2"
 						name={
@@ -530,7 +529,17 @@ export function TripMomentsScreen() {
 	const spotlightDayLabel = getDayLabel(itinerary.days, spotlightMoment?.dayId);
 
 	return (
-		<TripModuleScreenFrame activeTab="memories" tripId={tripId}>
+		<TripModuleScreenFrame
+			activeTab="memories"
+			headerAction={
+				<NavigationIconButton
+					accessibilityLabel="Add moment"
+					icon="add"
+					onPress={openCreateSheet}
+				/>
+			}
+			tripId={tripId}
+		>
 			<Container
 				className="px-4 pb-28"
 				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
@@ -554,7 +563,7 @@ export function TripMomentsScreen() {
 						</Text>
 					) : null}
 
-					<Surface className="gap-4 rounded-[30px] bg-surface-secondary p-4">
+					<View className="gap-4 rounded-[30px] bg-surface-secondary p-4">
 						<View className="flex-row items-start justify-between gap-3">
 							<View className="min-w-0 flex-1 gap-1">
 								<Text.Heading type="h5" weight="semibold">
@@ -564,10 +573,7 @@ export function TripMomentsScreen() {
 									Choose the moments that should shape the trip story.
 								</Text>
 							</View>
-							<View
-								className="h-11 w-11 items-center justify-center rounded-full"
-								style={{ backgroundColor: "rgba(191, 90, 242, 0.12)" }}
-							>
+							<View className="h-11 w-11 items-center justify-center rounded-full bg-surface-secondary">
 								<Ionicons color="#BF5AF2" name="images-outline" size={20} />
 							</View>
 						</View>
@@ -601,7 +607,7 @@ export function TripMomentsScreen() {
 							spotlightItineraryHref={spotlightItineraryHref}
 							spotlightMoment={spotlightMoment}
 						/>
-					</Surface>
+					</View>
 
 					{moments.length === 0 ? (
 						<EmptyState
@@ -693,10 +699,7 @@ function MomentCard({
 	return (
 		<Surface className="gap-4 rounded-[28px] border border-border bg-surface p-5">
 			<View className="flex-row items-start gap-3">
-				<View
-					className="h-10 w-10 items-center justify-center rounded-full"
-					style={{ backgroundColor: "rgba(191, 90, 242, 0.12)" }}
-				>
+				<View className="h-10 w-10 items-center justify-center rounded-full bg-surface-secondary">
 					<Ionicons color="#BF5AF2" name="image-outline" size={18} />
 				</View>
 				<View className="min-w-0 flex-1 gap-2">
@@ -722,62 +725,120 @@ function MomentCard({
 						{moment.note || moment.caption}
 					</Text.Paragraph>
 				</View>
-			</View>
-			<View className="flex-row flex-wrap gap-2">
-				{canOpenMaps ? (
-					<Button
-						className="flex-1"
-						isDisabled={isPending}
-						onPress={onOpenMaps}
-						size="sm"
-						variant="secondary"
-					>
-						<Ionicons color="#0A84FF" name="map-outline" size={15} />
-						<Button.Label>Open Maps</Button.Label>
-					</Button>
-				) : null}
-				{itineraryHref ? (
-					<Link asChild href={itineraryHref}>
-						<Button
-							className="flex-1"
-							isDisabled={isPending}
-							size="sm"
-							variant="secondary"
+				<Menu>
+					<Menu.Trigger asChild={true}>
+						<Pressable
+							accessibilityLabel="Moment options"
+							accessibilityRole="button"
+							className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary"
+							style={({ pressed }) => ({
+								transform: [{ scale: pressed ? 0.94 : 1 }],
+							})}
 						>
-							<Ionicons color="#0A84FF" name="calendar-outline" size={15} />
-							<Button.Label>Open itinerary</Button.Label>
-						</Button>
-					</Link>
-				) : null}
-				<Button
-					className="flex-1"
-					isDisabled={isPending}
-					onPress={onToggleHighlight}
-					size="sm"
-					variant="secondary"
-				>
-					<Button.Label>
-						{moment.isHighlight ? "Unhighlight" : "Highlight"}
-					</Button.Label>
-				</Button>
-				<Button
-					className="flex-1"
-					isDisabled={isPending}
-					onPress={onEdit}
-					size="sm"
-					variant="secondary"
-				>
-					<Button.Label>Edit</Button.Label>
-				</Button>
-				<Button
-					className="flex-1"
-					isDisabled={isPending}
-					onPress={onDelete}
-					size="sm"
-					variant="tertiary"
-				>
-					<Button.Label>Delete</Button.Label>
-				</Button>
+							<Ionicons color="#71717A" name="ellipsis-horizontal" size={17} />
+						</Pressable>
+					</Menu.Trigger>
+					<Menu.Portal>
+						<Menu.Overlay />
+						<Menu.Content
+							align="end"
+							className="rounded-[24px] border border-border bg-surface p-2"
+							offset={8}
+							placement="bottom"
+							presentation="popover"
+							width={220}
+						>
+							<Menu.Item
+								accessibilityLabel={
+									moment.isHighlight ? "Remove highlight" : "Mark as highlight"
+								}
+								className="flex-row items-center gap-3 rounded-[18px] p-2.5"
+								isAnimatedStyleActive={false}
+								isDisabled={isPending}
+								onPress={onToggleHighlight}
+							>
+								<View className="h-8 w-8 items-center justify-center rounded-full bg-surface-secondary">
+									<Ionicons
+										color="#BF5AF2"
+										name={moment.isHighlight ? "star-outline" : "star-outline"}
+										size={16}
+									/>
+								</View>
+								<Menu.ItemTitle className="font-semibold text-sm">
+									{moment.isHighlight
+										? "Remove highlight"
+										: "Mark as highlight"}
+								</Menu.ItemTitle>
+							</Menu.Item>
+							{canOpenMaps ? (
+								<Menu.Item
+									accessibilityLabel="Open in Maps"
+									className="flex-row items-center gap-3 rounded-[18px] p-2.5"
+									isAnimatedStyleActive={false}
+									isDisabled={isPending}
+									onPress={onOpenMaps}
+								>
+									<View className="h-8 w-8 items-center justify-center rounded-full bg-surface-secondary">
+										<Ionicons color="#0A84FF" name="map-outline" size={16} />
+									</View>
+									<Menu.ItemTitle className="font-semibold text-sm">
+										Open in Maps
+									</Menu.ItemTitle>
+								</Menu.Item>
+							) : null}
+							{itineraryHref ? (
+								<Link asChild href={itineraryHref}>
+									<Menu.Item
+										accessibilityLabel="Open itinerary"
+										className="flex-row items-center gap-3 rounded-[18px] p-2.5"
+										isAnimatedStyleActive={false}
+										isDisabled={isPending}
+									>
+										<View className="h-8 w-8 items-center justify-center rounded-full bg-surface-secondary">
+											<Ionicons
+												color="#0A84FF"
+												name="calendar-outline"
+												size={16}
+											/>
+										</View>
+										<Menu.ItemTitle className="font-semibold text-sm">
+											Open itinerary
+										</Menu.ItemTitle>
+									</Menu.Item>
+								</Link>
+							) : null}
+							<Menu.Item
+								accessibilityLabel="Edit moment"
+								className="flex-row items-center gap-3 rounded-[18px] p-2.5"
+								isAnimatedStyleActive={false}
+								isDisabled={isPending}
+								onPress={onEdit}
+							>
+								<View className="h-8 w-8 items-center justify-center rounded-full bg-surface-secondary">
+									<Ionicons color="#0A84FF" name="create-outline" size={16} />
+								</View>
+								<Menu.ItemTitle className="font-semibold text-sm">
+									Edit moment
+								</Menu.ItemTitle>
+							</Menu.Item>
+							<View className="mx-2 my-1 h-px bg-border" />
+							<Menu.Item
+								accessibilityLabel="Delete moment"
+								className="flex-row items-center gap-3 rounded-[18px] p-2.5"
+								isAnimatedStyleActive={false}
+								isDisabled={isPending}
+								onPress={onDelete}
+							>
+								<View className="h-8 w-8 items-center justify-center rounded-full bg-danger/10">
+									<Ionicons color="#FF3B30" name="trash-outline" size={16} />
+								</View>
+								<Menu.ItemTitle className="font-semibold text-danger text-sm">
+									Delete moment
+								</Menu.ItemTitle>
+							</Menu.Item>
+						</Menu.Content>
+					</Menu.Portal>
+				</Menu>
 			</View>
 		</Surface>
 	);
