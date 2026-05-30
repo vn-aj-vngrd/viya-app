@@ -10,6 +10,7 @@ import {
 	CloseButton,
 	Input,
 	Label,
+	Menu,
 	Spinner,
 	Surface,
 	Text,
@@ -17,11 +18,12 @@ import {
 	TextField,
 } from "heroui-native";
 import { useState } from "react";
-import { ScrollView, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Container } from "@/components/container";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 import { EmptyState } from "@/src/components/empty-state";
+import { NavigationIconButton } from "@/src/components/navigation/navigation-icon-button";
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 import { TripModuleScreenFrame } from "./trip-module-floating-bar";
@@ -373,48 +375,87 @@ function NoteCard({
 }) {
 	return (
 		<Surface className="gap-3 rounded-[28px] border border-border bg-surface p-5">
-			<View className="flex-row flex-wrap gap-2">
-				<Chip size="sm" variant="secondary">
-					<Chip.Label>{formatNoteCategoryLabel(note.category)}</Chip.Label>
-				</Chip>
-				{relatedEntityLabel ? (
-					<Chip size="sm" variant="secondary">
-						<Chip.Label>{relatedEntityLabel}</Chip.Label>
-					</Chip>
-				) : null}
-			</View>
-			<Text type="body" weight="bold">
-				{note.title}
-			</Text>
-			<Text.Paragraph color="muted" type="body-sm">
-				{note.body}
-			</Text.Paragraph>
-			<View className="flex-row flex-wrap gap-2">
-				{relatedEntityHref ? (
-					<Link asChild href={relatedEntityHref}>
-						<Button className="flex-1" size="sm" variant="secondary">
-							<Ionicons color="#0A84FF" name="open-outline" size={15} />
-							<Button.Label>Open linked item</Button.Label>
-						</Button>
-					</Link>
-				) : null}
-				<Button
-					className="flex-1"
-					onPress={onEdit}
-					size="sm"
-					variant="secondary"
-				>
-					<Button.Label>Edit</Button.Label>
-				</Button>
-				<Button
-					className="flex-1"
-					isDisabled={isPending}
-					onPress={onDelete}
-					size="sm"
-					variant="tertiary"
-				>
-					<Button.Label>Delete</Button.Label>
-				</Button>
+			<View className="flex-row items-start gap-3">
+				<View className="min-w-0 flex-1 gap-3">
+					<View className="flex-row flex-wrap gap-2">
+						<Chip size="sm" variant="secondary">
+							<Chip.Label>{formatNoteCategoryLabel(note.category)}</Chip.Label>
+						</Chip>
+						{relatedEntityLabel ? (
+							<Chip size="sm" variant="secondary">
+								<Chip.Label>{relatedEntityLabel}</Chip.Label>
+							</Chip>
+						) : null}
+					</View>
+					<Text type="body" weight="bold">
+						{note.title}
+					</Text>
+					<Text.Paragraph color="muted" type="body-sm">
+						{note.body}
+					</Text.Paragraph>
+					{relatedEntityHref ? (
+						<Link asChild href={relatedEntityHref}>
+							<Button className="self-start" size="sm" variant="secondary">
+								<Ionicons color="#0A84FF" name="open-outline" size={15} />
+								<Button.Label>Open linked item</Button.Label>
+							</Button>
+						</Link>
+					) : null}
+				</View>
+				<Menu>
+					<Menu.Trigger asChild={true}>
+						<Pressable
+							accessibilityLabel="Note options"
+							accessibilityRole="button"
+							className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary"
+							style={({ pressed }) => ({
+								transform: [{ scale: pressed ? 0.94 : 1 }],
+							})}
+						>
+							<Ionicons color="#71717A" name="ellipsis-horizontal" size={17} />
+						</Pressable>
+					</Menu.Trigger>
+					<Menu.Portal>
+						<Menu.Overlay />
+						<Menu.Content
+							align="end"
+							className="rounded-[24px] border border-border bg-surface p-2"
+							offset={8}
+							placement="bottom"
+							presentation="popover"
+							width={200}
+						>
+							<Menu.Item
+								accessibilityLabel="Edit note"
+								className="flex-row items-center gap-3 rounded-[18px] p-2.5"
+								isAnimatedStyleActive={false}
+								onPress={onEdit}
+							>
+								<View className="h-8 w-8 items-center justify-center rounded-full bg-surface-secondary">
+									<Ionicons color="#0A84FF" name="create-outline" size={16} />
+								</View>
+								<Menu.ItemTitle className="font-semibold text-sm">
+									Edit note
+								</Menu.ItemTitle>
+							</Menu.Item>
+							<View className="mx-2 my-1 h-px bg-border" />
+							<Menu.Item
+								accessibilityLabel="Delete note"
+								className="flex-row items-center gap-3 rounded-[18px] p-2.5"
+								isAnimatedStyleActive={false}
+								isDisabled={isPending}
+								onPress={onDelete}
+							>
+								<View className="h-8 w-8 items-center justify-center rounded-full bg-danger/10">
+									<Ionicons color="#FF3B30" name="trash-outline" size={16} />
+								</View>
+								<Menu.ItemTitle className="font-semibold text-danger text-sm">
+									Delete note
+								</Menu.ItemTitle>
+							</Menu.Item>
+						</Menu.Content>
+					</Menu.Portal>
+				</Menu>
 			</View>
 		</Surface>
 	);
@@ -569,7 +610,17 @@ export function TripNotesScreen() {
 		: null;
 
 	return (
-		<TripModuleScreenFrame activeTab="notes" tripId={tripId}>
+		<TripModuleScreenFrame
+			activeTab="notes"
+			headerAction={
+				<NavigationIconButton
+					accessibilityLabel="Add trip note"
+					icon="add"
+					onPress={openCreateSheet}
+				/>
+			}
+			tripId={tripId}
+		>
 			<Container
 				className="px-4 pb-28"
 				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
@@ -583,7 +634,7 @@ export function TripNotesScreen() {
 						primaryActionLabel="Add note"
 					/>
 
-					<Surface className="gap-4 rounded-[30px] bg-surface-secondary p-4">
+					<View className="gap-4 rounded-[30px] bg-surface-secondary p-4">
 						<View className="flex-row items-start justify-between gap-3">
 							<View className="min-w-0 flex-1 gap-1">
 								<Text.Heading type="h5" weight="semibold">
@@ -593,10 +644,7 @@ export function TripNotesScreen() {
 									Keep decisions, constraints, and reminders close to planning.
 								</Text>
 							</View>
-							<View
-								className="h-11 w-11 items-center justify-center rounded-full"
-								style={{ backgroundColor: "rgba(255, 149, 0, 0.12)" }}
-							>
+							<View className="h-11 w-11 items-center justify-center rounded-full bg-surface-secondary">
 								<Ionicons
 									color="#FF9500"
 									name="document-text-outline"
@@ -620,10 +668,7 @@ export function TripNotesScreen() {
 						</View>
 						<View className="gap-3 rounded-[24px] bg-surface p-4">
 							<View className="flex-row items-center gap-3">
-								<View
-									className="h-9 w-9 items-center justify-center rounded-full"
-									style={{ backgroundColor: "rgba(255, 149, 0, 0.14)" }}
-								>
+								<View className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary">
 									<Ionicons color="#FF9500" name="bookmark-outline" size={18} />
 								</View>
 								<View className="min-w-0 flex-1 gap-1">
@@ -698,7 +743,7 @@ export function TripNotesScreen() {
 								</Button>
 							)}
 						</View>
-					</Surface>
+					</View>
 
 					{notes.length === 0 ? (
 						<EmptyState
