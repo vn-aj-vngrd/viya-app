@@ -973,7 +973,7 @@ export function TripHero({ model }: { model: TripDashboardModel }) {
 					</View>
 				</View>
 			</View>
-			<View className="flex-row items-stretch gap-4 border-border border-t pt-4">
+			<View className="flex-row items-stretch gap-4 pt-4">
 				<Link asChild href={VIYA_ROUTES.tripReadiness(model.tripId)}>
 					<Pressable
 						accessibilityLabel="View readiness details"
@@ -1143,10 +1143,7 @@ function ModuleLauncherBadge({
 	}
 
 	return (
-		<View
-			className="min-w-0 max-w-28 shrink items-center rounded-full px-2 py-1"
-			style={{ backgroundColor: accent.bg }}
-		>
+		<View className="min-w-0 max-w-28 shrink items-center rounded-full border border-border bg-white px-2 py-1">
 			<Text
 				numberOfLines={1}
 				style={{ color: accent.color }}
@@ -1194,10 +1191,7 @@ function ModuleLauncherTile({
 				}}
 			>
 				<View className="flex-row items-center justify-between gap-2">
-					<View
-						className="h-9 w-9 items-center justify-center rounded-2xl"
-						style={{ backgroundColor: accent.bg }}
-					>
+					<View className="h-9 w-9 items-center justify-center rounded-2xl bg-surface-secondary">
 						<Ionicons color={accent.color} name={item.icon} size={18} />
 					</View>
 					<ModuleLauncherBadge
@@ -1412,16 +1406,10 @@ function WorkspaceModuleTile({ item }: { item: TripWorkspaceModule }) {
 					style={{ borderColor, borderWidth: 1 }}
 				>
 					<View className="min-w-0 flex-row items-center justify-between gap-2">
-						<View
-							className="h-9 w-9 shrink-0 items-center justify-center rounded-2xl"
-							style={{ backgroundColor: accent.bg }}
-						>
+						<View className="h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-surface-secondary">
 							<Ionicons color={accent.color} name={item.icon} size={18} />
 						</View>
-						<View
-							className="min-w-0 max-w-28 shrink rounded-full px-2.5 py-1"
-							style={{ backgroundColor: accent.bg }}
-						>
+						<View className="min-w-0 max-w-28 shrink rounded-full border border-border bg-white px-2.5 py-1">
 							<Text
 								numberOfLines={1}
 								style={{ color: accent.color }}
