@@ -426,9 +426,9 @@ export function Section({
 	title: string;
 }) {
 	return (
-		<View className="gap-3 border-border border-t py-4">
+		<View className="gap-3 py-2">
 			<View className="flex-row items-center gap-2">
-				{icon ? <Ionicons color={accentColor} name={icon} size={18} /> : null}
+				{icon ? <Ionicons color={mutedColor} name={icon} size={18} /> : null}
 				<Text.Heading type="h5" weight="semibold">
 					{title}
 				</Text.Heading>
@@ -1662,7 +1662,7 @@ export function InfoRow({
 	right?: string;
 }) {
 	return (
-		<View className="flex-row items-center gap-3 border-border border-t py-3">
+		<View className="flex-row items-center gap-3 py-2">
 			{icon ? <Ionicons color={accentColor} name={icon} size={18} /> : null}
 			<View className="min-w-0 flex-1">
 				<Text numberOfLines={1} type="body-sm" weight="semibold">
