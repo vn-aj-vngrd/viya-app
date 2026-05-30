@@ -296,6 +296,32 @@ const getPaceFromItems = (items: string[]) => {
 	return "moderate";
 };
 
+const getGroupTypeFromItems = (items: string[]) => {
+	const text = items.join(" ").toLowerCase();
+
+	if (text.includes("family")) {
+		return "family";
+	}
+
+	if (text.includes("friend")) {
+		return "friends";
+	}
+
+	if (text.includes("work") || text.includes("business")) {
+		return "work";
+	}
+
+	if (
+		text.includes("couple") ||
+		text.includes("partner") ||
+		text.includes("2")
+	) {
+		return "couple";
+	}
+
+	return "solo";
+};
+
 const getItineraryPaceFromTripPace = (pace: string) => {
 	if (pace === "fast") {
 		return "packed";
@@ -1110,7 +1136,9 @@ export const createTripFromBlueprint = mutation({
 		destination: v.string(),
 		route: blueprintItemsValidator,
 		dates: blueprintItemsValidator,
+		travelers: v.optional(blueprintItemsValidator),
 		budgetAllocation: blueprintItemsValidator,
+		pace: v.optional(blueprintItemsValidator),
 		itineraryStyle: blueprintItemsValidator,
 		bookingTargets: blueprintItemsValidator,
 		requirements: blueprintItemsValidator,
@@ -1124,8 +1152,10 @@ export const createTripFromBlueprint = mutation({
 		const now = Date.now();
 		const { endDate, startDate } = getDateRangeFromItems(args.dates);
 		const budgetAmount = getBudgetAmountFromItems(args.budgetAllocation);
+		const travelers = getLimitedItems(args.travelers ?? []);
+		const paceItems = getLimitedItems(args.pace ?? []);
 		const itinerarySummary = joinItems(
-			args.itineraryStyle,
+			[...args.itineraryStyle, ...paceItems],
 			"Planning blueprint created with Viya."
 		);
 		const routeSummary = joinItems(args.route, args.destination);
@@ -1137,7 +1167,9 @@ export const createTripFromBlueprint = mutation({
 			0,
 			maxBlueprintItems
 		);
-		const tripPace = getPaceFromItems(args.itineraryStyle);
+		const tripPace = getPaceFromItems([...paceItems, ...args.itineraryStyle]);
+		const groupType = getGroupTypeFromItems(travelers);
+		const travelerSummary = joinItems(travelers, "Solo traveler.");
 		const tripId = await ctx.db.insert("trips", {
 			arrivalTime: undefined,
 			budgetAmount,
@@ -1147,16 +1179,19 @@ export const createTripFromBlueprint = mutation({
 			departureTime: undefined,
 			destination: args.destination,
 			endDate,
-			groupType: "solo",
+			groupType,
 			isDemo: false,
 			ownerId: identity.subject,
 			pace: tripPace,
 			readinessScore: 0,
 			startDate,
 			status: "planning",
-			summary: `${routeSummary}. ${itinerarySummary}`,
+			summary: `${routeSummary}. ${travelerSummary}. ${itinerarySummary}`,
 			title: args.title,
-			travelStyle: getTravelStyleFromItems(args.itineraryStyle),
+			travelStyle: getTravelStyleFromItems([
+				...args.itineraryStyle,
+				...paceItems,
+			]),
 			updatedAt: now,
 		});
 

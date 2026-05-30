@@ -4,8 +4,10 @@ import type { MenuKey } from "heroui-native";
 import type { StyleProp, ViewStyle } from "react-native";
 
 import {
+	ALL_CHAT_MODE_OPTIONS,
 	activeThreadsStorageKey,
 	CHAT_MODE_OPTIONS,
+	chatPromptSuggestions,
 	planPromptSuggestions,
 	returnTabRoutes,
 	rgbColorPattern,
@@ -44,7 +46,9 @@ const tripBlueprintSectionOrder = [
 	"destination",
 	"route",
 	"dates",
+	"travelers",
 	"budget",
+	"pace",
 	"itineraryStyle",
 	"bookingTargets",
 	"requirements",
@@ -59,9 +63,11 @@ const tripBlueprintSectionLabels = {
 	destination: "Destination",
 	itineraryStyle: "Itinerary style",
 	nextActions: "Next actions",
+	pace: "Pace",
 	requirements: "Requirements",
 	risks: "Risks",
 	route: "Route",
+	travelers: "Travelers",
 } as const satisfies Record<TripBlueprintSectionId, string>;
 
 const tripBlueprintSectionAliases = new Map<string, TripBlueprintSectionId>([
@@ -78,10 +84,16 @@ const tripBlueprintSectionAliases = new Map<string, TripBlueprintSectionId>([
 	["itinerary style", "itineraryStyle"],
 	["next action", "nextActions"],
 	["next actions", "nextActions"],
+	["pace", "pace"],
+	["pacing", "pace"],
 	["requirements", "requirements"],
 	["route", "route"],
 	["risks", "risks"],
 	["style", "itineraryStyle"],
+	["traveler", "travelers"],
+	["travelers", "travelers"],
+	["travellers", "travelers"],
+	["travel party", "travelers"],
 ]);
 
 const fallbackTripDestination = "Planned trip";
@@ -113,8 +125,20 @@ export const getViyaBackRoute = ({
 	return returnTabRoutes.index;
 };
 
+export const shouldPopViyaBackRoute = ({
+	canGoBack,
+	returnTo,
+}: {
+	canGoBack: boolean;
+	returnTo?: string | string[];
+}) => {
+	const launchRoute = getFirstSearchParamValue(returnTo);
+
+	return Boolean(canGoBack && launchRoute && isAppReturnRoute(launchRoute));
+};
+
 export const getDraftTripBlueprintPrompt = () =>
-	"Generate a Trip Blueprint now using the planning details we have. Make sensible assumptions for missing fields and clearly mark anything that needs confirmation.";
+	"Generate a Trip Blueprint now using the manual trip setup fields: destination, route, dates, travelers, budget, pace, itinerary style, booking targets, requirements, risks, and next actions. Make sensible assumptions for missing fields and clearly mark anything that needs confirmation.";
 
 export const isCurrentChatRequest = ({
 	activeSessionId,
@@ -152,7 +176,7 @@ export const getUserBubbleStyle = (primaryColor: string) =>
 	}) satisfies StyleProp<ViewStyle>;
 
 export const getChatModeOption = (mode: ChatModeId) =>
-	CHAT_MODE_OPTIONS.find((option) => option.id === mode) ??
+	ALL_CHAT_MODE_OPTIONS.find((option) => option.id === mode) ??
 	CHAT_MODE_OPTIONS[0];
 
 export const isChatModeId = (value: MenuKey): value is ChatModeId =>
@@ -209,10 +233,16 @@ const getSlashCommandMatches = (query: string) => {
 };
 
 export const getVisibleSlashCommands = (
-	activeSlashCommand: ActiveSlashCommand | null
+	activeSlashCommand: ActiveSlashCommand | null,
+	lockedMode?: ChatModeId
 ) =>
 	activeSlashCommand
-		? getSlashCommandMatches(activeSlashCommand.query).slice(0, 7)
+		? getSlashCommandMatches(activeSlashCommand.query)
+				.filter(
+					(command) =>
+						!(lockedMode && command.mode) || command.mode === lockedMode
+				)
+				.slice(0, 7)
 		: [];
 
 export const getMessageQueryArgs = (threadId: string | null) =>
@@ -342,11 +372,11 @@ export const getTripBlueprintActionPrompt = (
 
 	const actionInstructions = {
 		adjustItinerary:
-			"Refine this Trip Blueprint with a clearer route and itinerary style. Keep timing, rest, and transfers realistic.",
+			"Refine this Trip Blueprint with a clearer route, pace, and itinerary style. Keep timing, rest, and transfers realistic.",
 		refineBudget:
 			"Refine this Trip Blueprint with a clearer budget allocation and trade-offs. Keep the same destination and dates unless I say otherwise.",
 		reviewRisks:
-			"Pressure-test this Trip Blueprint. Tighten the requirements, risks, backup moves, and next actions.",
+			"Pressure-test this Trip Blueprint. Tighten the traveler assumptions, requirements, risks, backup moves, and next actions.",
 	} as const satisfies Record<TripBlueprintAction, string>;
 
 	return `${actionInstructions[action]}\n\nCurrent blueprint:\n${blueprintSummary}`;
@@ -372,10 +402,12 @@ export const getTripBlueprintCreateInput = (
 		destination,
 		itineraryStyle: getBlueprintSectionItems(blueprint, "itineraryStyle"),
 		nextActions: getBlueprintSectionItems(blueprint, "nextActions"),
+		pace: getBlueprintSectionItems(blueprint, "pace"),
 		requirements: getBlueprintSectionItems(blueprint, "requirements"),
 		risks: getBlueprintSectionItems(blueprint, "risks"),
 		route: getBlueprintSectionItems(blueprint, "route"),
 		title: `${destination} Trip`,
+		travelers: getBlueprintSectionItems(blueprint, "travelers"),
 	};
 };
 
@@ -482,7 +514,9 @@ export const getPromptSuggestions = (
 		return tripPromptSuggestions;
 	}
 
-	return preferenceSuggestions;
+	return preferenceSuggestions.length > 0
+		? preferenceSuggestions
+		: chatPromptSuggestions;
 };
 
 const isThreadIdsByContext = (value: unknown): value is ThreadIdsByContext => {

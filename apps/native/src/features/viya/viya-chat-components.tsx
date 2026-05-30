@@ -88,8 +88,9 @@ const isTravelDateQuestion = (question: string) =>
 const blueprintSnapshotSectionIds = [
 	"destination",
 	"dates",
+	"travelers",
 	"budget",
-	"itineraryStyle",
+	"pace",
 ] as const;
 
 const blueprintActionItems = [
@@ -191,6 +192,7 @@ function TypingBubble() {
 export function ChatModeSelector({
 	currentTripId,
 	isOpen,
+	isLocked = false,
 	onOpenChange,
 	onSelect,
 	selectedMode,
@@ -198,6 +200,7 @@ export function ChatModeSelector({
 }: {
 	currentTripId: Id<"trips"> | null;
 	isOpen: boolean;
+	isLocked?: boolean;
 	onOpenChange: (isOpen: boolean) => void;
 	onSelect: (mode: ChatModeId) => void;
 	selectedMode: ChatModeId;
@@ -220,12 +223,21 @@ export function ChatModeSelector({
 	};
 
 	return (
-		<Menu isOpen={isOpen} onOpenChange={onOpenChange}>
+		<Menu
+			isOpen={isLocked ? false : isOpen}
+			onOpenChange={(nextIsOpen) => {
+				if (!isLocked) {
+					onOpenChange(nextIsOpen);
+				}
+			}}
+		>
 			<Menu.Trigger asChild={true}>
 				<Pressable
 					accessibilityLabel="Choose chat mode"
 					accessibilityRole="button"
+					accessibilityState={{ disabled: isLocked }}
 					className="h-12 flex-row items-center gap-2 rounded-full border border-border bg-surface px-4"
+					disabled={isLocked}
 				>
 					<Ionicons
 						color={selectedOption.accent}
@@ -239,11 +251,13 @@ export function ChatModeSelector({
 					>
 						{selectedOption.label}
 					</Text>
-					<Ionicons
-						color={selectedOption.accent}
-						name="chevron-down"
-						size={14}
-					/>
+					{isLocked ? null : (
+						<Ionicons
+							color={selectedOption.accent}
+							name="chevron-down"
+							size={14}
+						/>
+					)}
 				</Pressable>
 			</Menu.Trigger>
 			<Menu.Portal>
@@ -446,6 +460,7 @@ export function HeaderActionGroup({
 }
 
 export function ChatHistorySheet({
+	chatMode,
 	currentThreadId,
 	currentTripId,
 	history,
@@ -453,6 +468,7 @@ export function ChatHistorySheet({
 	onOpenChange,
 	onSelect,
 }: {
+	chatMode: ChatModeId;
 	currentThreadId: string | null;
 	currentTripId: Id<"trips"> | null;
 	history: readonly ChatHistoryItem[] | undefined;
@@ -463,6 +479,16 @@ export function ChatHistorySheet({
 	const insets = useSafeAreaInsets();
 	const hasLoaded = history !== undefined;
 	const hasHistory = Boolean(history?.length);
+	const isTripScopedHistory = chatMode === "trip" && Boolean(currentTripId);
+	const historyDescription = isTripScopedHistory
+		? "Reopen a previous Viya conversation for this trip."
+		: "Reopen a previous Viya conversation.";
+	const emptyHistoryDescription = hasLoaded
+		? "Your conversations will appear here after you send a message."
+		: "Fetching your saved conversations.";
+	const tripScopedEmptyHistoryDescription = hasLoaded
+		? "Trip conversations will appear here after you send a message in this trip."
+		: "Fetching your saved conversations.";
 
 	return (
 		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
@@ -479,7 +505,7 @@ export function ChatHistorySheet({
 						<View className="gap-1">
 							<BottomSheet.Title>Chat history</BottomSheet.Title>
 							<BottomSheet.Description>
-								Reopen a previous Viya conversation.
+								{historyDescription}
 							</BottomSheet.Description>
 						</View>
 
@@ -564,9 +590,9 @@ export function ChatHistorySheet({
 									{hasLoaded ? "No history yet" : "Loading history"}
 								</Text>
 								<Text align="center" color="muted" type="body-xs">
-									{hasLoaded
-										? "Your conversations will appear here after you send a message."
-										: "Fetching your saved conversations."}
+									{isTripScopedHistory
+										? tripScopedEmptyHistoryDescription
+										: emptyHistoryDescription}
 								</Text>
 							</View>
 						)}
@@ -910,7 +936,7 @@ export function DraftBlueprintShortcut({
 
 	return (
 		<Pressable
-			accessibilityLabel="Draft blueprint now"
+			accessibilityLabel="Generate trip setup now"
 			accessibilityRole="button"
 			className="min-h-10 flex-row items-center gap-1.5 self-start rounded-full border border-secondary/30 bg-secondary/10 px-3 py-1.5"
 			disabled={isDisabled}
@@ -922,7 +948,7 @@ export function DraftBlueprintShortcut({
 		>
 			<Ionicons color={primaryColor} name="sparkles-outline" size={13} />
 			<Text style={{ color: primaryColor }} type="body-xs" weight="semibold">
-				Draft blueprint now
+				Generate trip setup
 			</Text>
 		</Pressable>
 	);
@@ -1120,7 +1146,7 @@ function TripBlueprintReviewCard({
 						type="body-xs"
 						weight="semibold"
 					>
-						DRAFT BLUEPRINT
+						AI TRIP SETUP
 					</Text>
 					<Text type="body" weight="bold">
 						{blueprint.title}
@@ -1145,7 +1171,8 @@ function TripBlueprintReviewCard({
 					size={16}
 				/>
 				<Text.Paragraph className="flex-1" color="muted" type="body-xs">
-					Uses assumptions. Missing details can be refined later.
+					Matches manual setup fields. Assumptions can be refined before
+					booking.
 				</Text.Paragraph>
 			</View>
 
@@ -1154,7 +1181,7 @@ function TripBlueprintReviewCard({
 			) : null}
 
 			<Pressable
-				accessibilityLabel="Create planning trip from blueprint"
+				accessibilityLabel="Create trip from AI setup"
 				accessibilityRole="button"
 				className="min-h-12 flex-row items-center justify-center gap-2 rounded-full px-4 py-3"
 				disabled={isCreatingTripFromBlueprint}
@@ -1169,9 +1196,7 @@ function TripBlueprintReviewCard({
 			>
 				<Ionicons color="#FFFFFF" name="checkmark-circle-outline" size={17} />
 				<Text className="text-white" type="body-sm" weight="bold">
-					{isCreatingTripFromBlueprint
-						? "Creating planning trip"
-						: "Create planning trip"}
+					{isCreatingTripFromBlueprint ? "Creating trip" : "Create trip"}
 				</Text>
 			</Pressable>
 

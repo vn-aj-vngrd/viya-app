@@ -4,7 +4,7 @@ import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
 import type { ComponentProps } from "react";
 
 export type SuggestionIconName = ComponentProps<typeof Ionicons>["name"];
-export type ChatModeId = "plan" | "trip";
+export type ChatModeId = "chat" | "plan" | "trip";
 export type ThreadIdsByContext = Record<string, string>;
 export type UiChatMessages = NonNullable<
 	ReturnType<typeof useUIMessages>["results"]
@@ -99,7 +99,9 @@ export type TripBlueprintSectionId =
 	| "destination"
 	| "route"
 	| "dates"
+	| "travelers"
 	| "budget"
+	| "pace"
 	| "itineraryStyle"
 	| "bookingTargets"
 	| "requirements"
@@ -125,10 +127,12 @@ export interface TripBlueprintCreateInput {
 	destination: string;
 	itineraryStyle: string[];
 	nextActions: string[];
+	pace: string[];
 	requirements: string[];
 	risks: string[];
 	route: string[];
 	title: string;
+	travelers: string[];
 }
 
 export type TripBlueprintAction =

@@ -10,6 +10,7 @@ import {
 	getSelectableTripContexts,
 	getSelectedTripContext,
 	getTripBlueprintCreateInput,
+	getVisibleSlashCommands,
 } from "./viya-chat-utils";
 
 describe("getComposerInputLayout", () => {
@@ -63,22 +64,37 @@ describe("getComposerInputLayout", () => {
 });
 
 describe("Viya chat modes", () => {
-	test("exposes only plan and trip modes", () => {
+	test("exposes chat and planning in the general mode selector", () => {
 		expect(CHAT_MODE_OPTIONS.map((option) => option.id)).toEqual([
+			"chat",
 			"plan",
-			"trip",
 		]);
-		expect(SLASH_COMMAND_OPTIONS.map((option) => option.id)).not.toContain(
-			"chat"
+		expect(SLASH_COMMAND_OPTIONS.map((option) => option.id)).toContain("chat");
+	});
+
+	test("hides planning slash commands when trip mode is locked", () => {
+		const commands = getVisibleSlashCommands(
+			{ endIndex: 1, query: "", startIndex: 0 },
+			"trip"
 		);
+
+		expect(commands.map((command) => command.id)).toContain("vault");
+		expect(commands.map((command) => command.id)).toContain("budget");
+		expect(commands.map((command) => command.id)).toContain("new");
+		expect(commands.map((command) => command.id)).not.toContain("chat");
+		expect(commands.map((command) => command.id)).not.toContain("plan");
+		expect(commands.map((command) => command.id)).not.toContain("ask");
 	});
 });
 
 describe("draft blueprint fast path", () => {
-	test("asks Viya to generate a blueprint now with clear assumptions", () => {
+	test("asks Viya to generate a manual-style setup with clear assumptions", () => {
 		expect(getDraftTripBlueprintPrompt()).toContain(
 			"Generate a Trip Blueprint now"
 		);
+		expect(getDraftTripBlueprintPrompt()).toContain("manual trip setup fields");
+		expect(getDraftTripBlueprintPrompt()).toContain("travelers");
+		expect(getDraftTripBlueprintPrompt()).toContain("pace");
 		expect(getDraftTripBlueprintPrompt()).toContain("sensible assumptions");
 		expect(getDraftTripBlueprintPrompt()).toContain("needs confirmation");
 	});
@@ -118,8 +134,12 @@ test("extracts the lifecycle Trip Blueprint sections", () => {
 - Manila -> Puerto Princesa -> El Nido
 ### Dates
 - 2026-07-10 to 2026-07-14
+### Travelers
+- Couple, 2 travelers
 ### Budget allocation
 - PHP 25000 total
+### Pace
+- Balanced
 ### Itinerary style
 - Balanced beach trip
 ### Booking targets
@@ -136,7 +156,9 @@ test("extracts the lifecycle Trip Blueprint sections", () => {
 		"destination",
 		"route",
 		"dates",
+		"travelers",
 		"budget",
+		"pace",
 		"itineraryStyle",
 		"bookingTargets",
 		"requirements",
@@ -146,5 +168,9 @@ test("extracts the lifecycle Trip Blueprint sections", () => {
 	if (!blueprint) {
 		throw new Error("Expected Trip Blueprint to parse.");
 	}
-	expect(getTripBlueprintCreateInput(blueprint).destination).toBe("El Nido");
+	const input = getTripBlueprintCreateInput(blueprint);
+
+	expect(input.destination).toBe("El Nido");
+	expect(input.travelers).toEqual(["Couple, 2 travelers"]);
+	expect(input.pace).toEqual(["Balanced"]);
 });

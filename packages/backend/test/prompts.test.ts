@@ -22,12 +22,23 @@ const tripBlueprintPattern = /## Trip Blueprint/i;
 const budgetAllocationPattern = /### Budget allocation/i;
 const bookingTargetsPattern = /### Booking targets/i;
 const nextActionsPattern = /### Next actions/i;
+const travelersPattern = /### Travelers/i;
+const pacePattern = /### Pace/i;
+const manualTripSetupPattern = /manual trip setup/i;
 const blueprintNowPattern = /Generate a Trip Blueprint now/i;
 const assumptionPattern = /assumptions/i;
 const needsConfirmationPattern = /needs confirmation/i;
 const oneQuestionPattern = /Ask at most one direct question/i;
 const noSelfAnswerPattern = /do not answer the question yourself/i;
 const noLaterIntakeQuestionPattern = /Never include Question N\+1/i;
+const workspaceAgentPattern = /travel workspace agent/i;
+const itineraryBudgetVaultReadinessPattern =
+	/Itinerary, Budget, Vault, and Readiness/i;
+const wanderlogPattern = /Wanderlog-style/i;
+const centralizedBudgetPattern = /Budget is centralized/i;
+const vaultBookingsDocumentsPattern = /Vault contains Bookings and Documents/i;
+const readinessCurrentStatusPattern =
+	/Readiness is based on current trip status/i;
 const preferenceContext = [
 	"Traveler preference context:",
 	"- Travel style: relaxed",
@@ -38,6 +49,8 @@ const preferenceContextPattern = /Traveler preference context:/i;
 const relaxedStylePattern = /Travel style: relaxed/i;
 const tripContext = "Current trip: Palawan family beach trip.";
 const tripContextPattern = /Current trip: Palawan family beach trip/i;
+const chatModePattern = /Mode: Chat/i;
+const fileExtractionContextPattern = /uploaded or pasted file extraction text/i;
 const budgetSuggestionModePattern = /Mode: Budget suggestion/i;
 const budgetSuggestionAmountPattern = /Heuristic budget estimate: PHP 19000/i;
 const budgetSuggestionCurrencyPattern = /Return one PHP budget amount/i;
@@ -45,6 +58,7 @@ const budgetSuggestionCurrencyPattern = /Return one PHP budget amount/i;
 describe("Viya prompt guardrails", () => {
 	it("keeps the base agent focused on travel only", () => {
 		assert.match(VIYA_SYSTEM_PROMPT, travelGuidePattern);
+		assert.match(VIYA_SYSTEM_PROMPT, workspaceAgentPattern);
 		assert.match(VIYA_SYSTEM_PROMPT, travelOnlyPattern);
 		assert.match(VIYA_SYSTEM_PROMPT, declinePattern);
 		assert.match(VIYA_SYSTEM_PROMPT, offTopicPattern);
@@ -64,11 +78,28 @@ describe("Viya prompt guardrails", () => {
 		assert.match(prompt, offTopicPattern);
 	});
 
+	it("supports general chat mode with file extraction context", () => {
+		const prompt = buildChatModeSystemPrompt("chat");
+
+		assert.match(prompt, chatModePattern);
+		assert.match(prompt, fileExtractionContextPattern);
+	});
+
 	it("limits every assistant response to one question", () => {
 		const prompt = buildChatModeSystemPrompt("trip");
 
 		assert.match(prompt, oneQuestionPattern);
 		assert.match(prompt, noSelfAnswerPattern);
+	});
+
+	it("frames trip mode as an agent over the simplified workspace", () => {
+		const prompt = buildChatModeSystemPrompt("trip");
+
+		assert.match(prompt, itineraryBudgetVaultReadinessPattern);
+		assert.match(prompt, wanderlogPattern);
+		assert.match(prompt, centralizedBudgetPattern);
+		assert.match(prompt, vaultBookingsDocumentsPattern);
+		assert.match(prompt, readinessCurrentStatusPattern);
 	});
 
 	it("adds runtime date context and prevents stale date suggestions", () => {
@@ -85,7 +116,10 @@ describe("Viya prompt guardrails", () => {
 		const prompt = buildChatModeSystemPrompt("plan");
 
 		assert.match(prompt, tripBlueprintPattern);
+		assert.match(prompt, manualTripSetupPattern);
+		assert.match(prompt, travelersPattern);
 		assert.match(prompt, budgetAllocationPattern);
+		assert.match(prompt, pacePattern);
 		assert.match(prompt, bookingTargetsPattern);
 		assert.match(prompt, nextActionsPattern);
 		assert.match(prompt, noLaterIntakeQuestionPattern);

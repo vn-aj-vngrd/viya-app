@@ -10,6 +10,7 @@ import {
 	BottomSheet,
 	Button,
 	ScrollShadow,
+	Spinner,
 	Surface,
 	Text,
 	useThemeColor,
@@ -30,6 +31,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Container } from "@/components/container";
 import { NavigationBackButton } from "@/src/components/navigation/navigation-back-button";
+import { TripSyncReviewSheet } from "@/src/features/vault/tripsync-review-sheet";
+import type { PendingTripSyncReview } from "@/src/features/vault/tripsync-types";
+import { useVaultUpload } from "@/src/features/vault/use-vault-upload";
 
 import {
 	ChatHistorySheet,
@@ -86,6 +90,7 @@ import {
 	persistStoredThreadIdsByContext,
 	removeStoredThreadIdsByContext,
 	runAsyncTask,
+	shouldPopViyaBackRoute,
 } from "./viya-chat-utils";
 
 const getThreadIdsAfterTripCreate = ({
@@ -123,6 +128,24 @@ const chatScrollShadowTopBleed = 20;
 
 const getSearchParamValue = (value?: string | string[]) =>
 	Array.isArray(value) ? value[0] : value;
+
+const getInitialChatMode = ({
+	requestedMode,
+	routeTripId,
+}: {
+	requestedMode?: string;
+	routeTripId?: Id<"trips">;
+}): ChatModeId => {
+	if (requestedMode === "trip" || routeTripId) {
+		return "trip";
+	}
+
+	if (requestedMode === "plan") {
+		return "plan";
+	}
+
+	return "chat";
+};
 
 const getChatInputError = ({
 	chatMode,
@@ -252,7 +275,7 @@ const createBlueprintTripHandler =
 			onChatModeChange("trip");
 			onAwaitingAssistantMessageCountChange(null);
 			onNoticeMessageChange(
-				"Planning trip created. Booking targets were saved as external booking placeholders."
+				"Trip created from AI setup. Booking targets were saved as external booking placeholders."
 			);
 			runAsyncTask(persistStoredThreadIdsByContext(nextThreadIds));
 		} catch (error) {
@@ -368,6 +391,7 @@ export function ViyaChatScreen() {
 	const requestedMode = getSearchParamValue(mode);
 	const routePrompt = getSearchParamValue(prompt) ?? "";
 	const routeTripId = getSearchParamValue(tripId) as Id<"trips"> | undefined;
+	const isTripModeLocked = Boolean(routeTripId);
 	const insets = useSafeAreaInsets();
 	const { height: windowHeight } = useWindowDimensions();
 	const [input, setInput] = useState(routePrompt);
@@ -378,7 +402,7 @@ export function ViyaChatScreen() {
 		useState(expandedComposerInputMinHeight);
 	const [threadIdsByContext, setThreadIdsByContext] =
 		useState<ThreadIdsByContext>({});
-	const initialMode = requestedMode === "trip" || routeTripId ? "trip" : "plan";
+	const initialMode = getInitialChatMode({ requestedMode, routeTripId });
 	const [chatMode, setChatMode] = useState<ChatModeId>(initialMode);
 	const [createdTripId, setCreatedTripId] = useState<Id<"trips"> | null>(null);
 	const [isHistorySheetOpen, setIsHistorySheetOpen] = useState(false);
@@ -399,6 +423,9 @@ export function ViyaChatScreen() {
 		useState<number | null>(null);
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
+	const [pendingVaultReview, setPendingVaultReview] =
+		useState<PendingTripSyncReview | null>(null);
+	const [isConfirmingVaultUpload, setIsConfirmingVaultUpload] = useState(false);
 	const scrollViewRef = useRef<NativeScrollView>(null);
 	const chatSessionIdRef = useRef(0);
 	const mutedColor = useThemeColor("muted");
@@ -421,7 +448,10 @@ export function ViyaChatScreen() {
 		preferencePromptSuggestions
 	);
 	const activeSlashCommand = getActiveSlashCommand(input);
-	const visibleSlashCommands = getVisibleSlashCommands(activeSlashCommand);
+	const visibleSlashCommands = getVisibleSlashCommands(
+		activeSlashCommand,
+		isTripModeLocked ? "trip" : undefined
+	);
 	const backgroundColor = useThemeColor("background");
 
 	const createThread = useMutation(api.chat.createNewThread);
@@ -431,7 +461,21 @@ export function ViyaChatScreen() {
 	const dismissPendingQuestion = useMutation(api.chat.dismissPendingQuestion);
 	const linkThreadToTrip = useMutation(api.chat.linkThreadToTrip);
 	const sendMessage = useMutation(api.chat.sendMessage);
-	const chatHistory = useQuery(api.chat.listHistory, { limit: 50 });
+	const confirmTripSyncReview = useMutation(api.vault.confirmTripSyncReview);
+	const {
+		errorMessage: vaultUploadErrorMessage,
+		isUploading: isUploadingVaultFile,
+		pickDocument,
+	} = useVaultUpload();
+	const chatHistoryArgs =
+		chatMode === "trip" && currentTripId
+			? ({
+					limit: 50,
+					mode: "trip",
+					tripId: currentTripId,
+				} as const)
+			: ({ limit: 50 } as const);
+	const chatHistory = useQuery(api.chat.listHistory, chatHistoryArgs);
 	const pendingQuestion = useQuery(api.chat.getPendingQuestion, { threadId });
 
 	const { results: messages } = useUIMessages(
@@ -517,6 +561,7 @@ export function ViyaChatScreen() {
 	const remainingInputCharacters = chatInputMaxLength - input.length;
 	const shouldShowInputLimit = input.length >= chatInputWarningThreshold;
 	const messageCount = displayedMessages.length;
+	const canSendMessage = Boolean(input.trim() && !isAwaitingViya);
 
 	useEffect(() => {
 		let isMounted = true;
@@ -537,11 +582,19 @@ export function ViyaChatScreen() {
 	}, []);
 
 	useEffect(() => {
+		if (isTripModeLocked) {
+			if (chatMode !== "trip") {
+				setChatMode("trip");
+			}
+			setErrorMessage(null);
+			return;
+		}
+
 		if (chatMode === "trip" && trips !== undefined && !currentTripId) {
-			setChatMode("plan");
+			setChatMode("chat");
 			setErrorMessage("Create a trip first to use Trip mode.");
 		}
-	}, [chatMode, currentTripId, trips]);
+	}, [chatMode, currentTripId, isTripModeLocked, trips]);
 
 	useEffect(() => {
 		if (hasPersistedPendingPrompt && !hasMisorderedPersistedPendingPrompt) {
@@ -679,13 +732,29 @@ export function ViyaChatScreen() {
 	};
 
 	const handleBackPress = () => {
+		if (
+			shouldPopViyaBackRoute({
+				canGoBack: router.canGoBack(),
+				returnTo,
+			})
+		) {
+			router.back();
+			return;
+		}
+
 		router.replace(getViyaBackRoute({ fromTab, returnTo }));
 	};
 
 	const handleModeSelect = createModeSelectHandler({
 		currentTripId,
 		onAwaitingAssistantMessageCountChange: setAwaitingAssistantMessageCount,
-		onChatModeChange: setChatMode,
+		onChatModeChange: (nextMode) => {
+			if (isTripModeLocked && nextMode !== "trip") {
+				return;
+			}
+
+			setChatMode(nextMode);
+		},
 		onErrorMessageChange: setErrorMessage,
 		onModeMenuOpenChange: setIsModeMenuOpen,
 		onNoticeMessageChange: setNoticeMessage,
@@ -756,6 +825,12 @@ export function ViyaChatScreen() {
 	};
 
 	const handleHistorySelect = (item: ChatHistoryItem) => {
+		if (isTripModeLocked && item.mode !== "trip") {
+			setErrorMessage("Trip AI stays in Trip mode for this workspace.");
+			setIsHistorySheetOpen(false);
+			return;
+		}
+
 		const historyTripId =
 			item.mode === "trip" ? (item.tripId ?? currentTripId) : currentTripId;
 
@@ -805,6 +880,87 @@ export function ViyaChatScreen() {
 		runAsyncTask(handleSubmit(getDraftTripBlueprintPrompt()));
 	};
 
+	const handleFileUploadPress = async () => {
+		setErrorMessage(null);
+		setNoticeMessage(null);
+
+		try {
+			const review = await pickDocument({
+				kind: "document",
+				tripId: chatMode === "trip" ? currentTripId : undefined,
+			});
+
+			if (!review) {
+				return;
+			}
+
+			if (chatMode === "trip" && currentTripId) {
+				setPendingVaultReview(review);
+				return;
+			}
+
+			const fileContext = [
+				`Uploaded file: ${review.upload.fileName}`,
+				`Extracted title: ${review.extraction.extractedTitle}`,
+				`Summary: ${review.extraction.summary}`,
+				`Document type: ${review.extraction.documentType}`,
+				review.extraction.booking
+					? `Booking: ${review.extraction.booking.title}`
+					: null,
+			]
+				.filter(Boolean)
+				.join("\n");
+			const nextInput = input.trim()
+				? `${input.trim()}\n\n${fileContext}`
+				: `Use this uploaded file context:\n\n${fileContext}`;
+
+			setInput(nextInput);
+			setNoticeMessage(
+				"File extracted. Viya can use the text summary in this chat."
+			);
+		} catch (error) {
+			setErrorMessage(
+				error instanceof Error
+					? error.message
+					: "Viya could not upload this file."
+			);
+		}
+	};
+
+	const handleConfirmVaultUpload = async () => {
+		if (!(pendingVaultReview && currentTripId)) {
+			return;
+		}
+
+		setIsConfirmingVaultUpload(true);
+		setErrorMessage(null);
+		setNoticeMessage(null);
+
+		try {
+			await confirmTripSyncReview({
+				extraction: pendingVaultReview.extraction,
+				fileName: pendingVaultReview.upload.fileName,
+				fileSize: pendingVaultReview.upload.fileSize,
+				kind: pendingVaultReview.upload.kind,
+				mimeType: pendingVaultReview.upload.mimeType,
+				storageId: pendingVaultReview.upload.storageId,
+				tripId: currentTripId,
+			});
+			setPendingVaultReview(null);
+			setNoticeMessage(
+				"Saved to Vault. Viya extracted the details for trip context."
+			);
+		} catch (error) {
+			setErrorMessage(
+				error instanceof Error
+					? error.message
+					: "Viya could not save this file to Vault."
+			);
+		} finally {
+			setIsConfirmingVaultUpload(false);
+		}
+	};
+
 	const handleComposerTextChange = (value: string) => {
 		setInput(value);
 
@@ -821,6 +977,11 @@ export function ViyaChatScreen() {
 	};
 
 	const handleSlashCommandSelect = (command: SlashCommandOption) => {
+		if (isTripModeLocked && command.mode && command.mode !== "trip") {
+			setErrorMessage("Trip AI stays in Trip mode for this workspace.");
+			return;
+		}
+
 		setErrorMessage(null);
 		setNoticeMessage(null);
 		setIsModeMenuOpen(false);
@@ -851,6 +1012,26 @@ export function ViyaChatScreen() {
 		threadId,
 		threadIdsByContext,
 	});
+	const currentTripChip =
+		chatMode === "trip" && currentTrip ? (
+			<Pressable
+				accessibilityLabel={`Current trip context is ${currentTrip.title}`}
+				accessibilityRole="button"
+				className="min-w-0 flex-row items-center gap-1.5 rounded-full border border-warning/30 bg-warning/10 px-3 py-2"
+				onPress={() => setIsTripContextSheetOpen(true)}
+			>
+				<Ionicons color="#FF9F0A" name="briefcase-outline" size={14} />
+				<Text
+					adjustsFontSizeToFit={true}
+					numberOfLines={1}
+					style={{ color: "#9A5A00", maxWidth: 120 }}
+					type="body-sm"
+					weight="bold"
+				>
+					{currentTrip.title}
+				</Text>
+			</Pressable>
+		) : null;
 
 	return (
 		<Container isScrollable={false}>
@@ -871,14 +1052,17 @@ export function ViyaChatScreen() {
 								accessibilityLabel="Back to previous tab"
 								onPress={handleBackPress}
 							/>
-							<ChatModeSelector
-								currentTripId={currentTripId}
-								isOpen={isModeMenuOpen}
-								onOpenChange={setIsModeMenuOpen}
-								onSelect={handleModeSelect}
-								selectedMode={chatMode}
-								threadIdsByContext={threadIdsByContext}
-							/>
+							{currentTripChip ?? (
+								<ChatModeSelector
+									currentTripId={currentTripId}
+									isLocked={isTripModeLocked}
+									isOpen={isModeMenuOpen}
+									onOpenChange={setIsModeMenuOpen}
+									onSelect={handleModeSelect}
+									selectedMode={chatMode}
+									threadIdsByContext={threadIdsByContext}
+								/>
+							)}
 						</View>
 						<HeaderActionGroup
 							currentThreadId={threadId}
@@ -983,59 +1167,40 @@ export function ViyaChatScreen() {
 					) : null}
 
 					<View className="mt-2 gap-1">
-						{chatMode === "trip" && currentTrip ? (
-							<Pressable
-								accessibilityLabel={`Current trip context is ${currentTrip.title}`}
-								accessibilityRole="button"
-								className="flex-row items-center gap-1.5 self-start rounded-full border border-warning/30 bg-warning/10 px-3 py-1.5"
-								onPress={() => setIsTripContextSheetOpen(true)}
-							>
-								<Ionicons color="#FF9F0A" name="briefcase-outline" size={13} />
-								<Text
-									numberOfLines={1}
-									style={{ color: "#9A5A00", maxWidth: 220 }}
-									type="body-xs"
-									weight="semibold"
-								>
-									{currentTrip.title}
-								</Text>
-							</Pressable>
+						{vaultUploadErrorMessage ? (
+							<Text className="px-4 text-danger" type="body-xs">
+								{vaultUploadErrorMessage}
+							</Text>
 						) : null}
 						<Surface
 							className="relative flex-row items-center gap-2 rounded-[28px] border border-border bg-surface px-3 py-2"
 							style={composerStyle}
 						>
-							{chatMode === "trip" ? (
-								<View
-									className="items-center justify-center"
-									style={{ height: composerInputLayout.height, width: 38 }}
-								>
-									<Pressable
-										accessibilityLabel={
-											currentTrip
-												? `Change trip context from ${currentTrip.title}`
-												: "Choose trip context"
-										}
-										accessibilityRole="button"
-										className="h-9 w-9 items-center justify-center rounded-full border"
-										onPress={() => setIsTripContextSheetOpen(true)}
-										style={{
-											backgroundColor: currentTrip
-												? "rgba(255, 159, 10, 0.14)"
-												: "rgba(24, 24, 27, 0.06)",
-											borderColor: currentTrip
-												? "rgba(255, 159, 10, 0.32)"
-												: "transparent",
-										}}
-									>
-										<Ionicons
-											color={currentTrip ? "#FF9F0A" : "#18181B"}
-											name={currentTrip ? "briefcase-outline" : "add"}
-											size={currentTrip ? 17 : 20}
-										/>
-									</Pressable>
-								</View>
-							) : null}
+							<Pressable
+								accessibilityLabel={
+									chatMode === "trip"
+										? "Upload a file to this trip Vault"
+										: "Upload a file for Viya"
+								}
+								accessibilityRole="button"
+								accessibilityState={{
+									disabled: Boolean(
+										isUploadingVaultFile || isConfirmingVaultUpload
+									),
+								}}
+								className="h-9 w-9 items-center justify-center rounded-full border"
+								disabled={isUploadingVaultFile || isConfirmingVaultUpload}
+								onPress={() => {
+									runAsyncTask(handleFileUploadPress());
+								}}
+								style={{ backgroundColor: "#FFFFFF", borderColor: "#D4D4D8" }}
+							>
+								{isUploadingVaultFile ? (
+									<Spinner size="sm" />
+								) : (
+									<Ionicons color="#18181B" name="add" size={22} />
+								)}
+							</Pressable>
 							<View
 								className="relative flex-1"
 								style={{ height: composerInputLayout.height }}
@@ -1074,24 +1239,27 @@ export function ViyaChatScreen() {
 										/>
 									</Pressable>
 								) : null}
-								<Button
-									isDisabled={!input.trim() || isAwaitingViya}
-									isIconOnly={true}
-									onPress={() => handleSubmit()}
-									size="sm"
-									style={{ height: 38, width: 38 }}
-									variant={
-										input.trim() && !isAwaitingViya ? "primary" : "secondary"
-									}
-								>
-									<Ionicons
-										color={
-											input.trim() && !isAwaitingViya ? "#FFFFFF" : mutedColor
-										}
-										name="arrow-up"
-										size={18}
-									/>
-								</Button>
+								{canSendMessage ? (
+									<Button
+										isIconOnly={true}
+										onPress={() => handleSubmit()}
+										size="sm"
+										style={{ height: 38, width: 38 }}
+										variant="primary"
+									>
+										<Ionicons color="#FFFFFF" name="arrow-up" size={18} />
+									</Button>
+								) : (
+									<Pressable
+										accessibilityLabel="Send message"
+										accessibilityRole="button"
+										accessibilityState={{ disabled: true }}
+										className="h-[38px] w-[38px] items-center justify-center rounded-full"
+										disabled={true}
+									>
+										<Ionicons color="#A1A1AA" name="arrow-up" size={18} />
+									</Pressable>
+								)}
 							</View>
 						</Surface>
 					</View>
@@ -1174,12 +1342,27 @@ export function ViyaChatScreen() {
 				</BottomSheet.Portal>
 			</BottomSheet>
 			<ChatHistorySheet
+				chatMode={chatMode}
 				currentThreadId={threadId}
 				currentTripId={currentTripId}
 				history={chatHistory}
 				isOpen={isHistorySheetOpen}
 				onOpenChange={setIsHistorySheetOpen}
 				onSelect={handleHistorySelect}
+			/>
+			<TripSyncReviewSheet
+				isConfirming={isConfirmingVaultUpload}
+				isOpen={Boolean(pendingVaultReview)}
+				onConfirm={() => {
+					runAsyncTask(handleConfirmVaultUpload());
+				}}
+				onDiscard={() => setPendingVaultReview(null)}
+				onOpenChange={(isOpen) => {
+					if (!(isOpen || isConfirmingVaultUpload)) {
+						setPendingVaultReview(null);
+					}
+				}}
+				review={pendingVaultReview}
 			/>
 			<TripContextSheet
 				isOpen={isTripContextSheetOpen}

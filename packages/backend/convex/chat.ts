@@ -23,9 +23,12 @@ import { chatAgent } from "./agent";
 import { buildChatModeSystemPrompt, type ChatMode } from "./ai/prompts";
 import { ensureTripAccess, getRequiredIdentity } from "./lib/auth";
 
-const chatModeValidator = v.union(v.literal("plan"), v.literal("trip"));
-const normalizeChatMode = (mode: "chat" | ChatMode): ChatMode =>
-	mode === "chat" ? "plan" : mode;
+const chatModeValidator = v.union(
+	v.literal("chat"),
+	v.literal("plan"),
+	v.literal("trip")
+);
+const normalizeChatMode = (mode: ChatMode): ChatMode => mode;
 
 const maxHistoryItems = 50;
 const maxPromptLength = 1200;
@@ -42,6 +45,22 @@ const terminalPunctuationPattern = /[.!?]+$/;
 const typeSomethingElsePattern =
 	/^(?:type\s+)?(?:something\s+else|other|custom answer)$/i;
 const lineBreakPattern = /\r\n|\r|\n/g;
+const spendIntentPattern = /\b(?:i\s+)?(?:spent|paid|bought|purchased)\b/i;
+const spendAmountPattern =
+	/(?:₱|PHP\s*)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*(?:php|pesos?)?/i;
+const spendTitleAfterConnectorPattern =
+	/\b(?:on|for)\s+(.+?)(?:\s+(?:for|at)\s+(?:₱|PHP\s*)?[0-9]|$)/i;
+const spendTitleBeforeAmountPattern =
+	/\b(?:spent|paid|bought|purchased)\s+(.+?)\s+(?:for|at)?\s*(?:₱|PHP\s*)?[0-9]/i;
+const foodExpensePattern =
+	/\b(?:breakfast|brunch|lunch|dinner|meal|coffee|food|restaurant|snack|drink)\b/i;
+const hotelExpensePattern =
+	/\b(?:hotel|hostel|stay|accommodation|airbnb|lodging)\b/i;
+const shoppingExpensePattern = /\b(?:shopping|souvenir|gift|mall)\b/i;
+const transportExpensePattern =
+	/\b(?:taxi|grab|uber|train|bus|ferry|flight|transport|transfer|fare|gas|fuel)\b/i;
+const documentExpensePattern =
+	/\b(?:passport|visa|permit|document|insurance)\b/i;
 
 const getPromptSnippet = (prompt: string, maxLength: number) => {
 	const normalizedPrompt = prompt.replace(/\s+/g, " ").trim();
@@ -161,6 +180,7 @@ const clearPendingQuestionsForThread = async (
 const compactTripContext = ({
 	bookings,
 	documents,
+	expenses,
 	itineraryDays,
 	itineraryItems,
 	readinessItems,
@@ -170,6 +190,7 @@ const compactTripContext = ({
 }: {
 	bookings: unknown[];
 	documents: unknown[];
+	expenses: unknown[];
 	itineraryDays: unknown[];
 	itineraryItems: unknown[];
 	readinessItems: unknown[];
@@ -180,6 +201,7 @@ const compactTripContext = ({
 	JSON.stringify({
 		bookings,
 		documents,
+		expenses,
 		itineraryDays,
 		itineraryItems,
 		readinessItems,
@@ -199,9 +221,119 @@ export const createNewThread = mutation({
 	},
 });
 
+const getExpenseCategory = (title: string) => {
+	if (foodExpensePattern.test(title)) {
+		return "food";
+	}
+
+	if (hotelExpensePattern.test(title)) {
+		return "hotel";
+	}
+
+	if (shoppingExpensePattern.test(title)) {
+		return "shopping";
+	}
+
+	if (transportExpensePattern.test(title)) {
+		return "transport";
+	}
+
+	if (documentExpensePattern.test(title)) {
+		return "documents";
+	}
+
+	return "other";
+};
+
+const cleanExpenseTitle = (value: string) => {
+	const title = value
+		.replace(/[.!?]+$/g, "")
+		.replace(/\s+/g, " ")
+		.trim();
+
+	if (!title) {
+		return "Trip expense";
+	}
+
+	return `${title.charAt(0).toUpperCase()}${title.slice(1)}`;
+};
+
+const getExpenseTitleFromPrompt = (prompt: string) => {
+	const titleAfterConnector = spendTitleAfterConnectorPattern.exec(prompt)?.[1];
+
+	if (titleAfterConnector) {
+		return cleanExpenseTitle(titleAfterConnector);
+	}
+
+	const titleBeforeAmount = spendTitleBeforeAmountPattern.exec(prompt)?.[1];
+
+	if (titleBeforeAmount && !spendAmountPattern.test(titleBeforeAmount)) {
+		return cleanExpenseTitle(titleBeforeAmount);
+	}
+
+	return "Trip expense";
+};
+
+const getSpendExpenseDraft = (prompt: string) => {
+	if (!spendIntentPattern.test(prompt)) {
+		return null;
+	}
+
+	const amountMatch = spendAmountPattern.exec(prompt);
+	const amount = amountMatch
+		? Number.parseFloat(amountMatch[1].replaceAll(",", ""))
+		: Number.NaN;
+
+	if (!(Number.isFinite(amount) && amount > 0)) {
+		return null;
+	}
+
+	const title = getExpenseTitleFromPrompt(prompt);
+
+	return {
+		amount,
+		category: getExpenseCategory(title),
+		currency: "PHP",
+		notes: "Logged from Viya chat.",
+		spentAt: new Date().toISOString().slice(0, 10),
+		title,
+	};
+};
+
+const maybeLogTripChatExpense = async (
+	ctx: MutationCtx,
+	{
+		prompt,
+		tripId,
+	}: {
+		prompt: string;
+		tripId: Id<"trips">;
+	}
+) => {
+	const expense = getSpendExpenseDraft(prompt);
+
+	if (!expense) {
+		return null;
+	}
+
+	const now = Date.now();
+	const expenseId = await ctx.db.insert("expenses", {
+		...expense,
+		createdAt: now,
+		source: "manual" as const,
+		tripId,
+		updatedAt: now,
+	});
+	await ctx.db.patch(tripId, { updatedAt: now });
+
+	return expenseId;
+};
+
 export const listHistory = query({
 	args: {
 		limit: v.optional(v.number()),
+		mode: v.optional(chatModeValidator),
+		tripId: v.optional(v.id("trips")),
 	},
 	handler: async (ctx, args) => {
 		const identity = await getRequiredIdentity(ctx);
@@ -209,11 +341,29 @@ export const listHistory = query({
 			1,
 			Math.min(args.limit ?? maxHistoryItems, maxHistoryItems)
 		);
-		const threads = await ctx.db
-			.query("chatThreads")
-			.withIndex("by_owner_updatedAt", (q) => q.eq("ownerId", identity.subject))
-			.order("desc")
-			.take(limit);
+		const threads = (
+			await ctx.db
+				.query("chatThreads")
+				.withIndex("by_owner_updatedAt", (q) =>
+					q.eq("ownerId", identity.subject)
+				)
+				.order("desc")
+				.collect()
+		)
+			.filter((thread) => {
+				const normalizedMode = normalizeChatMode(thread.mode);
+
+				if (args.mode && normalizedMode !== args.mode) {
+					return false;
+				}
+
+				if (args.tripId && thread.tripId !== args.tripId) {
+					return false;
+				}
+
+				return true;
+			})
+			.slice(0, limit);
 
 		return await Promise.all(
 			threads.map(async (thread) => {
@@ -341,6 +491,10 @@ export const sendMessage = mutation({
 			}
 
 			await ensureTripAccess(ctx, tripId, identity.subject);
+			await maybeLogTripChatExpense(ctx, {
+				prompt: trimmedPrompt,
+				tripId,
+			});
 		}
 
 		await clearPendingQuestionsForThread(ctx, {
@@ -519,6 +673,7 @@ export const getTripChatContext = internalQuery({
 			vaultItems,
 			documents,
 			bookings,
+			expenses,
 		] = await Promise.all([
 			ctx.db
 				.query("itineraryDays")
@@ -550,6 +705,10 @@ export const getTripChatContext = internalQuery({
 				.query("bookings")
 				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
 				.collect(),
+			ctx.db
+				.query("expenses")
+				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+				.collect(),
 		]);
 
 		return compactTripContext({
@@ -570,6 +729,14 @@ export const getTripChatContext = internalQuery({
 				status: document.status,
 				title: document.title,
 				type: document.type,
+			})),
+			expenses: expenses.map((expense) => ({
+				amount: expense.amount,
+				category: expense.category,
+				currency: expense.currency,
+				notes: expense.notes,
+				spentAt: expense.spentAt,
+				title: expense.title,
 			})),
 			itineraryDays: itineraryDays.map((day) => ({
 				date: day.date,

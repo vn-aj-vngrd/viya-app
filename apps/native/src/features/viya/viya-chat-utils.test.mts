@@ -5,6 +5,7 @@ import {
 	getPendingPromptInsertionIndex,
 	getViyaBackRoute,
 	isCurrentChatRequest,
+	shouldPopViyaBackRoute,
 } from "./viya-chat-utils";
 
 describe("question prompt display", () => {
@@ -95,5 +96,32 @@ describe("Viya back route", () => {
 
 	test("uses home when no launch context is present", () => {
 		expect(getViyaBackRoute({})).toBe("/(app)/(tabs)");
+	});
+
+	test("pops stack-launched app routes instead of replacing with duplicates", () => {
+		expect(
+			shouldPopViyaBackRoute({
+				canGoBack: true,
+				returnTo: "/(app)/trips/trip-id/budget",
+			})
+		).toBe(true);
+	});
+
+	test("does not pop when there is no existing back stack", () => {
+		expect(
+			shouldPopViyaBackRoute({
+				canGoBack: false,
+				returnTo: "/(app)/trips/trip-id/budget",
+			})
+		).toBe(false);
+	});
+
+	test("does not pop non-app return routes", () => {
+		expect(
+			shouldPopViyaBackRoute({
+				canGoBack: true,
+				returnTo: "https://example.com",
+			})
+		).toBe(false);
 	});
 });

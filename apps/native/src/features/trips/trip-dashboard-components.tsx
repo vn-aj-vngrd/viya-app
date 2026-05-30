@@ -17,7 +17,7 @@ import {
 	useThemeColor,
 } from "heroui-native";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
 	ImageBackground,
 	Pressable,
@@ -50,19 +50,20 @@ const borderColor = "rgba(24, 24, 27, 0.08)";
 const softBackgroundColor = "rgba(24, 24, 27, 0.04)";
 export const tripFloatingBarBottomInset = 24;
 export const tripFloatingBarGap = 6;
+const viyaButtonNavigationThrottleMs = 800;
 
 const destinationParentheticalPattern = /\s*\([^)]*\)/g;
 
 const tripScreenMeta: Record<TripTab, { icon: IoniconName; label: string }> = {
 	bookings: { icon: "briefcase-outline", label: "Bookings" },
 	budget: { icon: "wallet-outline", label: "Budget" },
-	checklist: { icon: "checkbox-outline", label: "Checklist" },
+	checklist: { icon: "shield-checkmark-outline", label: "Readiness" },
 	companions: { icon: "people-outline", label: "Companions" },
-	documents: { icon: "folder-open-outline", label: "Documents" },
+	documents: { icon: "folder-open-outline", label: "Vault" },
 	itinerary: { icon: "calendar-outline", label: "Itinerary" },
 	memories: { icon: "images-outline", label: "Memories" },
 	notes: { icon: "document-text-outline", label: "Notes" },
-	overview: { icon: "speedometer-outline", label: "Today" },
+	overview: { icon: "speedometer-outline", label: "Overview" },
 	places: { icon: "map-outline", label: "Places" },
 	recap: { icon: "share-social-outline", label: "Recap" },
 	risks: { icon: "warning-outline", label: "Risks" },
@@ -83,11 +84,13 @@ const moduleAccents: Record<string, ModuleAccent> = {
 	Itinerary: { bg: "rgba(10, 132, 255, 0.1)", color: "#0A84FF" },
 	Memories: { bg: "rgba(191, 90, 242, 0.12)", color: "#BF5AF2" },
 	Notes: { bg: "rgba(255, 159, 10, 0.12)", color: "#FF9F0A" },
+	Overview: { bg: "rgba(10, 132, 255, 0.1)", color: "#0A84FF" },
 	Places: { bg: "rgba(52, 199, 89, 0.12)", color: "#34C759" },
+	Readiness: { bg: "rgba(52, 199, 89, 0.12)", color: "#34C759" },
 	Recap: { bg: "rgba(10, 132, 255, 0.1)", color: "#0A84FF" },
 	Risks: { bg: "rgba(255, 59, 48, 0.1)", color: "#FF3B30" },
-	Today: { bg: "rgba(10, 132, 255, 0.1)", color: "#0A84FF" },
 	"Travel Mode": { bg: "rgba(0, 122, 255, 0.1)", color: "#007AFF" },
+	Vault: { bg: "rgba(255, 159, 10, 0.12)", color: "#FF9F0A" },
 };
 
 const defaultModuleAccent: ModuleAccent = {
@@ -791,6 +794,28 @@ export function TripFloatingViyaButton({
 	tripId: Id<"trips">;
 }) {
 	const router = useRouter();
+	const lastNavigationPressRef = useRef(0);
+
+	const handlePress = () => {
+		const now = Date.now();
+
+		if (now - lastNavigationPressRef.current < viyaButtonNavigationThrottleMs) {
+			return;
+		}
+
+		lastNavigationPressRef.current = now;
+		router.push({
+			params: {
+				mode: "trip",
+				returnTo:
+					activeTab === "overview"
+						? `/(app)/trips/${tripId}`
+						: `/(app)/trips/${tripId}/${activeTab}`,
+				tripId: String(tripId),
+			},
+			pathname: VIYA_ROUTES.ai,
+		});
+	};
 
 	return (
 		<Surface className="h-14 w-14 items-center justify-center rounded-full border border-border bg-surface">
@@ -798,19 +823,7 @@ export function TripFloatingViyaButton({
 				accessibilityLabel="Open Viya for this trip"
 				accessibilityRole="button"
 				className="h-12 w-12 items-center justify-center rounded-full"
-				onPress={() => {
-					router.push({
-						params: {
-							mode: "trip",
-							returnTo:
-								activeTab === "overview"
-									? `/(app)/trips/${tripId}`
-									: `/(app)/trips/${tripId}/${activeTab}`,
-							tripId: String(tripId),
-						},
-						pathname: VIYA_ROUTES.ai,
-					});
-				}}
+				onPress={handlePress}
 				style={({ pressed }) => ({
 					transform: [{ scale: pressed ? 0.99 : 1 }],
 				})}
@@ -1001,11 +1014,12 @@ interface TripWorkspaceModule {
 	href: Href;
 	icon: IoniconName;
 	label: string;
+	span?: "full";
 	tab: TripTab;
 	value: string;
 }
 
-type WorkspaceModuleGroupKey = "plan" | "book" | "group" | "travel";
+type WorkspaceModuleGroupKey = "core";
 
 interface TripWorkspaceModuleGroup {
 	items: TripWorkspaceModule[];
@@ -1016,127 +1030,82 @@ interface TripWorkspaceModuleGroup {
 const formatCountLabel = (count: number, singular: string) =>
 	`${count} ${count === 1 ? singular : `${singular}s`}`;
 
+const formatWorkspaceStatusLabel = (status: string) =>
+	status
+		.split("-")
+		.map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+		.join(" ");
+
 const getTripWorkspaceModuleGroups = (
-	model: TripDashboardModel
+	model: TripDashboardModel,
+	options: { includeOverview?: boolean } = {}
 ): TripWorkspaceModuleGroup[] => {
 	const documentCount =
 		model.workspace.documents.length + model.workspace.vaultItems.length;
+	const bookingCount = model.workspace.bookings.length;
+	const itineraryDayCount = model.workspace.itineraryDays.length;
+	const itineraryItemCount = model.workspace.itineraryItems.length;
+	const vaultDetail =
+		bookingCount > 0 || documentCount > 0
+			? `${formatCountLabel(bookingCount, "booking")} · ${formatCountLabel(
+					documentCount,
+					"file"
+				)}`
+			: "No files";
+	const overviewItem: TripWorkspaceModule = {
+		detail: "Trip snapshot, next actions, and workspace summary",
+		href: VIYA_ROUTES.tripDashboard(model.tripId),
+		icon: "speedometer-outline",
+		label: "Overview",
+		span: "full",
+		tab: "overview",
+		value: formatWorkspaceStatusLabel(model.workspace.trip.status),
+	};
+	const workspaceItems: TripWorkspaceModule[] = [
+		{
+			detail:
+				itineraryDayCount > 0
+					? `${formatCountLabel(itineraryDayCount, "day")} planned`
+					: "Add days, places, meals, and transfers",
+			href: VIYA_ROUTES.tripItinerary(model.tripId),
+			icon: "calendar-outline",
+			label: "Itinerary",
+			tab: "itinerary",
+			value: formatCountLabel(itineraryItemCount, "stop"),
+		},
+		{
+			href: VIYA_ROUTES.tripBudget(model.tripId),
+			icon: "wallet-outline",
+			label: "Budget",
+			tab: "budget",
+			detail: "Central spend, bookings, receipts, and daily pace",
+			value: `${formatMoney(model.budget.remaining, model.currency)} left`,
+		},
+		{
+			detail: "Bookings, passports, tickets, and documents",
+			href: VIYA_ROUTES.tripVault(model.tripId),
+			icon: "folder-open-outline",
+			label: "Vault",
+			tab: "documents",
+			value: vaultDetail,
+		},
+		{
+			detail: model.readiness.topBlocker,
+			href: VIYA_ROUTES.tripReadiness(model.tripId),
+			icon: "shield-checkmark-outline",
+			label: "Readiness",
+			tab: "checklist",
+			value: model.readiness.label,
+		},
+	];
 
 	return [
 		{
-			label: "Plan",
-			value: "plan",
-			items: [
-				{
-					detail: formatCountLabel(model.workspace.itineraryDays.length, "day"),
-					href: VIYA_ROUTES.tripItinerary(model.tripId),
-					icon: "calendar-outline",
-					label: "Itinerary",
-					tab: "itinerary",
-					value: formatCountLabel(
-						model.workspace.itineraryItems.length,
-						"item"
-					),
-				},
-				{
-					detail: model.budget.status,
-					href: VIYA_ROUTES.tripBudget(model.tripId),
-					icon: "wallet-outline",
-					label: "Budget",
-					tab: "budget",
-					value: `${formatMoney(model.budget.remaining, model.currency)} left`,
-				},
-				{
-					detail: model.readiness.topBlocker,
-					href: VIYA_ROUTES.tripReadiness(model.tripId),
-					icon: "checkbox-outline",
-					label: "Checklist",
-					tab: "checklist",
-					value: `${model.readiness.openCount} open`,
-				},
-			],
-		},
-		{
-			label: "Book",
-			value: "book",
-			items: [
-				{
-					detail: "Flights, stays, and activities",
-					href: VIYA_ROUTES.tripBookings(model.tripId),
-					icon: "briefcase-outline",
-					label: "Bookings",
-					tab: "bookings",
-					value: formatCountLabel(model.workspace.bookings.length, "booking"),
-				},
-				{
-					detail: "Tickets, IDs, and receipts",
-					href: VIYA_ROUTES.tripVault(model.tripId),
-					icon: "folder-open-outline",
-					label: "Documents",
-					tab: "documents",
-					value: formatCountLabel(documentCount, "file"),
-				},
-				{
-					detail: "Open risks and backup actions",
-					href: VIYA_ROUTES.tripRisks(model.tripId),
-					icon: "warning-outline",
-					label: "Risks",
-					tab: "risks",
-					value: `${model.tabCounts.risks ?? 0} open`,
-				},
-			],
-		},
-		{
-			label: "Group",
-			value: "group",
-			items: [
-				{
-					detail: "Travelers, roles, and emergency contacts",
-					href: VIYA_ROUTES.tripCompanions(model.tripId),
-					icon: "people-outline",
-					label: "Companions",
-					tab: "companions",
-					value: formatCountLabel(model.workspace.companions.length, "contact"),
-				},
-				{
-					detail: "Decisions, reminders, and constraints",
-					href: VIYA_ROUTES.tripNotes(model.tripId),
-					icon: "document-text-outline",
-					label: "Notes",
-					tab: "notes",
-					value: formatCountLabel(model.workspace.notes.length, "note"),
-				},
-			],
-		},
-		{
-			label: "Travel",
-			value: "travel",
-			items: [
-				{
-					detail: "Day-of guidance and quick logging",
-					href: VIYA_ROUTES.tripTravelMode(model.tripId),
-					icon: "navigate-outline",
-					label: "Travel Mode",
-					tab: "travel",
-					value: `${model.travelAlertCount} alerts`,
-				},
-				{
-					detail: "Photos, highlights, and story notes",
-					href: VIYA_ROUTES.tripMoments(model.tripId),
-					icon: "images-outline",
-					label: "Memories",
-					tab: "memories",
-					value: formatCountLabel(model.workspace.moments.length, "memory"),
-				},
-				{
-					detail: "Trip story, spend, and wrap-up",
-					href: VIYA_ROUTES.tripWrapped(model.tripId),
-					icon: "share-social-outline",
-					label: "Recap",
-					tab: "recap",
-					value: formatCountLabel(model.highlights.length, "highlight"),
-				},
-			],
+			label: "Workspace",
+			value: "core",
+			items: options.includeOverview
+				? [overviewItem, ...workspaceItems]
+				: workspaceItems,
 		},
 	];
 };
@@ -1153,15 +1122,19 @@ function ModuleLauncherBadge({
 	if (isActive) {
 		return (
 			<View
-				className="min-w-6 flex-row items-center gap-1 rounded-full bg-surface px-2 py-1"
-				style={{ borderColor: accent.color, borderWidth: 1 }}
+				className="min-w-6 flex-row items-center gap-1 rounded-full px-2 py-1"
+				style={{
+					backgroundColor: "#FFFFFF",
+					borderColor: accent.color,
+					borderWidth: 1,
+				}}
 			>
 				<Ionicons
 					color={accent.color}
 					name="checkmark-circle-outline"
 					size={12}
 				/>
-				<Text type="body-xs" weight="semibold">
+				<Text style={{ color: accent.color }} type="body-xs" weight="semibold">
 					Current
 				</Text>
 			</View>
@@ -1169,8 +1142,16 @@ function ModuleLauncherBadge({
 	}
 
 	return (
-		<View className="min-w-6 items-center rounded-full bg-surface-secondary px-2 py-1">
-			<Text color="muted" numberOfLines={1} type="body-xs" weight="semibold">
+		<View
+			className="min-w-0 max-w-28 shrink items-center rounded-full px-2 py-1"
+			style={{ backgroundColor: accent.bg }}
+		>
+			<Text
+				numberOfLines={1}
+				style={{ color: accent.color }}
+				type="body-xs"
+				weight="semibold"
+			>
 				{value}
 			</Text>
 		</View>
@@ -1193,7 +1174,11 @@ function ModuleLauncherTile({
 			accessibilityLabel={`${isActive ? "Current module" : "Open"} ${item.label}`}
 			accessibilityRole="button"
 			accessibilityState={{ selected: isActive }}
-			className="min-h-24 flex-1 basis-[47%] rounded-[24px] bg-white p-3.5"
+			className={
+				item.span === "full"
+					? "min-h-24 basis-full rounded-[24px] bg-white p-3.5"
+					: "min-h-24 flex-1 basis-[47%] rounded-[24px] bg-white p-3.5"
+			}
 			onPress={onPress}
 			style={({ pressed }) => ({
 				backgroundColor: isActive ? accent.bg : "#FFFFFF",
@@ -1244,7 +1229,9 @@ function TripModulesSheet({
 	const insets = useSafeAreaInsets();
 	const foreground = useThemeColor("foreground");
 	const { height } = useWindowDimensions();
-	const moduleGroups = getTripWorkspaceModuleGroups(model);
+	const moduleGroups = getTripWorkspaceModuleGroups(model, {
+		includeOverview: true,
+	});
 	const moduleListMaxHeight = getTripModulesSheetListMaxHeight({
 		bottomInset: insets.bottom,
 		windowHeight: height,
@@ -1364,7 +1351,7 @@ export function TripModuleMenuButton({
 							{activeScreen.label}
 						</Text>
 					</View>
-					<Ionicons color={activeAccent.color} name="chevron-down" size={14} />
+					<Ionicons color={mutedColor} name="chevron-up" size={14} />
 				</Pressable>
 			</Surface>
 			<TripModulesSheet
@@ -1419,17 +1406,20 @@ function WorkspaceModuleTile({ item }: { item: TripWorkspaceModule }) {
 				})}
 			>
 				<View className="flex-1 justify-between gap-2.5">
-					<View className="flex-row items-center justify-between gap-2">
+					<View className="min-w-0 flex-row items-center justify-between gap-2">
 						<View
-							className="h-9 w-9 items-center justify-center rounded-2xl"
+							className="h-9 w-9 shrink-0 items-center justify-center rounded-2xl"
 							style={{ backgroundColor: accent.bg }}
 						>
 							<Ionicons color={accent.color} name={item.icon} size={18} />
 						</View>
-						<View className="rounded-full bg-surface-secondary px-2.5 py-1">
+						<View
+							className="min-w-0 max-w-28 shrink rounded-full px-2.5 py-1"
+							style={{ backgroundColor: accent.bg }}
+						>
 							<Text
-								color="muted"
 								numberOfLines={1}
+								style={{ color: accent.color }}
 								type="body-xs"
 								weight="semibold"
 							>
@@ -1453,8 +1443,9 @@ function WorkspaceModuleTile({ item }: { item: TripWorkspaceModule }) {
 
 export function MainModules({ model }: { model: TripDashboardModel }) {
 	const [activeWorkspaceGroup, setActiveWorkspaceGroup] =
-		useState<WorkspaceModuleGroupKey>("plan");
+		useState<WorkspaceModuleGroupKey>("core");
 	const workspaceModuleGroups = getTripWorkspaceModuleGroups(model);
+	const shouldShowWorkspacePicker = workspaceModuleGroups.length > 1;
 
 	return (
 		<View className="gap-7">
@@ -1465,37 +1456,39 @@ export function MainModules({ model }: { model: TripDashboardModel }) {
 					</Text.Heading>
 				</View>
 				<View className="gap-3">
-					<View className="w-full flex-row items-center rounded-full bg-surface p-1">
-						{workspaceModuleGroups.map((group) => {
-							const isSelected = group.value === activeWorkspaceGroup;
+					{shouldShowWorkspacePicker ? (
+						<View className="w-full flex-row items-center rounded-full bg-surface p-1">
+							{workspaceModuleGroups.map((group) => {
+								const isSelected = group.value === activeWorkspaceGroup;
 
-							return (
-								<Pressable
-									accessibilityLabel={`Show ${group.label} modules`}
-									accessibilityRole="tab"
-									accessibilityState={{ selected: isSelected }}
-									className={
-										isSelected
-											? "h-8 min-w-0 flex-1 items-center justify-center rounded-full"
-											: "h-8 min-w-0 flex-1 items-center justify-center"
-									}
-									key={group.value}
-									onPress={() => setActiveWorkspaceGroup(group.value)}
-									style={{
-										backgroundColor: isSelected ? accentColor : "transparent",
-									}}
-								>
-									<Text
-										style={{ color: isSelected ? "#FFFFFF" : mutedColor }}
-										type="body-sm"
-										weight={isSelected ? "semibold" : "medium"}
+								return (
+									<Pressable
+										accessibilityLabel={`Show ${group.label} modules`}
+										accessibilityRole="tab"
+										accessibilityState={{ selected: isSelected }}
+										className={
+											isSelected
+												? "h-8 min-w-0 flex-1 items-center justify-center rounded-full"
+												: "h-8 min-w-0 flex-1 items-center justify-center"
+										}
+										key={group.value}
+										onPress={() => setActiveWorkspaceGroup(group.value)}
+										style={{
+											backgroundColor: isSelected ? accentColor : "transparent",
+										}}
 									>
-										{group.label}
-									</Text>
-								</Pressable>
-							);
-						})}
-					</View>
+										<Text
+											style={{ color: isSelected ? "#FFFFFF" : mutedColor }}
+											type="body-sm"
+											weight={isSelected ? "semibold" : "medium"}
+										>
+											{group.label}
+										</Text>
+									</Pressable>
+								);
+							})}
+						</View>
+					) : null}
 					{workspaceModuleGroups.map((group) =>
 						group.value === activeWorkspaceGroup ? (
 							<View className="flex-row flex-wrap gap-3" key={group.value}>

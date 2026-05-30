@@ -50,6 +50,18 @@ export const expandedComposerInputMinHeight = 220;
 
 export const CHAT_MODE_OPTIONS = [
 	{
+		accent: "#0A84FF",
+		description: "General travel help, files, decisions, and follow-ups.",
+		emptyDescription:
+			"Ask travel questions, upload files for text extraction, compare options, or turn loose notes into next steps.",
+		emptyTitle: "Ask Viya anything travel",
+		icon: "sparkles-outline",
+		id: "chat",
+		label: "Chat",
+		placeholder: "Ask Viya",
+		soft: "rgba(10, 132, 255, 0.12)",
+	},
+	{
 		accent: "#BF5AF2",
 		description: "Guided trip planning, one decision at a time.",
 		emptyDescription:
@@ -61,20 +73,64 @@ export const CHAT_MODE_OPTIONS = [
 		placeholder: "Ask Viya to plan",
 		soft: "rgba(191, 90, 242, 0.12)",
 	},
+] as const satisfies readonly ChatModeOption[];
+
+export const TRIP_CONTEXT_MODE_OPTION = {
+	accent: "#FF9F0A",
+	description: "Agent help for itinerary, budget, vault, and readiness.",
+	emptyDescription:
+		"Ask Viya to file uploads, find passports or confirmations, generate itinerary drafts, centralize budget, and check trip status.",
+	emptyTitle: "Let Viya work on this trip",
+	icon: "briefcase-outline",
+	id: "trip",
+	label: "Trip",
+	placeholder: "Ask Viya to update this trip",
+	requiresTrip: true,
+	soft: "rgba(255, 159, 10, 0.14)",
+} as const satisfies ChatModeOption;
+
+export const ALL_CHAT_MODE_OPTIONS = [
+	...CHAT_MODE_OPTIONS,
 	{
-		accent: "#FF9F0A",
-		description: "Chat with an existing trip, readiness, vault, and itinerary.",
-		emptyDescription:
-			"Use Trip mode for readiness gaps, bookings, documents, routes, delays, risks, and day-of decisions.",
-		emptyTitle: "Ask about your active trip",
-		icon: "briefcase-outline",
-		id: "trip",
-		label: "Trip",
-		placeholder: "Ask about this trip",
-		requiresTrip: true,
-		soft: "rgba(255, 159, 10, 0.14)",
+		...TRIP_CONTEXT_MODE_OPTION,
 	},
 ] as const satisfies readonly ChatModeOption[];
+
+export const chatPromptSuggestions = [
+	{
+		accent: "#0A84FF",
+		icon: "sparkles-outline",
+		prompt: "Help me understand this travel question and suggest next steps.",
+		soft: "rgba(10, 132, 255, 0.12)",
+		summary: "Get a concise travel answer.",
+		title: "Ask a travel question",
+	},
+	{
+		accent: "#30D158",
+		icon: "document-attach-outline",
+		prompt:
+			"I uploaded a file. Extract the useful travel details and tell me what to do next.",
+		soft: "rgba(48, 209, 88, 0.12)",
+		summary: "Use extracted file context.",
+		title: "Work from a file",
+	},
+	{
+		accent: "#FF9F0A",
+		icon: "wallet-outline",
+		prompt: "Help me estimate costs and trade-offs for this travel decision.",
+		soft: "rgba(255, 159, 10, 0.14)",
+		summary: "Compare budget impact.",
+		title: "Estimate costs",
+	},
+	{
+		accent: "#BF5AF2",
+		icon: "git-compare-outline",
+		prompt: "Compare these travel options and recommend the practical choice.",
+		soft: "rgba(191, 90, 242, 0.12)",
+		summary: "Pick the best option.",
+		title: "Compare options",
+	},
+] as const satisfies readonly PromptSuggestion[];
 
 export const planPromptSuggestions = [
 	{
@@ -117,42 +173,52 @@ export const planPromptSuggestions = [
 export const tripPromptSuggestions = [
 	{
 		accent: "#FF9F0A",
-		icon: "shield-checkmark-outline",
+		icon: "folder-open-outline",
 		prompt:
-			"What are the biggest readiness gaps for this trip, and what should I fix first?",
+			"Find passport, booking, ticket, and document gaps in this trip. Tell me what is already in the vault and what still needs to be uploaded or linked.",
 		soft: "rgba(255, 159, 10, 0.14)",
-		summary: "Find what needs attention first.",
-		title: "Check readiness",
+		summary: "Audit saved files and missing proof.",
+		title: "Organize vault",
 	},
 	{
 		accent: "#0A84FF",
-		icon: "time-outline",
+		icon: "calendar-outline",
 		prompt:
-			"If we get delayed, what parts of this trip are most sensitive to timing?",
+			"Generate a simple Wanderlog-style itinerary draft for this trip with days, time blocks, places, meals, transfers, and realistic pacing.",
 		soft: "rgba(10, 132, 255, 0.12)",
-		summary: "Spot brittle timing assumptions.",
-		title: "Stress-test timing",
+		summary: "Draft days and stops.",
+		title: "Build itinerary",
 	},
 	{
 		accent: "#30D158",
-		icon: "bag-check-outline",
-		prompt: "What should I have ready before leaving for this trip?",
+		icon: "wallet-outline",
+		prompt:
+			"Centralize the budget for this trip. Show booked costs, manual expenses, remaining spend, daily safe spend, and what needs a receipt or confirmation.",
 		soft: "rgba(48, 209, 88, 0.12)",
-		summary: "Prepare the essentials.",
-		title: "Pre-trip check",
+		summary: "Review spend in one place.",
+		title: "Budget center",
 	},
 	{
 		accent: "#BF5AF2",
-		icon: "navigate-outline",
+		icon: "shield-checkmark-outline",
 		prompt:
-			"What should I do next on this trip if I want the lowest-friction option?",
+			"Based on the current trip status, what is the readiness state and what should Viya fix first?",
 		soft: "rgba(191, 90, 242, 0.12)",
-		summary: "Choose the easiest next move.",
-		title: "Next best move",
+		summary: "Use current status to pick the next action.",
+		title: "Check readiness",
 	},
 ] as const satisfies readonly PromptSuggestion[];
 
 export const SLASH_COMMAND_OPTIONS = [
+	{
+		accent: "#0A84FF",
+		description: "Switch to general travel chat.",
+		icon: "sparkles-outline",
+		id: "chat",
+		keywords: ["general", "ask", "question", "help"],
+		label: "/chat",
+		mode: "chat",
+	},
 	{
 		accent: "#BF5AF2",
 		description: "Switch to guided planning.",
@@ -161,16 +227,6 @@ export const SLASH_COMMAND_OPTIONS = [
 		keywords: ["planning", "intake", "itinerary"],
 		label: "/plan",
 		mode: "plan",
-	},
-	{
-		accent: "#FF9F0A",
-		description: "Switch to the active trip workspace.",
-		icon: "briefcase-outline",
-		id: "trip",
-		keywords: ["travel", "current", "context"],
-		label: "/trip",
-		mode: "trip",
-		requiresTrip: true,
 	},
 	{
 		action: "newChat",
@@ -183,37 +239,50 @@ export const SLASH_COMMAND_OPTIONS = [
 	},
 	{
 		accent: "#FF9F0A",
-		description: "Ask what needs fixing before departure.",
-		icon: "shield-checkmark-outline",
-		id: "readiness",
-		keywords: ["checklist", "gaps", "documents", "booking"],
-		label: "/readiness",
+		description: "Audit bookings and documents in the vault.",
+		icon: "folder-open-outline",
+		id: "vault",
+		keywords: ["passport", "files", "documents", "booking", "uploads"],
+		label: "/vault",
 		mode: "trip",
 		prompt:
-			"What are the biggest readiness gaps for this trip, and what should I fix first?",
+			"Audit the vault for this trip. Identify saved bookings, documents, passport or ID coverage, missing links, and the next upload or link Viya should handle.",
 		requiresTrip: true,
 	},
 	{
 		accent: "#0A84FF",
-		description: "Find timing risks and backup moves.",
-		icon: "time-outline",
-		id: "delay",
-		keywords: ["late", "timing", "backup", "replan"],
-		label: "/delay",
+		description: "Generate or refine the trip itinerary.",
+		icon: "calendar-outline",
+		id: "itinerary",
+		keywords: ["wanderlog", "route", "days", "stops", "replan"],
+		label: "/itinerary",
 		mode: "trip",
 		prompt:
-			"If we get delayed, what parts of this trip are most sensitive to timing?",
+			"Generate a simple Wanderlog-style itinerary draft for this trip with days, time blocks, places, meals, transfers, and realistic pacing.",
 		requiresTrip: true,
 	},
 	{
 		accent: "#30D158",
-		description: "Prepare a practical departure checklist.",
-		icon: "bag-check-outline",
-		id: "packing",
-		keywords: ["pack", "bag", "before leaving", "departure"],
-		label: "/packing",
+		description: "Review centralized trip spend.",
+		icon: "wallet-outline",
+		id: "budget",
+		keywords: ["spend", "cost", "receipt", "money", "expenses"],
+		label: "/budget",
 		mode: "trip",
-		prompt: "What should I have ready before leaving for this trip?",
+		prompt:
+			"Centralize the budget for this trip. Show booked costs, manual expenses, remaining spend, daily safe spend, and what needs a receipt or confirmation.",
+		requiresTrip: true,
+	},
+	{
+		accent: "#BF5AF2",
+		description: "Check status-based readiness.",
+		icon: "shield-checkmark-outline",
+		id: "readiness",
+		keywords: ["checklist", "gaps", "status", "ready"],
+		label: "/readiness",
+		mode: "trip",
+		prompt:
+			"Based on the current trip status, what is the readiness state and what should Viya fix first?",
 		requiresTrip: true,
 	},
 	{
