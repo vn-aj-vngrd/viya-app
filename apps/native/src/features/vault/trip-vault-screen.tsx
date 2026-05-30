@@ -787,7 +787,7 @@ export function TripVaultScreen() {
 						vaultErrorMessage ||
 						openFileErrorMessage ||
 						didSync ? (
-							<View className="gap-2 rounded-[24px] bg-surface-secondary p-4">
+							<View className="gap-2">
 								{isUploading ? (
 									<View className="flex-row items-center gap-2">
 										<Spinner size="sm" />
