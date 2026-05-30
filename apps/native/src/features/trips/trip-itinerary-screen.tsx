@@ -458,31 +458,19 @@ function ItineraryMetaPill({
 	label: string;
 	tone?: "accent" | "neutral" | "warning";
 }) {
-	const toneStyles = {
-		accent: {
-			backgroundColor: "rgba(10, 132, 255, 0.1)",
-			color: ITINERARY_ACCENT_COLOR,
-		},
-		neutral: {
-			backgroundColor: "rgba(24, 24, 27, 0.05)",
-			color: ITINERARY_MUTED_COLOR,
-		},
-		warning: {
-			backgroundColor: "rgba(255, 159, 10, 0.12)",
-			color: ITINERARY_WARNING_COLOR,
-		},
+	const toneColors = {
+		accent: ITINERARY_ACCENT_COLOR,
+		neutral: ITINERARY_MUTED_COLOR,
+		warning: ITINERARY_WARNING_COLOR,
 	} as const;
-	const style = toneStyles[tone];
+	const color = toneColors[tone];
 
 	return (
-		<View
-			className="flex-row items-center gap-1.5 rounded-full px-2.5 py-1.5"
-			style={{ backgroundColor: style.backgroundColor }}
-		>
-			<Ionicons color={style.color} name={icon} size={13} />
+		<View className="flex-row items-center gap-1.5 rounded-full border border-border bg-white px-2.5 py-1.5">
+			<Ionicons color={color} name={icon} size={13} />
 			<Text
 				numberOfLines={1}
-				style={{ color: style.color }}
+				style={{ color }}
 				type="body-xs"
 				weight="semibold"
 			>
@@ -673,7 +661,7 @@ function ItineraryTimelineNode({
 		}
 
 		return {
-			backgroundColor: "rgba(10, 132, 255, 0.1)",
+			backgroundColor: undefined,
 			iconColor: ITINERARY_ACCENT_COLOR,
 			iconName: getCategoryIcon(category),
 		};
@@ -689,7 +677,7 @@ function ItineraryTimelineNode({
 				}
 				accessibilityRole="button"
 				accessibilityState={{ checked: isCompleted, disabled: isPending }}
-				className="h-9 w-9 items-center justify-center rounded-full"
+				className={`h-9 w-9 items-center justify-center rounded-full ${appearance.backgroundColor === undefined ? "bg-surface-secondary" : ""}`}
 				disabled={isPending}
 				onPress={onToggleComplete}
 				style={({ pressed }) => ({
@@ -1123,10 +1111,7 @@ function ItineraryDaySurface({
 			})}
 		>
 			<View className="flex-row items-center gap-3">
-				<View
-					className="h-12 w-12 items-center justify-center rounded-full"
-					style={{ backgroundColor: "rgba(10, 132, 255, 0.1)" }}
-				>
+				<View className="h-12 w-12 items-center justify-center rounded-full bg-surface-secondary">
 					<Text
 						style={{ color: ITINERARY_ACCENT_COLOR }}
 						type="body"
