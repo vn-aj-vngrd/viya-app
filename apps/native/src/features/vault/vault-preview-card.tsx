@@ -19,6 +19,45 @@ interface VaultPreviewCardProps {
 	url?: string | null;
 }
 
+const vaultKindMeta: Record<
+	string,
+	{
+		accent: string;
+		backgroundColor: string;
+		icon: keyof typeof Ionicons.glyphMap;
+	}
+> = {
+	booking: {
+		accent: "#FF9F0A",
+		backgroundColor: "rgba(255, 159, 10, 0.12)",
+		icon: "ticket-outline",
+	},
+	document: {
+		accent: "#0A84FF",
+		backgroundColor: "rgba(10, 132, 255, 0.1)",
+		icon: "document-outline",
+	},
+	momentPhoto: {
+		accent: "#AF52DE",
+		backgroundColor: "rgba(175, 82, 222, 0.12)",
+		icon: "images-outline",
+	},
+	receipt: {
+		accent: "#34C759",
+		backgroundColor: "rgba(52, 199, 89, 0.12)",
+		icon: "receipt-outline",
+	},
+};
+
+const formatVaultKindLabel = (value: string) =>
+	value
+		.replaceAll("_", " ")
+		.replaceAll(/([a-z])([A-Z])/g, "$1 $2")
+		.split(" ")
+		.filter(Boolean)
+		.map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
+		.join(" ");
+
 export function VaultPreviewCard({
 	createdAt,
 	fileName,
@@ -33,36 +72,50 @@ export function VaultPreviewCard({
 }: VaultPreviewCardProps) {
 	const createdDateLabel = formatReadableDate(createdAt);
 	const canOpenFile = Boolean(url && onOpenFile);
+	const kindMeta = vaultKindMeta[kind] ?? {
+		accent: "#6B7280",
+		backgroundColor: "rgba(107, 114, 128, 0.12)",
+		icon: "document-attach-outline" as const,
+	};
 
 	return (
 		<Surface
-			className="gap-3 rounded-[24px] border border-border bg-surface p-4"
+			className="gap-3 rounded-[26px] border border-border bg-surface p-4"
 			variant="secondary"
 		>
-			<View className="flex-row items-center gap-3">
+			<View className="flex-row items-start gap-3">
 				<View
-					className="h-11 w-11 items-center justify-center rounded-full"
-					style={{ backgroundColor: "rgba(175, 82, 222, 0.12)" }}
+					className="h-11 w-11 items-center justify-center rounded-2xl"
+					style={{ backgroundColor: kindMeta.backgroundColor }}
 				>
-					<Ionicons color="#AF52DE" name="document-attach" size={22} />
+					<Ionicons color={kindMeta.accent} name={kindMeta.icon} size={21} />
 				</View>
-				<View className="flex-1">
-					<Text weight="semibold">{title}</Text>
-					<Text className="mt-1" color="muted" type="body-xs">
-						{fileName}
-					</Text>
-					<Text className="mt-1" color="muted" type="body-xs">
-						{kind} · {createdDateLabel}
+				<View className="min-w-0 flex-1 gap-1">
+					<View className="flex-row items-start justify-between gap-3">
+						<View className="min-w-0 flex-1">
+							<Text numberOfLines={1} weight="semibold">
+								{title}
+							</Text>
+							<Text color="muted" numberOfLines={1} type="body-xs">
+								{fileName}
+							</Text>
+						</View>
+						<Text color="muted" type="body-xs" weight="semibold">
+							{formatVaultKindLabel(kind)}
+						</Text>
+					</View>
+					<Text color="muted" type="body-xs">
+						{createdDateLabel}
 					</Text>
 					{linkedEntityLabel ? (
-						<Text className="mt-1" color="muted" type="body-xs">
+						<Text color="muted" numberOfLines={1} type="body-xs">
 							Linked to {linkedEntityLabel}
 						</Text>
 					) : null}
 				</View>
 			</View>
 			{canOpenFile || linkedEntityHref || onDelete || onEdit ? (
-				<View className="mt-3 flex-row flex-wrap gap-2">
+				<View className="flex-row flex-wrap gap-2">
 					{canOpenFile ? (
 						<Button
 							className="flex-1"
@@ -83,22 +136,14 @@ export function VaultPreviewCard({
 						</Link>
 					) : null}
 					{onEdit ? (
-						<Button
-							className="flex-1"
-							onPress={onEdit}
-							size="sm"
-							variant="secondary"
-						>
+						<Button onPress={onEdit} size="sm" variant="secondary">
+							<Ionicons color="#0A84FF" name="create-outline" size={16} />
 							<Button.Label>Edit</Button.Label>
 						</Button>
 					) : null}
 					{onDelete ? (
-						<Button
-							className="flex-1"
-							onPress={onDelete}
-							size="sm"
-							variant="tertiary"
-						>
+						<Button onPress={onDelete} size="sm" variant="tertiary">
+							<Ionicons color="#6B7280" name="trash-outline" size={16} />
 							<Button.Label>Delete</Button.Label>
 						</Button>
 					) : null}

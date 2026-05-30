@@ -11,22 +11,19 @@ import {
 	Input,
 	Label,
 	Spinner,
-	Surface,
 	Text,
 	TextField,
 } from "heroui-native";
-import type { ReactNode } from "react";
 import { useState } from "react";
 import { Linking, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Container } from "@/components/container";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 import { EmptyState } from "@/src/components/empty-state";
-import { RouteHeader } from "@/src/components/navigation/route-header";
+import { NavigationIconButton } from "@/src/components/navigation/navigation-icon-button";
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 import { TripModuleScreenFrame } from "@/src/features/trips/trip-module-floating-bar";
-import { TripModuleManualEntryCard } from "@/src/features/trips/trip-module-manual-entry-card";
 import {
 	getLinkedEntityMutationFields,
 	getRelatedEntityKey,
@@ -48,10 +45,6 @@ interface VaultForm {
 	title: string;
 }
 
-type VaultListItem = Doc<"vaultItems"> & {
-	url?: string | null;
-};
-
 type VaultKind =
 	| "booking"
 	| "document"
@@ -68,6 +61,16 @@ const vaultKindOptions = [
 	"noteAttachment",
 	"other",
 ] as const;
+
+type VaultGroup = "all" | "booking" | "document" | "receipt" | "photo";
+
+const vaultGroupOptions = [
+	{ id: "all", label: "All files" },
+	{ id: "booking", label: "Bookings" },
+	{ id: "document", label: "Documents" },
+	{ id: "receipt", label: "Receipts" },
+	{ id: "photo", label: "Photos" },
+] as const satisfies readonly { id: VaultGroup; label: string }[];
 
 const vaultKinds = new Set<string>(vaultKindOptions);
 
@@ -152,13 +155,27 @@ function SheetField({
 	);
 }
 
-function VaultPill({ children }: { children: ReactNode }) {
+function VaultGroupChip({
+	count,
+	isSelected,
+	label,
+	onPress,
+}: {
+	count: number;
+	isSelected: boolean;
+	label: string;
+	onPress: () => void;
+}) {
 	return (
-		<View className="rounded-full bg-surface-secondary px-3 py-1.5">
-			<Text color="muted" type="body-xs" weight="semibold">
-				{children}
-			</Text>
-		</View>
+		<Button
+			onPress={onPress}
+			size="sm"
+			variant={isSelected ? "primary" : "secondary"}
+		>
+			<Button.Label>
+				{label} {count}
+			</Button.Label>
+		</Button>
 	);
 }
 
@@ -314,88 +331,116 @@ function VaultEditSheet({
 	);
 }
 
-function LatestVaultFileSummary({
-	handleOpenVaultFile,
+function VaultAddSheet({
+	isOpen,
 	isUploading,
-	latestFile,
-	latestFileRelatedHref,
-	openEditSheet,
-	onUploadFirstFile,
+	onOpenChange,
+	onPickBooking,
+	onPickDocument,
+	onPickPhoto,
+	onPickReceipt,
 }: {
-	handleOpenVaultFile: (url?: string | null) => Promise<void>;
+	isOpen: boolean;
 	isUploading: boolean;
-	latestFile: VaultListItem | null;
-	latestFileRelatedHref: Href | null;
-	openEditSheet: (item: VaultListItem) => void;
-	onUploadFirstFile: () => void;
+	onOpenChange: (isOpen: boolean) => void;
+	onPickBooking: () => void;
+	onPickDocument: () => void;
+	onPickPhoto: () => void;
+	onPickReceipt: () => void;
 }) {
+	const insets = useSafeAreaInsets();
+	const uploadActions = [
+		{
+			accent: "#0A84FF",
+			description: "PDFs, IDs, tickets, or travel forms",
+			icon: "document-outline",
+			label: "Document",
+			onPress: onPickDocument,
+		},
+		{
+			accent: "#FF9F0A",
+			description: "Flights, stays, tours, and confirmations",
+			icon: "ticket-outline",
+			label: "Booking",
+			onPress: onPickBooking,
+		},
+		{
+			accent: "#34C759",
+			description: "Payments, refunds, and expense proof",
+			icon: "receipt-outline",
+			label: "Receipt",
+			onPress: onPickReceipt,
+		},
+		{
+			accent: "#AF52DE",
+			description: "Camera roll photos or screenshots",
+			icon: "images-outline",
+			label: "Photo or screenshot",
+			onPress: onPickPhoto,
+		},
+	] as const;
+
 	return (
-		<View className="gap-3 rounded-[24px] bg-surface p-4">
-			<View className="flex-row items-center gap-3">
-				<View
-					className="h-9 w-9 items-center justify-center rounded-full"
-					style={{ backgroundColor: "rgba(90, 200, 250, 0.16)" }}
+		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
+			<BottomSheet.Portal>
+				<BottomSheet.Overlay />
+				<BottomSheet.Content
+					backgroundClassName="rounded-t-[36px] bg-background"
+					enablePanDownToClose={true}
+					snapPoints={["52%"]}
 				>
-					<Ionicons color="#5AC8FA" name="document-attach-outline" size={18} />
-				</View>
-				<View className="min-w-0 flex-1 gap-1">
-					<Text color="muted" type="body-xs" weight="semibold">
-						LATEST FILE
-					</Text>
-					<Text numberOfLines={1} type="body-sm" weight="bold">
-						{latestFile?.title ?? "No file synced yet"}
-					</Text>
-				</View>
-			</View>
-			<Text color="muted" numberOfLines={2} type="body-sm">
-				{latestFile
-					? `${formatVaultKindLabel(latestFile.kind)} · ${
-							latestFile.linkedEntityType
-								? "Linked to trip context"
-								: "Ready to link"
-						}`
-					: "Upload a booking, document, receipt, or screenshot to start the vault."}
-			</Text>
-			{latestFile ? (
-				<View className="flex-row flex-wrap gap-2">
-					<Button
-						className="flex-1"
-						onPress={() => {
-							handleOpenVaultFile(latestFile.url).catch(() => undefined);
-						}}
-						size="sm"
+					<View
+						className="gap-4 px-5 pt-2"
+						style={{ paddingBottom: Math.max(insets.bottom, 18) }}
 					>
-						<Ionicons color="#FFFFFF" name="open-outline" size={16} />
-						<Button.Label>Open latest file</Button.Label>
-					</Button>
-					<Button
-						className="flex-1"
-						onPress={() => openEditSheet(latestFile)}
-						size="sm"
-						variant="secondary"
-					>
-						<Ionicons color="#0A84FF" name="create-outline" size={16} />
-						<Button.Label>Edit latest file</Button.Label>
-					</Button>
-					{latestFileRelatedHref ? (
-						<Link asChild href={latestFileRelatedHref}>
-							<Button className="w-full" size="sm" variant="secondary">
-								<Ionicons color="#0A84FF" name="git-branch-outline" size={16} />
-								<Button.Label>Open latest link</Button.Label>
-							</Button>
-						</Link>
-					) : null}
-				</View>
-			) : (
-				<Button isDisabled={isUploading} onPress={onUploadFirstFile} size="sm">
-					{isUploading ? <Spinner size="sm" /> : null}
-					<Ionicons color="#FFFFFF" name="cloud-upload-outline" size={16} />
-					<Button.Label>
-						{isUploading ? "Uploading..." : "Upload first file"}
-					</Button.Label>
-				</Button>
-			)}
-		</View>
+						<View className="flex-row items-start justify-between gap-4">
+							<View className="flex-1 gap-1">
+								<BottomSheet.Title>Add to vault</BottomSheet.Title>
+								<BottomSheet.Description>
+									Choose what kind of file Viya should extract and link.
+								</BottomSheet.Description>
+							</View>
+							<CloseButton
+								accessibilityLabel="Close add file options"
+								className="h-10 w-10 rounded-full bg-surface"
+								onPress={() => onOpenChange(false)}
+							/>
+						</View>
+						<View className="gap-2">
+							{uploadActions.map((action) => (
+								<Button
+									className="h-16 justify-start rounded-3xl bg-surface px-4"
+									isDisabled={isUploading}
+									key={action.label}
+									onPress={action.onPress}
+									size="lg"
+									variant="secondary"
+								>
+									<View
+										className="h-10 w-10 items-center justify-center rounded-full"
+										style={{ backgroundColor: `${action.accent}1F` }}
+									>
+										<Ionicons
+											color={action.accent}
+											name={action.icon}
+											size={19}
+										/>
+									</View>
+									<View className="min-w-0 flex-1 items-start">
+										<Text type="body-sm" weight="semibold">
+											{action.label}
+										</Text>
+										<Text color="muted" numberOfLines={1} type="body-xs">
+											{action.description}
+										</Text>
+									</View>
+								</Button>
+							))}
+						</View>
+					</View>
+				</BottomSheet.Content>
+			</BottomSheet.Portal>
+		</BottomSheet>
 	);
 }
 
@@ -431,6 +476,9 @@ export function TripVaultScreen() {
 		useState<PendingTripSyncReview | null>(null);
 	const [isConfirming, setIsConfirming] = useState(false);
 	const [isSavingEdit, setIsSavingEdit] = useState(false);
+	const [isAddSheetOpen, setIsAddSheetOpen] = useState(false);
+	const [selectedVaultGroup, setSelectedVaultGroup] =
+		useState<VaultGroup>("all");
 	const [didSync, setDidSync] = useState(false);
 	const [vaultErrorMessage, setVaultErrorMessage] = useState<string | null>(
 		null
@@ -454,15 +502,6 @@ export function TripVaultScreen() {
 	if (vaultItems === undefined) {
 		return <ScreenLoadingState />;
 	}
-
-	const handleUpload = async (kind: "booking" | "document" | "receipt") => {
-		setVaultErrorMessage(null);
-		const review = await pickDocument({ kind, tripId });
-		if (review) {
-			setPendingReview(review);
-			setDidSync(false);
-		}
-	};
 
 	const handlePhotoUpload = async () => {
 		setVaultErrorMessage(null);
@@ -581,35 +620,60 @@ export function TripVaultScreen() {
 	const linkLabelByKey = workspace
 		? getTripRelatedEntityLabelByKey(workspace)
 		: new Map<string, string>();
-	const linkedFileCount = vaultItems.filter(
-		(item) => item.linkedEntityId && item.linkedEntityType
-	).length;
 	const receiptCount = vaultItems.filter(
 		(item) => item.kind === "receipt"
 	).length;
-	const documentCount = vaultItems.filter(
-		(item) => item.kind === "document" || item.kind === "booking"
-	).length;
-	const latestFile = vaultItems.at(0) ?? null;
-	const latestFileRelatedHref = latestFile
-		? getVaultRelatedHref({
-				relatedEntityType: latestFile.linkedEntityType,
-				tripId,
-			})
-		: null;
-	const linkTargetLabel =
-		workspace === undefined
-			? "Loading links"
-			: `${linkOptions.length} link targets`;
+	const getVaultGroupCount = (group: VaultGroup) => {
+		switch (group) {
+			case "booking":
+				return vaultItems.filter((item) => item.kind === "booking").length;
+			case "document":
+				return vaultItems.filter((item) => item.kind === "document").length;
+			case "receipt":
+				return receiptCount;
+			case "photo":
+				return vaultItems.filter((item) => item.kind === "momentPhoto").length;
+			default:
+				return vaultItems.length;
+		}
+	};
+	const filteredVaultItems = vaultItems.filter((item) => {
+		switch (selectedVaultGroup) {
+			case "booking":
+				return item.kind === "booking";
+			case "document":
+				return item.kind === "document";
+			case "receipt":
+				return item.kind === "receipt";
+			case "photo":
+				return item.kind === "momentPhoto";
+			default:
+				return true;
+		}
+	});
+	const selectedVaultGroupLabel =
+		vaultGroupOptions.find((option) => option.id === selectedVaultGroup)
+			?.label ?? "Files";
+
+	const handleSheetUpload = async (
+		upload: () => Promise<PendingTripSyncReview | null>
+	) => {
+		setIsAddSheetOpen(false);
+		const review = await upload();
+		if (review) {
+			setPendingReview(review);
+			setDidSync(false);
+		}
+	};
 
 	const savedFilesContent = (() => {
 		if (vaultItems.length === 0) {
 			return (
 				<EmptyState
 					action={{
-						label: isUploading ? "Uploading..." : "Upload file",
+						label: isUploading ? "Uploading..." : "Add file",
 						onPress: () => {
-							handleUpload("document").catch(() => undefined);
+							setIsAddSheetOpen(true);
 						},
 					}}
 					description="Upload confirmations, travel documents, receipts, or useful screenshots."
@@ -619,9 +683,30 @@ export function TripVaultScreen() {
 			);
 		}
 
+		if (filteredVaultItems.length === 0) {
+			return (
+				<View className="items-center gap-3 rounded-[28px] bg-surface p-5">
+					<View
+						className="h-12 w-12 items-center justify-center rounded-full"
+						style={{ backgroundColor: "rgba(10, 132, 255, 0.1)" }}
+					>
+						<Ionicons color="#0A84FF" name="folder-open-outline" size={22} />
+					</View>
+					<View className="items-center gap-1">
+						<Text type="body-sm" weight="semibold">
+							No {selectedVaultGroupLabel.toLowerCase()} yet
+						</Text>
+						<Text color="muted" type="body-sm">
+							Add one from the plus button.
+						</Text>
+					</View>
+				</View>
+			);
+		}
+
 		return (
 			<View className="gap-3">
-				{vaultItems.map((item) => (
+				{filteredVaultItems.map((item) => (
 					<VaultPreviewCard
 						createdAt={item.createdAt}
 						fileName={item.fileName}
@@ -660,165 +745,84 @@ export function TripVaultScreen() {
 	return (
 		<TripModuleScreenFrame
 			activeTab="documents"
-			header={
-				<RouteHeader
-					eyebrow="Sync"
-					icon="cloud-upload-outline"
-					subtitle="Upload, label, link, and review files before they update trip records."
-					title="TripSync Vault"
+			headerAction={
+				<NavigationIconButton
+					accessibilityLabel="Add file to vault"
+					icon="add"
+					onPress={() => setIsAddSheetOpen(true)}
 				/>
 			}
 			tripId={tripId}
 		>
-			<Container
-				className="px-4 pb-28"
-				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
-			>
-				<View className="gap-4 pb-4">
-					<TripModuleManualEntryCard
-						description="Upload confirmations, IDs, receipts, screenshots, and photos, then link each file to the right trip item."
-						isPrimaryDisabled={isUploading}
-						isSecondaryDisabled={isUploading}
-						moduleLabel="documents"
-						onPrimaryPress={() => {
-							handleUpload("document").catch(() => undefined);
-						}}
-						onSecondaryPress={() => {
-							handlePhotoUpload().catch(() => undefined);
-						}}
-						primaryActionIcon="cloud-upload-outline"
-						primaryActionLabel={isUploading ? "Uploading..." : "Upload file"}
-						secondaryActionIcon="images-outline"
-						secondaryActionLabel="Add photo"
-					/>
-
-					<Surface className="gap-4 rounded-[30px] bg-surface-secondary p-4">
-						<View className="flex-row items-start justify-between gap-3">
-							<View className="min-w-0 flex-1 gap-1">
-								<Text.Heading type="h5" weight="semibold">
-									Document inbox
-								</Text.Heading>
-								<Text color="muted" type="body-sm">
-									Upload once, review extraction, then link files to the trip.
-								</Text>
-							</View>
-							<View
-								className="h-11 w-11 items-center justify-center rounded-full"
-								style={{ backgroundColor: "rgba(90, 200, 250, 0.14)" }}
-							>
-								<Ionicons
-									color="#5AC8FA"
-									name="folder-open-outline"
-									size={20}
-								/>
-							</View>
-						</View>
-						<View className="flex-row flex-wrap gap-2">
-							<VaultPill>{vaultItems.length} files</VaultPill>
-							<VaultPill>{linkedFileCount} linked</VaultPill>
-							<VaultPill>{documentCount} docs</VaultPill>
-							<VaultPill>{receiptCount} receipts</VaultPill>
-							<VaultPill>{linkTargetLabel}</VaultPill>
-							<VaultPill>Review before save</VaultPill>
-						</View>
-						<LatestVaultFileSummary
-							handleOpenVaultFile={handleOpenVaultFile}
-							isUploading={isUploading}
-							latestFile={latestFile}
-							latestFileRelatedHref={latestFileRelatedHref}
-							onUploadFirstFile={() => {
-								handleUpload("document").catch(() => undefined);
-							}}
-							openEditSheet={openEditSheet}
-						/>
-						<View className="flex-row flex-wrap gap-2">
-							<Button
-								className="flex-1"
-								isDisabled={isUploading}
-								onPress={() => {
-									handleUpload("booking").catch(() => undefined);
-								}}
-								size="sm"
-							>
-								<Ionicons color="#FFFFFF" name="ticket-outline" size={16} />
-								<Button.Label>Booking</Button.Label>
-							</Button>
-							<Button
-								className="flex-1"
-								isDisabled={isUploading}
-								onPress={() => {
-									handleUpload("document").catch(() => undefined);
-								}}
-								size="sm"
-								variant="secondary"
-							>
-								<Ionicons color="#0A84FF" name="document-outline" size={16} />
-								<Button.Label>Document</Button.Label>
-							</Button>
-							<Button
-								className="flex-1"
-								isDisabled={isUploading}
-								onPress={() => {
-									handleUpload("receipt").catch(() => undefined);
-								}}
-								size="sm"
-								variant="secondary"
-							>
-								<Ionicons color="#0A84FF" name="receipt-outline" size={16} />
-								<Button.Label>Receipt</Button.Label>
-							</Button>
-							<Button
-								className="w-full"
-								isDisabled={isUploading}
-								onPress={() => {
-									handlePhotoUpload().catch(() => undefined);
-								}}
-								size="sm"
-								variant="tertiary"
-							>
-								<Ionicons color="#6B7280" name="camera-outline" size={16} />
-								<Button.Label>Photo or screenshot</Button.Label>
-							</Button>
-						</View>
-						{isUploading ? (
-							<View className="flex-row items-center gap-2">
-								<Spinner size="sm" />
-								<Text color="muted" type="body-sm">
-									Uploading and extracting...
-								</Text>
-							</View>
-						) : null}
-						{uploadErrorMessage ? (
-							<Text className="text-danger" type="body-sm">
-								{uploadErrorMessage}
-							</Text>
-						) : null}
-						{vaultErrorMessage ? (
-							<Text className="text-danger" type="body-sm">
-								{vaultErrorMessage}
-							</Text>
-						) : null}
-						{openFileErrorMessage ? (
-							<Text className="text-danger" type="body-sm">
-								{openFileErrorMessage}
-							</Text>
-						) : null}
-						{didSync ? (
-							<Link asChild href={VIYA_ROUTES.tripReadiness(tripId)}>
-								<Button size="sm" variant="secondary">
-									<Button.Label>Review readiness impact</Button.Label>
-								</Button>
-							</Link>
-						) : null}
-					</Surface>
-
+			<Container includeBottomInset={false} isScrollable={false}>
+				<ScrollView
+					contentContainerStyle={{
+						flexGrow: 1,
+						gap: 14,
+						paddingBottom: 112,
+						paddingHorizontal: 16,
+					}}
+					contentInsetAdjustmentBehavior="automatic"
+					keyboardShouldPersistTaps="handled"
+					showsVerticalScrollIndicator={false}
+				>
 					<View className="gap-3">
-						<Text.Heading type="h5" weight="semibold">
-							Saved files
-						</Text.Heading>
+						<ScrollView
+							contentContainerStyle={{ gap: 8, paddingRight: 16 }}
+							horizontal={true}
+							showsHorizontalScrollIndicator={false}
+						>
+							{vaultGroupOptions.map((option) => (
+								<VaultGroupChip
+									count={getVaultGroupCount(option.id)}
+									isSelected={selectedVaultGroup === option.id}
+									key={option.id}
+									label={option.label}
+									onPress={() => setSelectedVaultGroup(option.id)}
+								/>
+							))}
+						</ScrollView>
+						{isUploading ||
+						uploadErrorMessage ||
+						vaultErrorMessage ||
+						openFileErrorMessage ||
+						didSync ? (
+							<View className="gap-2 rounded-[24px] bg-surface-secondary p-4">
+								{isUploading ? (
+									<View className="flex-row items-center gap-2">
+										<Spinner size="sm" />
+										<Text color="muted" type="body-sm">
+											Uploading and extracting...
+										</Text>
+									</View>
+								) : null}
+								{uploadErrorMessage ? (
+									<Text className="text-danger" type="body-sm">
+										{uploadErrorMessage}
+									</Text>
+								) : null}
+								{vaultErrorMessage ? (
+									<Text className="text-danger" type="body-sm">
+										{vaultErrorMessage}
+									</Text>
+								) : null}
+								{openFileErrorMessage ? (
+									<Text className="text-danger" type="body-sm">
+										{openFileErrorMessage}
+									</Text>
+								) : null}
+								{didSync ? (
+									<Link asChild href={VIYA_ROUTES.tripReadiness(tripId)}>
+										<Button size="sm" variant="secondary">
+											<Button.Label>Review readiness impact</Button.Label>
+										</Button>
+									</Link>
+								) : null}
+							</View>
+						) : null}
 						{savedFilesContent}
 					</View>
-				</View>
+				</ScrollView>
 
 				<TripSyncReviewSheet
 					isConfirming={isConfirming}
@@ -852,6 +856,30 @@ export function TripVaultScreen() {
 					onUpdateForm={(key, value) => {
 						setVaultErrorMessage(null);
 						setEditForm((currentForm) => ({ ...currentForm, [key]: value }));
+					}}
+				/>
+				<VaultAddSheet
+					isOpen={isAddSheetOpen}
+					isUploading={isUploading}
+					onOpenChange={setIsAddSheetOpen}
+					onPickBooking={() => {
+						handleSheetUpload(() =>
+							pickDocument({ kind: "booking", tripId })
+						).catch(() => undefined);
+					}}
+					onPickDocument={() => {
+						handleSheetUpload(() =>
+							pickDocument({ kind: "document", tripId })
+						).catch(() => undefined);
+					}}
+					onPickPhoto={() => {
+						setIsAddSheetOpen(false);
+						handlePhotoUpload().catch(() => undefined);
+					}}
+					onPickReceipt={() => {
+						handleSheetUpload(() =>
+							pickDocument({ kind: "receipt", tripId })
+						).catch(() => undefined);
 					}}
 				/>
 			</Container>

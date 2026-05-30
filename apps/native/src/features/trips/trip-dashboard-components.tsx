@@ -81,7 +81,7 @@ const moduleAccents: Record<string, ModuleAccent> = {
 	Checklist: { bg: "rgba(94, 92, 230, 0.12)", color: "#5E5CE6" },
 	Companions: { bg: "rgba(255, 45, 85, 0.1)", color: "#FF2D55" },
 	Documents: { bg: "rgba(175, 82, 222, 0.12)", color: "#AF52DE" },
-	Itinerary: { bg: "rgba(10, 132, 255, 0.1)", color: "#0A84FF" },
+	Itinerary: { bg: "rgba(191, 90, 242, 0.12)", color: "#BF5AF2" },
 	Memories: { bg: "rgba(191, 90, 242, 0.12)", color: "#BF5AF2" },
 	Notes: { bg: "rgba(255, 159, 10, 0.12)", color: "#FF9F0A" },
 	Overview: { bg: "rgba(10, 132, 255, 0.1)", color: "#0A84FF" },
@@ -1177,18 +1177,22 @@ function ModuleLauncherTile({
 			accessibilityState={{ selected: isActive }}
 			className={
 				item.span === "full"
-					? "min-h-24 basis-full rounded-[24px] bg-white p-3.5"
-					: "min-h-24 flex-1 basis-[47%] rounded-[24px] bg-white p-3.5"
+					? "min-h-24 basis-full rounded-[24px]"
+					: "min-h-24 flex-1 basis-[47%] rounded-[24px]"
 			}
 			onPress={onPress}
 			style={({ pressed }) => ({
-				backgroundColor: isActive ? accent.bg : "#FFFFFF",
-				borderColor: isActive ? accent.color : borderColor,
-				borderWidth: 1,
 				transform: [{ scale: pressed ? 0.985 : 1 }],
 			})}
 		>
-			<View className="flex-1 justify-between gap-2.5">
+			<Surface
+				className="flex-1 justify-between gap-2.5 rounded-[24px] bg-surface p-3.5"
+				style={{
+					backgroundColor: isActive ? accent.bg : undefined,
+					borderColor: isActive ? accent.color : borderColor,
+					borderWidth: 1,
+				}}
+			>
 				<View className="flex-row items-center justify-between gap-2">
 					<View
 						className="h-9 w-9 items-center justify-center rounded-2xl"
@@ -1210,7 +1214,7 @@ function ModuleLauncherTile({
 						{item.detail}
 					</Text>
 				</View>
-			</View>
+			</Surface>
 		</Pressable>
 	);
 }
@@ -1398,15 +1402,15 @@ function WorkspaceModuleTile({ item }: { item: TripWorkspaceModule }) {
 			<Pressable
 				accessibilityLabel={`Open ${item.label}`}
 				accessibilityRole="button"
-				className="min-h-24 flex-1 basis-[47%] rounded-[24px] bg-white p-3.5"
+				className="min-h-24 flex-1 basis-[47%] rounded-[24px]"
 				style={({ pressed }) => ({
-					backgroundColor: "#FFFFFF",
-					borderColor,
-					borderWidth: 1,
 					transform: [{ scale: pressed ? 0.985 : 1 }],
 				})}
 			>
-				<View className="flex-1 justify-between gap-2.5">
+				<Surface
+					className="flex-1 justify-between gap-2.5 rounded-[24px] bg-surface p-3.5"
+					style={{ borderColor, borderWidth: 1 }}
+				>
 					<View className="min-w-0 flex-row items-center justify-between gap-2">
 						<View
 							className="h-9 w-9 shrink-0 items-center justify-center rounded-2xl"
@@ -1436,7 +1440,7 @@ function WorkspaceModuleTile({ item }: { item: TripWorkspaceModule }) {
 							{item.detail}
 						</Text>
 					</View>
-				</View>
+				</Surface>
 			</Pressable>
 		</Link>
 	);

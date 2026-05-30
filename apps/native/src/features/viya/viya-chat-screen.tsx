@@ -119,11 +119,11 @@ const getThreadIdsAfterTripCreate = ({
 };
 
 const composerInputLineHeight = 21;
-const composerInputPaddingBottom = 9;
-const composerInputPaddingTop = 11;
+const composerInputPaddingBottom = 10;
+const composerInputPaddingTop = 10;
 const expandedComposerChromeReserve = 260;
-const chatScrollContentBottomPadding = 18;
-const chatScrollShadowBottomBleed = 12;
+const chatScrollContentBottomPadding = 24;
+const chatComposerGap = 12;
 const chatScrollShadowTopBleed = 20;
 
 const getSearchParamValue = (value?: string | string[]) =>
@@ -544,12 +544,6 @@ export function ViyaChatScreen() {
 			hasPlanUserInput &&
 			!isAwaitingViya &&
 			!shouldShowSlashCommandMenu
-	);
-	const hasBottomOverlayPanel = Boolean(
-		shouldShowSlashCommandMenu ||
-			shouldShowEmptySuggestions ||
-			shouldShowDraftBlueprintShortcut ||
-			shouldShowQuestionCard
 	);
 	const composerInputLayout = getComposerInputLayout({
 		contentHeight: composerContentHeight,
@@ -1050,8 +1044,12 @@ export function ViyaChatScreen() {
 				className="flex-1"
 			>
 				<View
-					className="flex-1 overflow-hidden px-4 pb-4"
-					style={{ backgroundColor, paddingTop: insets.top + 10 }}
+					className="flex-1 overflow-hidden px-4"
+					style={{
+						backgroundColor,
+						paddingBottom: Math.max(insets.bottom, 16),
+						paddingTop: insets.top + 10,
+					}}
 				>
 					<View
 						className="mb-5 flex-row items-center justify-between"
@@ -1090,9 +1088,7 @@ export function ViyaChatScreen() {
 						LinearGradientComponent={LinearGradient}
 						size={36}
 						style={{
-							marginBottom: hasBottomOverlayPanel
-								? 0
-								: -chatScrollShadowBottomBleed,
+							marginBottom: 0,
 							marginTop: -chatScrollShadowTopBleed,
 						}}
 					>
@@ -1101,9 +1097,7 @@ export function ViyaChatScreen() {
 							contentContainerStyle={{
 								flexGrow: 1,
 								justifyContent: shouldShowMessages ? undefined : "center",
-								paddingBottom:
-									chatScrollContentBottomPadding +
-									(hasBottomOverlayPanel ? 0 : chatScrollShadowBottomBleed),
+								paddingBottom: chatScrollContentBottomPadding,
 								paddingTop: chatScrollShadowTopBleed,
 							}}
 							key={`${threadContextKey}:${threadId ?? "new"}`}
@@ -1176,7 +1170,7 @@ export function ViyaChatScreen() {
 						</View>
 					) : null}
 
-					<View className="mt-2 gap-1">
+					<View className="gap-1" style={{ marginTop: chatComposerGap }}>
 						{vaultUploadErrorMessage ? (
 							<Text className="px-4 text-danger" type="body-xs">
 								{vaultUploadErrorMessage}
@@ -1198,7 +1192,7 @@ export function ViyaChatScreen() {
 										isUploadingVaultFile || isConfirmingVaultUpload
 									),
 								}}
-								className="h-9 w-9 items-center justify-center rounded-full border"
+								className="h-11 w-11 items-center justify-center rounded-full border"
 								disabled={isUploadingVaultFile || isConfirmingVaultUpload}
 								onPress={() => {
 									runAsyncTask(handleFileUploadPress());
@@ -1232,8 +1226,8 @@ export function ViyaChatScreen() {
 								/>
 							</View>
 							<View
-								className="items-center justify-end"
-								style={{ height: composerInputLayout.height, width: 38 }}
+								className="items-center justify-center"
+								style={{ height: composerInputLayout.height, width: 44 }}
 							>
 								{composerInputLayout.shouldShowExpand ? (
 									<Pressable
@@ -1254,7 +1248,13 @@ export function ViyaChatScreen() {
 										isIconOnly={true}
 										onPress={() => handleSubmit()}
 										size="sm"
-										style={{ height: 38, width: 38 }}
+										style={{
+											height: 44,
+											marginTop: composerInputLayout.shouldShowExpand
+												? "auto"
+												: 0,
+											width: 44,
+										}}
 										variant="primary"
 									>
 										<Ionicons color="#FFFFFF" name="arrow-up" size={18} />
@@ -1264,8 +1264,14 @@ export function ViyaChatScreen() {
 										accessibilityLabel="Send message"
 										accessibilityRole="button"
 										accessibilityState={{ disabled: true }}
-										className="h-[38px] w-[38px] items-center justify-center rounded-full bg-default"
+										className="h-11 w-11 items-center justify-center rounded-full"
 										disabled={true}
+										style={{
+											backgroundColor: "rgba(24, 24, 27, 0.06)",
+											marginTop: composerInputLayout.shouldShowExpand
+												? "auto"
+												: 0,
+										}}
 									>
 										<Ionicons color="#A1A1AA" name="arrow-up" size={18} />
 									</Pressable>

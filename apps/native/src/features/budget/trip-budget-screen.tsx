@@ -3,9 +3,11 @@ import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
 import { getBudgetWalletSummary } from "@viya-app/domain";
 import { useMutation, useQuery } from "convex/react";
-import { type Href, Link } from "expo-router";
+import { Link } from "expo-router";
 import {
+	BottomSheet,
 	Button,
+	CloseButton,
 	Input,
 	Label,
 	Spinner,
@@ -13,12 +15,15 @@ import {
 	Text,
 	TextField,
 } from "heroui-native";
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { useMemo, useState } from "react";
-import { Linking, View } from "react-native";
+import { Linking, ScrollView, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Container } from "@/components/container";
+import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 import { EmptyState } from "@/src/components/empty-state";
+import { NavigationIconButton } from "@/src/components/navigation/navigation-icon-button";
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 import {
@@ -31,6 +36,8 @@ import { useTripIdParam } from "@/src/features/trips/use-trip-id-param";
 const dateMs = 86_400_000;
 const budgetAccentColor = "#0AA5B5";
 const budgetAccentBackground = "rgba(10, 165, 181, 0.12)";
+const budgetAccentTrack = "rgba(10, 165, 181, 0.16)";
+const subtleBorderColor = "rgba(24, 24, 27, 0.08)";
 const expenseCategories = [
 	"food",
 	"transport",
@@ -42,11 +49,6 @@ const expenseCategories = [
 ] as const;
 
 type ExpenseCategory = (typeof expenseCategories)[number];
-
-const expenseCategorySet = new Set<string>(expenseCategories);
-
-const getExpenseCategory = (value: string): ExpenseCategory =>
-	expenseCategorySet.has(value) ? (value as ExpenseCategory) : "other";
 
 interface ExpenseFormState {
 	amount: string;
@@ -132,16 +134,18 @@ const getBudgetProgress = ({
 };
 
 function BudgetSnapshotStat({
+	align = "flex-start",
 	detail,
 	label,
 	value,
 }: {
+	align?: "flex-end" | "flex-start";
 	detail?: string;
 	label: string;
 	value: string;
 }) {
 	return (
-		<View className="min-w-[30%] flex-1 gap-1 rounded-[20px] bg-surface px-3 py-3">
+		<View className="min-w-0 flex-1 gap-1.5" style={{ alignItems: align }}>
 			<Text color="muted" numberOfLines={1} type="body-xs" weight="semibold">
 				{label}
 			</Text>
@@ -161,7 +165,7 @@ function ProgressBar({ progress }: { progress: number }) {
 	return (
 		<View
 			className="h-2 overflow-hidden rounded-full"
-			style={{ backgroundColor: budgetAccentBackground }}
+			style={{ backgroundColor: budgetAccentTrack }}
 		>
 			<View
 				className="h-full rounded-full"
@@ -172,20 +176,16 @@ function ProgressBar({ progress }: { progress: number }) {
 }
 
 function BudgetOverviewCard({
-	bookingHref,
 	budgetStatus,
 	dailySafeSpendLabel,
-	onLogExpense,
 	onOpenBudgetEditor,
 	plannedBudgetLabel,
 	progress,
 	remainingAmountLabel,
 	totalTrackedSpendLabel,
 }: {
-	bookingHref: Href;
 	budgetStatus: string;
 	dailySafeSpendLabel: string;
-	onLogExpense: () => void;
 	onOpenBudgetEditor: () => void;
 	plannedBudgetLabel: string;
 	progress: number;
@@ -193,21 +193,27 @@ function BudgetOverviewCard({
 	totalTrackedSpendLabel: string;
 }) {
 	return (
-		<Surface className="gap-4 rounded-[30px] bg-surface-secondary p-4">
-			<View className="flex-row items-start justify-between gap-3">
+		<Surface className="gap-3 rounded-[30px] bg-surface-secondary p-4">
+			<View className="flex-row items-center gap-3">
+				<View
+					className="h-10 w-10 items-center justify-center rounded-full"
+					style={{ backgroundColor: budgetAccentBackground }}
+				>
+					<Ionicons color={budgetAccentColor} name="wallet-outline" size={20} />
+				</View>
 				<View className="min-w-0 flex-1 gap-1">
 					<Text color="muted" type="body-xs" weight="semibold">
-						REMAINING
+						BUDGET STATUS
 					</Text>
-					<Text.Heading numberOfLines={1} type="h2" weight="semibold">
+					<Text.Heading numberOfLines={1} type="h3" weight="semibold">
 						{remainingAmountLabel}
 					</Text.Heading>
-					<Text color="muted" numberOfLines={1} type="body-sm">
-						{dailySafeSpendLabel} per travel day
+					<Text color="muted" numberOfLines={1} type="body-xs">
+						{dailySafeSpendLabel} safe daily spend
 					</Text>
 				</View>
 				<View
-					className="rounded-full px-3 py-1"
+					className="rounded-full px-3 py-1.5"
 					style={{ backgroundColor: budgetAccentBackground }}
 				>
 					<Text
@@ -221,7 +227,7 @@ function BudgetOverviewCard({
 				</View>
 			</View>
 
-			<View className="gap-2">
+			<View className="gap-2 rounded-[20px] bg-surface px-3 py-2.5">
 				<ProgressBar progress={progress} />
 				<View className="flex-row justify-between gap-3">
 					<Text color="muted" type="body-xs">
@@ -233,38 +239,29 @@ function BudgetOverviewCard({
 				</View>
 			</View>
 
-			<View className="flex-row flex-wrap gap-2">
-				<Button className="min-w-[150px] flex-1" onPress={onLogExpense}>
-					<Ionicons color="#FFFFFF" name="receipt-outline" size={17} />
-					<Button.Label>Log expense</Button.Label>
-				</Button>
-				<Link asChild href={bookingHref}>
-					<Button className="min-w-[150px] flex-1" variant="secondary">
-						<Ionicons
-							color={budgetAccentColor}
-							name="ticket-outline"
-							size={17}
-						/>
-						<Button.Label>Bookings</Button.Label>
-					</Button>
-				</Link>
-			</View>
-
-			<View className="flex-row flex-wrap gap-2">
+			<View
+				className="flex-row items-stretch gap-4 border-t pt-3"
+				style={{ borderColor: subtleBorderColor }}
+			>
 				<BudgetSnapshotStat
 					detail="Logged"
 					label="Spent"
 					value={totalTrackedSpendLabel}
 				/>
+				<View className="w-px self-stretch bg-border" />
 				<BudgetSnapshotStat label="Daily" value={dailySafeSpendLabel} />
-				<Button
-					className="min-w-[30%] flex-1 rounded-[20px]"
-					onPress={onOpenBudgetEditor}
-					variant="tertiary"
-				>
-					<Button.Label>{`Budget ${plannedBudgetLabel}`}</Button.Label>
-				</Button>
+				<View className="w-px self-stretch bg-border" />
+				<BudgetSnapshotStat
+					align="flex-end"
+					label="Budget"
+					value={plannedBudgetLabel}
+				/>
 			</View>
+
+			<Button onPress={onOpenBudgetEditor} size="sm" variant="secondary">
+				<Ionicons color={budgetAccentColor} name="create-outline" size={15} />
+				<Button.Label>Edit budget</Button.Label>
+			</Button>
 		</Surface>
 	);
 }
@@ -282,38 +279,6 @@ function SectionTitle({
 			<Text.Heading type="h5" weight="semibold">
 				{title}
 			</Text.Heading>
-		</View>
-	);
-}
-
-function CategoryBreakdownRow({
-	currency,
-	item,
-	onAddCategoryExpense,
-}: {
-	currency: string;
-	item: { amount: number; category: string };
-	onAddCategoryExpense: (category: ExpenseCategory) => void;
-}) {
-	return (
-		<View className="gap-3 border-border border-b px-4 py-3">
-			<View className="flex-row items-center justify-between gap-3">
-				<Text type="body-sm" weight="semibold">
-					{formatStatus(item.category)}
-				</Text>
-				<Text color="muted" type="body-sm">
-					{formatMoney(item.amount, currency)}
-				</Text>
-			</View>
-			<Button
-				className="self-start"
-				onPress={() => onAddCategoryExpense(getExpenseCategory(item.category))}
-				size="sm"
-				variant="secondary"
-			>
-				<Ionicons color={budgetAccentColor} name="add-outline" size={15} />
-				<Button.Label>Add expense</Button.Label>
-			</Button>
 		</View>
 	);
 }
@@ -338,6 +303,27 @@ function CategoryPicker({
 				</Button>
 			))}
 		</View>
+	);
+}
+
+function SheetField({
+	children,
+	label,
+}: {
+	children: (
+		handlers: ReturnType<typeof useCompatibleBottomSheetAwareHandlers>
+	) => ReactNode;
+	label: string;
+}) {
+	const handlers = useCompatibleBottomSheetAwareHandlers();
+
+	return (
+		<TextField className="gap-2">
+			<Label>
+				<Label.Text>{label}</Label.Text>
+			</Label>
+			{children(handlers)}
+		</TextField>
 	);
 }
 
@@ -446,13 +432,14 @@ function BudgetEditorCard({
 	);
 }
 
-function ExpenseFormCard({
+function ExpenseFormSheet({
 	bookingOptions,
 	editingExpenseId,
 	expenseErrorMessage,
 	expenseForm,
 	isAddingExpense,
-	onCancel,
+	isOpen,
+	onOpenChange,
 	onSave,
 	onUpdateForm,
 	receiptOptions,
@@ -462,112 +449,145 @@ function ExpenseFormCard({
 	expenseErrorMessage: string | null;
 	expenseForm: ExpenseFormState;
 	isAddingExpense: boolean;
-	onCancel: () => void;
+	isOpen: boolean;
+	onOpenChange: (isOpen: boolean) => void;
 	onSave: () => void;
 	onUpdateForm: (patch: Partial<ExpenseFormState>) => void;
 	receiptOptions: { detail: string; id: Id<"vaultItems">; label: string }[];
 }) {
+	const insets = useSafeAreaInsets();
+
 	return (
-		<Surface className="gap-4 rounded-[26px] border border-border bg-surface p-5">
-			<SectionTitle
-				icon="receipt-outline"
-				title={editingExpenseId ? "Edit expense" : "Log expense"}
-			/>
-			<TextField className="gap-2">
-				<Label>
-					<Label.Text>Title</Label.Text>
-				</Label>
-				<Input
-					className="h-11 rounded-[18px] border-0 bg-surface-secondary px-4"
-					onChangeText={(title) => onUpdateForm({ title })}
-					placeholder="Lunch, taxi, museum ticket"
-					value={expenseForm.title}
-					variant="secondary"
-				/>
-			</TextField>
-			<View className="flex-row flex-wrap gap-3">
-				<TextField className="min-w-0 flex-1 gap-2">
-					<Label>
-						<Label.Text>Amount</Label.Text>
-					</Label>
-					<Input
-						className="h-11 rounded-[18px] border-0 bg-surface-secondary px-4"
-						keyboardType="numeric"
-						onChangeText={(amount) => onUpdateForm({ amount })}
-						placeholder="1200"
-						value={expenseForm.amount}
-						variant="secondary"
-					/>
-				</TextField>
-				<TextField className="min-w-0 flex-1 gap-2">
-					<Label>
-						<Label.Text>Date</Label.Text>
-					</Label>
-					<Input
-						className="h-11 rounded-[18px] border-0 bg-surface-secondary px-4"
-						onChangeText={(spentAt) => onUpdateForm({ spentAt })}
-						placeholder="2026-07-10"
-						value={expenseForm.spentAt}
-						variant="secondary"
-					/>
-				</TextField>
-			</View>
-			<View className="gap-2">
-				<Text color="muted" type="body-xs" weight="semibold">
-					CATEGORY
-				</Text>
-				<CategoryPicker
-					onChange={(category) => onUpdateForm({ category })}
-					value={expenseForm.category}
-				/>
-			</View>
-			<LinkPicker
-				emptyLabel="No booking"
-				label="Booking"
-				onChange={(bookingId) => onUpdateForm({ bookingId })}
-				options={bookingOptions}
-				value={expenseForm.bookingId}
-			/>
-			<LinkPicker
-				emptyLabel="No receipt"
-				label="Receipt proof"
-				onChange={(vaultItemId) => onUpdateForm({ vaultItemId })}
-				options={receiptOptions}
-				value={expenseForm.vaultItemId}
-			/>
-			<TextField className="gap-2">
-				<Label>
-					<Label.Text>Notes</Label.Text>
-				</Label>
-				<Input
-					className="h-11 rounded-[18px] border-0 bg-surface-secondary px-4"
-					onChangeText={(notes) => onUpdateForm({ notes })}
-					placeholder="Optional"
-					value={expenseForm.notes}
-					variant="secondary"
-				/>
-			</TextField>
-			{expenseErrorMessage ? (
-				<Text className="text-danger" type="body-sm">
-					{expenseErrorMessage}
-				</Text>
-			) : null}
-			<Button isDisabled={isAddingExpense} onPress={onSave}>
-				{isAddingExpense ? <Spinner size="sm" /> : null}
-				<Button.Label>
-					{editingExpenseId ? "Save expense" : "Add expense"}
-				</Button.Label>
-			</Button>
-			<Button
-				isDisabled={isAddingExpense}
-				onPress={onCancel}
-				variant="secondary"
-			>
-				<Button.Label>
-					{editingExpenseId ? "Cancel edit" : "Cancel"}
-				</Button.Label>
-			</Button>
-		</Surface>
+		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
+			<BottomSheet.Portal>
+				<BottomSheet.Overlay />
+				<BottomSheet.Content
+					backgroundClassName="rounded-t-[36px] bg-background"
+					enablePanDownToClose={true}
+					snapPoints={["86%"]}
+				>
+					<ScrollView
+						contentContainerStyle={{
+							gap: 16,
+							paddingBottom: Math.max(insets.bottom, 18),
+							paddingHorizontal: 20,
+							paddingTop: 8,
+						}}
+						keyboardShouldPersistTaps="handled"
+						showsVerticalScrollIndicator={false}
+					>
+						<View className="flex-row items-start justify-between gap-4">
+							<View className="flex-1 gap-1">
+								<BottomSheet.Title>
+									{editingExpenseId ? "Edit expense" : "Add expense"}
+								</BottomSheet.Title>
+								<BottomSheet.Description>
+									Log manual spend and link booking or receipt proof.
+								</BottomSheet.Description>
+							</View>
+							<CloseButton
+								accessibilityLabel="Close expense form"
+								className="h-10 w-10 rounded-full bg-surface"
+								onPress={() => onOpenChange(false)}
+							/>
+						</View>
+						<SheetField label="Title">
+							{({ onBlur, onFocus }) => (
+								<Input
+									className="h-12 border border-border bg-surface px-4"
+									onBlur={onBlur}
+									onChangeText={(title) => onUpdateForm({ title })}
+									onFocus={onFocus}
+									placeholder="Lunch, taxi, museum ticket"
+									value={expenseForm.title}
+									variant="secondary"
+								/>
+							)}
+						</SheetField>
+						<View className="flex-row flex-wrap gap-3">
+							<View className="min-w-0 flex-1">
+								<SheetField label="Amount">
+									{({ onBlur, onFocus }) => (
+										<Input
+											className="h-12 border border-border bg-surface px-4"
+											keyboardType="numeric"
+											onBlur={onBlur}
+											onChangeText={(amount) => onUpdateForm({ amount })}
+											onFocus={onFocus}
+											placeholder="1200"
+											value={expenseForm.amount}
+											variant="secondary"
+										/>
+									)}
+								</SheetField>
+							</View>
+							<View className="min-w-0 flex-1">
+								<SheetField label="Date">
+									{({ onBlur, onFocus }) => (
+										<Input
+											className="h-12 border border-border bg-surface px-4"
+											onBlur={onBlur}
+											onChangeText={(spentAt) => onUpdateForm({ spentAt })}
+											onFocus={onFocus}
+											placeholder="2026-07-10"
+											value={expenseForm.spentAt}
+											variant="secondary"
+										/>
+									)}
+								</SheetField>
+							</View>
+						</View>
+						<View className="gap-2">
+							<Text color="muted" type="body-xs" weight="semibold">
+								CATEGORY
+							</Text>
+							<CategoryPicker
+								onChange={(category) => onUpdateForm({ category })}
+								value={expenseForm.category}
+							/>
+						</View>
+						<LinkPicker
+							emptyLabel="No booking"
+							label="Booking"
+							onChange={(bookingId) => onUpdateForm({ bookingId })}
+							options={bookingOptions}
+							value={expenseForm.bookingId}
+						/>
+						<LinkPicker
+							emptyLabel="No receipt"
+							label="Receipt proof"
+							onChange={(vaultItemId) => onUpdateForm({ vaultItemId })}
+							options={receiptOptions}
+							value={expenseForm.vaultItemId}
+						/>
+						<SheetField label="Notes">
+							{({ onBlur, onFocus }) => (
+								<Input
+									className="h-12 border border-border bg-surface px-4"
+									onBlur={onBlur}
+									onChangeText={(notes) => onUpdateForm({ notes })}
+									onFocus={onFocus}
+									placeholder="Optional"
+									value={expenseForm.notes}
+									variant="secondary"
+								/>
+							)}
+						</SheetField>
+						{expenseErrorMessage ? (
+							<Text className="text-danger" type="body-sm">
+								{expenseErrorMessage}
+							</Text>
+						) : null}
+						<Button isDisabled={isAddingExpense} onPress={onSave} size="lg">
+							{isAddingExpense ? <Spinner size="sm" /> : null}
+							<Button.Label>
+								{editingExpenseId ? "Save expense" : "Add expense"}
+							</Button.Label>
+						</Button>
+					</ScrollView>
+				</BottomSheet.Content>
+			</BottomSheet.Portal>
+		</BottomSheet>
 	);
 }
 
@@ -598,16 +618,29 @@ function ExpenseRow({
 }) {
 	return (
 		<View
-			className="flex-row items-center justify-between gap-3 border-border border-b px-4 py-3"
+			className="flex-row items-center justify-between gap-3 border-border border-b px-4 py-3.5"
 			key={expense._id}
 		>
-			<View className="min-w-0 flex-1">
-				<Text numberOfLines={1} type="body-sm" weight="semibold">
-					{expense.title}
-				</Text>
-				<Text color="muted" numberOfLines={1} type="body-xs">
-					{formatStatus(expense.category)} · {expense.spentAt}
-				</Text>
+			<View
+				className="h-10 w-10 items-center justify-center rounded-full"
+				style={{ backgroundColor: budgetAccentBackground }}
+			>
+				<Ionicons color={budgetAccentColor} name="receipt-outline" size={18} />
+			</View>
+			<View className="min-w-0 flex-1 gap-0.5">
+				<View className="flex-row items-start justify-between gap-3">
+					<View className="min-w-0 flex-1">
+						<Text numberOfLines={1} type="body-sm" weight="semibold">
+							{expense.title}
+						</Text>
+						<Text color="muted" numberOfLines={1} type="body-xs">
+							{formatStatus(expense.category)} · {expense.spentAt}
+						</Text>
+					</View>
+					<Text type="body-sm" weight="semibold">
+						{formatMoney(expense.amount, expense.currency)}
+					</Text>
+				</View>
 				{expense.bookingId || expense.vaultItemId ? (
 					<Text color="muted" numberOfLines={1} type="body-xs">
 						{[
@@ -620,12 +653,7 @@ function ExpenseRow({
 							.join(" · ")}
 					</Text>
 				) : null}
-			</View>
-			<View className="items-end gap-2">
-				<Text type="body-sm" weight="semibold">
-					{formatMoney(expense.amount, expense.currency)}
-				</Text>
-				<View className="flex-row flex-wrap justify-end gap-2">
+				<View className="flex-row flex-wrap gap-2 pt-2">
 					{expense.bookingId ? (
 						<Link asChild href={VIYA_ROUTES.tripBookings(tripId)}>
 							<Button size="sm" variant="secondary">
@@ -897,15 +925,6 @@ export function TripBudgetScreen() {
 		});
 		setIsExpenseFormOpen(true);
 	};
-	const handleAddCategoryExpense = (category: ExpenseCategory) => {
-		setEditingExpenseId(null);
-		setExpenseErrorMessage(null);
-		setExpenseForm({
-			...initialExpenseForm(),
-			category,
-		});
-		setIsExpenseFormOpen(true);
-	};
 
 	const handleOpenReceipt = async (url: string) => {
 		setReceiptOpenErrorMessage(null);
@@ -917,17 +936,32 @@ export function TripBudgetScreen() {
 	};
 
 	return (
-		<TripModuleScreenFrame activeTab="budget" tripId={tripId}>
-			<Container
-				className="px-4 pb-28"
-				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
-			>
-				<View className="gap-4 pb-4">
+		<TripModuleScreenFrame
+			activeTab="budget"
+			headerAction={
+				<NavigationIconButton
+					accessibilityLabel="Add expense"
+					icon="add"
+					onPress={openNewExpenseForm}
+				/>
+			}
+			tripId={tripId}
+		>
+			<Container includeBottomInset={false} isScrollable={false}>
+				<ScrollView
+					contentContainerStyle={{
+						flexGrow: 1,
+						gap: 14,
+						paddingBottom: 112,
+						paddingHorizontal: 16,
+					}}
+					contentInsetAdjustmentBehavior="automatic"
+					keyboardShouldPersistTaps="handled"
+					showsVerticalScrollIndicator={false}
+				>
 					<BudgetOverviewCard
-						bookingHref={VIYA_ROUTES.tripBookings(tripId)}
 						budgetStatus={budgetStatus}
 						dailySafeSpendLabel={formatMoney(summary.dailySafeSpend, currency)}
-						onLogExpense={openNewExpenseForm}
 						onOpenBudgetEditor={() => {
 							setBudgetErrorMessage(null);
 							setIsBudgetEditorOpen(true);
@@ -962,24 +996,6 @@ export function TripBudgetScreen() {
 						/>
 					) : null}
 
-					{isExpenseFormOpen ? (
-						<ExpenseFormCard
-							bookingOptions={bookingOptions}
-							editingExpenseId={editingExpenseId}
-							expenseErrorMessage={expenseErrorMessage}
-							expenseForm={expenseForm}
-							isAddingExpense={isAddingExpense}
-							onCancel={closeExpenseForm}
-							onSave={() => {
-								handleSaveExpense().catch(() => undefined);
-							}}
-							onUpdateForm={(patch) => {
-								setExpenseForm((current) => ({ ...current, ...patch }));
-							}}
-							receiptOptions={receiptOptions}
-						/>
-					) : null}
-
 					<View className="gap-3">
 						<Text
 							className="px-1"
@@ -987,61 +1003,20 @@ export function TripBudgetScreen() {
 							type="body-xs"
 							weight="semibold"
 						>
-							SPEND BREAKDOWN
-						</Text>
-						<Surface className="overflow-hidden rounded-[26px] border border-border bg-surface">
-							{summary.categoryBreakdown.length === 0 ? (
-								<View className="items-center gap-2 p-6">
-									<Ionicons color="#8E8E93" name="receipt-outline" size={24} />
-									<Text color="muted" type="body-sm">
-										No booked costs or manual expenses yet.
-									</Text>
-									<View className="flex-row flex-wrap justify-center gap-2">
-										<Button
-											onPress={openNewExpenseForm}
-											size="sm"
-											variant="secondary"
-										>
-											<Button.Label>Add expense</Button.Label>
-										</Button>
-										<Link asChild href={VIYA_ROUTES.tripBookings(tripId)}>
-											<Button size="sm" variant="secondary">
-												<Button.Label>Add booking cost</Button.Label>
-											</Button>
-										</Link>
-									</View>
-								</View>
-							) : (
-								summary.categoryBreakdown.map((item) => (
-									<CategoryBreakdownRow
-										currency={currency}
-										item={item}
-										key={item.category}
-										onAddCategoryExpense={handleAddCategoryExpense}
-									/>
-								))
-							)}
-						</Surface>
-					</View>
-
-					<View className="gap-3">
-						<Text
-							className="px-1"
-							color="muted"
-							type="body-xs"
-							weight="semibold"
-						>
-							RECENT EXPENSES
+							ALL EXPENSES
 						</Text>
 						{receiptOpenErrorMessage ? (
 							<Text className="px-1 text-danger" type="body-sm">
 								{receiptOpenErrorMessage}
 							</Text>
 						) : null}
-						<Surface className="overflow-hidden rounded-[26px] border border-border bg-surface">
+						<Surface className="overflow-hidden rounded-[30px] border border-border bg-surface">
 							{budget.expenses.length === 0 ? (
-								<View className="items-center gap-2 p-5">
-									<Text color="muted" type="body-sm">
+								<View className="items-center gap-3 p-6">
+									<View className="h-12 w-12 items-center justify-center rounded-full bg-surface-secondary">
+										<Ionicons color="#8E8E93" name="card-outline" size={23} />
+									</View>
+									<Text align="center" color="muted" type="body-sm">
 										Manual expenses will appear here.
 									</Text>
 									<Button
@@ -1093,7 +1068,30 @@ export function TripBudgetScreen() {
 							)}
 						</Surface>
 					</View>
-				</View>
+				</ScrollView>
+				<ExpenseFormSheet
+					bookingOptions={bookingOptions}
+					editingExpenseId={editingExpenseId}
+					expenseErrorMessage={expenseErrorMessage}
+					expenseForm={expenseForm}
+					isAddingExpense={isAddingExpense}
+					isOpen={isExpenseFormOpen}
+					onOpenChange={(isOpen) => {
+						if (isOpen) {
+							setIsExpenseFormOpen(true);
+							return;
+						}
+
+						closeExpenseForm();
+					}}
+					onSave={() => {
+						handleSaveExpense().catch(() => undefined);
+					}}
+					onUpdateForm={(patch) => {
+						setExpenseForm((current) => ({ ...current, ...patch }));
+					}}
+					receiptOptions={receiptOptions}
+				/>
 			</Container>
 		</TripModuleScreenFrame>
 	);

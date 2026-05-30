@@ -8,9 +8,8 @@ import type {
 	ItineraryPace,
 } from "@viya-app/domain";
 import { useMutation, useQuery } from "convex/react";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import {
-	Accordion,
 	BottomSheet,
 	Button,
 	CloseButton,
@@ -23,13 +22,7 @@ import {
 	TextField,
 } from "heroui-native";
 import { type ComponentProps, useState } from "react";
-import {
-	Linking,
-	Pressable,
-	ScrollView,
-	useWindowDimensions,
-	View,
-} from "react-native";
+import { Linking, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Container } from "@/components/container";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
@@ -237,14 +230,18 @@ const getBookingLabel = (booking: Doc<"bookings">) => {
 		: booking.title;
 };
 
+const defaultItineraryDaySummary =
+	"Add places, meals, transfers, and buffers for this day.";
+const defaultItineraryDayWeatherNote = "Check forecast closer to travel.";
+
 const initialDayForm: ItineraryDayForm = {
 	date: "",
 	estimatedCost: "0",
 	pace: "balanced",
-	summary: "",
+	summary: defaultItineraryDaySummary,
 	theme: "",
 	title: "",
-	weatherNote: "",
+	weatherNote: defaultItineraryDayWeatherNote,
 };
 
 const itineraryItemCategoryOptions = [
@@ -259,9 +256,7 @@ const itineraryItemCategoryOptions = [
 	"emergency",
 ] as const;
 
-const itineraryPaceOptions = ["light", "balanced", "packed"] as const;
 const itineraryItemCategories = new Set<string>(itineraryItemCategoryOptions);
-const itineraryPaces = new Set<string>(itineraryPaceOptions);
 const itineraryItemPriorityOptions = [
 	"required",
 	"recommended",
@@ -273,8 +268,10 @@ const itineraryItemStatusOptions = [
 	"skipped",
 	"completed",
 ] as const;
+const itineraryPaceOptions = ["light", "balanced", "packed"] as const;
 const itineraryItemPriorities = new Set<string>(itineraryItemPriorityOptions);
 const itineraryItemStatuses = new Set<string>(itineraryItemStatusOptions);
+const itineraryPaces = new Set<string>(itineraryPaceOptions);
 
 const getItineraryItemCategory = (value: string): ItineraryItemCategory => {
 	const category = value.trim();
@@ -282,12 +279,6 @@ const getItineraryItemCategory = (value: string): ItineraryItemCategory => {
 	return itineraryItemCategories.has(category)
 		? (category as ItineraryItemCategory)
 		: "activity";
-};
-
-const getItineraryPace = (value: string): ItineraryPace => {
-	const pace = value.trim();
-
-	return itineraryPaces.has(pace) ? (pace as ItineraryPace) : "balanced";
 };
 
 const getItineraryItemPriority = (value?: string): ItineraryItemPriority => {
@@ -304,6 +295,12 @@ const getItineraryItemStatus = (value?: string): ItineraryItemStatus => {
 	return itineraryItemStatuses.has(status)
 		? (status as ItineraryItemStatus)
 		: "planned";
+};
+
+const getItineraryPace = (value: string): ItineraryPace => {
+	const pace = value.trim();
+
+	return itineraryPaces.has(pace) ? (pace as ItineraryPace) : "balanced";
 };
 
 const formatChoiceLabel = (value: string) =>
@@ -398,24 +395,7 @@ const ITINERARY_ACCENT_COLOR = "#0A84FF";
 const ITINERARY_DANGER_COLOR = "#FF3B30";
 const ITINERARY_MUTED_COLOR = "#71717A";
 const ITINERARY_SUBTLE_COLOR = "#8E8E93";
-const ITINERARY_HEADER_HORIZONTAL_PADDING = 32;
-const ITINERARY_HEADER_CONTROL_GAP = 8;
-const ITINERARY_DATE_RANGE_MIN_WIDTH = 176;
-const ITINERARY_DAY_SELECTOR_MIN_WIDTH = 136;
-const ITINERARY_DAY_SELECTOR_MAX_WIDTH = 164;
-
-const getItineraryDaySelectorWidth = (windowWidth: number) => {
-	const availableWidth =
-		windowWidth -
-		ITINERARY_HEADER_HORIZONTAL_PADDING -
-		ITINERARY_HEADER_CONTROL_GAP;
-	const remainingWidth = availableWidth - ITINERARY_DATE_RANGE_MIN_WIDTH;
-
-	return Math.max(
-		ITINERARY_DAY_SELECTOR_MIN_WIDTH,
-		Math.min(ITINERARY_DAY_SELECTOR_MAX_WIDTH, remainingWidth)
-	);
-};
+const ITINERARY_WARNING_COLOR = "#FF9F0A";
 
 const ITINERARY_CATEGORY_ICON: Record<string, IoniconName> = {
 	activity: "sparkles-outline",
@@ -466,6 +446,49 @@ function ItineraryQuietActionButton({
 				{label}
 			</Text>
 		</Pressable>
+	);
+}
+
+function ItineraryMetaPill({
+	icon,
+	label,
+	tone = "neutral",
+}: {
+	icon: IoniconName;
+	label: string;
+	tone?: "accent" | "neutral" | "warning";
+}) {
+	const toneStyles = {
+		accent: {
+			backgroundColor: "rgba(10, 132, 255, 0.1)",
+			color: ITINERARY_ACCENT_COLOR,
+		},
+		neutral: {
+			backgroundColor: "rgba(24, 24, 27, 0.05)",
+			color: ITINERARY_MUTED_COLOR,
+		},
+		warning: {
+			backgroundColor: "rgba(255, 159, 10, 0.12)",
+			color: ITINERARY_WARNING_COLOR,
+		},
+	} as const;
+	const style = toneStyles[tone];
+
+	return (
+		<View
+			className="flex-row items-center gap-1.5 rounded-full px-2.5 py-1.5"
+			style={{ backgroundColor: style.backgroundColor }}
+		>
+			<Ionicons color={style.color} name={icon} size={13} />
+			<Text
+				numberOfLines={1}
+				style={{ color: style.color }}
+				type="body-xs"
+				weight="semibold"
+			>
+				{label}
+			</Text>
+		</View>
 	);
 }
 
@@ -608,46 +631,6 @@ function ItineraryItemActionsMenu({
 					<ItineraryMenuItem
 						icon="trash-outline"
 						label="Delete stop"
-						onPress={onDelete}
-						tone="danger"
-					/>
-				</Menu.Content>
-			</Menu.Portal>
-		</Menu>
-	);
-}
-
-function ItineraryDayActionsMenu({
-	isPending,
-	onDelete,
-	onEdit,
-}: {
-	isPending: boolean;
-	onDelete: () => void;
-	onEdit: () => void;
-}) {
-	return (
-		<Menu>
-			<ItineraryOverflowTrigger isDisabled={isPending} label="Day options" />
-			<Menu.Portal>
-				<Menu.Overlay />
-				<Menu.Content
-					align="end"
-					className="rounded-[24px] border border-border bg-surface p-2"
-					offset={8}
-					placement="bottom"
-					presentation="popover"
-					width={236}
-				>
-					<ItineraryMenuItem
-						icon="create-outline"
-						label="Edit day"
-						onPress={onEdit}
-					/>
-					<View className="mx-2 my-1 h-px bg-border" />
-					<ItineraryMenuItem
-						icon="trash-outline"
-						label="Delete day"
 						onPress={onDelete}
 						tone="danger"
 					/>
@@ -1110,11 +1093,516 @@ function ItineraryItemCard({
 	);
 }
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This screen coordinates mutations, sheets, and timeline rendering in one module.
+interface ItineraryDayPreview {
+	dayDate: string;
+	dayNumber: number;
+	existingDay: Doc<"itineraryDays"> | undefined;
+	label: string;
+	stopCount: number;
+}
+
+function ItineraryDaySurface({
+	calendarDay,
+	onPress,
+}: {
+	calendarDay: ItineraryDayPreview;
+	onPress: () => void;
+}) {
+	const day = calendarDay.existingDay;
+	const stopLabel =
+		calendarDay.stopCount === 1 ? "1 stop" : `${calendarDay.stopCount} stops`;
+
+	return (
+		<Pressable
+			accessibilityLabel={`Open itinerary day ${calendarDay.dayNumber}`}
+			accessibilityRole="button"
+			className="rounded-[28px] border border-border bg-white p-4"
+			onPress={onPress}
+			style={({ pressed }) => ({
+				transform: [{ scale: pressed ? 0.99 : 1 }],
+			})}
+		>
+			<View className="flex-row items-center gap-3">
+				<View
+					className="h-12 w-12 items-center justify-center rounded-full"
+					style={{ backgroundColor: "rgba(10, 132, 255, 0.1)" }}
+				>
+					<Text
+						style={{ color: ITINERARY_ACCENT_COLOR }}
+						type="body"
+						weight="bold"
+					>
+						{calendarDay.dayNumber}
+					</Text>
+				</View>
+				<View className="min-w-0 flex-1 gap-1.5">
+					<Text numberOfLines={1} type="body" weight="bold">
+						{day?.title ?? `Day ${calendarDay.dayNumber}`}
+					</Text>
+					<Text color="muted" numberOfLines={1} type="body-sm">
+						{calendarDay.label}
+						{day?.theme ? ` · ${day.theme}` : ""}
+					</Text>
+					<View className="flex-row flex-wrap gap-1.5">
+						<ItineraryMetaPill
+							icon="location-outline"
+							label={stopLabel}
+							tone={calendarDay.stopCount > 0 ? "accent" : "neutral"}
+						/>
+						{day ? (
+							<ItineraryMetaPill
+								icon="speedometer-outline"
+								label={formatChoiceLabel(day.pace)}
+								tone={day.pace === "packed" ? "warning" : "neutral"}
+							/>
+						) : (
+							<ItineraryMetaPill
+								icon="add-circle-outline"
+								label="Ready to add"
+							/>
+						)}
+					</View>
+				</View>
+				<Ionicons
+					color={ITINERARY_MUTED_COLOR}
+					name="chevron-forward"
+					size={18}
+				/>
+			</View>
+		</Pressable>
+	);
+}
+
+function EmptyPlannedDayContent({ onAddStop }: { onAddStop: () => void }) {
+	return (
+		<View className="items-center gap-3 rounded-[24px] bg-surface-secondary px-5 py-7">
+			<View
+				className="h-10 w-10 items-center justify-center rounded-full"
+				style={{ backgroundColor: "rgba(10, 132, 255, 0.1)" }}
+			>
+				<Ionicons
+					color={ITINERARY_ACCENT_COLOR}
+					name="time-outline"
+					size={21}
+				/>
+			</View>
+			<View className="items-center gap-1">
+				<Text color="muted" type="body-sm" weight="semibold">
+					No stops yet
+				</Text>
+				<Text color="muted" numberOfLines={2} type="body-xs">
+					Add the first stop when the timing is ready.
+				</Text>
+			</View>
+			<ItineraryQuietActionButton
+				icon="add-circle-outline"
+				label="Add stop"
+				onPress={onAddStop}
+			/>
+		</View>
+	);
+}
+
+function UnplannedDayPlaceholder({
+	isSavingDay,
+	onAddStop,
+}: {
+	isSavingDay: boolean;
+	onAddStop: () => void;
+}) {
+	return (
+		<View className="items-center gap-3 rounded-[28px] border border-border bg-white px-5 py-8">
+			<View
+				className="h-12 w-12 items-center justify-center rounded-full"
+				style={{ backgroundColor: "rgba(10, 132, 255, 0.1)" }}
+			>
+				<Ionicons
+					color={ITINERARY_ACCENT_COLOR}
+					name="calendar-outline"
+					size={23}
+				/>
+			</View>
+			<View className="items-center gap-1">
+				<Text type="body" weight="bold">
+					Start this day
+				</Text>
+				<Text
+					color="muted"
+					numberOfLines={2}
+					style={{ textAlign: "center" }}
+					type="body-sm"
+				>
+					Add the first stop to turn this date into an itinerary day.
+				</Text>
+			</View>
+			<Button isDisabled={isSavingDay} onPress={onAddStop} size="lg">
+				{isSavingDay ? <Spinner size="sm" /> : null}
+				<Button.Label>Add itinerary</Button.Label>
+			</Button>
+		</View>
+	);
+}
+
+function ItineraryPlannedDayContent({
+	bookingLabelById,
+	day,
+	dayItems,
+	onAddStop,
+	onDeleteDay,
+	onDeleteItem,
+	onEditDay,
+	onEditItem,
+	onOpenBooking,
+	onOpenMaps,
+	onToggleComplete,
+	onToggleSkip,
+	pendingDayId,
+	pendingItemId,
+}: {
+	bookingLabelById: Map<string, string>;
+	day: Doc<"itineraryDays">;
+	dayItems: Doc<"itineraryItems">[];
+	onAddStop: () => void;
+	onDeleteDay: (dayId: Id<"itineraryDays">) => void;
+	onDeleteItem: (itemId: Id<"itineraryItems">) => void;
+	onEditDay: (day: Doc<"itineraryDays">) => void;
+	onEditItem: (item: Doc<"itineraryItems">) => void;
+	onOpenBooking: () => void;
+	onOpenMaps: (item: Doc<"itineraryItems">) => void;
+	onToggleComplete: (item: Doc<"itineraryItems">) => void;
+	onToggleSkip: (item: Doc<"itineraryItems">) => void;
+	pendingDayId: Id<"itineraryDays"> | null;
+	pendingItemId: Id<"itineraryItems"> | null;
+}) {
+	const stopCount = dayItems.length;
+	const isDeletingDay = pendingDayId === day._id;
+
+	return (
+		<View className="gap-4">
+			<View className="gap-3">
+				<View className="flex-row items-center justify-between gap-3">
+					<View className="min-w-0 flex-1 gap-1.5">
+						<Text type="h4" weight="bold">
+							{day.title || `Day ${day.dayNumber}`}
+						</Text>
+						<Text color="muted" numberOfLines={1} type="body-sm">
+							{getDayTabLabel(day.date, day.dayNumber)}
+							{day.theme ? ` · ${day.theme}` : ""}
+						</Text>
+					</View>
+					<View className="flex-row items-center gap-2">
+						<Pressable
+							accessibilityLabel="Edit itinerary day"
+							accessibilityRole="button"
+							className="h-10 w-10 items-center justify-center rounded-full bg-surface-secondary"
+							onPress={() => onEditDay(day)}
+							style={({ pressed }) => ({
+								transform: [{ scale: pressed ? 0.94 : 1 }],
+							})}
+						>
+							<Ionicons
+								color={ITINERARY_ACCENT_COLOR}
+								name="create-outline"
+								size={19}
+							/>
+						</Pressable>
+						<Pressable
+							accessibilityLabel="Delete itinerary day"
+							accessibilityRole="button"
+							accessibilityState={{ disabled: isDeletingDay }}
+							className="h-10 w-10 items-center justify-center rounded-full bg-surface-secondary"
+							disabled={isDeletingDay}
+							onPress={() => onDeleteDay(day._id)}
+							style={({ pressed }) => ({
+								opacity: isDeletingDay ? 0.5 : 1,
+								transform: [{ scale: pressed ? 0.94 : 1 }],
+							})}
+						>
+							{isDeletingDay ? (
+								<Spinner size="sm" />
+							) : (
+								<Ionicons
+									color={ITINERARY_DANGER_COLOR}
+									name="trash-outline"
+									size={19}
+								/>
+							)}
+						</Pressable>
+						<Pressable
+							accessibilityLabel="Add itinerary stop"
+							accessibilityRole="button"
+							className="h-10 w-10 items-center justify-center rounded-full bg-accent"
+							onPress={onAddStop}
+							style={({ pressed }) => ({
+								transform: [{ scale: pressed ? 0.94 : 1 }],
+							})}
+						>
+							<Ionicons color="#FFFFFF" name="add" size={21} />
+						</Pressable>
+					</View>
+				</View>
+				{day.summary && day.summary !== defaultItineraryDaySummary ? (
+					<Text.Paragraph color="muted" type="body-sm">
+						{day.summary}
+					</Text.Paragraph>
+				) : null}
+				<View className="flex-row flex-wrap gap-1.5">
+					<ItineraryMetaPill
+						icon="location-outline"
+						label={stopCount === 1 ? "1 stop" : `${stopCount} stops`}
+						tone={stopCount > 0 ? "accent" : "neutral"}
+					/>
+					<ItineraryMetaPill
+						icon="speedometer-outline"
+						label={formatChoiceLabel(day.pace)}
+						tone={day.pace === "packed" ? "warning" : "neutral"}
+					/>
+					{day.estimatedCost > 0 ? (
+						<ItineraryMetaPill
+							icon="wallet-outline"
+							label={formatCost(day.estimatedCost)}
+						/>
+					) : null}
+					{day.weatherNote &&
+					day.weatherNote !== defaultItineraryDayWeatherNote ? (
+						<ItineraryMetaPill
+							icon="partly-sunny-outline"
+							label={getCompactLabel(day.weatherNote)}
+						/>
+					) : null}
+				</View>
+			</View>
+
+			{dayItems.length === 0 ? (
+				<EmptyPlannedDayContent onAddStop={onAddStop} />
+			) : (
+				<View className="rounded-[28px] border border-border bg-white p-4">
+					{dayItems.map((item, index) => (
+						<ItineraryItemCard
+							bookingLabel={
+								item.bookingId
+									? (bookingLabelById.get(item.bookingId) ?? "Booking linked")
+									: null
+							}
+							isLast={index === dayItems.length - 1}
+							isPending={pendingItemId === item._id}
+							item={item}
+							key={item._id}
+							onDelete={() => onDeleteItem(item._id)}
+							onEdit={() => onEditItem(item)}
+							onOpenBooking={onOpenBooking}
+							onOpenMaps={() => onOpenMaps(item)}
+							onToggleComplete={() => onToggleComplete(item)}
+							onToggleSkip={() => onToggleSkip(item)}
+						/>
+					))}
+				</View>
+			)}
+		</View>
+	);
+}
+
 export function TripItineraryScreen() {
 	const tripId = useTripIdParam();
 	const router = useRouter();
-	const { width: windowWidth } = useWindowDimensions();
+	const workspace = useQuery(
+		api.tripWorkspace.getTripWorkspace,
+		tripId ? { tripId } : "skip"
+	);
+	const updateTripProfile = useMutation(api.trips.updateTripProfile);
+	const [tripDateErrorMessage, setTripDateErrorMessage] = useState<
+		string | null
+	>(null);
+	const [tripDateRange, setTripDateRange] = useState<DateRangeValue>({
+		end: "",
+		start: "",
+	});
+	const [isSavingTripDates, setIsSavingTripDates] = useState(false);
+
+	if (!tripId) {
+		return (
+			<Container className="px-4 pb-28">
+				<EmptyState
+					description="Open a saved trip before viewing its itinerary."
+					icon="calendar-outline"
+					title="Trip not found"
+				/>
+			</Container>
+		);
+	}
+
+	if (workspace === undefined) {
+		return <ScreenLoadingState />;
+	}
+
+	const { itineraryDays, itineraryItems, trip } = workspace;
+	const tripDayCountFromDates =
+		trip.startDate && trip.endDate
+			? (getDateRangeDurationDays(trip.startDate, trip.endDate) ?? 1)
+			: 1;
+	const calendarDayCount = Math.max(1, tripDayCountFromDates);
+	const itineraryItemsByDayId = new Map<
+		Id<"itineraryDays">,
+		Doc<"itineraryItems">[]
+	>();
+	const itineraryDayByNumber = new Map<number, Doc<"itineraryDays">>();
+	const itineraryDayByDate = new Map<string, Doc<"itineraryDays">>();
+
+	for (const day of itineraryDays) {
+		itineraryDayByNumber.set(day.dayNumber, day);
+		itineraryDayByDate.set(day.date, day);
+		itineraryItemsByDayId.set(day._id, []);
+	}
+
+	for (const item of itineraryItems) {
+		const dayItems = itineraryItemsByDayId.get(item.dayId);
+		if (dayItems) {
+			dayItems.push(item);
+		}
+	}
+
+	const previewDays: ItineraryDayPreview[] = Array.from(
+		{ length: calendarDayCount },
+		(_, index) => {
+			const dayNumber = index + 1;
+			const dayDate = trip.startDate ? addDays(trip.startDate, index) : "";
+			const existingDay =
+				itineraryDayByNumber.get(dayNumber) ?? itineraryDayByDate.get(dayDate);
+			const stopCount = existingDay
+				? (itineraryItemsByDayId.get(existingDay._id)?.length ?? 0)
+				: 0;
+
+			return {
+				dayDate,
+				dayNumber,
+				existingDay,
+				label: dayDate
+					? getDayTabLabel(dayDate, dayNumber)
+					: `Day ${dayNumber}`,
+				stopCount,
+			};
+		}
+	);
+	const plannedDayCount = previewDays.filter((day) => day.existingDay).length;
+	const totalStopCount = itineraryItems.length;
+	const effectiveTripDateRange =
+		tripDateRange.start && tripDateRange.end
+			? tripDateRange
+			: {
+					end: trip.endDate,
+					start: trip.startDate,
+				};
+	const handleSaveTripDateRange = async () => {
+		const startDate = effectiveTripDateRange.start.trim();
+		const endDate = effectiveTripDateRange.end.trim();
+
+		if (!(startDate && endDate)) {
+			return;
+		}
+
+		if (startDate === trip.startDate && endDate === trip.endDate) {
+			return;
+		}
+
+		setTripDateErrorMessage(null);
+		setIsSavingTripDates(true);
+		try {
+			await updateTripProfile({
+				budgetAmount: trip.budgetAmount ?? undefined,
+				budgetCurrency: trip.budgetCurrency ?? "PHP",
+				destination: trip.destination,
+				endDate,
+				groupType: trip.groupType ?? "solo",
+				pace: trip.pace ?? "moderate",
+				startDate,
+				summary: trip.summary,
+				title: trip.title,
+				travelStyle: trip.travelStyle ?? "balanced",
+				tripId,
+			});
+		} catch {
+			setTripDateErrorMessage("Could not update trip dates.");
+		} finally {
+			setIsSavingTripDates(false);
+		}
+	};
+
+	return (
+		<TripModuleScreenFrame activeTab="itinerary" tripId={tripId}>
+			<Container includeBottomInset={false} isScrollable={false}>
+				<ScrollView
+					contentContainerStyle={{
+						flexGrow: 1,
+						gap: 16,
+						paddingBottom: 112,
+						paddingHorizontal: 16,
+					}}
+					contentInsetAdjustmentBehavior="automatic"
+					keyboardShouldPersistTaps="handled"
+					showsVerticalScrollIndicator={false}
+				>
+					<ItineraryErrorNotice message={tripDateErrorMessage} />
+					<DateRangePickerField
+						errorText={tripDateErrorMessage ?? undefined}
+						formatDateRange={formatCompactTripDateRange}
+						isDisabled={isSavingTripDates}
+						label="Trip dates"
+						onOpenChange={(isOpen) => {
+							if (!isOpen) {
+								handleSaveTripDateRange().catch(() => undefined);
+							}
+						}}
+						onValueChange={(value) => {
+							setTripDateErrorMessage(null);
+							setTripDateRange(value);
+						}}
+						triggerClassName="h-14 w-full flex-row items-center gap-2 rounded-[24px] border border-border/70 bg-white px-4"
+						triggerIconColor="#71717A"
+						triggerVariant="button"
+						value={effectiveTripDateRange}
+					/>
+
+					<View className="flex-row flex-wrap gap-1.5">
+						<ItineraryMetaPill
+							icon="calendar-outline"
+							label={`${calendarDayCount} ${calendarDayCount === 1 ? "day" : "days"}`}
+							tone="accent"
+						/>
+						<ItineraryMetaPill
+							icon="checkmark-circle-outline"
+							label={`${plannedDayCount} planned`}
+						/>
+						<ItineraryMetaPill
+							icon="location-outline"
+							label={`${totalStopCount} ${totalStopCount === 1 ? "stop" : "stops"}`}
+						/>
+					</View>
+
+					<View className="gap-3">
+						{previewDays.map((calendarDay) => (
+							<ItineraryDaySurface
+								calendarDay={calendarDay}
+								key={calendarDay.dayNumber}
+								onPress={() => {
+									router.push(
+										VIYA_ROUTES.tripItineraryDay(tripId, calendarDay.dayNumber)
+									);
+								}}
+							/>
+						))}
+					</View>
+				</ScrollView>
+			</Container>
+		</TripModuleScreenFrame>
+	);
+}
+
+export function TripItineraryDayScreen() {
+	const tripId = useTripIdParam();
+	const router = useRouter();
+	const { dayNumber: dayNumberParam } = useLocalSearchParams<{
+		dayNumber?: string;
+	}>();
 	const workspace = useQuery(
 		api.tripWorkspace.getTripWorkspace,
 		tripId ? { tripId } : "skip"
@@ -1125,7 +1613,6 @@ export function TripItineraryScreen() {
 	const deleteItineraryItem = useMutation(api.itinerary.deleteItineraryItem);
 	const updateItineraryDay = useMutation(api.itinerary.updateItineraryDay);
 	const updateItineraryItem = useMutation(api.itinerary.updateItineraryItem);
-	const updateTripProfile = useMutation(api.trips.updateTripProfile);
 	const [itemForm, setItemForm] = useState<ItineraryItemForm>(initialItemForm);
 	const [dayForm, setDayForm] = useState<ItineraryDayForm>(initialDayForm);
 	const [editingDayId, setEditingDayId] = useState<Id<"itineraryDays"> | null>(
@@ -1138,10 +1625,6 @@ export function TripItineraryScreen() {
 	const [selectedCalendarDayNumber, setSelectedCalendarDayNumber] = useState<
 		number | null
 	>(null);
-	const [expandedCalendarDayNumber, setExpandedCalendarDayNumber] = useState<
-		number | null
-	>(null);
-	const [isDayMenuOpen, setIsDayMenuOpen] = useState(false);
 	const [isDaySheetOpen, setIsDaySheetOpen] = useState(false);
 	const [isItemSheetOpen, setIsItemSheetOpen] = useState(false);
 	const [isSavingDay, setIsSavingDay] = useState(false);
@@ -1153,14 +1636,6 @@ export function TripItineraryScreen() {
 		useState<Id<"itineraryItems"> | null>(null);
 	const [dayErrorMessage, setDayErrorMessage] = useState<string | null>(null);
 	const [itemErrorMessage, setItemErrorMessage] = useState<string | null>(null);
-	const [tripDateErrorMessage, setTripDateErrorMessage] = useState<
-		string | null
-	>(null);
-	const [tripDateRange, setTripDateRange] = useState<DateRangeValue>({
-		end: "",
-		start: "",
-	});
-	const [isSavingTripDates, setIsSavingTripDates] = useState(false);
 	const [itineraryErrorMessage, setItineraryErrorMessage] = useState<
 		string | null
 	>(null);
@@ -1231,23 +1706,20 @@ export function TripItineraryScreen() {
 		itineraryDayByNumber.set(day.dayNumber, day);
 		itineraryDayByDate.set(day.date, day);
 	}
-	const fallbackDay = itineraryDays[0] ?? null;
+	const parsedRouteDayNumber = Number(dayNumberParam ?? "1");
+	const routeDayNumber = Number.isFinite(parsedRouteDayNumber)
+		? parsedRouteDayNumber
+		: 1;
 	const selectedDayById =
 		itineraryDays.find((day) => day._id === selectedDayId) ?? null;
 	const activeCalendarDayNumber =
-		selectedCalendarDayNumber ??
-		selectedDayById?.dayNumber ??
-		fallbackDay?.dayNumber ??
-		1;
-	const selectedDay =
-		selectedCalendarDayNumber === null
-			? (selectedDayById ?? fallbackDay)
-			: (itineraryDayByNumber.get(activeCalendarDayNumber) ?? null);
+		selectedCalendarDayNumber ?? selectedDayById?.dayNumber ?? routeDayNumber;
+	const selectedDay = itineraryDayByNumber.get(activeCalendarDayNumber) ?? null;
 	const editingDay =
 		itineraryDays.find((day) => day._id === editingDayId) ?? null;
 	const editingItem =
 		itineraryItems.find((item) => item._id === editingItemId) ?? null;
-	const selectedSheetDay = selectedDayById ?? selectedDay ?? fallbackDay;
+	const selectedSheetDay = selectedDayById ?? selectedDay;
 	const previewDayChips = Array.from(
 		{ length: calendarDayCount },
 		(_, index) => {
@@ -1270,18 +1742,6 @@ export function TripItineraryScreen() {
 			};
 		}
 	);
-	const activeDayChip =
-		previewDayChips.find(
-			(chip) => chip.dayNumber === activeCalendarDayNumber
-		) ?? previewDayChips[0];
-	const effectiveTripDateRange =
-		tripDateRange.start && tripDateRange.end
-			? tripDateRange
-			: {
-					end: trip.endDate,
-					start: trip.startDate,
-				};
-	const daySelectorWidth = getItineraryDaySelectorWidth(windowWidth);
 	const handleAddDay = async (targetDayNumber = activeCalendarDayNumber) => {
 		if (!tripId || isSavingDay) {
 			return null;
@@ -1304,15 +1764,14 @@ export function TripItineraryScreen() {
 				dayNumber,
 				estimatedCost: 0,
 				pace: "balanced",
-				summary: "Add places, meals, transfers, and buffers for this day.",
+				summary: defaultItineraryDaySummary,
 				theme: "Open planning",
 				title: `Day ${dayNumber}`,
 				tripId,
-				weatherNote: "Check forecast closer to travel.",
+				weatherNote: defaultItineraryDayWeatherNote,
 			});
 			if (createdDay) {
 				setSelectedCalendarDayNumber(createdDay.dayNumber);
-				setExpandedCalendarDayNumber(createdDay.dayNumber);
 				setSelectedDayId(createdDay._id);
 			}
 			return createdDay ?? null;
@@ -1374,29 +1833,6 @@ export function TripItineraryScreen() {
 			title: item.title,
 		});
 		setIsItemSheetOpen(true);
-	};
-	const selectCalendarDay = (dayNumber: number) => {
-		const chip = previewDayChips.find((day) => day.dayNumber === dayNumber);
-
-		setSelectedCalendarDayNumber(dayNumber);
-		setExpandedCalendarDayNumber(dayNumber);
-		if (chip?.existingDay) {
-			setSelectedDayId(chip.existingDay._id);
-		}
-	};
-	const openItemSheetForCalendarDay = async (dayNumber: number) => {
-		const chip = previewDayChips.find((day) => day.dayNumber === dayNumber);
-		selectCalendarDay(dayNumber);
-
-		if (chip?.existingDay) {
-			openItemSheet(chip.existingDay._id);
-			return;
-		}
-
-		const createdDay = await handleAddDay(dayNumber);
-		if (createdDay) {
-			openItemSheet(createdDay._id);
-		}
 	};
 	const handleSaveDay = async () => {
 		if (!editingDay) {
@@ -1547,47 +1983,13 @@ export function TripItineraryScreen() {
 			setMapErrorMessage("Could not open Maps for this itinerary stop.");
 		}
 	};
-	const handleSaveTripDateRange = async () => {
-		const startDate = effectiveTripDateRange.start.trim();
-		const endDate = effectiveTripDateRange.end.trim();
-
-		if (!(startDate && endDate)) {
-			return;
-		}
-
-		if (startDate === trip.startDate && endDate === trip.endDate) {
-			return;
-		}
-
-		setTripDateErrorMessage(null);
-		setIsSavingTripDates(true);
-		try {
-			await updateTripProfile({
-				budgetAmount: trip.budgetAmount ?? undefined,
-				budgetCurrency: trip.budgetCurrency ?? "PHP",
-				destination: trip.destination,
-				endDate,
-				groupType: trip.groupType ?? "solo",
-				pace: trip.pace ?? "moderate",
-				startDate,
-				summary: trip.summary,
-				title: trip.title,
-				travelStyle: trip.travelStyle ?? "balanced",
-				tripId,
-			});
-		} catch {
-			setTripDateErrorMessage("Could not update trip dates.");
-		} finally {
-			setIsSavingTripDates(false);
-		}
-	};
-
 	return (
 		<TripModuleScreenFrame activeTab="itinerary" tripId={tripId}>
 			<Container includeBottomInset={false} isScrollable={false}>
 				<ScrollView
 					contentContainerStyle={{
 						flexGrow: 1,
+						gap: 16,
 						paddingBottom: 112,
 						paddingHorizontal: 16,
 					}}
@@ -1595,302 +1997,58 @@ export function TripItineraryScreen() {
 					keyboardShouldPersistTaps="handled"
 					showsVerticalScrollIndicator={false}
 				>
-					<View className="gap-4">
-						<ItineraryErrorNotice message={itineraryErrorMessage} />
-						<ItineraryErrorNotice message={mapErrorMessage} />
-						<View className="flex-row items-center gap-2">
-							<DateRangePickerField
-								className="min-w-0 flex-1"
-								errorText={tripDateErrorMessage ?? undefined}
-								formatDateRange={formatCompactTripDateRange}
-								isDisabled={isSavingTripDates}
-								label="Trip dates"
-								onOpenChange={(isOpen) => {
-									if (!isOpen) {
-										handleSaveTripDateRange().catch(() => undefined);
-									}
-								}}
-								onValueChange={(value) => {
-									setTripDateErrorMessage(null);
-									setTripDateRange(value);
-								}}
-								triggerClassName="h-11 w-full flex-row items-center gap-2 rounded-full border border-border/70 bg-white px-3"
-								triggerIconColor="#71717A"
-								triggerVariant="button"
-								value={effectiveTripDateRange}
-							/>
-							<Pressable
-								accessibilityLabel="Choose itinerary day"
-								accessibilityRole="button"
-								className="h-11 min-w-0 flex-row items-center gap-2 rounded-full border border-border/70 bg-white px-3"
-								onPress={() => {
-									setIsDayMenuOpen(true);
-								}}
-								style={({ pressed }) => ({
-									transform: [{ scale: pressed ? 0.98 : 1 }],
-									width: daySelectorWidth,
-								})}
-							>
-								<Ionicons color="#71717A" name="list-outline" size={16} />
-								<Text
-									className="min-w-0 flex-1"
-									numberOfLines={1}
-									type="body-sm"
-									weight="semibold"
-								>
-									{activeDayChip ? activeDayChip.label : "Choose day"}
-								</Text>
-								<Ionicons color="#71717A" name="chevron-down" size={14} />
-							</Pressable>
-						</View>
-
-						<View className="gap-3">
-							<Text color="muted" type="body-xs" weight="semibold">
-								DAYS
-							</Text>
-							<Accordion
-								className="gap-3"
-								hideSeparator={true}
-								onValueChange={(value) => {
-									if (typeof value === "string") {
-										selectCalendarDay(Number(value));
-										return;
-									}
-
-									setExpandedCalendarDayNumber(null);
-								}}
-								selectionMode="single"
-								value={expandedCalendarDayNumber?.toString()}
-							>
-								{previewDayChips.map((calendarDay) => {
-									const day = calendarDay.existingDay;
-									const dayItems = day
-										? (itineraryItemsByDayId.get(day._id) ?? [])
-										: [];
-
-									return (
-										<Accordion.Item
-											className="overflow-hidden rounded-[28px] border border-border bg-surface"
-											key={calendarDay.dayNumber}
-											value={calendarDay.dayNumber.toString()}
-										>
-											<Accordion.Trigger
-												accessibilityLabel={`Open ${calendarDay.label}`}
-												className="flex-row items-center gap-3 px-4 py-4"
-											>
-												<View className="min-w-0 flex-1 gap-1">
-													<Text type="body" weight="bold">
-														{calendarDay.label}
-													</Text>
-													<Text color="muted" numberOfLines={1} type="body-sm">
-														{day?.title ?? `Day ${calendarDay.dayNumber}`}
-													</Text>
-												</View>
-												<Accordion.Indicator
-													iconProps={{ color: "#71717A", size: 18 }}
-												/>
-											</Accordion.Trigger>
-
-											<Accordion.Content className="gap-4 px-4 pt-0 pb-4">
-												{day ? (
-													<>
-														{day.summary ? (
-															<Text.Paragraph
-																className="border-border border-t pt-4"
-																color="muted"
-																type="body-sm"
-															>
-																{day.summary}
-															</Text.Paragraph>
-														) : null}
-														<View
-															className={`flex-row items-center gap-2 ${
-																day.summary ? "" : "border-border border-t pt-4"
-															}`}
-														>
-															<ItineraryQuietActionButton
-																icon="location-outline"
-																label="Add stop"
-																onPress={() => openItemSheet(day._id)}
-															/>
-															<ItineraryDayActionsMenu
-																isPending={pendingDayId === day._id}
-																onDelete={() => {
-																	handleDeleteDay(day._id).catch(
-																		() => undefined
-																	);
-																}}
-																onEdit={() => openEditDaySheet(day)}
-															/>
-														</View>
-
-														{dayItems.length === 0 ? (
-															<View className="items-center gap-3 border-border border-t px-5 py-7">
-																<View className="h-10 w-10 items-center justify-center rounded-full bg-surface-secondary">
-																	<Ionicons
-																		color={ITINERARY_SUBTLE_COLOR}
-																		name="time-outline"
-																		size={21}
-																	/>
-																</View>
-																<View className="items-center gap-1">
-																	<Text
-																		color="muted"
-																		type="body-sm"
-																		weight="semibold"
-																	>
-																		No stops yet
-																	</Text>
-																	<Text
-																		color="muted"
-																		numberOfLines={2}
-																		type="body-xs"
-																	>
-																		Add the first stop when the timing is ready.
-																	</Text>
-																</View>
-																<ItineraryQuietActionButton
-																	icon="add-circle-outline"
-																	label="Add stop"
-																	onPress={() => openItemSheet(day._id)}
-																/>
-															</View>
-														) : (
-															<View className="border-border border-t pt-4">
-																{dayItems.map((item, index) => (
-																	<ItineraryItemCard
-																		bookingLabel={
-																			item.bookingId
-																				? (bookingLabelById.get(
-																						item.bookingId
-																					) ?? "Booking linked")
-																				: null
-																		}
-																		isLast={index === dayItems.length - 1}
-																		isPending={pendingItemId === item._id}
-																		item={item}
-																		key={item._id}
-																		onDelete={() => {
-																			handleDeleteItem(item._id).catch(
-																				() => undefined
-																			);
-																		}}
-																		onEdit={() => openEditItemSheet(item)}
-																		onOpenBooking={() => {
-																			router.push(
-																				VIYA_ROUTES.tripBookings(tripId)
-																			);
-																		}}
-																		onOpenMaps={() => {
-																			handleOpenMaps({
-																				address: item.address,
-																				latitude: item.latitude,
-																				locationName: item.locationName,
-																				longitude: item.longitude,
-																				title: item.title,
-																			}).catch(() => undefined);
-																		}}
-																		onToggleComplete={() => {
-																			updateItemStatus(
-																				item._id,
-																				item.status === "completed"
-																					? "planned"
-																					: "completed"
-																			).catch(() => undefined);
-																		}}
-																		onToggleSkip={() => {
-																			updateItemStatus(
-																				item._id,
-																				item.status === "skipped"
-																					? "planned"
-																					: "skipped"
-																			).catch(() => undefined);
-																		}}
-																	/>
-																))}
-															</View>
-														)}
-													</>
-												) : (
-													<View className="items-center gap-3 border-border border-t px-5 py-7">
-														<View className="h-10 w-10 items-center justify-center rounded-full bg-surface-secondary">
-															<Ionicons
-																color={ITINERARY_SUBTLE_COLOR}
-																name="calendar-outline"
-																size={21}
-															/>
-														</View>
-														<View className="items-center gap-1">
-															<Text
-																color="muted"
-																type="body-sm"
-																weight="semibold"
-															>
-																No stops planned for this day
-															</Text>
-															<Text color="muted" type="body-xs">
-																Create the day and add the first stop.
-															</Text>
-														</View>
-														<ItineraryQuietActionButton
-															icon="add-circle-outline"
-															isDisabled={isSavingDay}
-															label="Add stop"
-															onPress={() => {
-																openItemSheetForCalendarDay(
-																	calendarDay.dayNumber
-																).catch(() => undefined);
-															}}
-														/>
-													</View>
-												)}
-											</Accordion.Content>
-										</Accordion.Item>
-									);
-								})}
-							</Accordion>
-						</View>
-					</View>
+					<ItineraryErrorNotice message={itineraryErrorMessage} />
+					<ItineraryErrorNotice message={mapErrorMessage} />
+					{selectedDay ? (
+						<ItineraryPlannedDayContent
+							bookingLabelById={bookingLabelById}
+							day={selectedDay}
+							dayItems={itineraryItemsByDayId.get(selectedDay._id) ?? []}
+							onAddStop={() => openItemSheet(selectedDay._id)}
+							onDeleteDay={(dayId) => {
+								handleDeleteDay(dayId).catch(() => undefined);
+							}}
+							onDeleteItem={(itemId) => {
+								handleDeleteItem(itemId).catch(() => undefined);
+							}}
+							onEditDay={openEditDaySheet}
+							onEditItem={openEditItemSheet}
+							onOpenBooking={() => {
+								router.push(VIYA_ROUTES.tripBookings(tripId));
+							}}
+							onOpenMaps={(item) => {
+								handleOpenMaps({
+									address: item.address,
+									latitude: item.latitude,
+									locationName: item.locationName,
+									longitude: item.longitude,
+									title: item.title,
+								}).catch(() => undefined);
+							}}
+							onToggleComplete={(item) => {
+								updateItemStatus(
+									item._id,
+									item.status === "completed" ? "planned" : "completed"
+								).catch(() => undefined);
+							}}
+							onToggleSkip={(item) => {
+								updateItemStatus(
+									item._id,
+									item.status === "skipped" ? "planned" : "skipped"
+								).catch(() => undefined);
+							}}
+							pendingDayId={pendingDayId}
+							pendingItemId={pendingItemId}
+						/>
+					) : (
+						<UnplannedDayPlaceholder
+							isSavingDay={isSavingDay}
+							onAddStop={() => {
+								handleAddDay(activeCalendarDayNumber).catch(() => undefined);
+							}}
+						/>
+					)}
 				</ScrollView>
-				<BottomSheet isOpen={isDayMenuOpen} onOpenChange={setIsDayMenuOpen}>
-					<BottomSheet.Portal>
-						<BottomSheet.Overlay />
-						<BottomSheet.Content
-							backgroundClassName="rounded-t-[36px] bg-background"
-							enablePanDownToClose={true}
-							snapPoints={["56%"]}
-						>
-							<View className="gap-3 px-5 pt-2 pb-6">
-								<BottomSheet.Title>Jump to day</BottomSheet.Title>
-								<ScrollView
-									contentContainerStyle={{ gap: 8, paddingBottom: 8 }}
-									showsVerticalScrollIndicator={false}
-									style={{ maxHeight: 360 }}
-								>
-									{previewDayChips.map((day) => (
-										<Button
-											key={day.dayNumber}
-											onPress={() => {
-												selectCalendarDay(day.dayNumber);
-												setIsDayMenuOpen(false);
-											}}
-											size="sm"
-											variant={
-												activeCalendarDayNumber === day.dayNumber
-													? "primary"
-													: "secondary"
-											}
-										>
-											<Button.Label>
-												{`${day.label} · ${day.stopCount} stops`}
-											</Button.Label>
-										</Button>
-									))}
-								</ScrollView>
-							</View>
-						</BottomSheet.Content>
-					</BottomSheet.Portal>
-				</BottomSheet>
 				<ItineraryItemSheet
 					bookings={bookings}
 					day={selectedSheetDay}

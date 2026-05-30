@@ -23,7 +23,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Container } from "@/components/container";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 import { EmptyState } from "@/src/components/empty-state";
-import { RouteHeader } from "@/src/components/navigation/route-header";
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 import {
@@ -773,18 +772,7 @@ export function BookingHubScreen() {
 	})();
 
 	return (
-		<TripModuleScreenFrame
-			activeTab="bookings"
-			header={
-				<RouteHeader
-					eyebrow="Book"
-					icon="ticket-outline"
-					subtitle="Track external reservations, statuses, confirmations, providers, and costs."
-					title="Booking Hub"
-				/>
-			}
-			tripId={tripId}
-		>
+		<TripModuleScreenFrame activeTab="bookings" tripId={tripId}>
 			<Container
 				className="px-4 pb-28"
 				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}

@@ -34,7 +34,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Container } from "@/components/container";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 import { EmptyState } from "@/src/components/empty-state";
-import { RouteHeader } from "@/src/components/navigation/route-header";
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 import { TripModuleScreenFrame } from "@/src/features/trips/trip-module-floating-bar";
@@ -709,23 +708,19 @@ export function ReadinessScreen() {
 	);
 
 	return (
-		<TripModuleScreenFrame
-			activeTab="checklist"
-			header={
-				<RouteHeader
-					eyebrow="Check"
-					icon="shield-checkmark-outline"
-					subtitle="Resolve booking, document, budget, packing, schedule, safety, and backup gaps before travel."
-					title="Readiness"
-				/>
-			}
-			tripId={tripId}
-		>
-			<Container
-				className="px-4 pb-28"
-				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
-			>
-				<View className="gap-4 pb-4">
+		<TripModuleScreenFrame activeTab="checklist" tripId={tripId}>
+			<Container includeBottomInset={false} isScrollable={false}>
+				<ScrollView
+					contentContainerStyle={{
+						flexGrow: 1,
+						gap: 16,
+						paddingBottom: 112,
+						paddingHorizontal: 16,
+					}}
+					contentInsetAdjustmentBehavior="automatic"
+					keyboardShouldPersistTaps="handled"
+					showsVerticalScrollIndicator={false}
+				>
 					<TripModuleManualEntryCard
 						description="Add and resolve concrete prep tasks for documents, bookings, packing, budget, safety, and backup plans."
 						moduleLabel="readiness"
@@ -895,7 +890,7 @@ export function ReadinessScreen() {
 							/>
 						))}
 					</View>
-				</View>
+				</ScrollView>
 				<ReadinessTaskSheet
 					companions={companions}
 					errorMessage={readinessErrorMessage}

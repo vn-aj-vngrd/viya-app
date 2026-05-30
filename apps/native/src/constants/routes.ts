@@ -20,6 +20,11 @@ export const VIYA_ROUTES = {
 	tripCompanions: (tripId: Id<"trips">) => tripRoute(tripId, "/companions"),
 	tripDashboard: (tripId: Id<"trips">) => tripRoute(tripId),
 	tripItinerary: (tripId: Id<"trips">) => tripRoute(tripId, "/itinerary"),
+	tripItineraryDay: (tripId: Id<"trips">, dayNumber: number) =>
+		({
+			params: { dayNumber: String(dayNumber), tripId },
+			pathname: "/(app)/trips/[tripId]/itinerary-day",
+		}) as Href,
 	tripMoments: (tripId: Id<"trips">) => tripRoute(tripId, "/moments"),
 	tripNotes: (tripId: Id<"trips">) => tripRoute(tripId, "/notes"),
 	tripPlaces: (tripId: Id<"trips">) => tripRoute(tripId, "/places"),

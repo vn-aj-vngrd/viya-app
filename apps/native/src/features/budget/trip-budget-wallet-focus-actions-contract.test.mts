@@ -14,10 +14,10 @@ describe("trip budget overview actions contract", () => {
 		);
 
 		expect(source).toContain("BudgetOverviewCard");
-		expect(source).toContain("Log expense");
-		expect(source).toContain("Bookings");
+		expect(source).toContain("NavigationIconButton");
+		expect(source).toContain('accessibilityLabel="Add expense"');
 		expect(source).toContain("openNewExpenseForm");
-		expect(source).toContain("handleAddCategoryExpense");
-		expect(source).toContain("getExpenseCategory(item.category)");
+		expect(source).toContain("ALL EXPENSES");
+		expect(source).toContain("Edit budget");
 	});
 });

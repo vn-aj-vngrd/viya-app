@@ -18,11 +18,13 @@ export function TripModuleScreenFrame({
 	activeTab,
 	header,
 	children,
+	headerAction,
 	tripId,
 }: {
 	activeTab: TripTab;
 	header?: ReactNode;
 	children: ReactNode;
+	headerAction?: ReactNode;
 	tripId: Id<"trips">;
 }) {
 	const router = useRouter();
@@ -54,7 +56,10 @@ export function TripModuleScreenFrame({
 						</Text>
 					</View>
 					<View className="w-12 items-end">
-						{model ? <TripHeaderActionGroup model={model} /> : null}
+						{headerAction ??
+							(model && activeTab === "overview" ? (
+								<TripHeaderActionGroup model={model} />
+							) : null)}
 					</View>
 				</View>
 				{header ? <View className="pt-1">{header}</View> : null}
