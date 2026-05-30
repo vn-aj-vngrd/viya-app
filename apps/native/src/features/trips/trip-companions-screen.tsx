@@ -9,6 +9,7 @@ import {
 	CloseButton,
 	Input,
 	Label,
+	Menu,
 	Spinner,
 	Surface,
 	Text,
@@ -17,11 +18,12 @@ import {
 } from "heroui-native";
 import type { ComponentProps } from "react";
 import { useState } from "react";
-import { Linking, ScrollView, View } from "react-native";
+import { Linking, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Container } from "@/components/container";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 import { EmptyState } from "@/src/components/empty-state";
+import { NavigationIconButton } from "@/src/components/navigation/navigation-icon-button";
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 import { TripModuleScreenFrame } from "./trip-module-floating-bar";
 import { TripModuleManualEntryCard } from "./trip-module-manual-entry-card";
@@ -404,7 +406,17 @@ export function TripCompanionsScreen() {
 		null;
 
 	return (
-		<TripModuleScreenFrame activeTab="companions" tripId={tripId}>
+		<TripModuleScreenFrame
+			activeTab="companions"
+			headerAction={
+				<NavigationIconButton
+					accessibilityLabel="Add companion"
+					icon="add"
+					onPress={openCreateSheet}
+				/>
+			}
+			tripId={tripId}
+		>
 			<Container
 				className="px-4 pb-28"
 				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
@@ -423,7 +435,7 @@ export function TripCompanionsScreen() {
 						</Text>
 					) : null}
 
-					<Surface className="gap-4 rounded-[30px] bg-surface-secondary p-4">
+					<View className="gap-4 rounded-[30px] bg-surface-secondary p-4">
 						<View className="flex-row items-start justify-between gap-3">
 							<View className="min-w-0 flex-1 gap-1">
 								<Text.Heading type="h5" weight="semibold">
@@ -433,10 +445,7 @@ export function TripCompanionsScreen() {
 									Keep travelers, contacts, and responsibilities easy to scan.
 								</Text>
 							</View>
-							<View
-								className="h-11 w-11 items-center justify-center rounded-full"
-								style={{ backgroundColor: "rgba(255, 45, 85, 0.1)" }}
-							>
+							<View className="h-11 w-11 items-center justify-center rounded-full bg-surface-secondary">
 								<Ionicons color="#FF2D55" name="people-outline" size={20} />
 							</View>
 						</View>
@@ -455,10 +464,7 @@ export function TripCompanionsScreen() {
 						</View>
 						<View className="gap-3 rounded-[24px] bg-surface p-4">
 							<View className="flex-row items-center gap-3">
-								<View
-									className="h-9 w-9 items-center justify-center rounded-full"
-									style={{ backgroundColor: "rgba(255, 45, 85, 0.12)" }}
-								>
+								<View className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary">
 									<Ionicons color="#FF2D55" name="person-outline" size={18} />
 								</View>
 								<View className="min-w-0 flex-1 gap-1">
@@ -544,7 +550,7 @@ export function TripCompanionsScreen() {
 								</Button>
 							)}
 						</View>
-					</Surface>
+					</View>
 
 					{companions.length === 0 ? (
 						<EmptyState
@@ -563,85 +569,142 @@ export function TripCompanionsScreen() {
 									className="gap-3 rounded-[28px] border border-border bg-surface p-5"
 									key={companion._id}
 								>
-									<View className="flex-row flex-wrap gap-2">
-										<Chip size="sm" variant="secondary">
-											<Chip.Label>{companion.role}</Chip.Label>
-										</Chip>
-									</View>
-									<Text type="body" weight="bold">
-										{companion.name}
-									</Text>
-									{companion.email || companion.phone ? (
-										<Text color="muted" type="body-sm">
-											{[companion.email, companion.phone]
-												.filter(Boolean)
-												.join(" · ")}
-										</Text>
-									) : null}
-									{companion.notes ? (
-										<Text.Paragraph color="muted" type="body-sm">
-											{companion.notes}
-										</Text.Paragraph>
-									) : null}
-									{companion.phone || companion.email ? (
-										<View className="flex-row flex-wrap gap-2">
-											{companion.phone ? (
-												<>
-													<CompanionContactButton
-														icon="call-outline"
-														label="Call"
-														onPress={() => {
-															handleOpenContact(
-																getPhoneContactUrl("tel", companion.phone ?? "")
-															).catch(() => undefined);
-														}}
-													/>
-													<CompanionContactButton
-														icon="chatbubble-outline"
-														label="Message"
-														onPress={() => {
-															handleOpenContact(
-																getPhoneContactUrl("sms", companion.phone ?? "")
-															).catch(() => undefined);
-														}}
-													/>
-												</>
+									<View className="flex-row items-start gap-3">
+										<View className="min-w-0 flex-1 gap-3">
+											<View className="flex-row flex-wrap gap-2">
+												<Chip size="sm" variant="secondary">
+													<Chip.Label>{companion.role}</Chip.Label>
+												</Chip>
+											</View>
+											<Text type="body" weight="bold">
+												{companion.name}
+											</Text>
+											{companion.email || companion.phone ? (
+												<Text color="muted" type="body-sm">
+													{[companion.email, companion.phone]
+														.filter(Boolean)
+														.join(" · ")}
+												</Text>
 											) : null}
-											{companion.email ? (
-												<CompanionContactButton
-													icon="mail-outline"
-													label="Email"
-													onPress={() => {
-														handleOpenContact(
-															getEmailContactUrl(companion.email ?? "")
-														).catch(() => undefined);
-													}}
-												/>
+											{companion.notes ? (
+												<Text.Paragraph color="muted" type="body-sm">
+													{companion.notes}
+												</Text.Paragraph>
+											) : null}
+											{companion.phone || companion.email ? (
+												<View className="flex-row flex-wrap gap-2">
+													{companion.phone ? (
+														<>
+															<CompanionContactButton
+																icon="call-outline"
+																label="Call"
+																onPress={() => {
+																	handleOpenContact(
+																		getPhoneContactUrl(
+																			"tel",
+																			companion.phone ?? ""
+																		)
+																	).catch(() => undefined);
+																}}
+															/>
+															<CompanionContactButton
+																icon="chatbubble-outline"
+																label="Message"
+																onPress={() => {
+																	handleOpenContact(
+																		getPhoneContactUrl(
+																			"sms",
+																			companion.phone ?? ""
+																		)
+																	).catch(() => undefined);
+																}}
+															/>
+														</>
+													) : null}
+													{companion.email ? (
+														<CompanionContactButton
+															icon="mail-outline"
+															label="Email"
+															onPress={() => {
+																handleOpenContact(
+																	getEmailContactUrl(companion.email ?? "")
+																).catch(() => undefined);
+															}}
+														/>
+													) : null}
+												</View>
 											) : null}
 										</View>
-									) : null}
-									<View className="flex-row flex-wrap gap-2">
-										<Button
-											className="flex-1"
-											onPress={() => openEditSheet(companion)}
-											size="sm"
-											variant="secondary"
-										>
-											<Button.Label>Edit</Button.Label>
-										</Button>
-										<Button
-											className="flex-1"
-											isDisabled={pendingCompanionId === companion._id}
-											onPress={() => {
-												handleDeleteCompanion(companion._id).catch(
-													() => undefined
-												);
-											}}
-											size="sm"
-											variant="tertiary"
-										>
-											<Button.Label>Delete</Button.Label>
-										</Button>
+										<Menu>
+											<Menu.Trigger asChild={true}>
+												<Pressable
+													accessibilityLabel="Companion options"
+													accessibilityRole="button"
+													className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary"
+													style={({ pressed }) => ({
+														transform: [{ scale: pressed ? 0.94 : 1 }],
+													})}
+												>
+													<Ionicons
+														color="#71717A"
+														name="ellipsis-horizontal"
+														size={17}
+													/>
+												</Pressable>
+											</Menu.Trigger>
+											<Menu.Portal>
+												<Menu.Overlay />
+												<Menu.Content
+													align="end"
+													className="rounded-[24px] border border-border bg-surface p-2"
+													offset={8}
+													placement="bottom"
+													presentation="popover"
+													width={200}
+												>
+													<Menu.Item
+														accessibilityLabel="Edit companion"
+														className="flex-row items-center gap-3 rounded-[18px] p-2.5"
+														isAnimatedStyleActive={false}
+														onPress={() => openEditSheet(companion)}
+													>
+														<View className="h-8 w-8 items-center justify-center rounded-full bg-surface-secondary">
+															<Ionicons
+																color="#0A84FF"
+																name="create-outline"
+																size={16}
+															/>
+														</View>
+														<Menu.ItemTitle className="font-semibold text-sm">
+															Edit companion
+														</Menu.ItemTitle>
+													</Menu.Item>
+													<View className="mx-2 my-1 h-px bg-border" />
+													<Menu.Item
+														accessibilityLabel="Delete companion"
+														className="flex-row items-center gap-3 rounded-[18px] p-2.5"
+														isAnimatedStyleActive={false}
+														isDisabled={pendingCompanionId === companion._id}
+														onPress={() => {
+															handleDeleteCompanion(companion._id).catch(
+																() => undefined
+															);
+														}}
+													>
+														<View className="h-8 w-8 items-center justify-center rounded-full bg-danger/10">
+															<Ionicons
+																color="#FF3B30"
+																name="trash-outline"
+																size={16}
+															/>
+														</View>
+														<Menu.ItemTitle className="font-semibold text-danger text-sm">
+															Delete companion
+														</Menu.ItemTitle>
+													</Menu.Item>
+												</Menu.Content>
+											</Menu.Portal>
+										</Menu>
 									</View>
 								</Surface>
 							))}
