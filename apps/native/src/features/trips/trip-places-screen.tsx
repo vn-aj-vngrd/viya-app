@@ -11,6 +11,7 @@ import {
 	CloseButton,
 	Input,
 	Label,
+	Menu,
 	Spinner,
 	Surface,
 	Text,
@@ -18,11 +19,12 @@ import {
 	TextField,
 } from "heroui-native";
 import { useState } from "react";
-import { Linking, ScrollView, View } from "react-native";
+import { Linking, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Container } from "@/components/container";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 import { EmptyState } from "@/src/components/empty-state";
+import { NavigationIconButton } from "@/src/components/navigation/navigation-icon-button";
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 import {
@@ -373,11 +375,8 @@ function PlaceAssignmentSheet({
 								})}
 							</ScrollView>
 						) : (
-							<Surface className="gap-2 rounded-[24px] bg-surface-secondary p-4">
-								<View
-									className="h-10 w-10 items-center justify-center rounded-full"
-									style={{ backgroundColor: "rgba(52, 199, 89, 0.14)" }}
-								>
+							<View className="gap-2 rounded-[24px] bg-surface-secondary p-4">
+								<View className="h-10 w-10 items-center justify-center rounded-full bg-surface-secondary">
 									<Ionicons color="#34C759" name="calendar-outline" size={18} />
 								</View>
 								<Text type="body-sm" weight="bold">
@@ -397,7 +396,7 @@ function PlaceAssignmentSheet({
 										<Button.Label>Plan itinerary days</Button.Label>
 									</Button>
 								</Link>
-							</Surface>
+							</View>
 						)}
 
 						{errorMessage ? (
@@ -655,7 +654,17 @@ export function TripPlacesScreen() {
 	].slice(0, 4);
 
 	return (
-		<TripModuleScreenFrame activeTab="places" tripId={tripId}>
+		<TripModuleScreenFrame
+			activeTab="places"
+			headerAction={
+				<NavigationIconButton
+					accessibilityLabel="Add place"
+					icon="add"
+					onPress={openCreateSheet}
+				/>
+			}
+			tripId={tripId}
+		>
 			<Container
 				className="px-4 pb-28"
 				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
@@ -669,14 +678,11 @@ export function TripPlacesScreen() {
 						primaryActionLabel="Add place"
 					/>
 
-					<Surface className="gap-4 rounded-[30px] bg-surface-secondary p-4">
+					<View className="gap-4 rounded-[30px] bg-surface-secondary p-4">
 						<View className="min-h-44 gap-4">
 							<View className="flex-row items-start justify-between gap-3">
 								<View className="min-w-0 flex-1 flex-row items-center gap-3">
-									<View
-										className="h-10 w-10 items-center justify-center rounded-full"
-										style={{ backgroundColor: "rgba(52, 199, 89, 0.14)" }}
-									>
+									<View className="h-10 w-10 items-center justify-center rounded-full bg-surface-secondary">
 										<Ionicons
 											color="#34C759"
 											name="navigate-outline"
@@ -704,12 +710,7 @@ export function TripPlacesScreen() {
 											className="flex-row items-center gap-3 rounded-[18px] bg-surface px-3 py-2"
 											key={`${place.sourceLabel}-${place.id}`}
 										>
-											<View
-												className="h-7 w-7 items-center justify-center rounded-full"
-												style={{
-													backgroundColor: "rgba(52, 199, 89, 0.12)",
-												}}
-											>
+											<View className="h-7 w-7 items-center justify-center rounded-full bg-surface-secondary">
 												<Text
 													style={{ color: "#34C759" }}
 													type="body-xs"
@@ -782,7 +783,7 @@ export function TripPlacesScreen() {
 							itineraryHref={VIYA_ROUTES.tripItinerary(tripId)}
 							onAddPlace={openCreateSheet}
 						/>
-					</Surface>
+					</View>
 					{mapErrorMessage ? (
 						<Text className="px-1 text-danger" type="body-sm">
 							{mapErrorMessage}
@@ -832,7 +833,7 @@ export function TripPlacesScreen() {
 										ITINERARY STOPS
 									</Text>
 									{places.itineraryPlaces.map((place) => (
-										<Surface
+										<View
 											className="gap-2 rounded-[24px] bg-surface-secondary p-4"
 											key={place.id}
 										>
@@ -885,7 +886,7 @@ export function TripPlacesScreen() {
 													<Button.Label>Open itinerary</Button.Label>
 												</Button>
 											</Link>
-										</Surface>
+										</View>
 									))}
 								</View>
 							) : null}
@@ -964,10 +965,7 @@ function PlaceSection({
 					key={place._id}
 				>
 					<View className="flex-row items-start gap-3">
-						<View
-							className="h-10 w-10 items-center justify-center rounded-full"
-							style={{ backgroundColor: "rgba(52, 199, 89, 0.12)" }}
-						>
+						<View className="h-10 w-10 items-center justify-center rounded-full bg-surface-secondary">
 							<Ionicons color="#34C759" name="location-outline" size={18} />
 						</View>
 						<View className="min-w-0 flex-1 gap-1">
@@ -989,64 +987,128 @@ function PlaceSection({
 									{place.description}
 								</Text.Paragraph>
 							) : null}
-						</View>
-					</View>
-					<View className="flex-row flex-wrap gap-2">
-						{hasTripMapSearchTarget({
-							address: place.address,
-							latitude: place.latitude,
-							locationName: place.locationName,
-							longitude: place.longitude,
-						}) ? (
-							<Button
-								className="min-w-[30%] flex-1"
-								onPress={() => onOpenMaps(place)}
-								size="sm"
-								variant="secondary"
-							>
-								<Ionicons color="#34C759" name="map-outline" size={16} />
-								<Button.Label>Maps</Button.Label>
-							</Button>
-						) : null}
-						<Button
-							className="min-w-[30%] flex-1"
-							onPress={() => onAssignPlace(place)}
-							size="sm"
-							variant="primary"
-						>
-							<Button.Label>
-								{place.assignedDayId ? "Move day" : "Add to day"}
-							</Button.Label>
-						</Button>
-						{place.assignedDayId ? (
-							<Link asChild href={itineraryHref}>
+							<View className="flex-row flex-wrap gap-2 pt-1">
 								<Button
-									className="min-w-[30%] flex-1"
+									onPress={() => onAssignPlace(place)}
 									size="sm"
-									variant="secondary"
+									variant="primary"
 								>
-									<Ionicons color="#0A84FF" name="calendar-outline" size={16} />
-									<Button.Label>Open itinerary</Button.Label>
+									<Button.Label>
+										{place.assignedDayId ? "Move day" : "Add to day"}
+									</Button.Label>
 								</Button>
-							</Link>
-						) : null}
-						<Button
-							className="min-w-[30%] flex-1"
-							onPress={() => onEditPlace(place)}
-							size="sm"
-							variant="secondary"
-						>
-							<Button.Label>Edit</Button.Label>
-						</Button>
-						<Button
-							className="min-w-[30%] flex-1"
-							isDisabled={deletingPlaceId === place._id}
-							onPress={() => onDeletePlace(place._id)}
-							size="sm"
-							variant="tertiary"
-						>
-							<Button.Label>Delete</Button.Label>
-						</Button>
+							</View>
+						</View>
+						<Menu>
+							<Menu.Trigger asChild={true}>
+								<Pressable
+									accessibilityLabel="Place options"
+									accessibilityRole="button"
+									className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary"
+									style={({ pressed }) => ({
+										transform: [{ scale: pressed ? 0.94 : 1 }],
+									})}
+								>
+									<Ionicons
+										color="#71717A"
+										name="ellipsis-horizontal"
+										size={17}
+									/>
+								</Pressable>
+							</Menu.Trigger>
+							<Menu.Portal>
+								<Menu.Overlay />
+								<Menu.Content
+									align="end"
+									className="rounded-[24px] border border-border bg-surface p-2"
+									offset={8}
+									placement="bottom"
+									presentation="popover"
+									width={220}
+								>
+									{hasTripMapSearchTarget({
+										address: place.address,
+										latitude: place.latitude,
+										locationName: place.locationName,
+										longitude: place.longitude,
+									}) ? (
+										<Menu.Item
+											accessibilityLabel="Open in Maps"
+											className="flex-row items-center gap-3 rounded-[18px] p-2.5"
+											isAnimatedStyleActive={false}
+											onPress={() => onOpenMaps(place)}
+										>
+											<View className="h-8 w-8 items-center justify-center rounded-full bg-surface-secondary">
+												<Ionicons
+													color="#34C759"
+													name="map-outline"
+													size={16}
+												/>
+											</View>
+											<Menu.ItemTitle className="font-semibold text-sm">
+												Open in Maps
+											</Menu.ItemTitle>
+										</Menu.Item>
+									) : null}
+									{place.assignedDayId ? (
+										<Link asChild href={itineraryHref}>
+											<Menu.Item
+												accessibilityLabel="Open itinerary"
+												className="flex-row items-center gap-3 rounded-[18px] p-2.5"
+												isAnimatedStyleActive={false}
+											>
+												<View className="h-8 w-8 items-center justify-center rounded-full bg-surface-secondary">
+													<Ionicons
+														color="#0A84FF"
+														name="calendar-outline"
+														size={16}
+													/>
+												</View>
+												<Menu.ItemTitle className="font-semibold text-sm">
+													Open itinerary
+												</Menu.ItemTitle>
+											</Menu.Item>
+										</Link>
+									) : null}
+									<Menu.Item
+										accessibilityLabel="Edit place"
+										className="flex-row items-center gap-3 rounded-[18px] p-2.5"
+										isAnimatedStyleActive={false}
+										onPress={() => onEditPlace(place)}
+									>
+										<View className="h-8 w-8 items-center justify-center rounded-full bg-surface-secondary">
+											<Ionicons
+												color="#0A84FF"
+												name="create-outline"
+												size={16}
+											/>
+										</View>
+										<Menu.ItemTitle className="font-semibold text-sm">
+											Edit place
+										</Menu.ItemTitle>
+									</Menu.Item>
+									<View className="mx-2 my-1 h-px bg-border" />
+									<Menu.Item
+										accessibilityLabel="Delete place"
+										className="flex-row items-center gap-3 rounded-[18px] p-2.5"
+										isAnimatedStyleActive={false}
+										isDisabled={deletingPlaceId === place._id}
+										onPress={() => onDeletePlace(place._id)}
+									>
+										<View className="h-8 w-8 items-center justify-center rounded-full bg-danger/10">
+											<Ionicons
+												color="#FF3B30"
+												name="trash-outline"
+												size={16}
+											/>
+										</View>
+										<Menu.ItemTitle className="font-semibold text-danger text-sm">
+											Delete place
+										</Menu.ItemTitle>
+									</Menu.Item>
+								</Menu.Content>
+							</Menu.Portal>
+						</Menu>
 					</View>
 				</Surface>
 			))}
