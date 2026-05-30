@@ -59,7 +59,7 @@ function AppLayout() {
 		>
 			<Stack.Screen name="index" options={{ headerShown: false }} />
 			<Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-			<Stack.Screen name="ai" options={{ title: "Viya" }} />
+			<Stack.Screen name="ai" options={{ headerShown: false }} />
 			<Stack.Screen
 				name="onboarding/preferences"
 				options={{ headerShown: false }}

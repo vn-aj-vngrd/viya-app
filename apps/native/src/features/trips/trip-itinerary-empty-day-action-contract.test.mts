@@ -16,6 +16,6 @@ describe("trip itinerary empty day action contract", () => {
 		expect(source).toContain("No scheduled items yet");
 		expect(source).toContain("Add timed stop");
 		expect(source).toContain("openItemSheet(day._id)");
-		expect(source).toContain('name="add-circle-outline"');
+		expect(source).toContain('icon="add-circle-outline"');
 	});
 });

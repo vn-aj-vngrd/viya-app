@@ -8,9 +8,8 @@ import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NavigationBackButton } from "@/src/components/navigation/navigation-back-button";
 import {
-	TripFloatingViyaButton,
 	TripHeaderActionGroup,
-	TripModuleMenuButton,
+	TripModuleNavigationBar,
 } from "./trip-dashboard-components";
 import type { TripTab } from "./trip-dashboard-types";
 import { createTripDashboardModel } from "./trip-dashboard-utils";
@@ -62,18 +61,7 @@ export function TripModuleScreenFrame({
 			</View>
 			<View className="flex-1">{children}</View>
 			{model ? (
-				<View
-					className="absolute right-0 left-0 flex-row items-center justify-center px-4"
-					pointerEvents="box-none"
-					style={{
-						bottom: Math.max(insets.bottom + 10, 24),
-						gap: 10,
-						zIndex: 30,
-					}}
-				>
-					<TripModuleMenuButton activeTab={activeTab} model={model} />
-					<TripFloatingViyaButton activeTab={activeTab} tripId={tripId} />
-				</View>
+				<TripModuleNavigationBar activeTab={activeTab} model={model} />
 			) : null}
 		</View>
 	);

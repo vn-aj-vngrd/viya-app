@@ -38,41 +38,19 @@ import type {
 	DashboardAction,
 	DashboardTab,
 	IoniconName,
-	TripCountdown,
 	TripDashboardModel,
 	TripTab,
 } from "./trip-dashboard-types";
 import { formatMoney, getReadinessDisplay } from "./trip-dashboard-utils";
 
 const accentColor = "#0A84FF";
-const successColor = "#1CCB68";
 const mutedColor = "#71717A";
 const foregroundColor = "#18181B";
 const borderColor = "rgba(24, 24, 27, 0.08)";
 const softBackgroundColor = "rgba(24, 24, 27, 0.04)";
-const tripFloatingBarBottomInset = 24;
-const tripFloatingBarGap = 10;
+export const tripFloatingBarBottomInset = 24;
+export const tripFloatingBarGap = 6;
 
-const tripCountdownToneStyles: Record<
-	TripCountdown["tone"],
-	{ background: string; color: string; icon: IoniconName }
-> = {
-	active: {
-		background: "rgba(28, 203, 104, 0.12)",
-		color: successColor,
-		icon: "ellipse",
-	},
-	complete: {
-		background: softBackgroundColor,
-		color: mutedColor,
-		icon: "checkmark-circle",
-	},
-	upcoming: {
-		background: "rgba(10, 132, 255, 0.12)",
-		color: accentColor,
-		icon: "time-outline",
-	},
-};
 const destinationParentheticalPattern = /\s*\([^)]*\)/g;
 
 const tripScreenMeta: Record<TripTab, { icon: IoniconName; label: string }> = {
@@ -916,27 +894,6 @@ const getDestinationImageFallbackNames = (destination: string) => {
 	return names;
 };
 
-function TripCountdownPill({ countdown }: { countdown: TripCountdown }) {
-	const tone = tripCountdownToneStyles[countdown.tone];
-
-	return (
-		<View
-			className="shrink-0 flex-row items-center gap-1.5 rounded-full px-2.5 py-1"
-			style={{ backgroundColor: tone.background }}
-		>
-			<Ionicons color={tone.color} name={tone.icon} size={10} />
-			<Text
-				numberOfLines={1}
-				style={{ color: tone.color }}
-				type="body-xs"
-				weight="bold"
-			>
-				{countdown.label}
-			</Text>
-		</View>
-	);
-}
-
 export function TripHero({ model }: { model: TripDashboardModel }) {
 	const { readiness, travelerLabel, tripWindow, workspace } = model;
 	const destinationImageFallbackNames = getDestinationImageFallbackNames(
@@ -992,9 +949,6 @@ export function TripHero({ model }: { model: TripDashboardModel }) {
 								{workspace.trip.title}
 							</Text.Heading>
 						</View>
-						{model.tripCountdown ? (
-							<TripCountdownPill countdown={model.tripCountdown} />
-						) : null}
 					</View>
 					<View className="gap-1.5">
 						<View className="flex-row flex-wrap items-center gap-x-3 gap-y-1.5">
@@ -1042,147 +996,159 @@ export function TripHero({ model }: { model: TripDashboardModel }) {
 	);
 }
 
-interface TripModuleLauncherItem {
-	count?: number;
-	description: string;
+interface TripWorkspaceModule {
+	detail: string;
 	href: Href;
 	icon: IoniconName;
 	label: string;
 	tab: TripTab;
+	value: string;
 }
 
-interface TripModuleLauncherGroup {
-	items: TripModuleLauncherItem[];
-	title: string;
+type WorkspaceModuleGroupKey = "plan" | "book" | "group" | "travel";
+
+interface TripWorkspaceModuleGroup {
+	items: TripWorkspaceModule[];
+	label: string;
+	value: WorkspaceModuleGroupKey;
 }
 
-const getTripModuleLauncherGroups = (
+const formatCountLabel = (count: number, singular: string) =>
+	`${count} ${count === 1 ? singular : `${singular}s`}`;
+
+const getTripWorkspaceModuleGroups = (
 	model: TripDashboardModel
-): TripModuleLauncherGroup[] => [
-	{
-		items: [
-			{
-				description: "Dashboard and next actions",
-				href: VIYA_ROUTES.tripDashboard(model.tripId),
-				icon: "speedometer-outline",
-				label: "Today",
-				tab: "overview",
-			},
-			{
-				count: model.workspace.itineraryItems.length,
-				description: "Daily plan, timing, and costs",
-				href: VIYA_ROUTES.tripItinerary(model.tripId),
-				icon: "calendar-outline",
-				label: "Itinerary",
-				tab: "itinerary",
-			},
-			{
-				count: model.workspace.expenses.length,
-				description: `${formatMoney(model.budget.remaining, model.currency)} remaining`,
-				href: VIYA_ROUTES.tripBudget(model.tripId),
-				icon: "wallet-outline",
-				label: "Budget",
-				tab: "budget",
-			},
-		],
-		title: "Plan",
-	},
-	{
-		items: [
-			{
-				count: model.workspace.bookings.length,
-				description: "Flights, stays, and activities",
-				href: VIYA_ROUTES.tripBookings(model.tripId),
-				icon: "briefcase-outline",
-				label: "Bookings",
-				tab: "bookings",
-			},
-			{
-				count:
-					model.workspace.vaultItems.length + model.workspace.documents.length,
-				description: "Tickets, IDs, and receipts",
-				href: VIYA_ROUTES.tripVault(model.tripId),
-				icon: "folder-open-outline",
-				label: "Documents",
-				tab: "documents",
-			},
-			{
-				count: model.readiness.openCount,
-				description: `${model.readiness.score}% ready`,
-				href: VIYA_ROUTES.tripReadiness(model.tripId),
-				icon: "checkbox-outline",
-				label: "Checklist",
-				tab: "checklist",
-			},
-			{
-				count: model.tabCounts.risks,
-				description: "Open risks and backup actions",
-				href: VIYA_ROUTES.tripRisks(model.tripId),
-				icon: "warning-outline",
-				label: "Risks",
-				tab: "risks",
-			},
-		],
-		title: "Book and prep",
-	},
-	{
-		items: [
-			{
-				count: model.workspace.companions.length,
-				description: "Travelers and contacts",
-				href: VIYA_ROUTES.tripCompanions(model.tripId),
-				icon: "people-outline",
-				label: "Companions",
-				tab: "companions",
-			},
-			{
-				count: model.workspace.notes.length,
-				description: "Decisions and reminders",
-				href: VIYA_ROUTES.tripNotes(model.tripId),
-				icon: "document-text-outline",
-				label: "Notes",
-				tab: "notes",
-			},
-		],
-		title: "Group",
-	},
-	{
-		items: [
-			{
-				description: "Day-of guidance",
-				href: VIYA_ROUTES.tripTravelMode(model.tripId),
-				icon: "navigate-outline",
-				label: "Travel Mode",
-				tab: "travel",
-			},
-			{
-				count: model.workspace.moments.length,
-				description: "Photos and highlights",
-				href: VIYA_ROUTES.tripMoments(model.tripId),
-				icon: "images-outline",
-				label: "Memories",
-				tab: "memories",
-			},
-			{
-				description: "Trip story and summary",
-				href: VIYA_ROUTES.tripWrapped(model.tripId),
-				icon: "share-social-outline",
-				label: "Recap",
-				tab: "recap",
-			},
-		],
-		title: "Travel and recap",
-	},
-];
+): TripWorkspaceModuleGroup[] => {
+	const documentCount =
+		model.workspace.documents.length + model.workspace.vaultItems.length;
+
+	return [
+		{
+			label: "Plan",
+			value: "plan",
+			items: [
+				{
+					detail: formatCountLabel(model.workspace.itineraryDays.length, "day"),
+					href: VIYA_ROUTES.tripItinerary(model.tripId),
+					icon: "calendar-outline",
+					label: "Itinerary",
+					tab: "itinerary",
+					value: formatCountLabel(
+						model.workspace.itineraryItems.length,
+						"item"
+					),
+				},
+				{
+					detail: model.budget.status,
+					href: VIYA_ROUTES.tripBudget(model.tripId),
+					icon: "wallet-outline",
+					label: "Budget",
+					tab: "budget",
+					value: `${formatMoney(model.budget.remaining, model.currency)} left`,
+				},
+				{
+					detail: model.readiness.topBlocker,
+					href: VIYA_ROUTES.tripReadiness(model.tripId),
+					icon: "checkbox-outline",
+					label: "Checklist",
+					tab: "checklist",
+					value: `${model.readiness.openCount} open`,
+				},
+			],
+		},
+		{
+			label: "Book",
+			value: "book",
+			items: [
+				{
+					detail: "Flights, stays, and activities",
+					href: VIYA_ROUTES.tripBookings(model.tripId),
+					icon: "briefcase-outline",
+					label: "Bookings",
+					tab: "bookings",
+					value: formatCountLabel(model.workspace.bookings.length, "booking"),
+				},
+				{
+					detail: "Tickets, IDs, and receipts",
+					href: VIYA_ROUTES.tripVault(model.tripId),
+					icon: "folder-open-outline",
+					label: "Documents",
+					tab: "documents",
+					value: formatCountLabel(documentCount, "file"),
+				},
+				{
+					detail: "Open risks and backup actions",
+					href: VIYA_ROUTES.tripRisks(model.tripId),
+					icon: "warning-outline",
+					label: "Risks",
+					tab: "risks",
+					value: `${model.tabCounts.risks ?? 0} open`,
+				},
+			],
+		},
+		{
+			label: "Group",
+			value: "group",
+			items: [
+				{
+					detail: "Travelers, roles, and emergency contacts",
+					href: VIYA_ROUTES.tripCompanions(model.tripId),
+					icon: "people-outline",
+					label: "Companions",
+					tab: "companions",
+					value: formatCountLabel(model.workspace.companions.length, "contact"),
+				},
+				{
+					detail: "Decisions, reminders, and constraints",
+					href: VIYA_ROUTES.tripNotes(model.tripId),
+					icon: "document-text-outline",
+					label: "Notes",
+					tab: "notes",
+					value: formatCountLabel(model.workspace.notes.length, "note"),
+				},
+			],
+		},
+		{
+			label: "Travel",
+			value: "travel",
+			items: [
+				{
+					detail: "Day-of guidance and quick logging",
+					href: VIYA_ROUTES.tripTravelMode(model.tripId),
+					icon: "navigate-outline",
+					label: "Travel Mode",
+					tab: "travel",
+					value: `${model.travelAlertCount} alerts`,
+				},
+				{
+					detail: "Photos, highlights, and story notes",
+					href: VIYA_ROUTES.tripMoments(model.tripId),
+					icon: "images-outline",
+					label: "Memories",
+					tab: "memories",
+					value: formatCountLabel(model.workspace.moments.length, "memory"),
+				},
+				{
+					detail: "Trip story, spend, and wrap-up",
+					href: VIYA_ROUTES.tripWrapped(model.tripId),
+					icon: "share-social-outline",
+					label: "Recap",
+					tab: "recap",
+					value: formatCountLabel(model.highlights.length, "highlight"),
+				},
+			],
+		},
+	];
+};
 
 function ModuleLauncherBadge({
 	accent,
-	count,
 	isActive,
+	value,
 }: {
 	accent: ModuleAccent;
-	count?: number;
 	isActive: boolean;
+	value: string;
 }) {
 	if (isActive) {
 		return (
@@ -1202,14 +1168,10 @@ function ModuleLauncherBadge({
 		);
 	}
 
-	if (count === undefined) {
-		return null;
-	}
-
 	return (
 		<View className="min-w-6 items-center rounded-full bg-surface-secondary px-2 py-1">
-			<Text color="muted" type="body-xs" weight="semibold">
-				{count}
+			<Text color="muted" numberOfLines={1} type="body-xs" weight="semibold">
+				{value}
 			</Text>
 		</View>
 	);
@@ -1221,7 +1183,7 @@ function ModuleLauncherTile({
 	onPress,
 }: {
 	isActive: boolean;
-	item: TripModuleLauncherItem;
+	item: TripWorkspaceModule;
 	onPress: () => void;
 }) {
 	const accent = getModuleAccent(item.label);
@@ -1231,17 +1193,17 @@ function ModuleLauncherTile({
 			accessibilityLabel={`${isActive ? "Current module" : "Open"} ${item.label}`}
 			accessibilityRole="button"
 			accessibilityState={{ selected: isActive }}
-			className="min-h-24 flex-1 basis-[47%] rounded-[24px] bg-surface p-3.5"
+			className="min-h-24 flex-1 basis-[47%] rounded-[24px] bg-white p-3.5"
 			onPress={onPress}
 			style={({ pressed }) => ({
-				backgroundColor: isActive ? accent.bg : undefined,
+				backgroundColor: isActive ? accent.bg : "#FFFFFF",
 				borderColor: isActive ? accent.color : borderColor,
-				borderWidth: isActive ? 1 : 0,
+				borderWidth: 1,
 				transform: [{ scale: pressed ? 0.985 : 1 }],
 			})}
 		>
-			<View className="gap-2.5">
-				<View className="flex-row items-start justify-between gap-3">
+			<View className="flex-1 justify-between gap-2.5">
+				<View className="flex-row items-center justify-between gap-2">
 					<View
 						className="h-9 w-9 items-center justify-center rounded-2xl"
 						style={{ backgroundColor: accent.bg }}
@@ -1250,16 +1212,16 @@ function ModuleLauncherTile({
 					</View>
 					<ModuleLauncherBadge
 						accent={accent}
-						count={item.count}
 						isActive={isActive}
+						value={item.value}
 					/>
 				</View>
 				<View className="gap-0.5">
-					<Text numberOfLines={1} type="body-sm" weight="bold">
+					<Text numberOfLines={1} type="body" weight="bold">
 						{item.label}
 					</Text>
 					<Text color="muted" numberOfLines={2} type="body-xs">
-						{item.description}
+						{item.detail}
 					</Text>
 				</View>
 			</View>
@@ -1282,13 +1244,13 @@ function TripModulesSheet({
 	const insets = useSafeAreaInsets();
 	const foreground = useThemeColor("foreground");
 	const { height } = useWindowDimensions();
-	const moduleGroups = getTripModuleLauncherGroups(model);
+	const moduleGroups = getTripWorkspaceModuleGroups(model);
 	const moduleListMaxHeight = getTripModulesSheetListMaxHeight({
 		bottomInset: insets.bottom,
 		windowHeight: height,
 	});
 
-	const openModule = (item: TripModuleLauncherItem) => {
+	const openModule = (item: TripWorkspaceModule) => {
 		onOpenChange(false);
 
 		if (item.tab !== activeTab) {
@@ -1311,13 +1273,13 @@ function TripModulesSheet({
 					>
 						<View className="flex-row items-start justify-between gap-4">
 							<View className="min-w-0 flex-1 gap-1">
-								<BottomSheet.Title>Trip modules</BottomSheet.Title>
+								<BottomSheet.Title>Workspace</BottomSheet.Title>
 								<BottomSheet.Description numberOfLines={2}>
-									Jump between the tools for {model.workspace.trip.title}.
+									Jump between sections for {model.workspace.trip.title}.
 								</BottomSheet.Description>
 							</View>
 							<CloseButton
-								accessibilityLabel="Close trip modules"
+								accessibilityLabel="Close workspace"
 								className="h-10 w-10 rounded-full bg-surface"
 								iconProps={{ color: foreground, size: 22 }}
 								onPress={() => onOpenChange(false)}
@@ -1330,14 +1292,14 @@ function TripModulesSheet({
 							style={{ maxHeight: moduleListMaxHeight }}
 						>
 							{moduleGroups.map((group) => (
-								<View className="gap-3" key={group.title}>
+								<View className="gap-3" key={group.value}>
 									<Text
 										className="px-1"
 										color="muted"
 										type="body-xs"
 										weight="semibold"
 									>
-										{group.title.toUpperCase()}
+										{group.label.toUpperCase()}
 									</Text>
 									<View className="flex-row flex-wrap gap-3">
 										{group.items.map((item) => (
@@ -1374,7 +1336,7 @@ export function TripModuleMenuButton({
 		<>
 			<Surface className="h-14 w-44 justify-center rounded-full border border-border bg-surface px-2 py-2">
 				<Pressable
-					accessibilityLabel={`Open trip modules from ${activeScreen.label}`}
+					accessibilityLabel={`Open workspace from ${activeScreen.label}`}
 					accessibilityRole="button"
 					className="h-10 flex-row items-center gap-3 rounded-full px-2"
 					onPress={() => setIsModulesOpen(true)}
@@ -1440,26 +1402,7 @@ export function TripModuleNavigationBar({
 	);
 }
 
-interface DashboardWorkspaceModule {
-	detail: string;
-	href: Href;
-	icon: IoniconName;
-	label: string;
-	value: string;
-}
-
-type WorkspaceModuleGroupKey = "plan" | "book" | "group" | "travel";
-
-interface DashboardWorkspaceModuleGroup {
-	items: DashboardWorkspaceModule[];
-	label: string;
-	value: WorkspaceModuleGroupKey;
-}
-
-const formatCountLabel = (count: number, singular: string) =>
-	`${count} ${count === 1 ? singular : `${singular}s`}`;
-
-function WorkspaceModuleTile({ item }: { item: DashboardWorkspaceModule }) {
+function WorkspaceModuleTile({ item }: { item: TripWorkspaceModule }) {
 	const accent = getModuleAccent(item.label);
 
 	return (
@@ -1467,8 +1410,11 @@ function WorkspaceModuleTile({ item }: { item: DashboardWorkspaceModule }) {
 			<Pressable
 				accessibilityLabel={`Open ${item.label}`}
 				accessibilityRole="button"
-				className="min-h-24 flex-1 basis-[47%] rounded-[24px] bg-surface p-3.5"
+				className="min-h-24 flex-1 basis-[47%] rounded-[24px] bg-white p-3.5"
 				style={({ pressed }) => ({
+					backgroundColor: "#FFFFFF",
+					borderColor,
+					borderWidth: 1,
 					transform: [{ scale: pressed ? 0.985 : 1 }],
 				})}
 			>
@@ -1506,123 +1452,16 @@ function WorkspaceModuleTile({ item }: { item: DashboardWorkspaceModule }) {
 }
 
 export function MainModules({ model }: { model: TripDashboardModel }) {
-	const documentCount =
-		model.workspace.documents.length + model.workspace.vaultItems.length;
 	const [activeWorkspaceGroup, setActiveWorkspaceGroup] =
 		useState<WorkspaceModuleGroupKey>("plan");
-	const workspaceModuleGroups: DashboardWorkspaceModuleGroup[] = [
-		{
-			label: "Plan",
-			value: "plan",
-			items: [
-				{
-					detail: formatCountLabel(model.workspace.itineraryDays.length, "day"),
-					href: VIYA_ROUTES.tripItinerary(model.tripId),
-					icon: "calendar-outline",
-					label: "Itinerary",
-					value: formatCountLabel(
-						model.workspace.itineraryItems.length,
-						"item"
-					),
-				},
-				{
-					detail: model.budget.status,
-					href: VIYA_ROUTES.tripBudget(model.tripId),
-					icon: "wallet-outline",
-					label: "Budget",
-					value: `${formatMoney(model.budget.remaining, model.currency)} left`,
-				},
-				{
-					detail: model.readiness.topBlocker,
-					href: VIYA_ROUTES.tripReadiness(model.tripId),
-					icon: "checkbox-outline",
-					label: "Checklist",
-					value: `${model.readiness.openCount} open`,
-				},
-			],
-		},
-		{
-			label: "Book",
-			value: "book",
-			items: [
-				{
-					detail: "Flights, stays, and activities",
-					href: VIYA_ROUTES.tripBookings(model.tripId),
-					icon: "briefcase-outline",
-					label: "Bookings",
-					value: formatCountLabel(model.workspace.bookings.length, "booking"),
-				},
-				{
-					detail: "Tickets, IDs, and receipts",
-					href: VIYA_ROUTES.tripVault(model.tripId),
-					icon: "folder-open-outline",
-					label: "Documents",
-					value: formatCountLabel(documentCount, "file"),
-				},
-				{
-					detail: "Open risks and backup actions",
-					href: VIYA_ROUTES.tripRisks(model.tripId),
-					icon: "warning-outline",
-					label: "Risks",
-					value: `${model.tabCounts.risks ?? 0} open`,
-				},
-			],
-		},
-		{
-			label: "Group",
-			value: "group",
-			items: [
-				{
-					detail: "Travelers, roles, and emergency contacts",
-					href: VIYA_ROUTES.tripCompanions(model.tripId),
-					icon: "people-outline",
-					label: "Companions",
-					value: formatCountLabel(model.workspace.companions.length, "contact"),
-				},
-				{
-					detail: "Decisions, reminders, and constraints",
-					href: VIYA_ROUTES.tripNotes(model.tripId),
-					icon: "document-text-outline",
-					label: "Notes",
-					value: formatCountLabel(model.workspace.notes.length, "note"),
-				},
-			],
-		},
-		{
-			label: "Travel",
-			value: "travel",
-			items: [
-				{
-					detail: "Day-of guidance and quick logging",
-					href: VIYA_ROUTES.tripTravelMode(model.tripId),
-					icon: "navigate-outline",
-					label: "Travel Mode",
-					value: `${model.travelAlertCount} alerts`,
-				},
-				{
-					detail: "Photos, highlights, and story notes",
-					href: VIYA_ROUTES.tripMoments(model.tripId),
-					icon: "images-outline",
-					label: "Memories",
-					value: formatCountLabel(model.workspace.moments.length, "memory"),
-				},
-				{
-					detail: "Trip story, spend, and wrap-up",
-					href: VIYA_ROUTES.tripWrapped(model.tripId),
-					icon: "share-social-outline",
-					label: "Recap",
-					value: formatCountLabel(model.highlights.length, "highlight"),
-				},
-			],
-		},
-	];
+	const workspaceModuleGroups = getTripWorkspaceModuleGroups(model);
 
 	return (
 		<View className="gap-7">
 			<View className="gap-3">
 				<View className="gap-1 px-1">
 					<Text.Heading type="h5" weight="bold">
-						Trip workspace
+						Workspace
 					</Text.Heading>
 				</View>
 				<View className="gap-3">

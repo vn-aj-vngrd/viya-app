@@ -24,7 +24,13 @@ import {
 	TextField,
 } from "heroui-native";
 import { type ComponentProps, useState } from "react";
-import { Linking, Pressable, ScrollView, View } from "react-native";
+import {
+	Linking,
+	Pressable,
+	ScrollView,
+	useWindowDimensions,
+	View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Container } from "@/components/container";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
@@ -389,6 +395,29 @@ function BookingPicker({
 
 type IoniconName = ComponentProps<typeof Ionicons>["name"];
 
+const ITINERARY_ACCENT_COLOR = "#0A84FF";
+const ITINERARY_DANGER_COLOR = "#FF3B30";
+const ITINERARY_MUTED_COLOR = "#71717A";
+const ITINERARY_SUBTLE_COLOR = "#8E8E93";
+const ITINERARY_HEADER_HORIZONTAL_PADDING = 32;
+const ITINERARY_HEADER_CONTROL_GAP = 8;
+const ITINERARY_DATE_RANGE_MIN_WIDTH = 176;
+const ITINERARY_DAY_SELECTOR_MIN_WIDTH = 136;
+const ITINERARY_DAY_SELECTOR_MAX_WIDTH = 164;
+
+const getItineraryDaySelectorWidth = (windowWidth: number) => {
+	const availableWidth =
+		windowWidth -
+		ITINERARY_HEADER_HORIZONTAL_PADDING -
+		ITINERARY_HEADER_CONTROL_GAP;
+	const remainingWidth = availableWidth - ITINERARY_DATE_RANGE_MIN_WIDTH;
+
+	return Math.max(
+		ITINERARY_DAY_SELECTOR_MIN_WIDTH,
+		Math.min(ITINERARY_DAY_SELECTOR_MAX_WIDTH, remainingWidth)
+	);
+};
+
 const ITINERARY_CATEGORY_ICON: Record<string, IoniconName> = {
 	activity: "sparkles-outline",
 	emergency: "medkit-outline",
@@ -428,8 +457,55 @@ function ItineraryStatusChip({ status }: { status: string }) {
 	);
 }
 
+function ItineraryDayMetaPill({ label }: { label: string }) {
+	return (
+		<View className="rounded-full bg-surface-secondary px-3 py-1.5">
+			<Text color="muted" type="body-xs" weight="semibold">
+				{label}
+			</Text>
+		</View>
+	);
+}
+
+function ItineraryQuietActionButton({
+	icon,
+	isDisabled,
+	label,
+	onPress,
+}: {
+	icon: IoniconName;
+	isDisabled?: boolean;
+	label: string;
+	onPress: () => void;
+}) {
+	return (
+		<Pressable
+			accessibilityLabel={label}
+			accessibilityRole="button"
+			accessibilityState={{ disabled: Boolean(isDisabled) }}
+			className="min-h-10 min-w-[132px] flex-1 flex-row items-center justify-center gap-2 rounded-full bg-surface-secondary px-4 py-2.5"
+			disabled={isDisabled}
+			onPress={onPress}
+			style={({ pressed }) => ({
+				opacity: isDisabled ? 0.5 : 1,
+				transform: [{ scale: pressed ? 0.98 : 1 }],
+			})}
+		>
+			<View
+				className="h-6 w-6 items-center justify-center rounded-full"
+				style={{ backgroundColor: "rgba(10, 132, 255, 0.1)" }}
+			>
+				<Ionicons color={ITINERARY_ACCENT_COLOR} name={icon} size={14} />
+			</View>
+			<Text type="body-sm" weight="semibold">
+				{label}
+			</Text>
+		</Pressable>
+	);
+}
+
 function ItineraryIconButton({
-	color = "#0A84FF",
+	color = ITINERARY_MUTED_COLOR,
 	icon,
 	isDisabled,
 	label,
@@ -446,6 +522,7 @@ function ItineraryIconButton({
 	return (
 		<Button
 			accessibilityLabel={label}
+			className="bg-surface-secondary"
 			isDisabled={isDisabled}
 			onPress={onPress}
 			size="sm"
@@ -740,8 +817,17 @@ function LinkedBookingAction({
 
 	return (
 		<Link asChild href={VIYA_ROUTES.tripBookings(tripId)}>
-			<Button isDisabled={isDisabled} size="sm" variant="secondary">
-				<Ionicons color="#0A84FF" name="ticket-outline" size={16} />
+			<Button
+				className="bg-surface-secondary"
+				isDisabled={isDisabled}
+				size="sm"
+				variant="secondary"
+			>
+				<Ionicons
+					color={ITINERARY_MUTED_COLOR}
+					name="ticket-outline"
+					size={16}
+				/>
 				<Button.Label>{label}</Button.Label>
 			</Button>
 		</Link>
@@ -901,6 +987,7 @@ function ItineraryItemCard({
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This screen coordinates mutations, sheets, and timeline rendering in one module.
 export function TripItineraryScreen() {
 	const tripId = useTripIdParam();
+	const { width: windowWidth } = useWindowDimensions();
 	const workspace = useQuery(
 		api.tripWorkspace.getTripWorkspace,
 		tripId ? { tripId } : "skip"
@@ -1090,6 +1177,7 @@ export function TripItineraryScreen() {
 					end: trip.endDate,
 					start: trip.startDate,
 				};
+	const daySelectorWidth = getItineraryDaySelectorWidth(windowWidth);
 	const handleAddDay = async (targetDayNumber = activeCalendarDayNumber) => {
 		if (!tripId || isSavingDay) {
 			return null;
@@ -1415,7 +1503,7 @@ export function TripItineraryScreen() {
 								setTripDateErrorMessage(null);
 								setTripDateRange(value);
 							}}
-							triggerClassName="h-11 min-w-0 flex-1 flex-row items-center gap-2 rounded-full border border-border/70 bg-white px-3"
+							triggerClassName="h-11 w-full flex-row items-center gap-2 rounded-full border border-border/70 bg-white px-3"
 							triggerIconColor="#71717A"
 							triggerVariant="button"
 							value={effectiveTripDateRange}
@@ -1423,12 +1511,13 @@ export function TripItineraryScreen() {
 						<Pressable
 							accessibilityLabel="Choose itinerary day"
 							accessibilityRole="button"
-							className="h-11 min-w-[132px] flex-[0.9] flex-row items-center gap-2 rounded-full border border-border/70 bg-white px-3"
+							className="h-11 min-w-0 flex-row items-center gap-2 rounded-full border border-border/70 bg-white px-3"
 							onPress={() => {
 								setIsDayMenuOpen(true);
 							}}
 							style={({ pressed }) => ({
 								transform: [{ scale: pressed ? 0.98 : 1 }],
+								width: daySelectorWidth,
 							})}
 						>
 							<Ionicons color="#71717A" name="list-outline" size={16} />
@@ -1476,7 +1565,7 @@ export function TripItineraryScreen() {
 
 								return (
 									<Accordion.Item
-										className="overflow-hidden rounded-[18px] border border-border/70 bg-white"
+										className="overflow-hidden rounded-[28px] border border-border bg-surface"
 										key={calendarDay.dayNumber}
 										value={calendarDay.dayNumber.toString()}
 									>
@@ -1497,36 +1586,18 @@ export function TripItineraryScreen() {
 											/>
 										</Accordion.Trigger>
 
-										<Accordion.Content className="gap-3 border-border/70 border-t px-4 py-4">
+										<Accordion.Content className="gap-4 px-4 pt-0 pb-4">
 											{day ? (
 												<>
-													<View className="flex-row flex-wrap gap-2">
-														<Chip
-															className="border border-border/70 bg-white"
-															size="sm"
-															variant="secondary"
-														>
-															<Chip.Label>{day.theme}</Chip.Label>
-														</Chip>
-														<Chip
-															className="border border-border/70 bg-white"
-															size="sm"
-															variant="secondary"
-														>
-															<Chip.Label>
-																{formatChoiceLabel(day.pace)}
-															</Chip.Label>
-														</Chip>
+													<View className="flex-row flex-wrap gap-2 border-border border-t pt-4">
+														<ItineraryDayMetaPill label={day.theme} />
+														<ItineraryDayMetaPill
+															label={formatChoiceLabel(day.pace)}
+														/>
 														{day.estimatedCost > 0 ? (
-															<Chip
-																className="border border-border/70 bg-white"
-																size="sm"
-																variant="secondary"
-															>
-																<Chip.Label>
-																	{formatCost(day.estimatedCost)}
-																</Chip.Label>
-															</Chip>
+															<ItineraryDayMetaPill
+																label={formatCost(day.estimatedCost)}
+															/>
 														) : null}
 													</View>
 													{day.summary ? (
@@ -1535,26 +1606,18 @@ export function TripItineraryScreen() {
 														</Text.Paragraph>
 													) : null}
 													<View className="flex-row flex-wrap items-center gap-2">
-														<Button
-															className="min-w-[132px] flex-1"
+														<ItineraryQuietActionButton
+															icon="location-outline"
+															label="Add stop"
 															onPress={() => openItemSheet(day._id)}
-															size="sm"
-															variant="secondary"
-														>
-															<Ionicons
-																color="#0A84FF"
-																name="location-outline"
-																size={16}
-															/>
-															<Button.Label>Add stop</Button.Label>
-														</Button>
+														/>
 														<ItineraryIconButton
 															icon="create-outline"
 															label="Edit day"
 															onPress={() => openEditDaySheet(day)}
 														/>
 														<ItineraryIconButton
-															color="#FF3B30"
+															color={ITINERARY_DANGER_COLOR}
 															icon="trash-outline"
 															isDisabled={pendingDayId === day._id}
 															label="Delete day"
@@ -1573,31 +1636,35 @@ export function TripItineraryScreen() {
 
 													{dayItems.length === 0 &&
 													daySavedPlaces.length === 0 ? (
-														<View className="items-center gap-2 rounded-[16px] border border-border/70 border-dashed bg-background px-4 py-6">
-															<Ionicons
-																color="#8E8E93"
-																name="time-outline"
-																size={22}
-															/>
-															<Text
-																color="muted"
-																type="body-sm"
-																weight="semibold"
-															>
-																No scheduled items yet
-															</Text>
-															<Button
-																onPress={() => openItemSheet(day._id)}
-																size="sm"
-																variant="secondary"
-															>
+														<View className="items-center gap-3 rounded-[24px] bg-surface-secondary px-5 py-7">
+															<View className="h-10 w-10 items-center justify-center rounded-full bg-surface">
 																<Ionicons
-																	color="#0A84FF"
-																	name="add-circle-outline"
-																	size={16}
+																	color={ITINERARY_SUBTLE_COLOR}
+																	name="time-outline"
+																	size={21}
 																/>
-																<Button.Label>Add timed stop</Button.Label>
-															</Button>
+															</View>
+															<View className="items-center gap-1">
+																<Text
+																	color="muted"
+																	type="body-sm"
+																	weight="semibold"
+																>
+																	No scheduled items yet
+																</Text>
+																<Text
+																	color="muted"
+																	numberOfLines={2}
+																	type="body-xs"
+																>
+																	Add the first stop when the timing is ready.
+																</Text>
+															</View>
+															<ItineraryQuietActionButton
+																icon="add-circle-outline"
+																label="Add timed stop"
+																onPress={() => openItemSheet(day._id)}
+															/>
 														</View>
 													) : (
 														<View className="gap-3">
@@ -1656,19 +1723,13 @@ export function TripItineraryScreen() {
 																>
 																	SAVED PLACES
 																</Text>
-																<Chip
-																	className="border border-border/70 bg-white"
-																	size="sm"
-																	variant="secondary"
-																>
-																	<Chip.Label>
-																		{daySavedPlaces.length} route stops
-																	</Chip.Label>
-																</Chip>
+																<ItineraryDayMetaPill
+																	label={`${daySavedPlaces.length} route stops`}
+																/>
 															</View>
 															{daySavedPlaces.map((place) => (
 																<View
-																	className="gap-2 rounded-[16px] border border-border/70 bg-background p-4"
+																	className="gap-3 rounded-[22px] bg-surface-secondary p-4"
 																	key={place._id}
 																>
 																	<View className="flex-row items-start gap-3">
@@ -1687,22 +1748,12 @@ export function TripItineraryScreen() {
 																		</View>
 																		<View className="min-w-0 flex-1 gap-1">
 																			<View className="flex-row flex-wrap gap-2">
-																				<Chip
-																					className="border border-border/70 bg-white"
-																					size="sm"
-																					variant="secondary"
-																				>
-																					<Chip.Label>
-																						{formatChoiceLabel(place.category)}
-																					</Chip.Label>
-																				</Chip>
-																				<Chip
-																					className="border border-border/70 bg-white"
-																					size="sm"
-																					variant="secondary"
-																				>
-																					<Chip.Label>Saved place</Chip.Label>
-																				</Chip>
+																				<ItineraryDayMetaPill
+																					label={formatChoiceLabel(
+																						place.category
+																					)}
+																				/>
+																				<ItineraryDayMetaPill label="Saved place" />
 																			</View>
 																			<Text type="body-sm" weight="bold">
 																				{place.title}
@@ -1731,6 +1782,7 @@ export function TripItineraryScreen() {
 																		longitude: place.longitude,
 																	}) ? (
 																		<Button
+																			className="bg-surface"
 																			onPress={() => {
 																				handleOpenMaps({
 																					address: place.address,
@@ -1757,32 +1809,36 @@ export function TripItineraryScreen() {
 													) : null}
 												</>
 											) : (
-												<View className="items-center gap-2 rounded-[16px] border border-border/70 border-dashed bg-background px-4 py-6">
-													<Ionicons
-														color="#8E8E93"
-														name="calendar-outline"
-														size={22}
-													/>
-													<Text color="muted" type="body-sm" weight="semibold">
-														No stops planned for this day
-													</Text>
-													<Button
+												<View className="items-center gap-3 rounded-[24px] bg-surface-secondary px-5 py-7">
+													<View className="h-10 w-10 items-center justify-center rounded-full bg-surface">
+														<Ionicons
+															color={ITINERARY_SUBTLE_COLOR}
+															name="calendar-outline"
+															size={21}
+														/>
+													</View>
+													<View className="items-center gap-1">
+														<Text
+															color="muted"
+															type="body-sm"
+															weight="semibold"
+														>
+															No stops planned for this day
+														</Text>
+														<Text color="muted" type="body-xs">
+															Create the day and add the first stop.
+														</Text>
+													</View>
+													<ItineraryQuietActionButton
+														icon="add-circle-outline"
 														isDisabled={isSavingDay}
+														label="Add stop"
 														onPress={() => {
 															openItemSheetForCalendarDay(
 																calendarDay.dayNumber
 															).catch(() => undefined);
 														}}
-														size="sm"
-														variant="secondary"
-													>
-														<Ionicons
-															color="#0A84FF"
-															name="add-circle-outline"
-															size={16}
-														/>
-														<Button.Label>Add stop</Button.Label>
-													</Button>
+													/>
 												</View>
 											)}
 										</Accordion.Content>
