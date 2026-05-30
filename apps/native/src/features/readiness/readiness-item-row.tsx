@@ -7,8 +7,8 @@ import {
 	type ReadinessCategory,
 } from "@viya-app/domain";
 import { type Href, Link } from "expo-router";
-import { Button, Surface, Text } from "heroui-native";
-import { View } from "react-native";
+import { Button, Menu, Text } from "heroui-native";
+import { Pressable, View } from "react-native";
 
 const statusLabels: Record<string, string> = {
 	blocked: "Blocked",
@@ -28,7 +28,7 @@ const statusOptions = [
 
 function RowPill({ label }: { label: string }) {
 	return (
-		<View className="rounded-full bg-surface-secondary px-2.5 py-1">
+		<View className="rounded-full border border-border bg-white px-2.5 py-1">
 			<Text color="muted" type="body-xs" weight="semibold">
 				{label}
 			</Text>
@@ -59,15 +59,12 @@ export function ReadinessItemRow({
 	onStatusChange,
 }: ReadinessItemRowProps) {
 	return (
-		<Surface className="gap-3 rounded-[24px] border border-border bg-surface p-4">
+		<View className="gap-3 rounded-[24px] border border-border bg-surface p-4">
 			<View className="flex-row items-start gap-3">
-				<View
-					className="h-9 w-9 items-center justify-center rounded-full"
-					style={{ backgroundColor: "rgba(94, 92, 230, 0.12)" }}
-				>
+				<View className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary">
 					<Ionicons color="#5E5CE6" name="checkmark-circle-outline" size={18} />
 				</View>
-				<View className="flex-1 gap-2">
+				<View className="min-w-0 flex-1 gap-2">
 					<View className="flex-row flex-wrap gap-2">
 						<RowPill
 							label={
@@ -87,9 +84,62 @@ export function ReadinessItemRow({
 						Due {item.dueDate}
 					</Text>
 				</View>
+				<Menu>
+					<Menu.Trigger asChild={true}>
+						<Pressable
+							accessibilityLabel="Task options"
+							accessibilityRole="button"
+							className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary"
+							style={({ pressed }) => ({
+								transform: [{ scale: pressed ? 0.94 : 1 }],
+							})}
+						>
+							<Ionicons color="#71717A" name="ellipsis-horizontal" size={17} />
+						</Pressable>
+					</Menu.Trigger>
+					<Menu.Portal>
+						<Menu.Overlay />
+						<Menu.Content
+							align="end"
+							className="rounded-[24px] border border-border bg-surface p-2"
+							offset={8}
+							placement="bottom"
+							presentation="popover"
+							width={200}
+						>
+							<Menu.Item
+								accessibilityLabel="Edit task"
+								className="flex-row items-center gap-3 rounded-[18px] p-2.5"
+								isAnimatedStyleActive={false}
+								onPress={() => onEdit(item)}
+							>
+								<View className="h-8 w-8 items-center justify-center rounded-full bg-surface-secondary">
+									<Ionicons color="#0A84FF" name="create-outline" size={16} />
+								</View>
+								<Menu.ItemTitle className="font-semibold text-sm">
+									Edit task
+								</Menu.ItemTitle>
+							</Menu.Item>
+							<View className="mx-2 my-1 h-px bg-border" />
+							<Menu.Item
+								accessibilityLabel="Delete task"
+								className="flex-row items-center gap-3 rounded-[18px] p-2.5"
+								isAnimatedStyleActive={false}
+								onPress={() => onDelete(item._id)}
+							>
+								<View className="h-8 w-8 items-center justify-center rounded-full bg-danger/10">
+									<Ionicons color="#FF3B30" name="trash-outline" size={16} />
+								</View>
+								<Menu.ItemTitle className="font-semibold text-danger text-sm">
+									Delete task
+								</Menu.ItemTitle>
+							</Menu.Item>
+						</Menu.Content>
+					</Menu.Portal>
+				</Menu>
 			</View>
 			<View className="flex-row flex-wrap items-center gap-2">
-				<View className="rounded-full bg-surface-secondary px-3 py-2">
+				<View className="rounded-full border border-border bg-white px-3 py-2">
 					<Text type="body-sm" weight="semibold">
 						{statusLabels[item.status] ?? item.status}
 					</Text>
@@ -122,40 +172,26 @@ export function ReadinessItemRow({
 					</Button>
 				)}
 			</View>
-			<View className="flex-row flex-wrap gap-2">
-				{categoryHref ? (
-					<Link asChild href={categoryHref}>
-						<Button className="flex-1" size="sm" variant="secondary">
-							<Ionicons color="#0A84FF" name="open-outline" size={15} />
-							<Button.Label>Open category</Button.Label>
-						</Button>
-					</Link>
-				) : null}
-				{ownerHref ? (
-					<Link asChild href={ownerHref}>
-						<Button className="flex-1" size="sm" variant="secondary">
-							<Ionicons color="#0A84FF" name="people-outline" size={15} />
-							<Button.Label>Open owner</Button.Label>
-						</Button>
-					</Link>
-				) : null}
-				<Button
-					className="flex-1"
-					onPress={() => onEdit(item)}
-					size="sm"
-					variant="secondary"
-				>
-					<Button.Label>Edit task</Button.Label>
-				</Button>
-				<Button
-					className="flex-1"
-					onPress={() => onDelete(item._id)}
-					size="sm"
-					variant="tertiary"
-				>
-					<Button.Label>Delete task</Button.Label>
-				</Button>
-			</View>
-		</Surface>
+			{categoryHref || ownerHref ? (
+				<View className="flex-row flex-wrap gap-2">
+					{categoryHref ? (
+						<Link asChild href={categoryHref}>
+							<Button className="flex-1" size="sm" variant="secondary">
+								<Ionicons color="#0A84FF" name="open-outline" size={15} />
+								<Button.Label>Open category</Button.Label>
+							</Button>
+						</Link>
+					) : null}
+					{ownerHref ? (
+						<Link asChild href={ownerHref}>
+							<Button className="flex-1" size="sm" variant="secondary">
+								<Ionicons color="#0A84FF" name="people-outline" size={15} />
+								<Button.Label>Open owner</Button.Label>
+							</Button>
+						</Link>
+					) : null}
+				</View>
+			) : null}
+		</View>
 	);
 }
