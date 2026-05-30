@@ -1,16 +1,29 @@
 // biome-ignore-all lint/style/useFilenamingConvention: Convex module names are public API paths.
 
-import { getTripModuleSummaries } from "@viya-app/domain";
+import {
+	getTripModuleSummaries,
+	sortReadinessItemsForReview,
+	sortTripCompanionsForCoordination,
+	sortTripExpensesForReview,
+	sortTripItineraryItemsForTimeline,
+	sortTripPlacesForRouteReview,
+	sortTripRisksForReview,
+} from "@viya-app/domain";
 import { v } from "convex/values";
 
 import { query } from "./_generated/server";
-import { ensureTripAccess, getRequiredIdentity } from "./lib/auth";
+import { getRequiredIdentity } from "./lib/auth";
 
 export const getTripWorkspace = query({
 	args: { tripId: v.id("trips") },
 	handler: async (ctx, args) => {
 		const identity = await getRequiredIdentity(ctx);
-		const trip = await ensureTripAccess(ctx, args.tripId, identity.subject);
+		const trip = await ctx.db.get(args.tripId);
+
+		if (!trip || trip.ownerId !== identity.subject) {
+			return null;
+		}
+
 		const [
 			bookings,
 			documents,
@@ -87,23 +100,39 @@ export const getTripWorkspace = query({
 		const sortedItineraryDays = [...itineraryDays].sort(
 			(firstDay, secondDay) => firstDay.dayNumber - secondDay.dayNumber
 		);
-		const sortedItineraryItems = [...itineraryItems].sort(
-			(firstItem, secondItem) =>
-				`${firstItem.startTime}-${firstItem.title}`.localeCompare(
-					`${secondItem.startTime}-${secondItem.title}`
-				)
+		const dayOrderById = new Map(
+			sortedItineraryDays.map((day) => [day._id, day.dayNumber])
+		);
+		const sortedItineraryItems = sortTripItineraryItemsForTimeline(
+			itineraryItems,
+			dayOrderById
 		);
 		const sortedBookings = [...bookings].sort((firstBooking, secondBooking) =>
 			`${firstBooking.startDateTime ?? ""}-${firstBooking.title}`.localeCompare(
 				`${secondBooking.startDateTime ?? ""}-${secondBooking.title}`
 			)
 		);
+		const sortedExpenses = sortTripExpensesForReview(expenses);
 		const sortedMoments = [...moments].sort(
 			(firstMoment, secondMoment) =>
 				secondMoment.createdAt - firstMoment.createdAt
 		);
+		const sortedNotes = [...notes].sort(
+			(firstNote, secondNote) => secondNote.updatedAt - firstNote.updatedAt
+		);
+		const sortedCompanions = sortTripCompanionsForCoordination(companions);
+		const sortedReadinessItems = sortReadinessItemsForReview(readinessItems);
+		const sortedSavedPlaces = sortTripPlacesForRouteReview(
+			savedPlaces,
+			dayOrderById
+		);
+		const sortedRisks = sortTripRisksForReview(risks);
+		const sortedVaultItems = [...vaultItems].sort(
+			(firstVaultItem, secondVaultItem) =>
+				secondVaultItem.createdAt - firstVaultItem.createdAt
+		);
 		const hydratedVaultItems = await Promise.all(
-			vaultItems.map(async (item) => ({
+			sortedVaultItems.map(async (item) => ({
 				...item,
 				url: await ctx.storage.getUrl(item.storageId),
 			}))
@@ -112,15 +141,15 @@ export const getTripWorkspace = query({
 			bookings: sortedBookings,
 			budgetAmount: trip.budgetAmount,
 			documents,
-			expenses,
+			expenses: sortedExpenses,
 			itineraryDays: sortedItineraryDays,
 			itineraryItems: sortedItineraryItems,
 			moments: sortedMoments,
-			notes,
-			companions,
+			notes: sortedNotes,
+			companions: sortedCompanions,
 			readinessScore: trip.readinessScore,
-			risks,
-			savedPlaces,
+			risks: sortedRisks,
+			savedPlaces: sortedSavedPlaces,
 			vaultItems: hydratedVaultItems,
 		});
 
@@ -128,16 +157,16 @@ export const getTripWorkspace = query({
 			agentDrafts,
 			bookings: sortedBookings,
 			documents,
-			expenses,
+			expenses: sortedExpenses,
 			itineraryDays: sortedItineraryDays,
 			itineraryItems: sortedItineraryItems,
 			moduleSummaries,
 			moments: sortedMoments,
-			notes,
-			companions,
-			readinessItems,
-			risks,
-			savedPlaces,
+			notes: sortedNotes,
+			companions: sortedCompanions,
+			readinessItems: sortedReadinessItems,
+			risks: sortedRisks,
+			savedPlaces: sortedSavedPlaces,
 			trip,
 			vaultItems: hydratedVaultItems,
 		};

@@ -4,11 +4,13 @@ import {
 	READINESS_CATEGORY_LABELS,
 	type ReadinessCategory,
 } from "@viya-app/domain";
-import { Surface, Text } from "heroui-native";
+import { type Href, Link } from "expo-router";
+import { Button, Surface, Text } from "heroui-native";
 import { View } from "react-native";
 
 interface ReadinessCategoryCardProps {
 	category: ReadinessCategory;
+	categoryHref: Href | null;
 	highestPriority: Priority | null;
 	openCount: number;
 	score: number;
@@ -16,6 +18,7 @@ interface ReadinessCategoryCardProps {
 
 export function ReadinessCategoryCard({
 	category,
+	categoryHref,
 	highestPriority,
 	openCount,
 	score,
@@ -40,6 +43,13 @@ export function ReadinessCategoryCard({
 					{highestPriority ? PRIORITY_LABELS[highestPriority] : "Clear"}
 				</Text>
 			</View>
+			{categoryHref ? (
+				<Link asChild href={categoryHref}>
+					<Button size="sm" variant="secondary">
+						<Button.Label>Open module</Button.Label>
+					</Button>
+				</Link>
+			) : null}
 		</Surface>
 	);
 }

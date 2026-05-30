@@ -14,7 +14,7 @@ import {
 	TextField,
 } from "heroui-native";
 import type { ComponentProps, ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import Animated, {
 	cancelAnimation,
@@ -33,13 +33,11 @@ import {
 	type DateRangeValue,
 } from "@/src/components/date/date-picker-field";
 import { NavigationBackButton } from "@/src/components/navigation/navigation-back-button";
-import { ViyaMark } from "@/src/components/viya-mark";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 
 import { LocationSuggestionField } from "./location-suggestion-field";
 import { fetchTripCoverImageUrl } from "./trip-cover-image";
 import {
-	type BudgetSuggestionSource,
 	budgetScopeOptions,
 	budgetStrictnessOptions,
 	createInitialTripCreateFlowState,
@@ -47,8 +45,6 @@ import {
 	getCreateTripPayload,
 	getCreateTripReviewRows,
 	getStepError,
-	getSuggestedBudgetAmount,
-	getSuggestedBudgetPrefill,
 	getTripCreateOptionLabel,
 	paceOptions,
 	parseBudgetAmount,
@@ -65,20 +61,13 @@ import {
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
 type FlowPhase = "flow" | "generating" | "starter";
-type BudgetSuggestionStatus = "idle" | "loading" | "ready" | "error";
-
-interface BudgetSuggestionResult {
-	amount: number;
-	rationale: string;
-	source: BudgetSuggestionSource;
-}
 
 const generationSteps = [
-	{ icon: "map-outline", label: "Creating itinerary" },
-	{ icon: "compass-outline", label: "Finding useful places" },
-	{ icon: "wallet-outline", label: "Estimating budget" },
-	{ icon: "checkbox-outline", label: "Preparing checklist" },
-	{ icon: "shield-checkmark-outline", label: "Checking readiness" },
+	{ icon: "map-outline", label: "Saving destination" },
+	{ icon: "calendar-outline", label: "Setting trip dates" },
+	{ icon: "people-outline", label: "Saving traveler details" },
+	{ icon: "wallet-outline", label: "Recording budget" },
+	{ icon: "checkbox-outline", label: "Preparing workspace" },
 ] as const satisfies readonly { icon: IconName; label: string }[];
 const stepAdvanceIntervalMs = 1500;
 
@@ -96,7 +85,7 @@ const starterInsights = [
 	{
 		accent: "#059669",
 		icon: "receipt-outline",
-		text: "Budget estimates can be refined from real receipts.",
+		text: "Budget tracking becomes more accurate as receipts are logged.",
 	},
 ] as const satisfies readonly {
 	accent: string;
@@ -461,7 +450,7 @@ function DatesStep({
 		<View className="gap-5">
 			<DateRangePickerField
 				errorText={errorMessage ?? undefined}
-				helperText="Viya uses dates to plan the right number of days."
+				helperText="Dates set the number of days in your workspace."
 				isInvalid={Boolean(errorMessage)}
 				label="Trip dates"
 				onValueChange={(value) => {
@@ -628,8 +617,6 @@ function StylePaceStep({
 function BudgetStep({
 	errorMessage,
 	onUpdate,
-	suggestion,
-	suggestionStatus,
 	state,
 }: {
 	errorMessage?: string | null;
@@ -637,50 +624,21 @@ function BudgetStep({
 		key: Key,
 		value: TripCreateFlowState[Key]
 	) => void;
-	suggestion?: BudgetSuggestionResult | null;
-	suggestionStatus: BudgetSuggestionStatus;
 	state: TripCreateFlowState;
 }) {
-	const aiSuggestion = suggestion?.source === "ai" ? suggestion : null;
-	const suggestedBudgetAmount = aiSuggestion?.amount;
-	const suggestedBudgetLabel = suggestedBudgetAmount
-		? `₱${suggestedBudgetAmount.toLocaleString()}`
-		: undefined;
-	let helperText: string | undefined;
-
-	if (aiSuggestion) {
-		helperText = `AI suggests ${suggestedBudgetLabel} based on your previous answers.`;
-	} else if (
-		suggestion?.source === "fallback" ||
-		suggestionStatus === "error"
-	) {
-		helperText =
-			"AI budget suggestion is unavailable. Enter your budget manually.";
-	}
-
-	const isSuggestionLoading = suggestionStatus === "loading";
-
 	return (
 		<View className="gap-5">
 			<View className="gap-2">
 				<InlineTextField
 					errorText={errorMessage ?? undefined}
-					helperText={helperText}
+					helperText="Enter the total amount you want to track for this trip."
 					isInvalid={Boolean(errorMessage)}
 					keyboardType="numeric"
 					label="Budget amount"
 					onChangeText={(value) => onUpdate("budgetAmount", value)}
-					placeholder={suggestedBudgetAmount?.toString() ?? "Enter amount"}
+					placeholder="Enter amount"
 					value={state.budgetAmount}
 				/>
-				{isSuggestionLoading && !errorMessage ? (
-					<View className="flex-row items-center gap-2">
-						<Spinner size="sm" />
-						<Text color="muted" type="body-xs">
-							Viya is estimating a budget...
-						</Text>
-					</View>
-				) : null}
 			</View>
 			<View className="gap-3">
 				<Text color="muted" type="body-xs" weight="semibold">
@@ -788,7 +746,7 @@ function GeneratingBrandMark() {
 					shadowRadius: 18,
 				}}
 			>
-				<ViyaMark size={42} />
+				<Ionicons color="#0A84FF" name="map-outline" size={34} />
 			</View>
 		</View>
 	);
@@ -941,7 +899,7 @@ function GeneratingScreen() {
 								Building your starter trip
 							</Text.Heading>
 							<Text.Paragraph className="max-w-80 leading-6" color="muted">
-								Viya is turning your answers into a workspace you can edit.
+								Your answers are being saved into an editable workspace.
 							</Text.Paragraph>
 						</View>
 						<GenerationProgressBar progress={progress} />
@@ -1055,7 +1013,7 @@ function StarterPreviewScreen({
 								Your starter trip is ready
 							</Text.Heading>
 							<Text.Paragraph className="leading-6" color="muted">
-								Open the workspace to fine-tune everything Viya prepared for{" "}
+								Open the workspace to fine-tune the manual plan for{" "}
 								{destination}.
 							</Text.Paragraph>
 						</View>
@@ -1094,7 +1052,7 @@ function StarterPreviewScreen({
 					<Reveal delayMs={400}>
 						<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
 							<Text type="body" weight="bold">
-								Viya noticed
+								Setup checklist
 							</Text>
 							{starterInsights.map((insight) => (
 								<View
@@ -1173,9 +1131,6 @@ export function ManualTripCreateScreen() {
 	const router = useRouter();
 	const createTrip = useMutation(api.trips.createTrip);
 	const currentPreferences = useQuery(api.preferences.getCurrentPreferences);
-	const generateBudgetSuggestion = useAction(
-		api.ai.features.generateBudgetSuggestion
-	);
 	const runLocationSuggestionSearch = useAction(
 		api.locations.searchLocationSuggestions
 	);
@@ -1184,11 +1139,6 @@ export function ManualTripCreateScreen() {
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [flowPhase, setFlowPhase] = useState<FlowPhase>("flow");
 	const [isCreating, setIsCreating] = useState(false);
-	const [budgetSuggestion, setBudgetSuggestion] =
-		useState<BudgetSuggestionResult | null>(null);
-	const [budgetSuggestionStatus, setBudgetSuggestionStatus] =
-		useState<BudgetSuggestionStatus>("idle");
-	const lastAppliedBudgetSuggestionRef = useRef<string | null>(null);
 	const [state, setState] = useState<TripCreateFlowState>(() =>
 		createInitialTripCreateFlowState()
 	);
@@ -1208,110 +1158,6 @@ export function ManualTripCreateScreen() {
 			...suggestions.placeSuggestions.map((suggestion) => suggestion.location),
 		].slice(0, 6);
 	}, [currentPreferences]);
-	const {
-		budgetScope,
-		budgetStrictness,
-		destination,
-		durationPreference,
-		endDate,
-		pace,
-		startDate,
-		styles,
-		travelerCount,
-		travelerType,
-	} = state;
-	const budgetSuggestionRequest = useMemo(() => {
-		const suggestionState: TripCreateFlowState = {
-			...createInitialTripCreateFlowState(),
-			budgetScope,
-			budgetStrictness,
-			destination,
-			durationPreference,
-			endDate,
-			pace,
-			startDate,
-			styles,
-			travelerCount,
-			travelerType,
-		};
-
-		return {
-			budgetScope,
-			budgetStrictness,
-			destination,
-			durationPreference: durationPreference ?? undefined,
-			endDate,
-			heuristicAmount: getSuggestedBudgetAmount(suggestionState),
-			pace,
-			startDate,
-			styles,
-			travelerCount,
-			travelerType,
-		};
-	}, [
-		budgetScope,
-		budgetStrictness,
-		destination,
-		durationPreference,
-		endDate,
-		pace,
-		startDate,
-		styles,
-		travelerCount,
-		travelerType,
-	]);
-
-	useEffect(() => {
-		if (activeStep !== "budget") {
-			return;
-		}
-
-		let isCurrent = true;
-		setBudgetSuggestion(null);
-		setBudgetSuggestionStatus("loading");
-
-		const loadBudgetSuggestion = async () => {
-			try {
-				const suggestion = await generateBudgetSuggestion(
-					budgetSuggestionRequest
-				);
-
-				if (!isCurrent) {
-					return;
-				}
-
-				setBudgetSuggestion(suggestion);
-				setBudgetSuggestionStatus("ready");
-				setState((currentState) => {
-					const nextBudgetAmount = getSuggestedBudgetPrefill(
-						currentState.budgetAmount,
-						suggestion.amount,
-						lastAppliedBudgetSuggestionRef.current ?? undefined,
-						suggestion.source
-					);
-
-					if (nextBudgetAmount === currentState.budgetAmount) {
-						return currentState;
-					}
-
-					lastAppliedBudgetSuggestionRef.current = nextBudgetAmount;
-
-					return { ...currentState, budgetAmount: nextBudgetAmount };
-				});
-			} catch {
-				if (isCurrent) {
-					setBudgetSuggestionStatus("error");
-				}
-			}
-		};
-
-		loadBudgetSuggestion();
-
-		return () => {
-			isCurrent = false;
-		};
-	}, [activeStep, budgetSuggestionRequest, generateBudgetSuggestion]);
-
 	const updateState = <Key extends keyof TripCreateFlowState>(
 		key: Key,
 		value: TripCreateFlowState[Key]
@@ -1407,7 +1253,7 @@ export function ManualTripCreateScreen() {
 
 	let title = "Where are you going?";
 	let helper =
-		"Choose a destination so Viya can build your trip around the right place.";
+		"Choose the destination this trip workspace should be organized around.";
 	let content: ReactNode = (
 		<DestinationStep
 			destinationSuggestions={destinationSuggestions}
@@ -1424,8 +1270,7 @@ export function ManualTripCreateScreen() {
 
 	if (activeStep === "dates") {
 		title = "When is your trip?";
-		helper =
-			"Viya will use your dates to plan the right pace and number of days.";
+		helper = "Set the dates so the workspace can organize days and timing.";
 		content = (
 			<DatesStep
 				errorMessage={errorMessage}
@@ -1435,7 +1280,7 @@ export function ManualTripCreateScreen() {
 		);
 	} else if (activeStep === "travelers") {
 		title = "Who's going?";
-		helper = "This helps Viya suggest the right pace, activities, and budget.";
+		helper = "This keeps the group size and traveler type visible in planning.";
 		content = (
 			<TravelersStep
 				errorMessage={errorMessage}
@@ -1445,8 +1290,7 @@ export function ManualTripCreateScreen() {
 		);
 	} else if (activeStep === "style") {
 		title = "What kind of trip do you want?";
-		helper =
-			"Pick what matters most. Viya will use this to suggest better days.";
+		helper = "Pick what matters most so your manual plan has a clear shape.";
 		content = (
 			<StylePaceStep
 				errorMessage={errorMessage}
@@ -1457,19 +1301,17 @@ export function ManualTripCreateScreen() {
 		);
 	} else if (activeStep === "budget") {
 		title = "What's your budget?";
-		helper = "Viya can warn you if the plan becomes too expensive.";
+		helper = "Enter the amount you want the budget wallet to track.";
 		content = (
 			<BudgetStep
 				errorMessage={errorMessage}
 				onUpdate={updateState}
 				state={state}
-				suggestion={budgetSuggestion}
-				suggestionStatus={budgetSuggestionStatus}
 			/>
 		);
 	} else if (activeStep === "review") {
 		title = "Review your trip";
-		helper = "Check the setup before Viya creates your workspace.";
+		helper = "Check the setup before creating your editable workspace.";
 		content = <ReviewStep state={state} />;
 		primaryLabel = isCreating ? "Creating..." : "Create trip";
 	}

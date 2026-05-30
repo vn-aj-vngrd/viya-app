@@ -1,0 +1,22 @@
+import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+const rootPath = resolve(import.meta.dirname, "../../../../..");
+
+const readWorkspaceFile = (path: string) =>
+	readFileSync(resolve(rootPath, path), "utf8");
+
+describe("trip budget empty recent expense action contract", () => {
+	it("keeps the empty recent-expenses state connected to manual expense entry", () => {
+		const source = readWorkspaceFile(
+			"apps/native/src/features/budget/trip-budget-screen.tsx"
+		);
+
+		expect(source).toContain("Manual expenses will appear here.");
+		expect(source).toContain("Add first expense");
+		expect(source).toContain("setEditingExpenseId(null)");
+		expect(source).toContain("setExpenseForm(initialExpenseForm())");
+		expect(source).toContain("setExpenseErrorMessage(null)");
+	});
+});

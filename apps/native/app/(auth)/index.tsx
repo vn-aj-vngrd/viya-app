@@ -1,21 +1,26 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Spinner, Surface, Text } from "heroui-native";
-import type { ComponentProps, ReactNode } from "react";
+import { Button, Spinner, Surface, Text, useThemeColor } from "heroui-native";
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-	FlatList,
 	type NativeScrollEvent,
 	type NativeSyntheticEvent,
-	Pressable,
 	useWindowDimensions,
 	View,
 } from "react-native";
 import Animated, {
-	cancelAnimation,
 	Easing,
+	FadeInLeft,
+	FadeInRight,
 	FadeInUp,
+	FadeOut,
+	scrollTo,
+	useAnimatedRef,
 	useAnimatedStyle,
+	useDerivedValue,
 	useSharedValue,
+	withDelay,
+	withRepeat,
 	withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -28,1026 +33,565 @@ import {
 	setCompletedOnboarding,
 } from "@/src/features/auth/onboarding-storage";
 
-type IconName = ComponentProps<typeof Ionicons>["name"];
+type ActId = "dream" | "prepare" | "remember";
 
-type PreviewKind =
-	| "welcome"
-	| "dream"
-	| "plan"
-	| "book"
-	| "sync"
-	| "prepare"
-	| "travel"
-	| "track"
-	| "capture"
-	| "wrap";
-
-interface OnboardingSlide {
-	accent: string;
-	id: PreviewKind;
-	preview: PreviewKind;
-	soft: string;
+interface OnboardingAct {
+	dwellMs: number;
+	eyebrow: string;
+	id: ActId;
 	subtitle: string;
 	title: string;
 }
 
-const ONBOARDING_SLIDES = [
+const ONBOARDING_ACTS = [
 	{
-		accent: "#111827",
-		id: "welcome",
-		preview: "welcome",
-		soft: "#F6F1EA",
-		subtitle: "Your AI travel companion from first idea to final memory.",
-		title: "Meet Viya",
-	},
-	{
-		accent: "#7C3AED",
+		dwellMs: 6800,
+		eyebrow: "DREAM IT",
 		id: "dream",
-		preview: "dream",
-		soft: "#F5EEFF",
 		subtitle:
-			"Tell Viya your destination, mood, budget, dates, or even a rough idea.",
-		title: "Dream your trip",
+			"Tell Viya a mood, a budget, or a rough idea — and watch a plan take shape.",
+		title: "Plan a trip\njust by chatting.",
 	},
 	{
-		accent: "#2563EB",
-		id: "plan",
-		preview: "plan",
-		soft: "#EAF2FF",
-		subtitle:
-			"Turn an idea into route, budget, itinerary style, and next actions.",
-		title: "Shape the perfect plan",
-	},
-	{
-		accent: "#E97816",
-		id: "book",
-		preview: "book",
-		soft: "#FFF1DA",
-		subtitle:
-			"Know what to book first while using your preferred apps and sites.",
-		title: "Book with confidence",
-	},
-	{
-		accent: "#059669",
-		id: "sync",
-		preview: "sync",
-		soft: "#E4F8EF",
-		subtitle:
-			"Upload confirmations, receipts, screenshots, and documents into one vault.",
-		title: "Sync everything",
-	},
-	{
-		accent: "#0F766E",
+		dwellMs: 4200,
+		eyebrow: "GET READY",
 		id: "prepare",
-		preview: "prepare",
-		soft: "#DEF7F2",
 		subtitle:
-			"Check bookings, documents, budget, packing, safety, and schedule gaps.",
-		title: "Know if you're ready",
+			"Bookings, documents, budget, and packing — checked, so nothing slips.",
+		title: "Know you're ready\nbefore you go.",
 	},
 	{
-		accent: "#0284C7",
-		id: "travel",
-		preview: "travel",
-		soft: "#E0F2FE",
+		dwellMs: 4600,
+		eyebrow: "REMEMBER IT",
+		id: "remember",
 		subtitle:
-			"Get Now, Next, and Watch Out guidance with your trip context ready.",
-		title: "Travel with live guidance",
+			"Every place, expense, and favorite becomes a recap you'll actually keep.",
+		title: "Come home with\nthe whole story.",
 	},
-	{
-		accent: "#CA8A04",
-		id: "track",
-		preview: "track",
-		soft: "#FEF3C7",
-		subtitle:
-			"Track booked costs, pocket money, and expenses as your trip happens.",
-		title: "Stay on budget",
-	},
-	{
-		accent: "#DB2777",
-		id: "capture",
-		preview: "capture",
-		soft: "#FCE7F3",
-		subtitle: "Save photos, notes, ratings, receipts, discoveries, and tips.",
-		title: "Capture every moment",
-	},
-	{
-		accent: "#9333EA",
-		id: "wrap",
-		preview: "wrap",
-		soft: "#F5E8FF",
-		subtitle:
-			"Create a shareable recap, travel insights, and a reusable guide.",
-		title: "Turn your trip into a story",
-	},
-] as const satisfies readonly OnboardingSlide[];
+] as const satisfies readonly OnboardingAct[];
 
-const WELCOME_INDEX = 0;
-const FINAL_INDEX = ONBOARDING_SLIDES.length - 1;
-const AUTO_ADVANCE_MS = 4200;
+const FIRST_INDEX = 0;
+const FINAL_INDEX = ONBOARDING_ACTS.length - 1;
+const COMPACT_HEIGHT_THRESHOLD = 740;
+const PREVIEW_HEIGHT = 440;
+const COMPACT_PREVIEW_HEIGHT = 320;
+const ADVANCE_TRANSITION_MS = 620;
 const PROGRESS_DOT_SIZE = 6;
-const ACTIVE_PROGRESS_DOT_WIDTH = 20;
+const ACTIVE_DOT_WIDTH = 22;
 
-interface PillProps {
-	accent?: string;
-	children: string;
+const CONVERSATION_TURNS = [
+	{
+		prompt: "a relaxing beach trip around ₱30k",
+		reply: "Palawan's perfect for that. Quiet islands, food spots, or both?",
+	},
+	{
+		prompt: "5 lowkey days in Palawan, foodie",
+		reply: "Love it — I'll plan food-first days with slow, easy mornings.",
+	},
+] as const;
+
+type ConversationPhase = "typing" | "thinking" | "answered";
+
+const TYPE_CHAR_MS = 46;
+const SEND_PAUSE_MS = 480;
+const THINKING_MS = 1100;
+const ANSWERED_HOLD_MS = 2600;
+const FINAL_STATIC_HOLD_MS = 1500;
+const BUBBLE_IN_MS = 360;
+const BUBBLE_OUT_MS = 220;
+const DOT_PULSE_MS = 460;
+const CARET_BLINK_MS = 540;
+const TYPING_DOT_DELAYS = [0, 140, 280] as const;
+
+function useTypedText(text: string, isActive: boolean) {
+	const [typed, setTyped] = useState("");
+
+	useEffect(() => {
+		if (!isActive) {
+			return;
+		}
+
+		setTyped("");
+		let charCount = 0;
+		const intervalId = setInterval(() => {
+			charCount += 1;
+			setTyped(text.slice(0, charCount));
+
+			if (charCount >= text.length) {
+				clearInterval(intervalId);
+			}
+		}, TYPE_CHAR_MS);
+
+		return () => clearInterval(intervalId);
+	}, [text, isActive]);
+
+	return typed;
 }
 
-function Pill({ accent = "#111827", children }: PillProps) {
+function Caret({ color }: { color: string }) {
+	const opacity = useSharedValue(1);
+
+	useEffect(() => {
+		opacity.value = withRepeat(
+			withTiming(0, { duration: CARET_BLINK_MS }),
+			-1,
+			true
+		);
+	}, [opacity]);
+
+	const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
+
 	return (
-		<View
-			className="rounded-full px-3 py-1.5"
-			style={{ backgroundColor: `${accent}18` }}
-		>
-			<Text style={{ color: accent }} type="body-xs" weight="semibold">
-				{children}
-			</Text>
-		</View>
+		<Animated.View
+			style={[
+				{ backgroundColor: color, borderRadius: 1, height: 18, width: 2 },
+				style,
+			]}
+		/>
 	);
 }
 
-interface MiniActionProps {
-	accent: string;
-	icon: IconName;
-	label: string;
-}
-
-function MiniAction({ accent, icon, label }: MiniActionProps) {
-	return (
-		<View className="items-center gap-1.5">
-			<View
-				className="h-9 w-9 items-center justify-center rounded-full"
-				style={{ backgroundColor: `${accent}18` }}
-			>
-				<Ionicons color={accent} name={icon} size={16} />
-			</View>
-			<Text type="body-xs" weight="semibold">
-				{label}
-			</Text>
-		</View>
-	);
-}
-
-interface ProgressBarProps {
-	accent: string;
-	value: number;
-}
-
-function ProgressBar({ accent, value }: ProgressBarProps) {
-	return (
-		<View
-			className="h-2.5 overflow-hidden rounded-full"
-			style={{ backgroundColor: "#EEF0F4" }}
-		>
-			<View
-				className="h-full rounded-full"
-				style={{ backgroundColor: accent, width: `${value}%` as `${number}%` }}
-			/>
-		</View>
-	);
-}
-
-interface OnboardingButtonProps {
-	label: string;
-	onPress: () => void;
-	variant?: "primary" | "secondary" | "ghost";
-}
-
-function OnboardingButton({
-	label,
-	onPress,
-	variant = "primary",
-}: OnboardingButtonProps) {
-	const isPrimary = variant === "primary";
-	const isSecondary = variant === "secondary";
-
-	return (
-		<Pressable
-			accessibilityLabel={label}
-			accessibilityRole="button"
-			className="items-center justify-center rounded-full"
-			onPress={onPress}
-			style={{
-				backgroundColor: isPrimary ? "#0A84FF" : "#FFFFFF",
-				borderColor: isSecondary ? "#E5E7EB" : "transparent",
-				borderWidth: isSecondary ? 1 : 0,
-				height: isPrimary || isSecondary ? 48 : 34,
-			}}
-		>
-			<Text
-				style={{ color: isPrimary ? "#FFFFFF" : "#18181B" }}
-				weight="semibold"
-			>
-				{label}
-			</Text>
-		</Pressable>
-	);
-}
-
-interface PreviewFrameProps {
+interface ChatBubbleProps {
 	children: ReactNode;
-	isCompact: boolean;
-	slide: OnboardingSlide;
+	fromViya: boolean;
 }
 
-function PreviewFrame({ children, isCompact, slide }: PreviewFrameProps) {
-	let cardHeight = 424;
+function ChatBubble({ children, fromViya }: ChatBubbleProps) {
+	const accent = useThemeColor("accent");
+	const accentForeground = useThemeColor("accent-foreground");
 
-	if (isCompact) {
-		cardHeight = 304;
+	if (fromViya) {
+		return (
+			<Animated.View
+				className="self-start"
+				entering={FadeInLeft.duration(BUBBLE_IN_MS)}
+				exiting={FadeOut.duration(BUBBLE_OUT_MS)}
+			>
+				<Surface className="max-w-[82%] rounded-3xl rounded-bl-md border border-border px-4 py-2.5">
+					<Text type="body-sm" weight="medium">
+						{children}
+					</Text>
+				</Surface>
+			</Animated.View>
+		);
 	}
 
 	return (
 		<Animated.View
-			entering={FadeInUp.duration(380).springify().damping(20)}
-			style={{ height: cardHeight }}
+			className="self-end"
+			entering={FadeInRight.duration(BUBBLE_IN_MS)}
+			exiting={FadeOut.duration(BUBBLE_OUT_MS)}
 		>
-			<Surface className="h-full overflow-hidden rounded-[36px] border border-border bg-surface p-4">
-				<View className="flex-row items-center justify-between">
-					<View className="flex-row items-center gap-2">
-						<View
-							className="h-3 w-3 rounded-full"
-							style={{ backgroundColor: "#FF5F57" }}
-						/>
-						<View
-							className="h-3 w-3 rounded-full"
-							style={{ backgroundColor: "#FEBC2E" }}
-						/>
-						<View
-							className="h-3 w-3 rounded-full"
-							style={{ backgroundColor: "#28C840" }}
-						/>
-					</View>
-					<View
-						className="rounded-full px-3 py-1.5"
-						style={{ backgroundColor: "#F4F4F5" }}
-					>
-						<Text color="muted" type="body-xs" weight="semibold">
-							{slide.id === "welcome" ? "VIYA" : slide.title}
-						</Text>
-					</View>
-				</View>
-				<View className="flex-1 pt-4">{children}</View>
+			<View
+				className="max-w-[84%] rounded-3xl rounded-br-md px-4 py-2.5"
+				style={{ backgroundColor: accent }}
+			>
+				<Text
+					style={{ color: accentForeground }}
+					type="body-sm"
+					weight="medium"
+				>
+					{children}
+				</Text>
+			</View>
+		</Animated.View>
+	);
+}
+
+function TypingDot({ delay }: { delay: number }) {
+	const muted = useThemeColor("muted");
+	const opacity = useSharedValue(0.25);
+
+	useEffect(() => {
+		opacity.value = withDelay(
+			delay,
+			withRepeat(withTiming(1, { duration: DOT_PULSE_MS }), -1, true)
+		);
+	}, [delay, opacity]);
+
+	const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
+
+	return (
+		<Animated.View
+			style={[
+				{ backgroundColor: muted, borderRadius: 3, height: 6, width: 6 },
+				style,
+			]}
+		/>
+	);
+}
+
+function TypingIndicator() {
+	return (
+		<Animated.View
+			className="self-start"
+			entering={FadeInLeft.duration(BUBBLE_IN_MS)}
+			exiting={FadeOut.duration(BUBBLE_OUT_MS)}
+		>
+			<Surface className="flex-row items-center gap-1.5 rounded-3xl rounded-bl-md border border-border px-4 py-3.5">
+				{TYPING_DOT_DELAYS.map((delay) => (
+					<TypingDot delay={delay} key={delay} />
+				))}
 			</Surface>
 		</Animated.View>
 	);
 }
 
-function WelcomeGraphic() {
-	return (
-		<View className="items-center gap-5">
-			<View className="h-56 w-full items-center justify-center">
-				<View
-					className="absolute h-44 w-44 rounded-full"
-					style={{ backgroundColor: "#EAF2FF" }}
-				/>
-				<Surface className="absolute h-28 w-64 rotate-[-10deg] rounded-[36px] border border-border bg-surface p-4">
-					<View className="flex-row items-center justify-between">
-						<Text weight="semibold">Trip plan</Text>
-						<Pill accent="#059669">Ready</Pill>
-					</View>
-					<View className="mt-5 gap-2">
-						<ProgressBar accent="#0A84FF" value={78} />
-						<ProgressBar accent="#059669" value={62} />
-					</View>
-				</Surface>
-				<View
-					className="absolute bottom-2 left-8 h-20 w-20 items-center justify-center rounded-[28px]"
-					style={{ backgroundColor: "#F5E8FF" }}
-				>
-					<ViyaMark size={58} />
-				</View>
-				<View
-					className="absolute top-2 right-7 h-24 w-24 items-center justify-center rounded-full"
-					style={{ backgroundColor: "#FEF3C7" }}
-				>
-					<Ionicons color="#CA8A04" name="airplane" size={30} />
-				</View>
-				<View
-					className="absolute right-12 bottom-8 h-14 w-14 items-center justify-center rounded-2xl"
-					style={{ backgroundColor: "#E4F8EF" }}
-				>
-					<Ionicons color="#059669" name="shield-checkmark" size={24} />
-				</View>
-			</View>
-			<View className="items-center gap-2">
-				<Text.Heading
-					align="center"
-					className="text-6xl"
-					type="h1"
-					weight="semibold"
-				>
-					Viya
-				</Text.Heading>
-				<Text.Paragraph align="center" color="muted" weight="medium">
-					Travel, one step ahead
-				</Text.Paragraph>
-			</View>
-			<View className="flex-row gap-2">
-				<Pill accent="#0A84FF">Plan</Pill>
-				<Pill accent="#059669">Prepare</Pill>
-				<Pill accent="#9333EA">Remember</Pill>
-			</View>
-		</View>
-	);
-}
+function DreamPreview({
+	onSequenceComplete,
+}: {
+	onSequenceComplete: () => void;
+}) {
+	const accent = useThemeColor("accent");
+	const accentForeground = useThemeColor("accent-foreground");
+	const [turnIndex, setTurnIndex] = useState(0);
+	const [phase, setPhase] = useState<ConversationPhase>("typing");
+	const hasCompletedRef = useRef(false);
 
-function DreamPreview({ accent }: { accent: string }) {
+	const turn = CONVERSATION_TURNS[turnIndex];
+	const isTyping = phase === "typing";
+	const typed = useTypedText(turn.prompt, isTyping);
+	const promptLength = turn.prompt.length;
+
+	useEffect(() => {
+		if (phase === "typing") {
+			const toThinking = setTimeout(
+				() => setPhase("thinking"),
+				promptLength * TYPE_CHAR_MS + SEND_PAUSE_MS
+			);
+
+			return () => clearTimeout(toThinking);
+		}
+
+		if (phase === "thinking") {
+			const toAnswered = setTimeout(() => setPhase("answered"), THINKING_MS);
+
+			return () => clearTimeout(toAnswered);
+		}
+
+		const toNextTurn = setTimeout(
+			() => {
+				const isLastTurn = turnIndex === CONVERSATION_TURNS.length - 1;
+				if (isLastTurn) {
+					if (!hasCompletedRef.current) {
+						hasCompletedRef.current = true;
+						onSequenceComplete();
+					}
+					return;
+				}
+
+				setTurnIndex((index) => index + 1);
+				setPhase("typing");
+			},
+			turnIndex === CONVERSATION_TURNS.length - 1
+				? FINAL_STATIC_HOLD_MS
+				: ANSWERED_HOLD_MS
+		);
+
+		return () => clearTimeout(toNextTurn);
+	}, [onSequenceComplete, phase, promptLength, turnIndex]);
+
 	return (
-		<View className="flex-1 justify-between">
-			<View className="gap-3">
-				<Surface
-					className="max-w-[84%] rounded-3xl rounded-bl-md px-4 py-3"
-					style={{ backgroundColor: "#F4F4F5" }}
-					variant="secondary"
+		<View className="flex-1 justify-between gap-4">
+			<View className="gap-2.5">
+				<Animated.View
+					className="self-start"
+					entering={FadeInLeft.duration(BUBBLE_IN_MS).delay(120)}
 				>
-					<Text type="body-sm" weight="medium">
-						I want a relaxing beach trip around ₱30k.
-					</Text>
-				</Surface>
-				<Surface
-					className="ml-auto max-w-[86%] rounded-3xl rounded-br-md px-4 py-3"
-					style={{ backgroundColor: `${accent}18` }}
-					variant="tertiary"
-				>
-					<Text type="body-sm" weight="semibold">
-						Got it. Quiet islands, food spots, or activities?
-					</Text>
-				</Surface>
-				<View className="flex-row flex-wrap gap-2">
-					{["Quiet beach", "Food trip", "Adventure", "Family friendly"].map(
-						(item) => (
-							<Pill accent={accent} key={item}>
-								{item}
-							</Pill>
-						)
-					)}
-				</View>
+					<Surface className="max-w-[82%] rounded-3xl rounded-bl-md border border-border px-4 py-2.5">
+						<Text type="body-sm" weight="medium">
+							Tell me your dream trip — I'll plan it.
+						</Text>
+					</Surface>
+				</Animated.View>
+				{turnIndex > 0 || !isTyping ? (
+					<ChatBubble fromViya={false}>
+						{CONVERSATION_TURNS[0].prompt}
+					</ChatBubble>
+				) : null}
+				{turnIndex > 0 || (turnIndex === 0 && phase === "answered") ? (
+					<ChatBubble fromViya={true}>{CONVERSATION_TURNS[0].reply}</ChatBubble>
+				) : null}
+				{turnIndex === 0 && phase === "thinking" ? <TypingIndicator /> : null}
+				{turnIndex === 1 && !isTyping ? (
+					<ChatBubble fromViya={false}>
+						{CONVERSATION_TURNS[1].prompt}
+					</ChatBubble>
+				) : null}
+				{turnIndex === 1 && phase === "thinking" ? <TypingIndicator /> : null}
+				{turnIndex === 1 && phase === "answered" ? (
+					<ChatBubble fromViya={true}>{CONVERSATION_TURNS[1].reply}</ChatBubble>
+				) : null}
 			</View>
-			<Surface
-				className="flex-row items-center gap-3 rounded-[26px] border px-4 py-3"
-				style={{ backgroundColor: "#FAFAFA", borderColor: "#ECEEF2" }}
-				variant="secondary"
-			>
-				<Text className="flex-1" color="muted" type="body-sm">
-					Ask Viya anything...
-				</Text>
+
+			<Surface className="flex-row items-center gap-2 rounded-full border border-border px-4 py-3">
+				<View className="min-h-[18px] flex-1 flex-row items-center">
+					{isTyping && typed.length > 0 ? (
+						<Text type="body-sm" weight="medium">
+							{typed}
+						</Text>
+					) : (
+						<Text color="muted" type="body-sm">
+							Ask Viya anything…
+						</Text>
+					)}
+					{isTyping ? (
+						<View className="ml-0.5">
+							<Caret color={accent} />
+						</View>
+					) : null}
+				</View>
 				<View
 					className="h-9 w-9 items-center justify-center rounded-full"
 					style={{ backgroundColor: accent }}
 				>
-					<Ionicons color="#FFFFFF" name="arrow-up" size={18} />
+					<Ionicons color={accentForeground} name="arrow-up" size={18} />
 				</View>
 			</Surface>
 		</View>
 	);
 }
 
-function PlanPreview({ accent }: { accent: string }) {
-	return (
-		<View className="flex-1 gap-3">
-			<Surface
-				className="rounded-[30px] p-4"
-				style={{ backgroundColor: `${accent}10` }}
-				variant="secondary"
-			>
-				<Text.Heading type="h4" weight="semibold">
-					Island Escape
-				</Text.Heading>
-				<View className="mt-3 flex-row gap-2">
-					<Pill accent={accent}>June 10-15</Pill>
-					<Pill accent={accent}>Relaxed beach</Pill>
-				</View>
-			</Surface>
-			<Surface
-				className="rounded-[26px] border p-4"
-				style={{ borderColor: "#ECEEF2" }}
-				variant="secondary"
-			>
-				<Text type="body-sm" weight="semibold">
-					Budget allocation
-				</Text>
-				<View className="mt-3 gap-3">
-					<ProgressBar accent={accent} value={42} />
-					<ProgressBar accent="#059669" value={24} />
-					<ProgressBar accent="#E97816" value={18} />
-					<ProgressBar accent="#DB2777" value={16} />
-				</View>
-			</Surface>
-			<View className="gap-2">
-				{["Pick hotel area", "Confirm island tour", "Add airport transfer"].map(
-					(action) => (
-						<View className="flex-row items-center gap-2" key={action}>
-							<Ionicons color={accent} name="checkmark-circle" size={18} />
-							<Text type="body-sm" weight="medium">
-								{action}
-							</Text>
-						</View>
-					)
-				)}
-			</View>
-		</View>
-	);
-}
-
-function BookPreview({ accent }: { accent: string }) {
-	const targets = [
-		{
-			label: "Flight confirmed",
-			status: "Done",
-			tone: "#059669",
-		},
-		{
-			label: "Hotel recommended",
-			status: "Must book now",
-			tone: accent,
-		},
-		{
-			label: "Airport transfer needed",
-			status: "Can book later",
-			tone: "#CA8A04",
-		},
-		{
-			label: "Island tour optional",
-			status: "Optional upgrade",
-			tone: "#71717A",
-		},
-	];
+function CheckRow({
+	delay,
+	done,
+	label,
+}: {
+	delay: number;
+	done: boolean;
+	label: string;
+}) {
+	const accent = useThemeColor("accent");
+	const muted = useThemeColor("muted");
 
 	return (
-		<View className="flex-1 justify-between">
-			<View>
-				<Text.Heading type="h4" weight="semibold">
-					Booking Targets
-				</Text.Heading>
-				<View className="mt-3 gap-2">
-					{targets.map((target) => (
-						<Surface
-							className="flex-row items-center justify-between rounded-2xl border px-3 py-2.5"
-							key={target.label}
-							style={{ borderColor: "#ECEEF2" }}
-							variant="secondary"
-						>
-							<View className="flex-row items-center gap-2">
-								<Ionicons
-									color={target.tone}
-									name="checkmark-circle"
-									size={18}
-								/>
-								<Text type="body-sm" weight="semibold">
-									{target.label}
-								</Text>
-							</View>
-							<Text
-								style={{ color: target.tone }}
-								type="body-xs"
-								weight="semibold"
-							>
-								{target.status}
-							</Text>
-						</Surface>
-					))}
-				</View>
-			</View>
-			<View className="flex-row gap-2">
-				<View
-					className="flex-1 rounded-2xl px-3 py-3"
-					style={{ backgroundColor: accent }}
-				>
-					<Text
-						align="center"
-						style={{ color: "#FFFFFF" }}
-						type="body-xs"
-						weight="semibold"
-					>
-						Open booking app
-					</Text>
-				</View>
-				<View
-					className="flex-1 rounded-2xl px-3 py-3"
-					style={{ backgroundColor: "#F4F4F5" }}
-				>
-					<Text align="center" type="body-xs" weight="semibold">
-						Save target
-					</Text>
-				</View>
-			</View>
-		</View>
+		<Animated.View
+			className="flex-row items-center gap-2.5"
+			entering={FadeInUp.delay(delay).duration(420)}
+		>
+			<Ionicons
+				color={done ? accent : muted}
+				name={done ? "checkmark-circle" : "ellipse-outline"}
+				size={20}
+			/>
+			<Text color={done ? "default" : "muted"} type="body-sm" weight="medium">
+				{label}
+			</Text>
+		</Animated.View>
 	);
 }
 
-function SyncPreview({ accent }: { accent: string }) {
-	const documents = [
-		{ icon: "airplane" as IconName, label: "Flight confirmation" },
-		{ icon: "receipt" as IconName, label: "Hotel receipt" },
-		{ icon: "image" as IconName, label: "Tour screenshot" },
-		{ icon: "id-card" as IconName, label: "Valid ID note" },
-	];
-
-	return (
-		<View className="flex-1 gap-3">
-			<Surface
-				className="items-center rounded-[28px] border border-dashed px-4 py-5"
-				style={{ borderColor: `${accent}66` }}
-				variant="secondary"
-			>
-				<Ionicons color={accent} name="cloud-upload" size={28} />
-				<Text className="mt-2" weight="semibold">
-					Drop confirmations here
-				</Text>
-			</Surface>
-			<View className="flex-row flex-wrap gap-2">
-				{documents.map((document) => (
-					<Surface
-						className="w-[48%] rounded-2xl p-3"
-						key={document.label}
-						style={{ backgroundColor: "#F7F7F8" }}
-						variant="secondary"
-					>
-						<Ionicons color={accent} name={document.icon} size={16} />
-						<Text className="mt-2" type="body-xs" weight="semibold">
-							{document.label}
-						</Text>
-					</Surface>
-				))}
-			</View>
-			<Surface
-				className="rounded-2xl px-4 py-3"
-				style={{ backgroundColor: "#111827" }}
-				variant="tertiary"
-			>
-				<Text style={{ color: "#FFFFFF" }} type="body-xs" weight="semibold">
-					Review: check-in, booking code, amount
-				</Text>
-			</Surface>
-		</View>
-	);
-}
-
-function PreparePreview({ accent }: { accent: string }) {
-	return (
-		<View className="flex-1 gap-3">
-			<Surface
-				className="flex-row items-center justify-between rounded-[30px] p-4"
-				style={{ backgroundColor: "#F7F7F8" }}
-				variant="secondary"
-			>
-				<View>
-					<Text.Heading className="text-5xl" type="h1" weight="semibold">
-						82%
-					</Text.Heading>
-					<Text color="muted" type="body-xs" weight="semibold">
-						Almost ready
-					</Text>
-				</View>
-				<View
-					className="h-24 w-24 items-center justify-center rounded-full"
-					style={{ backgroundColor: `${accent}18` }}
-				>
-					<Ionicons color={accent} name="shield-checkmark" size={42} />
-				</View>
-			</Surface>
-			<View className="gap-2">
-				{[
-					"Add hotel confirmation",
-					"Set airport transfer",
-					"Review weather buffer",
-				].map((fix) => (
-					<View className="flex-row items-center gap-2" key={fix}>
-						<Ionicons color={accent} name="radio-button-on" size={15} />
-						<Text type="body-sm" weight="medium">
-							{fix}
-						</Text>
-					</View>
-				))}
-			</View>
-			<View
-				className="rounded-2xl px-4 py-3"
-				style={{ backgroundColor: accent }}
-			>
-				<Text
-					align="center"
-					style={{ color: "#FFFFFF" }}
-					type="body-sm"
-					weight="semibold"
-				>
-					Fix my readiness
-				</Text>
-			</View>
-			<View className="flex-row justify-between">
-				{["Bookings", "Docs", "Budget", "Pack", "Safety"].map((item) => (
-					<Text color="muted" key={item} type="body-xs" weight="semibold">
-						{item}
-					</Text>
-				))}
-			</View>
-		</View>
-	);
-}
-
-function TravelPreview({ accent }: { accent: string }) {
-	return (
-		<View className="flex-1 gap-3">
-			<Text.Heading type="h4" weight="semibold">
-				Travel Mode
-			</Text.Heading>
-			<Surface
-				className="rounded-[28px] p-4"
-				style={{ backgroundColor: "#111827" }}
-				variant="tertiary"
-			>
-				<Text style={{ color: "#FFFFFF" }} type="body-xs" weight="semibold">
-					NOW
-				</Text>
-				<Text
-					className="mt-2"
-					style={{ color: "#FFFFFF" }}
-					type="h5"
-					weight="semibold"
-				>
-					Head to Puerto Princesa airport transfer
-				</Text>
-			</Surface>
-			<View className="flex-row gap-2">
-				<Surface
-					className="flex-1 rounded-2xl p-3"
-					style={{ backgroundColor: "#F7F7F8" }}
-					variant="secondary"
-				>
-					<Text type="body-xs" weight="semibold">
-						NEXT
-					</Text>
-					<Text className="mt-1" color="muted" type="body-xs">
-						Hotel check-in at 3:00 PM
-					</Text>
-				</Surface>
-				<Surface
-					className="flex-1 rounded-2xl p-3"
-					style={{ backgroundColor: `${accent}18` }}
-					variant="tertiary"
-				>
-					<Text type="body-xs" weight="semibold">
-						WATCH OUT
-					</Text>
-					<Text className="mt-1" color="muted" type="body-xs">
-						Rain later. Keep tour flexible.
-					</Text>
-				</Surface>
-			</View>
-			<Surface
-				className="flex-row justify-around rounded-[26px] border p-3"
-				style={{ borderColor: "#ECEEF2" }}
-				variant="secondary"
-			>
-				<MiniAction accent={accent} icon="documents" label="Docs" />
-				<MiniAction accent={accent} icon="sparkles" label="Ask" />
-				<MiniAction accent={accent} icon="map" label="Itinerary" />
-			</Surface>
-		</View>
-	);
-}
-
-function TrackPreview({ accent }: { accent: string }) {
-	return (
-		<View className="flex-1 justify-between">
-			<Surface
-				className="rounded-[30px] p-4"
-				style={{ backgroundColor: "#F7F7F8" }}
-				variant="secondary"
-			>
-				<View className="flex-row items-center justify-between">
-					<View>
-						<Text.Heading type="h4" weight="semibold">
-							₱30,000
-						</Text.Heading>
-						<Text color="muted" type="body-xs">
-							planned budget
-						</Text>
-					</View>
-					<View
-						className="h-20 w-20 items-center justify-center rounded-full"
-						style={{ borderColor: `${accent}66`, borderWidth: 10 }}
-					>
-						<Text type="body-xs" weight="semibold">
-							61%
-						</Text>
-					</View>
-				</View>
-				<View className="mt-4 gap-3">
-					<ProgressBar accent={accent} value={61} />
-					<View className="flex-row justify-between">
-						<Text color="muted" type="body-xs" weight="medium">
-							Spent ₱18,400
-						</Text>
-						<Text color="muted" type="body-xs" weight="medium">
-							Left ₱11,600
-						</Text>
-					</View>
-				</View>
-			</Surface>
-			<Surface
-				className="rounded-3xl border px-4 py-3"
-				style={{ borderColor: "#ECEEF2" }}
-				variant="secondary"
-			>
-				<Text type="body-sm" weight="semibold">
-					You're spending faster on food, but still safe.
-				</Text>
-			</Surface>
-			<View
-				className="rounded-2xl px-4 py-3"
-				style={{ backgroundColor: accent }}
-			>
-				<Text
-					align="center"
-					style={{ color: "#FFFFFF" }}
-					type="body-sm"
-					weight="semibold"
-				>
-					Add expense
-				</Text>
-			</View>
-		</View>
-	);
-}
-
-function CapturePreview({ accent }: { accent: string }) {
-	return (
-		<View className="flex-1 gap-3">
-			{[
-				{
-					body: "Best lunch spot near the bay.",
-					meta: "Day 3",
-					title: "Honda Bay",
-				},
-				{
-					body: "Island tour: 4.8",
-					meta: "Receipt attached",
-					title: "Memory saved",
-				},
-			].map((item) => (
-				<View className="flex-row gap-3" key={item.title}>
-					<View className="items-center">
-						<View
-							className="h-4 w-4 rounded-full"
-							style={{ backgroundColor: accent }}
-						/>
-						<View
-							className="mt-1 w-px flex-1"
-							style={{ backgroundColor: "#ECEEF2" }}
-						/>
-					</View>
-					<Surface
-						className="flex-1 rounded-3xl p-4"
-						style={{ backgroundColor: "#F7F7F8" }}
-						variant="secondary"
-					>
-						<View className="flex-row items-center justify-between">
-							<Text weight="semibold">{item.title}</Text>
-							<Text color="muted" type="body-xs">
-								{item.meta}
-							</Text>
-						</View>
-						<Text.Paragraph className="mt-2" color="muted" type="body-sm">
-							{item.body}
-						</Text.Paragraph>
-					</Surface>
-				</View>
-			))}
-			<Surface
-				className="rounded-3xl px-4 py-3"
-				style={{ backgroundColor: `${accent}18` }}
-				variant="tertiary"
-			>
-				<Text type="body-sm" weight="semibold">
-					Want to save this as a travel tip?
-				</Text>
-			</Surface>
-		</View>
-	);
-}
-
-function WrapPreview({ accent }: { accent: string }) {
-	return (
-		<View className="flex-1 gap-3">
-			<Surface
-				className="flex-1 justify-between rounded-4xl p-5"
-				style={{ backgroundColor: accent }}
-				variant="tertiary"
-			>
-				<Text style={{ color: "#FFFFFF" }} type="body-xs" weight="semibold">
-					YOUR TRIP STORY
-				</Text>
-				<View>
-					<Text.Heading
-						className="text-4xl"
-						style={{ color: "#FFFFFF" }}
-						type="h1"
-						weight="semibold"
-					>
-						5 days
-					</Text.Heading>
-					<Text.Paragraph
-						className="mt-1"
-						style={{ color: "#FFFFFF" }}
-						type="body-sm"
-					>
-						Places, spend, favorites, and best discovery.
-					</Text.Paragraph>
-				</View>
-			</Surface>
-			<View className="flex-row gap-2">
-				{["7 places", "₱28.4k", "Food lover"].map((item) => (
-					<Surface
-						className="flex-1 rounded-2xl px-2 py-3"
-						key={item}
-						style={{ backgroundColor: "#F7F7F8" }}
-						variant="secondary"
-					>
-						<Text align="center" type="body-xs" weight="semibold">
-							{item}
-						</Text>
-					</Surface>
-				))}
-			</View>
-			<View className="flex-row gap-2">
-				<Surface
-					className="flex-1 rounded-2xl border px-3 py-3"
-					style={{ borderColor: "#ECEEF2" }}
-					variant="secondary"
-				>
-					<Text align="center" type="body-xs" weight="semibold">
-						Share card
-					</Text>
-				</Surface>
-				<Surface
-					className="flex-1 rounded-2xl border px-3 py-3"
-					style={{ borderColor: "#ECEEF2" }}
-					variant="secondary"
-				>
-					<Text align="center" type="body-xs" weight="semibold">
-						Copy guide
-					</Text>
-				</Surface>
-			</View>
-		</View>
-	);
-}
-
-interface PreviewContentProps {
-	slide: OnboardingSlide;
-}
-
-function PreviewContent({ slide }: PreviewContentProps) {
-	switch (slide.preview) {
-		case "dream":
-			return <DreamPreview accent={slide.accent} />;
-		case "plan":
-			return <PlanPreview accent={slide.accent} />;
-		case "book":
-			return <BookPreview accent={slide.accent} />;
-		case "sync":
-			return <SyncPreview accent={slide.accent} />;
-		case "prepare":
-			return <PreparePreview accent={slide.accent} />;
-		case "travel":
-			return <TravelPreview accent={slide.accent} />;
-		case "track":
-			return <TrackPreview accent={slide.accent} />;
-		case "capture":
-			return <CapturePreview accent={slide.accent} />;
-		case "wrap":
-			return <WrapPreview accent={slide.accent} />;
-		default:
-			return null;
-	}
-}
-
-interface SlideViewProps {
-	isCompact: boolean;
-	slide: OnboardingSlide;
-	width: number;
-}
-
-function SlideView({ isCompact, slide, width }: SlideViewProps) {
-	return (
-		<View className="px-5" style={{ width }}>
-			<View
-				className={
-					isCompact
-						? "flex-1 justify-center gap-3"
-						: "flex-1 justify-center gap-5"
-				}
-			>
-				{slide.id === "welcome" ? (
-					<View className="items-center gap-4">
-						<WelcomeGraphic />
-						<Text.Paragraph
-							align="center"
-							className="max-w-[320px] leading-5"
-							color="muted"
-							type="body-sm"
-						>
-							{slide.subtitle}
-						</Text.Paragraph>
-					</View>
-				) : (
-					<>
-						<PreviewFrame isCompact={isCompact} slide={slide}>
-							<PreviewContent slide={slide} />
-						</PreviewFrame>
-						<View className="items-center gap-2 px-2">
-							<Text.Heading
-								className={
-									isCompact
-										? "text-center leading-6"
-										: "text-center text-3xl leading-9"
-								}
-								type={isCompact ? "h4" : "h2"}
-								weight="semibold"
-							>
-								{slide.title}
-							</Text.Heading>
-							<Text.Paragraph
-								align="center"
-								className="max-w-85 leading-5"
-								color="muted"
-								type="body-sm"
-							>
-								{slide.subtitle}
-							</Text.Paragraph>
-						</View>
-					</>
-				)}
-			</View>
-		</View>
-	);
-}
-
-interface ProgressDotsProps {
-	activeIndex: number;
-}
-
-interface ProgressDotProps {
-	isActive: boolean;
-}
-
-function ProgressDot({ isActive }: ProgressDotProps) {
-	const progress = useSharedValue(0);
-
-	useEffect(() => {
-		if (!isActive) {
-			cancelAnimation(progress);
-			progress.value = 0;
-			return;
-		}
-
-		progress.value = 0;
-		progress.value = withTiming(1, {
-			duration: AUTO_ADVANCE_MS,
-			easing: Easing.linear,
-		});
-
-		return () => cancelAnimation(progress);
-	}, [isActive, progress]);
-
-	const fillStyle = useAnimatedStyle(() => ({
-		width:
-			PROGRESS_DOT_SIZE +
-			(ACTIVE_PROGRESS_DOT_WIDTH - PROGRESS_DOT_SIZE) * progress.value,
-	}));
+function ReadinessRing({ value }: { value: number }) {
+	const accent = useThemeColor("accent");
+	const border = useThemeColor("border");
 
 	return (
 		<View
-			className="overflow-hidden rounded-full"
-			style={{
-				backgroundColor: "rgba(24, 24, 27, 0.2)",
-				height: PROGRESS_DOT_SIZE,
-				width: isActive ? ACTIVE_PROGRESS_DOT_WIDTH : PROGRESS_DOT_SIZE,
-			}}
+			className="h-24 w-24 items-center justify-center rounded-full"
+			style={{ borderColor: border, borderWidth: 8 }}
 		>
-			{isActive ? (
-				<Animated.View
-					className="h-full rounded-full"
-					style={[
-						{
-							backgroundColor: "rgba(24, 24, 27, 0.82)",
-						},
-						fillStyle,
-					]}
-				/>
-			) : null}
+			<View
+				className="absolute h-24 w-24 rounded-full"
+				style={{
+					borderBottomColor: "transparent",
+					borderColor: accent,
+					borderLeftColor: "transparent",
+					borderWidth: 8,
+					transform: [{ rotate: "-45deg" }],
+				}}
+			/>
+			<Text.Heading type="h3" weight="semibold">
+				{value}%
+			</Text.Heading>
 		</View>
 	);
 }
 
-function ProgressDots({ activeIndex }: ProgressDotsProps) {
+function PreparePreview() {
+	return (
+		<View className="flex-1 justify-center gap-4">
+			<Surface className="flex-row items-center justify-between rounded-[30px] border border-border p-5">
+				<View className="gap-1">
+					<Text color="muted" type="body-xs" weight="semibold">
+						TRIP READINESS
+					</Text>
+					<Text.Heading type="h4" weight="semibold">
+						Almost ready
+					</Text.Heading>
+					<Text color="muted" type="body-xs">
+						2 things left to confirm
+					</Text>
+				</View>
+				<ReadinessRing value={82} />
+			</Surface>
+			<Surface className="gap-3 rounded-[30px] border border-border p-5">
+				<CheckRow delay={300} done={true} label="Flight confirmed" />
+				<CheckRow delay={400} done={true} label="Hotel booked & saved" />
+				<CheckRow delay={500} done={false} label="Add airport transfer" />
+				<CheckRow delay={600} done={false} label="Pack for light rain" />
+			</Surface>
+		</View>
+	);
+}
+
+function StatChip({ delay, label }: { delay: number; label: string }) {
+	return (
+		<Animated.View
+			className="flex-1"
+			entering={FadeInUp.delay(delay).duration(420)}
+		>
+			<Surface className="rounded-2xl border border-border px-2 py-3">
+				<Text align="center" type="body-xs" weight="semibold">
+					{label}
+				</Text>
+			</Surface>
+		</Animated.View>
+	);
+}
+
+function RememberPreview() {
+	const accent = useThemeColor("accent");
+	const accentForeground = useThemeColor("accent-foreground");
+
+	return (
+		<View className="flex-1 justify-center gap-3">
+			<Animated.View
+				className="flex-1 justify-between rounded-[34px] p-6"
+				entering={FadeInUp.delay(120).duration(440)}
+				style={{ backgroundColor: accent, maxHeight: 280 }}
+			>
+				<View className="flex-row items-center justify-between">
+					<Text
+						style={{ color: accentForeground, opacity: 0.85 }}
+						type="body-xs"
+						weight="semibold"
+					>
+						YOUR TRIP STORY
+					</Text>
+					<Ionicons
+						color={accentForeground}
+						name="sparkles"
+						size={18}
+						style={{ opacity: 0.85 }}
+					/>
+				</View>
+				<View className="gap-1">
+					<Text.Heading
+						style={{ color: accentForeground }}
+						type="h1"
+						weight="semibold"
+					>
+						Palawan, 5 days
+					</Text.Heading>
+					<Text
+						style={{ color: accentForeground, opacity: 0.9 }}
+						type="body-sm"
+					>
+						7 places · ₱28.4k spent · a new favorite food town
+					</Text>
+				</View>
+			</Animated.View>
+			<View className="flex-row gap-2">
+				<StatChip delay={420} label="Share recap" />
+				<StatChip delay={500} label="Reuse as guide" />
+				<StatChip delay={580} label="Trip insights" />
+			</View>
+		</View>
+	);
+}
+
+function ActPreview({
+	id,
+	onDreamPreviewComplete,
+}: {
+	id: ActId;
+	onDreamPreviewComplete: () => void;
+}) {
+	if (id === "dream") {
+		return <DreamPreview onSequenceComplete={onDreamPreviewComplete} />;
+	}
+
+	if (id === "prepare") {
+		return <PreparePreview />;
+	}
+
+	return <RememberPreview />;
+}
+
+interface ActPageProps {
+	act: OnboardingAct;
+	isActive: boolean;
+	isCompact: boolean;
+	onDreamPreviewComplete: () => void;
+	width: number;
+}
+
+function ActPage({
+	act,
+	isActive,
+	isCompact,
+	onDreamPreviewComplete,
+	width,
+}: ActPageProps) {
+	const accent = useThemeColor("accent");
+	const previewHeight = isCompact ? COMPACT_PREVIEW_HEIGHT : PREVIEW_HEIGHT;
+
+	return (
+		<View className="flex-1 justify-center px-6" style={{ width }}>
+			<View className="justify-center" style={{ height: previewHeight }}>
+				{isActive ? (
+					<ActPreview
+						id={act.id}
+						onDreamPreviewComplete={onDreamPreviewComplete}
+					/>
+				) : null}
+			</View>
+			<View className="gap-2 pt-4">
+				<Text
+					style={{ color: accent, letterSpacing: 1.4 }}
+					type="body-xs"
+					weight="semibold"
+				>
+					{act.eyebrow}
+				</Text>
+				<Text.Heading
+					className={isCompact ? "leading-8" : "leading-10"}
+					type={isCompact ? "h2" : "h1"}
+					weight="semibold"
+				>
+					{act.title}
+				</Text.Heading>
+				<Text.Paragraph
+					className="max-w-[340px] leading-5"
+					color="muted"
+					type="body-sm"
+				>
+					{act.subtitle}
+				</Text.Paragraph>
+			</View>
+		</View>
+	);
+}
+
+function PageDots({ activeIndex }: { activeIndex: number }) {
+	const accent = useThemeColor("accent");
+	const border = useThemeColor("border");
+
 	return (
 		<View className="flex-row justify-center gap-1.5">
-			{ONBOARDING_SLIDES.map((slide, index) => {
-				const isActive = activeIndex === index;
+			{ONBOARDING_ACTS.map((act, index) => {
+				const isActive = index === activeIndex;
 
-				return <ProgressDot isActive={isActive} key={slide.id} />;
+				return (
+					<View
+						className="h-1.5 rounded-full"
+						key={act.id}
+						style={{
+							backgroundColor: isActive ? accent : border,
+							width: isActive ? ACTIVE_DOT_WIDTH : PROGRESS_DOT_SIZE,
+						}}
+					/>
+				);
 			})}
 		</View>
 	);
@@ -1056,32 +600,29 @@ function ProgressDots({ activeIndex }: ProgressDotsProps) {
 export default function AuthOnboardingScreen() {
 	const insets = useSafeAreaInsets();
 	const { height, width } = useWindowDimensions();
-	const listRef = useRef<FlatList<OnboardingSlide>>(null);
-	const activeIndexRef = useRef(WELCOME_INDEX);
-	const [activeIndex, setActiveIndex] = useState(WELCOME_INDEX);
+	const accentForeground = useThemeColor("accent-foreground");
+	const animatedRef = useAnimatedRef<Animated.FlatList<OnboardingAct>>();
+	const activeIndexRef = useRef(FIRST_INDEX);
+	const hasAutoAdvancedFromDreamRef = useRef(false);
+	const hasInteractedRef = useRef(false);
+	const [activeIndex, setActiveIndex] = useState(FIRST_INDEX);
 	const [isCheckingCompletion, setIsCheckingCompletion] = useState(true);
 	const [isSignInSheetOpen, setIsSignInSheetOpen] = useState(false);
-	const isCompactHeight = height < 740;
+	const isCompactHeight = height < COMPACT_HEIGHT_THRESHOLD;
+	const scrollOffset = useSharedValue(0);
+
+	useDerivedValue(() => {
+		scrollTo(animatedRef, scrollOffset.value, 0, false);
+	});
 
 	useEffect(() => {
 		let isMounted = true;
 
-		const checkCompletion = async () => {
-			const hasCompleted = await getCompletedOnboarding();
-
-			if (!isMounted) {
-				return;
-			}
-
-			if (hasCompleted) {
+		getCompletedOnboarding().finally(() => {
+			if (isMounted) {
 				setIsCheckingCompletion(false);
-				return;
 			}
-
-			setIsCheckingCompletion(false);
-		};
-
-		checkCompletion();
+		});
 
 		return () => {
 			isMounted = false;
@@ -1091,13 +632,13 @@ export default function AuthOnboardingScreen() {
 	const goToIndex = useCallback(
 		(nextIndex: number) => {
 			activeIndexRef.current = nextIndex;
-			listRef.current?.scrollToOffset({
-				animated: true,
-				offset: nextIndex * width,
+			scrollOffset.value = withTiming(nextIndex * width, {
+				duration: ADVANCE_TRANSITION_MS,
+				easing: Easing.inOut(Easing.cubic),
 			});
 			setActiveIndex(nextIndex);
 		},
-		[width]
+		[scrollOffset, width]
 	);
 
 	useEffect(() => {
@@ -1105,16 +646,30 @@ export default function AuthOnboardingScreen() {
 			return;
 		}
 
-		const timer = setInterval(() => {
-			const nextIndex =
-				activeIndexRef.current === FINAL_INDEX
-					? WELCOME_INDEX
-					: activeIndexRef.current + 1;
-			goToIndex(nextIndex);
-		}, AUTO_ADVANCE_MS);
+		if (activeIndex === FIRST_INDEX && !hasAutoAdvancedFromDreamRef.current) {
+			return;
+		}
 
-		return () => clearInterval(timer);
-	}, [goToIndex, isCheckingCompletion, isSignInSheetOpen, width]);
+		if (hasInteractedRef.current) {
+			return;
+		}
+
+		if (activeIndex === FINAL_INDEX) {
+			return;
+		}
+
+		const dwell = ONBOARDING_ACTS[activeIndex].dwellMs;
+		const timer = setTimeout(() => {
+			if (hasInteractedRef.current) {
+				return;
+			}
+
+			const nextIndex = activeIndex + 1;
+			goToIndex(nextIndex);
+		}, dwell);
+
+		return () => clearTimeout(timer);
+	}, [activeIndex, goToIndex, isCheckingCompletion, isSignInSheetOpen, width]);
 
 	const handleSignInPress = useCallback(() => {
 		setIsSignInSheetOpen(true);
@@ -1126,24 +681,55 @@ export default function AuthOnboardingScreen() {
 			const nextIndex = Math.min(
 				FINAL_INDEX,
 				Math.max(
-					WELCOME_INDEX,
+					FIRST_INDEX,
 					Math.round(event.nativeEvent.contentOffset.x / width)
 				)
 			);
+
+			scrollOffset.value = nextIndex * width;
 
 			if (nextIndex !== activeIndex) {
 				activeIndexRef.current = nextIndex;
 				setActiveIndex(nextIndex);
 			}
 		},
-		[activeIndex, width]
+		[activeIndex, scrollOffset, width]
 	);
 
-	const renderSlide = useCallback(
-		({ item }: { item: OnboardingSlide }) => (
-			<SlideView isCompact={isCompactHeight} slide={item} width={width} />
+	const handleScrollBeginDrag = useCallback(() => {
+		hasInteractedRef.current = true;
+	}, []);
+
+	const handleDreamPreviewComplete = useCallback(() => {
+		if (activeIndexRef.current !== FIRST_INDEX || isSignInSheetOpen) {
+			return;
+		}
+
+		if (hasAutoAdvancedFromDreamRef.current) {
+			return;
+		}
+
+		hasAutoAdvancedFromDreamRef.current = true;
+		goToIndex(FIRST_INDEX + 1);
+	}, [goToIndex, isSignInSheetOpen]);
+
+	useEffect(() => {
+		if (activeIndex === FIRST_INDEX) {
+			hasAutoAdvancedFromDreamRef.current = false;
+		}
+	}, [activeIndex]);
+
+	const renderPage = useCallback(
+		({ item, index }: { item: OnboardingAct; index: number }) => (
+			<ActPage
+				act={item}
+				isActive={index === activeIndex}
+				isCompact={isCompactHeight}
+				onDreamPreviewComplete={handleDreamPreviewComplete}
+				width={width}
+			/>
 		),
-		[isCompactHeight, width]
+		[activeIndex, handleDreamPreviewComplete, isCompactHeight, width]
 	);
 
 	if (isCheckingCompletion) {
@@ -1158,16 +744,14 @@ export default function AuthOnboardingScreen() {
 
 	return (
 		<Container isScrollable={false}>
-			<View
-				className="flex-1"
-				style={{
-					paddingBottom: 0,
-					paddingTop: insets.top + 4,
-				}}
-			>
-				<FlatList
+			<View className="flex-1" style={{ paddingTop: insets.top + 4 }}>
+				<View className="items-center px-6 pb-2">
+					<ViyaMark size={46} />
+				</View>
+
+				<Animated.FlatList
 					bounces={false}
-					data={ONBOARDING_SLIDES}
+					data={ONBOARDING_ACTS}
 					getItemLayout={(_, index) => ({
 						index,
 						length: width,
@@ -1176,16 +760,23 @@ export default function AuthOnboardingScreen() {
 					horizontal={true}
 					keyExtractor={(item) => item.id}
 					onMomentumScrollEnd={handleScrollEnd}
+					onScrollBeginDrag={handleScrollBeginDrag}
 					pagingEnabled={true}
-					ref={listRef}
-					renderItem={renderSlide}
+					ref={animatedRef}
+					renderItem={renderPage}
 					scrollEventThrottle={16}
 					showsHorizontalScrollIndicator={false}
 				/>
 
-				<View className="gap-4 px-5" style={{ paddingBottom: 6 }}>
-					<ProgressDots activeIndex={activeIndex} />
-					<OnboardingButton label="Get started" onPress={handleSignInPress} />
+				<View className="gap-5 px-6" style={{ paddingBottom: 8 }}>
+					<PageDots activeIndex={activeIndex} />
+					<Button
+						className="h-[54px] gap-2 rounded-full"
+						onPress={handleSignInPress}
+					>
+						<Button.Label className="text-[17px]">Get started</Button.Label>
+						<Ionicons color={accentForeground} name="arrow-forward" size={18} />
+					</Button>
 				</View>
 			</View>
 			<AuthSignInSheet

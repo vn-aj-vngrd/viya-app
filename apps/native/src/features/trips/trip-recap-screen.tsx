@@ -1,23 +1,22 @@
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
-import type { Doc } from "@viya-app/backend/convex/_generated/dataModel";
+import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
 import { getBudgetWalletSummary } from "@viya-app/domain";
 import { useMutation, useQuery } from "convex/react";
-import { Link, useRouter } from "expo-router";
+import { type Href, Link, useRouter } from "expo-router";
 import { Button, Spinner, Surface, Text } from "heroui-native";
 import type { ComponentProps } from "react";
 import { useMemo, useState } from "react";
-import { View } from "react-native";
+import { Share, View } from "react-native";
 
 import { Container } from "@/components/container";
 import { EmptyState } from "@/src/components/empty-state";
-import { RouteHeader } from "@/src/components/navigation/route-header";
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 import { formatMoney } from "./trip-dashboard-utils";
 import { TripModuleScreenFrame } from "./trip-module-floating-bar";
-import { TripModuleViyaAssistCard } from "./trip-module-viya-assist-card";
-import { TripStatusPill } from "./trip-status-pill";
+import { TripModuleManualEntryCard } from "./trip-module-manual-entry-card";
+import { buildTripRecapShareMessage } from "./trip-recap-share";
 import { useTripIdParam } from "./use-trip-id-param";
 
 const dayMs = 86_400_000;
@@ -81,29 +80,46 @@ function RecapStat({
 }
 
 function RecapRow({
+	actionHref,
+	actionLabel,
 	detail,
 	icon,
 	label,
 }: {
+	actionHref?: Href;
+	actionLabel?: string;
 	detail?: string;
 	icon: ComponentProps<typeof Ionicons>["name"];
 	label: string;
 }) {
+	const actionContent =
+		actionHref && actionLabel ? (
+			<Link asChild href={actionHref}>
+				<Button className="self-start" size="sm" variant="secondary">
+					<Ionicons color="#0A84FF" name="open-outline" size={16} />
+					<Button.Label>{actionLabel}</Button.Label>
+				</Button>
+			</Link>
+		) : null;
+
 	return (
-		<View className="flex-row items-start gap-3 rounded-[22px] bg-surface-secondary p-4">
-			<View className="h-9 w-9 items-center justify-center rounded-full bg-primary/10">
-				<Ionicons color="#0A84FF" name={icon} size={17} />
+		<View className="gap-3 rounded-[22px] bg-surface-secondary p-4">
+			<View className="flex-row items-start gap-3">
+				<View className="h-9 w-9 items-center justify-center rounded-full bg-primary/10">
+					<Ionicons color="#0A84FF" name={icon} size={17} />
+				</View>
+				<View className="min-w-0 flex-1 gap-1">
+					<Text type="body-sm" weight="bold">
+						{label}
+					</Text>
+					{detail ? (
+						<Text.Paragraph color="muted" type="body-sm">
+							{detail}
+						</Text.Paragraph>
+					) : null}
+				</View>
 			</View>
-			<View className="min-w-0 flex-1 gap-1">
-				<Text type="body-sm" weight="bold">
-					{label}
-				</Text>
-				{detail ? (
-					<Text.Paragraph color="muted" type="body-sm">
-						{detail}
-					</Text.Paragraph>
-				) : null}
-			</View>
+			{actionContent}
 		</View>
 	);
 }
@@ -118,7 +134,135 @@ function RecapPill({ children }: { children: string }) {
 	);
 }
 
-function HighlightRows({ moments }: { moments: Doc<"moments">[] }) {
+function StoryFocus({
+	actionHref,
+	actionLabel,
+	detail,
+	label,
+}: {
+	actionHref?: Href;
+	actionLabel?: string;
+	detail: string;
+	label: string;
+}) {
+	const actionContent =
+		actionHref && actionLabel ? (
+			<Link asChild href={actionHref}>
+				<Button className="self-start" size="sm" variant="secondary">
+					<Ionicons color="#0A84FF" name="open-outline" size={16} />
+					<Button.Label>{actionLabel}</Button.Label>
+				</Button>
+			</Link>
+		) : null;
+
+	return (
+		<View className="gap-3 rounded-[22px] bg-surface p-4">
+			<Text color="muted" type="body-xs" weight="semibold">
+				WRAP-UP FOCUS
+			</Text>
+			<View className="gap-1">
+				<Text type="body-sm" weight="bold">
+					{label}
+				</Text>
+				<Text.Paragraph color="muted" type="body-sm">
+					{detail}
+				</Text.Paragraph>
+			</View>
+			{actionContent}
+		</View>
+	);
+}
+
+function getStoryFocus({
+	dayLinkedMomentCount,
+	completedItems,
+	highlightCount,
+	missingDocumentCount,
+	tripId,
+	totalItems,
+	unconfirmedBookings,
+}: {
+	dayLinkedMomentCount: number;
+	completedItems: number;
+	highlightCount: number;
+	missingDocumentCount: number;
+	tripId: Id<"trips">;
+	totalItems: number;
+	unconfirmedBookings: number;
+}) {
+	if (highlightCount === 0) {
+		return {
+			actionHref: VIYA_ROUTES.tripMoments(tripId),
+			actionLabel: "Open moments",
+			detail:
+				"Mark at least one moment as a highlight so the recap has a story anchor.",
+			label: "Choose a highlight",
+		};
+	}
+
+	if (dayLinkedMomentCount === 0) {
+		return {
+			actionHref: VIYA_ROUTES.tripMoments(tripId),
+			actionLabel: "Open moments",
+			detail:
+				"Assign key moments to itinerary days so the recap reads like a trip timeline.",
+			label: "Link moments to days",
+		};
+	}
+
+	if (totalItems > completedItems) {
+		return {
+			actionHref: VIYA_ROUTES.tripItinerary(tripId),
+			actionLabel: "Open itinerary",
+			detail: `${totalItems - completedItems} itinerary items still need completion before the trip story is clean.`,
+			label: "Complete itinerary items",
+		};
+	}
+
+	if (unconfirmedBookings > 0) {
+		return {
+			actionHref: VIYA_ROUTES.tripBookings(tripId),
+			actionLabel: "Open bookings",
+			detail: `${unconfirmedBookings} booking targets still need confirmation or proof.`,
+			label: "Close booking proof",
+		};
+	}
+
+	if (missingDocumentCount > 0) {
+		return {
+			actionHref: VIYA_ROUTES.tripVault(tripId),
+			actionLabel: "Open files",
+			detail: `${missingDocumentCount} travel documents are still marked missing.`,
+			label: "Resolve missing documents",
+		};
+	}
+
+	return {
+		detail:
+			"Core story inputs are ready. Mark the trip complete when the recap reads right.",
+		label: "Ready to wrap",
+	};
+}
+
+const getDayLabel = (days: Doc<"itineraryDays">[], dayId?: string) => {
+	const day = days.find((itineraryDay) => itineraryDay._id === dayId);
+
+	if (!day) {
+		return "Unassigned";
+	}
+
+	return `Day ${day.dayNumber}`;
+};
+
+function HighlightRows({
+	days,
+	moments,
+	tripId,
+}: {
+	days: Doc<"itineraryDays">[];
+	moments: Doc<"moments">[];
+	tripId: Id<"trips">;
+}) {
 	const highlights = moments.filter((moment) => moment.isHighlight).slice(0, 4);
 	const visibleMoments =
 		highlights.length > 0 ? highlights : moments.slice(0, 4);
@@ -126,6 +270,8 @@ function HighlightRows({ moments }: { moments: Doc<"moments">[] }) {
 	if (visibleMoments.length === 0) {
 		return (
 			<RecapRow
+				actionHref={VIYA_ROUTES.tripMoments(tripId)}
+				actionLabel="Add memory"
 				detail="Save moments during or after the trip to build a richer recap."
 				icon="images-outline"
 				label="No moments captured yet"
@@ -137,7 +283,15 @@ function HighlightRows({ moments }: { moments: Doc<"moments">[] }) {
 		<>
 			{visibleMoments.map((moment) => (
 				<RecapRow
-					detail={moment.note || moment.caption || moment.locationName}
+					actionHref={VIYA_ROUTES.tripMoments(tripId)}
+					actionLabel="Open memory"
+					detail={[
+						getDayLabel(days, moment.dayId),
+						moment.locationName,
+						moment.note || moment.caption,
+					]
+						.filter(Boolean)
+						.join(" · ")}
 					icon={moment.isHighlight ? "star-outline" : "image-outline"}
 					key={moment._id}
 					label={moment.title}
@@ -159,6 +313,10 @@ export function TripRecapScreen() {
 	const [pendingAction, setPendingAction] = useState<
 		"archive" | "complete" | null
 	>(null);
+	const [lifecycleErrorMessage, setLifecycleErrorMessage] = useState<
+		string | null
+	>(null);
+	const [isSharingRecap, setIsSharingRecap] = useState(false);
 
 	const wallet = useMemo(() => {
 		if (!workspace) {
@@ -202,29 +360,95 @@ export function TripRecapScreen() {
 	const confirmedBookings = workspace.bookings.filter(
 		(booking) => booking.status === "confirmed"
 	).length;
+	const unconfirmedBookings = workspace.bookings.length - confirmedBookings;
 	const savedDocumentCount =
 		workspace.documents.filter((document) => document.status !== "missing")
 			.length + workspace.vaultItems.length;
+	const missingDocumentCount = workspace.documents.filter(
+		(document) => document.status === "missing"
+	).length;
+	const highlightCount = workspace.moments.filter(
+		(moment) => moment.isHighlight
+	).length;
+	const dayLinkedMomentCount = workspace.moments.filter(
+		(moment) => moment.dayId
+	).length;
+	const coveredStoryDayCount = new Set(
+		workspace.moments
+			.map((moment) => moment.dayId)
+			.filter((dayId): dayId is string => Boolean(dayId))
+	).size;
+	const openStoryGaps =
+		Math.max(totalItems - completedItems, 0) +
+		unconfirmedBookings +
+		missingDocumentCount +
+		(highlightCount > 0 ? 0 : 1) +
+		(dayLinkedMomentCount > 0 ? 0 : 1);
+	const storyFocus = getStoryFocus({
+		dayLinkedMomentCount,
+		completedItems,
+		highlightCount,
+		missingDocumentCount,
+		tripId,
+		totalItems,
+		unconfirmedBookings,
+	});
 	const dateWindow = `${formatShortDate(workspace.trip.startDate)} - ${formatShortDate(
 		workspace.trip.endDate
 	)}`;
 
 	const completeTrip = async () => {
+		setLifecycleErrorMessage(null);
 		setPendingAction("complete");
 		try {
 			await updateTripLifecycle({ status: "completed", tripId });
+		} catch {
+			setLifecycleErrorMessage("Could not mark trip complete.");
 		} finally {
 			setPendingAction(null);
 		}
 	};
 
 	const archiveCurrentTrip = async () => {
+		setLifecycleErrorMessage(null);
 		setPendingAction("archive");
 		try {
 			await archiveTrip({ tripId });
 			router.replace(VIYA_ROUTES.trips);
+		} catch {
+			setLifecycleErrorMessage("Could not archive trip.");
 		} finally {
 			setPendingAction(null);
+		}
+	};
+	const shareRecap = async () => {
+		const highlightTitles = workspace.moments
+			.filter((moment) => moment.isHighlight)
+			.map((moment) => moment.title);
+
+		setLifecycleErrorMessage(null);
+		setIsSharingRecap(true);
+		try {
+			await Share.share({
+				message: buildTripRecapShareMessage({
+					completedItems,
+					confirmedBookings,
+					currency,
+					dateWindow,
+					destination: workspace.trip.destination,
+					highlightTitles,
+					remainingAmount: wallet.remainingAmount,
+					savedDocumentCount,
+					title: workspace.trip.title,
+					totalItems,
+					totalTrackedSpend: wallet.totalTrackedSpend,
+				}),
+				title: workspace.trip.title,
+			});
+		} catch {
+			setLifecycleErrorMessage("Could not open the share sheet.");
+		} finally {
+			setIsSharingRecap(false);
 		}
 	};
 
@@ -235,34 +459,68 @@ export function TripRecapScreen() {
 				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
 			>
 				<View className="gap-4 pb-4">
-					<RouteHeader
-						eyebrow="Recap"
-						icon="sparkles-outline"
-						rightContent={<TripStatusPill status={workspace.trip.status} />}
-						subtitle="Review highlights, spend, confirmations, and wrap the trip."
-						title="Trip Story"
-					/>
-					<TripModuleViyaAssistCard
-						agentModule="recap"
-						description="Generate a recap draft, summarize spend, or ask Viya what is missing."
+					<TripModuleManualEntryCard
+						description="Review the trip story from saved itinerary items, moments, files, bookings, and spend."
 						moduleLabel="recap"
-						tripId={tripId}
+						onPrimaryPress={() => {
+							router.push(VIYA_ROUTES.tripMoments(tripId));
+						}}
+						onSecondaryPress={() => {
+							shareRecap().catch(() => undefined);
+						}}
+						primaryActionIcon="images-outline"
+						primaryActionLabel="Edit moments"
+						secondaryActionIcon="share-outline"
+						secondaryActionLabel="Share recap"
 					/>
+					{lifecycleErrorMessage ? (
+						<Text className="text-danger" type="body-sm">
+							{lifecycleErrorMessage}
+						</Text>
+					) : null}
 
-					<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
-						<View className="gap-2">
-							<View className="flex-row flex-wrap gap-2">
-								<RecapPill>{workspace.trip.destination}</RecapPill>
-								<RecapPill>{dateWindow}</RecapPill>
+					<Surface className="gap-4 rounded-[30px] bg-surface-secondary p-4">
+						<View className="flex-row items-start justify-between gap-3">
+							<View className="min-w-0 flex-1 gap-2">
+								<View className="flex-row flex-wrap gap-2">
+									<RecapPill>{workspace.trip.destination}</RecapPill>
+									<RecapPill>{dateWindow}</RecapPill>
+									<RecapPill>
+										{openStoryGaps === 0
+											? "Story ready"
+											: `${openStoryGaps} story gaps`}
+									</RecapPill>
+								</View>
+								<Text.Heading type="h3" weight="semibold">
+									{workspace.trip.title}
+								</Text.Heading>
+								<Text.Paragraph color="muted" type="body-sm">
+									{workspace.trip.summary ||
+										"Capture the trip outcome once itinerary, spend, and moments are ready."}
+								</Text.Paragraph>
 							</View>
-							<Text.Heading type="h3" weight="semibold">
-								{workspace.trip.title}
-							</Text.Heading>
-							<Text.Paragraph color="muted" type="body-sm">
-								{workspace.trip.summary ||
-									"Capture the trip outcome once itinerary, spend, and moments are ready."}
-							</Text.Paragraph>
+							<View className="h-11 w-11 items-center justify-center rounded-full bg-primary/10">
+								<Ionicons color="#0A84FF" name="sparkles-outline" size={20} />
+							</View>
 						</View>
+						<StoryFocus
+							actionHref={storyFocus.actionHref}
+							actionLabel={storyFocus.actionLabel}
+							detail={storyFocus.detail}
+							label={storyFocus.label}
+						/>
+						<Button
+							isDisabled={isSharingRecap}
+							onPress={() => {
+								shareRecap().catch(() => undefined);
+							}}
+							size="sm"
+							variant="secondary"
+						>
+							{isSharingRecap ? <Spinner size="sm" /> : null}
+							<Ionicons color="#0A84FF" name="share-outline" size={16} />
+							<Button.Label>Share recap</Button.Label>
+						</Button>
 						<View className="flex-row flex-wrap gap-3">
 							<RecapStat
 								detail={`${completedItems} completed`}
@@ -277,10 +535,10 @@ export function TripRecapScreen() {
 								value={formatMoney(wallet.totalTrackedSpend, currency)}
 							/>
 							<RecapStat
-								detail={`${workspace.moments.length} total moments`}
+								detail={`${dayLinkedMomentCount} day-linked`}
 								icon="images-outline"
 								label="Highlights"
-								value={`${workspace.moments.filter((moment) => moment.isHighlight).length}`}
+								value={`${highlightCount}`}
 							/>
 							<RecapStat
 								detail={`${savedDocumentCount} docs or files`}
@@ -298,7 +556,7 @@ export function TripRecapScreen() {
 									Moments
 								</Text.Heading>
 								<Text color="muted" type="body-sm">
-									Highlights become the recap source.
+									Highlights become the recap source by trip day.
 								</Text>
 							</View>
 							<Link asChild href={VIYA_ROUTES.tripMoments(tripId)}>
@@ -307,7 +565,18 @@ export function TripRecapScreen() {
 								</Button>
 							</Link>
 						</View>
-						<HighlightRows moments={workspace.moments} />
+						<RecapRow
+							actionHref={VIYA_ROUTES.tripMoments(tripId)}
+							actionLabel="Review story coverage"
+							detail={`${coveredStoryDayCount}/${workspace.itineraryDays.length} days have linked memory context`}
+							icon="calendar-number-outline"
+							label="Story coverage"
+						/>
+						<HighlightRows
+							days={workspace.itineraryDays}
+							moments={workspace.moments}
+							tripId={tripId}
+						/>
 					</Surface>
 
 					<Surface className="gap-3 rounded-[28px] border border-border bg-surface p-5">
@@ -315,16 +584,22 @@ export function TripRecapScreen() {
 							Wrap-up checklist
 						</Text.Heading>
 						<RecapRow
+							actionHref={VIYA_ROUTES.tripPlaces(tripId)}
+							actionLabel="Open route"
 							detail={`${workspace.savedPlaces.length} saved places, ${workspace.itineraryDays.length} planned days`}
 							icon="map-outline"
 							label="Route and places"
 						/>
 						<RecapRow
+							actionHref={VIYA_ROUTES.tripVault(tripId)}
+							actionLabel="Open files"
 							detail={`${confirmedBookings} confirmed bookings, ${savedDocumentCount} saved documents`}
 							icon="file-tray-full-outline"
 							label="Confirmations and documents"
 						/>
 						<RecapRow
+							actionHref={VIYA_ROUTES.tripBudget(tripId)}
+							actionLabel="Open budget"
 							detail={`${formatMoney(wallet.remainingAmount, currency)} remaining from planned budget`}
 							icon="cash-outline"
 							label="Budget outcome"

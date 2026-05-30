@@ -1,8 +1,10 @@
+import { sortTripCompanionsForCoordination } from "@viya-app/domain";
 import { ConvexError, v } from "convex/values";
 
 import type { Id } from "./_generated/dataModel";
 import { type MutationCtx, mutation, query } from "./_generated/server";
 import { ensureTripAccess, getRequiredIdentity } from "./lib/auth";
+import { clearDeletedTripEntityReferences } from "./lib/tripLinks";
 
 const touchTrip = async (ctx: MutationCtx, tripId: Id<"trips">) => {
 	await ctx.db.patch(tripId, { updatedAt: Date.now() });
@@ -24,6 +26,25 @@ const getRequiredCompanion = async (
 	return companion;
 };
 
+const clearDeletedCompanionAssignments = async (
+	ctx: MutationCtx,
+	companionId: Id<"tripCompanions">,
+	tripId: Id<"trips">
+) => {
+	const readinessItems = await ctx.db
+		.query("readinessItems")
+		.withIndex("by_trip", (q) => q.eq("tripId", tripId))
+		.collect();
+
+	for (const item of readinessItems) {
+		if (item.assignedToMemberId === companionId) {
+			await ctx.db.patch(item._id, {
+				assignedToMemberId: undefined,
+			});
+		}
+	}
+};
+
 export const listTripCompanions = query({
 	args: { tripId: v.id("trips") },
 	handler: async (ctx, args) => {
@@ -34,9 +55,7 @@ export const listTripCompanions = query({
 			.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
 			.collect();
 
-		return [...companions].sort((firstCompanion, secondCompanion) =>
-			firstCompanion.name.localeCompare(secondCompanion.name)
-		);
+		return sortTripCompanionsForCoordination(companions);
 	},
 });
 
@@ -100,6 +119,17 @@ export const deleteTripCompanion = mutation({
 			args.companionId,
 			identity.subject
 		);
+		await clearDeletedCompanionAssignments(
+			ctx,
+			args.companionId,
+			companion.tripId
+		);
+		await clearDeletedTripEntityReferences({
+			ctx,
+			linkedEntityId: args.companionId,
+			linkedEntityType: "companion",
+			tripId: companion.tripId,
+		});
 		await ctx.db.delete(args.companionId);
 		await touchTrip(ctx, companion.tripId);
 

@@ -38,11 +38,11 @@ const successSoftBackgroundStyle = { backgroundColor: "#E4F8EF" };
 const warmSoftBackgroundStyle = { backgroundColor: "#FFF7ED" };
 
 const coverImageTransitionMs = 320;
-const coverScrimColors = ["rgba(0,0,0,0)", "rgba(0,0,0,0.32)"] as const;
 const insightWashColors = [
 	"rgba(10,132,255,0.12)",
 	"rgba(10,132,255,0.02)",
 ] as const;
+const destinationParentheticalPattern = /\s*\([^)]*\)/g;
 
 const todayLabelFormatter = new Intl.DateTimeFormat("en-US", {
 	day: "numeric",
@@ -99,6 +99,24 @@ const getTripWindow = (startDate?: string, endDate?: string) => {
 	return `${tripWindow} · ${durationDays} ${dayLabel}`;
 };
 
+const getDestinationImageFallbackNames = (destination?: string) => {
+	if (!destination) {
+		return [];
+	}
+
+	const names = [destination.trim()];
+	const cleanedDestination = destination
+		.replace(destinationParentheticalPattern, "")
+		.split(",")[0]
+		?.trim();
+
+	if (cleanedDestination && cleanedDestination !== names[0]) {
+		names.push(cleanedDestination);
+	}
+
+	return names.filter(Boolean);
+};
+
 function SectionTitle({
 	action,
 	subtitle,
@@ -144,67 +162,11 @@ function ReadinessMeter({ score }: { score: number }) {
 	);
 }
 
-function ActiveTripCoverBand({
-	coverImageUrl,
-	title,
-	tripWindow,
-}: {
-	coverImageUrl: string;
-	title: string;
-	tripWindow: string;
-}) {
-	return (
-		<View className="h-40 w-full justify-end">
-			<View className="absolute inset-0" style={primarySoftBackgroundStyle} />
-			<Image
-				cachePolicy="memory-disk"
-				contentFit="cover"
-				source={{ uri: coverImageUrl }}
-				style={{ height: "100%", position: "absolute", width: "100%" }}
-				transition={coverImageTransitionMs}
-			/>
-			<LinearGradient
-				colors={coverScrimColors}
-				style={{
-					bottom: 0,
-					height: 120,
-					left: 0,
-					position: "absolute",
-					right: 0,
-				}}
-			/>
-			<View className="gap-1 p-5">
-				<Text
-					style={{ color: "rgba(255,255,255,0.82)" }}
-					type="body-xs"
-					weight="semibold"
-				>
-					ACTIVE TRIP
-				</Text>
-				<Text.Heading
-					numberOfLines={1}
-					style={{ color: "#FFFFFF" }}
-					type="h4"
-					weight="semibold"
-				>
-					{title}
-				</Text.Heading>
-				<Text
-					numberOfLines={1}
-					style={{ color: "rgba(255,255,255,0.88)" }}
-					type="body-sm"
-				>
-					{tripWindow}
-				</Text>
-			</View>
-		</View>
-	);
-}
-
 function ActiveTripCard({
 	budgetAmount,
 	budgetCurrency,
 	coverImageUrl,
+	destination,
 	readinessScore,
 	title,
 	tripId,
@@ -213,45 +175,59 @@ function ActiveTripCard({
 	budgetAmount?: number;
 	budgetCurrency?: string;
 	coverImageUrl?: string;
+	destination?: string;
 	readinessScore: number;
 	title: string;
 	tripId: Id<"trips">;
 	tripWindow: string;
 }) {
+	const fallbackImageNames = getDestinationImageFallbackNames(destination);
+	const fallbackImageUrls = useDestinationImages(
+		coverImageUrl ? [] : fallbackImageNames
+	);
+	const fallbackImageUrl = fallbackImageNames
+		.map((name) => fallbackImageUrls[name])
+		.find((url): url is string => Boolean(url));
+	const tripImageUrl = coverImageUrl ?? fallbackImageUrl;
 	const readinessLabel =
 		readinessScore > 0 ? `${readinessScore}% ready` : "Readiness open";
 
 	return (
-		<Surface className="gap-0 overflow-hidden rounded-[30px] border border-border bg-surface p-0">
-			{coverImageUrl ? (
-				<ActiveTripCoverBand
-					coverImageUrl={coverImageUrl}
-					title={title}
-					tripWindow={tripWindow}
-				/>
-			) : (
-				<View className="flex-row items-start gap-4 px-5 pt-5">
+		<Surface className="gap-5 rounded-[30px] border border-border bg-surface p-5">
+			<View className="flex-row items-center gap-4">
+				<View className="h-20 w-20 overflow-hidden rounded-[24px]">
 					<View
-						className="h-11 w-11 items-center justify-center rounded-full"
+						className="absolute inset-0"
 						style={primarySoftBackgroundStyle}
-					>
-						<Ionicons color="#0A84FF" name="navigate-outline" size={20} />
-					</View>
-					<View className="min-w-0 flex-1 gap-1">
-						<Text color="muted" type="body-xs" weight="semibold">
-							ACTIVE TRIP
-						</Text>
-						<Text.Heading numberOfLines={1} type="h4" weight="semibold">
-							{title}
-						</Text.Heading>
-						<Text color="muted" numberOfLines={1} type="body-sm">
-							{tripWindow}
-						</Text>
-					</View>
+					/>
+					{tripImageUrl ? (
+						<Image
+							cachePolicy="memory-disk"
+							contentFit="cover"
+							source={{ uri: tripImageUrl }}
+							style={{ height: "100%", width: "100%" }}
+							transition={coverImageTransitionMs}
+						/>
+					) : (
+						<View className="h-full w-full items-center justify-center">
+							<Ionicons color="#0A84FF" name="navigate-outline" size={22} />
+						</View>
+					)}
 				</View>
-			)}
+				<View className="min-w-0 flex-1 gap-1">
+					<Text color="muted" type="body-xs" weight="semibold">
+						ACTIVE TRIP
+					</Text>
+					<Text.Heading numberOfLines={2} type="h4" weight="semibold">
+						{title}
+					</Text.Heading>
+					<Text color="muted" numberOfLines={1} type="body-sm">
+						{tripWindow}
+					</Text>
+				</View>
+			</View>
 
-			<View className="gap-5 p-5">
+			<View className="gap-5">
 				<View className="flex-row">
 					<View className="flex-1 gap-1.5">
 						<Text color="muted" type="body-xs" weight="medium">
@@ -641,13 +617,6 @@ function EmptyHomeState({
 			pathname: "/(app)/(tabs)/viya",
 		});
 	};
-	const handlePlanWithViya = () => {
-		setIsCreateSheetOpen(false);
-		router.push({
-			params: { mode: "plan" },
-			pathname: "/(app)/(tabs)/viya",
-		});
-	};
 
 	return (
 		<StickyHomeShell
@@ -659,7 +628,6 @@ function EmptyHomeState({
 						router.push(VIYA_ROUTES.tripDashboard(tripId));
 					}}
 					onOpenChange={setIsCreateSheetOpen}
-					onPlanWithViya={handlePlanWithViya}
 				/>
 			}
 		>
@@ -701,13 +669,6 @@ export default function HomeScreen() {
 			pathname: "/(app)/(tabs)/viya",
 		});
 	};
-	const handlePlanWithViya = () => {
-		setIsCreateSheetOpen(false);
-		router.push({
-			params: { mode: "plan" },
-			pathname: "/(app)/(tabs)/viya",
-		});
-	};
 
 	const createTripSheet = (
 		<ManualTripCreateSheet
@@ -716,7 +677,6 @@ export default function HomeScreen() {
 				router.push(VIYA_ROUTES.tripDashboard(tripId));
 			}}
 			onOpenChange={setIsCreateSheetOpen}
-			onPlanWithViya={handlePlanWithViya}
 		/>
 	);
 	const similarTripPrompt = [
@@ -730,6 +690,7 @@ export default function HomeScreen() {
 				budgetAmount={currentTrip.budgetAmount}
 				budgetCurrency={currentTrip.budgetCurrency}
 				coverImageUrl={currentTrip.coverImageUrl}
+				destination={currentTrip.destination}
 				readinessScore={currentTrip.readinessScore}
 				title={currentTrip.title}
 				tripId={currentTrip._id}

@@ -1,11 +1,9 @@
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import type { Ionicons } from "@expo/vector-icons";
 import { Text } from "heroui-native";
 import { View } from "react-native";
 
 import { Container } from "@/components/container";
 import { EmptyState } from "@/src/components/empty-state";
-import { VIYA_ROUTES } from "@/src/constants/routes";
 
 interface TripEmptyScreenProps {
 	icon: React.ComponentProps<typeof Ionicons>["name"];
@@ -18,8 +16,6 @@ export function TripEmptyScreen({
 	subtitle,
 	title,
 }: TripEmptyScreenProps) {
-	const router = useRouter();
-
 	return (
 		<Container className="px-4 pb-28">
 			<View className="gap-4 py-4">
@@ -32,17 +28,9 @@ export function TripEmptyScreen({
 					</Text.Paragraph>
 				</View>
 				<EmptyState
-					action={{
-						label: "Plan with Viya",
-						onPress: () => router.push(VIYA_ROUTES.viya),
-						startContent: (
-							<Ionicons color="#FFFFFF" name="sparkles" size={16} />
-						),
-						variant: "primary",
-					}}
-					description="Viya can help prepare this module from the current trip details."
+					description="Add the first item manually to make this module part of the saved trip workspace."
 					icon={icon}
-					title="Ready for trip data"
+					title="Ready for manual entry"
 				/>
 			</View>
 		</Container>

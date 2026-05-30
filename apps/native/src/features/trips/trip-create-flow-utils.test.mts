@@ -5,8 +5,6 @@ import {
 	getCreateTripPayload,
 	getCreateTripReviewRows,
 	getStepError,
-	getSuggestedBudgetAmount,
-	getSuggestedBudgetPrefill,
 	getTripCreateSummary,
 	parseBudgetAmount,
 	type TripStyle,
@@ -80,7 +78,7 @@ describe("trip create flow payload", () => {
 		expect(parseBudgetAmount("abc")).toBeUndefined();
 	});
 
-	test("maps Viya answers into createTrip payload", () => {
+	test("maps manual answers into createTrip payload", () => {
 		const state = {
 			...createInitialTripCreateFlowState(),
 			budgetAmount: "60,000",
@@ -107,7 +105,7 @@ describe("trip create flow payload", () => {
 		});
 	});
 
-	test("summarizes selected setup for Viya", () => {
+	test("summarizes selected manual setup", () => {
 		const state = {
 			...createInitialTripCreateFlowState(),
 			budgetAmount: "60000",
@@ -148,61 +146,5 @@ describe("trip create flow payload", () => {
 				{ label: "Budget", value: "PHP 12,000 · Total · Moderate" },
 			])
 		);
-	});
-});
-
-describe("trip create flow budget suggestions", () => {
-	test("prefills the suggested budget when the current value is empty", () => {
-		expect(getSuggestedBudgetPrefill("", 19_000, undefined, "ai")).toBe(
-			"19000"
-		);
-		expect(getSuggestedBudgetPrefill("0", 19_000, undefined, "ai")).toBe(
-			"19000"
-		);
-	});
-
-	test("does not prefill fallback budget estimates", () => {
-		expect(getSuggestedBudgetPrefill("", 19_000, undefined, "fallback")).toBe(
-			""
-		);
-		expect(getSuggestedBudgetPrefill("0", 19_000, undefined, "fallback")).toBe(
-			"0"
-		);
-	});
-
-	test("keeps a traveler-entered budget instead of overwriting it", () => {
-		expect(getSuggestedBudgetPrefill("25,000", 19_000, undefined, "ai")).toBe(
-			"25,000"
-		);
-	});
-
-	test("suggests a positive total budget from previous answers", () => {
-		const state = {
-			...createInitialTripCreateFlowState(),
-			budgetScope: "total" as const,
-			destination: "Hong Kong",
-			durationPreference: "5-7-days" as const,
-			pace: "balanced" as const,
-			styles: ["food", "shopping", "themeParks"] as TripStyle[],
-			travelerCount: "2",
-			travelerType: "couple" as const,
-		};
-
-		expect(getSuggestedBudgetAmount(state)).toBe(51_000);
-	});
-
-	test("scopes suggested budget per person when selected", () => {
-		const state = {
-			...createInitialTripCreateFlowState(),
-			budgetScope: "perPerson" as const,
-			destination: "Hong Kong",
-			durationPreference: "5-7-days" as const,
-			pace: "balanced" as const,
-			styles: ["food", "shopping", "themeParks"] as TripStyle[],
-			travelerCount: "2",
-			travelerType: "couple" as const,
-		};
-
-		expect(getSuggestedBudgetAmount(state)).toBe(26_000);
 	});
 });

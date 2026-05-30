@@ -1,5 +1,6 @@
 import type { Ionicons } from "@expo/vector-icons";
 import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
+import type { TripModuleSummary } from "@viya-app/domain";
 import type { Href } from "expo-router";
 import type { ComponentProps } from "react";
 
@@ -14,7 +15,6 @@ export type TripTab =
 	| "risks"
 	| "companions"
 	| "notes"
-	| "viya"
 	| "travel"
 	| "memories"
 	| "recap";
@@ -22,13 +22,14 @@ export type TripTab =
 export type IoniconName = ComponentProps<typeof Ionicons>["name"];
 
 export interface TripWorkspace {
-	agentDrafts?: Doc<"tripAgentDrafts">[];
+	agentDrafts: Doc<"tripAgentDrafts">[];
 	bookings: Doc<"bookings">[];
 	companions: Doc<"tripCompanions">[];
 	documents: Doc<"travelDocuments">[];
 	expenses: Doc<"expenses">[];
 	itineraryDays: Doc<"itineraryDays">[];
 	itineraryItems: Doc<"itineraryItems">[];
+	moduleSummaries: TripModuleSummary[];
 	moments: Doc<"moments">[];
 	notes: Doc<"tripNotes">[];
 	readinessItems: Doc<"readinessItems">[];
@@ -64,9 +65,12 @@ export interface MissingItem {
 }
 
 export interface RecentUpdate {
+	actionLabel: string;
 	createdAt: number;
+	href: Href;
 	icon: IoniconName;
 	message: string;
+	tab: TripTab;
 }
 
 export interface ScheduledItem {
@@ -92,6 +96,11 @@ export interface BudgetDashboardSummary {
 	spent: number;
 	status: string;
 	totalTrackedSpend: number;
+}
+
+export interface TripCountdown {
+	label: string;
+	tone: "active" | "complete" | "upcoming";
 }
 
 export interface TripDashboardModel {
@@ -120,7 +129,9 @@ export interface TripDashboardModel {
 	statusMetrics: DashboardMetric[];
 	tabCounts: Partial<Record<TripTab, number>>;
 	tabs: DashboardTab[];
+	travelAlertCount: number;
 	travelerLabel: string;
+	tripCountdown: TripCountdown | null;
 	tripId: Id<"trips">;
 	tripWindow: string;
 	watchOutItems: string[];

@@ -3,9 +3,27 @@ import { ConvexError, v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { type MutationCtx, mutation, query } from "./_generated/server";
 import { ensureTripAccess, getRequiredIdentity } from "./lib/auth";
+import { clearDeletedTripEntityReferences } from "./lib/tripLinks";
 
 const touchTrip = async (ctx: MutationCtx, tripId: Id<"trips">) => {
 	await ctx.db.patch(tripId, { updatedAt: Date.now() });
+};
+
+const ensureDayBelongsToTrip = async (
+	ctx: MutationCtx,
+	dayId: string | undefined,
+	tripId: Id<"trips">
+) => {
+	if (!dayId) {
+		return;
+	}
+
+	const normalizedDayId = ctx.db.normalizeId("itineraryDays", dayId);
+	const day = normalizedDayId ? await ctx.db.get(normalizedDayId) : null;
+
+	if (!day || day.tripId !== tripId) {
+		throw new ConvexError("ITINERARY_DAY_TRIP_MISMATCH");
+	}
 };
 
 const getRequiredMoment = async (
@@ -55,6 +73,7 @@ export const createMoment = mutation({
 	handler: async (ctx, args) => {
 		const identity = await getRequiredIdentity(ctx);
 		await ensureTripAccess(ctx, args.tripId, identity.subject);
+		await ensureDayBelongsToTrip(ctx, args.dayId, args.tripId);
 		const momentId = await ctx.db.insert("moments", {
 			...args,
 			createdAt: Date.now(),
@@ -84,6 +103,7 @@ export const updateMoment = mutation({
 			args.momentId,
 			identity.subject
 		);
+		await ensureDayBelongsToTrip(ctx, args.dayId, moment.tripId);
 		const { momentId, ...patch } = args;
 		await ctx.db.patch(momentId, patch);
 		await touchTrip(ctx, moment.tripId);
@@ -121,6 +141,12 @@ export const deleteMoment = mutation({
 			args.momentId,
 			identity.subject
 		);
+		await clearDeletedTripEntityReferences({
+			ctx,
+			linkedEntityId: args.momentId,
+			linkedEntityType: "moment",
+			tripId: moment.tripId,
+		});
 		await ctx.db.delete(args.momentId);
 		await touchTrip(ctx, moment.tripId);
 

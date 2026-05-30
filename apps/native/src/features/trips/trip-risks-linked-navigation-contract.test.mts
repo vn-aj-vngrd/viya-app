@@ -1,0 +1,24 @@
+import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+const rootPath = resolve(import.meta.dirname, "../../../../..");
+
+const readWorkspaceFile = (path: string) =>
+	readFileSync(resolve(rootPath, path), "utf8");
+
+describe("trip risks linked navigation contract", () => {
+	it("keeps linked risk context navigable to the owning trip module", () => {
+		const source = readWorkspaceFile(
+			"apps/native/app/(app)/trips/[tripId]/risks.tsx"
+		);
+
+		expect(source).toContain("getRiskRelatedHref");
+		expect(source).toContain("Open linked item");
+		expect(source).toContain("VIYA_ROUTES.tripItinerary");
+		expect(source).toContain("VIYA_ROUTES.tripBookings");
+		expect(source).toContain("VIYA_ROUTES.tripVault");
+		expect(source).toContain("VIYA_ROUTES.tripBudget");
+		expect(source).toContain("VIYA_ROUTES.tripNotes");
+	});
+});

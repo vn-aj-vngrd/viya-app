@@ -1,8 +1,10 @@
+import { sortTripPlacesForRouteReview } from "@viya-app/domain";
 import { ConvexError, v } from "convex/values";
 
 import type { Id } from "./_generated/dataModel";
 import { type MutationCtx, mutation, query } from "./_generated/server";
 import { ensureTripAccess, getRequiredIdentity } from "./lib/auth";
+import { clearDeletedTripEntityReferences } from "./lib/tripLinks";
 
 const touchTrip = async (ctx: MutationCtx, tripId: Id<"trips">) => {
 	await ctx.db.patch(tripId, { updatedAt: Date.now() });
@@ -45,9 +47,13 @@ export const listTripPlaces = query({
 	handler: async (ctx, args) => {
 		const identity = await getRequiredIdentity(ctx);
 		await ensureTripAccess(ctx, args.tripId, identity.subject);
-		const [savedPlaces, itineraryItems] = await Promise.all([
+		const [savedPlaces, itineraryDays, itineraryItems] = await Promise.all([
 			ctx.db
 				.query("savedPlaces")
+				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+				.collect(),
+			ctx.db
+				.query("itineraryDays")
 				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
 				.collect(),
 			ctx.db
@@ -55,6 +61,9 @@ export const listTripPlaces = query({
 				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
 				.collect(),
 		]);
+		const dayOrderById = new Map(
+			itineraryDays.map((day) => [day._id, day.dayNumber])
+		);
 
 		const itineraryPlaces = itineraryItems
 			.filter((item) => item.locationName)
@@ -70,18 +79,29 @@ export const listTripPlaces = query({
 				source: "itinerary" as const,
 				title: item.title,
 			}));
+		const sortedSavedPlaces = sortTripPlacesForRouteReview(
+			savedPlaces,
+			dayOrderById
+		);
+		const sortedItineraryPlaces = sortTripPlacesForRouteReview(
+			itineraryPlaces,
+			dayOrderById
+		);
 
 		return {
-			itineraryPlaces,
+			itineraryPlaces: sortedItineraryPlaces,
 			routeStats: {
-				geocodedPlaceCount: [...savedPlaces, ...itineraryPlaces].filter(
+				geocodedPlaceCount: [
+					...sortedSavedPlaces,
+					...sortedItineraryPlaces,
+				].filter(
 					(place) =>
 						place.latitude !== undefined && place.longitude !== undefined
 				).length,
-				placeCount: savedPlaces.length + itineraryPlaces.length,
-				savedPlaceCount: savedPlaces.length,
+				placeCount: sortedSavedPlaces.length + sortedItineraryPlaces.length,
+				savedPlaceCount: sortedSavedPlaces.length,
 			},
-			savedPlaces,
+			savedPlaces: sortedSavedPlaces,
 		};
 	},
 });
@@ -178,6 +198,12 @@ export const deleteSavedPlace = mutation({
 			args.placeId,
 			identity.subject
 		);
+		await clearDeletedTripEntityReferences({
+			ctx,
+			linkedEntityId: args.placeId,
+			linkedEntityType: "savedPlace",
+			tripId: place.tripId,
+		});
 		await ctx.db.delete(args.placeId);
 		await touchTrip(ctx, place.tripId);
 

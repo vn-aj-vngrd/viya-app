@@ -5,14 +5,17 @@ import {
 	Alert,
 	BottomSheet,
 	Button,
+	Description,
+	FieldError,
 	Input,
+	Label,
 	Spinner,
 	Text,
 	TextField,
 	useThemeColor,
 } from "heroui-native";
 import React from "react";
-import { Pressable, TextInput, View } from "react-native";
+import { Platform, Pressable, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 
@@ -34,6 +37,8 @@ const RESEND_CODE_COOLDOWN_SECONDS = 30;
 const OTP_SLOT_INDEXES = [0, 1, 2, 3, 4, 5] as const;
 const SIGNED_IN_HOME = "/(app)/(tabs)";
 const SIGN_UP_TRANSFER_ERROR_CODE = "sign_up_if_missing_transfer";
+const shouldRenderCaptchaMount = Platform.OS === "web";
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type PendingAuthAction = "resend" | "send" | "verify";
 
@@ -73,7 +78,13 @@ const isSignUpTransferError = (error: unknown) => {
 
 interface SheetInputProps {
 	autoCapitalize?: "none";
+	description?: string;
+	errorMessage?: string;
+	isInvalid?: boolean;
+	isRequired?: boolean;
 	keyboardType?: "email-address" | "numeric";
+	label?: string;
+	onBlur?: () => void;
 	onChangeText: (value: string) => void;
 	placeholder: string;
 	secureTextEntry?: boolean;
@@ -82,27 +93,46 @@ interface SheetInputProps {
 
 function SheetInput({
 	autoCapitalize,
+	description,
+	errorMessage,
+	isInvalid,
+	isRequired,
 	keyboardType,
+	label,
+	onBlur,
 	onChangeText,
 	placeholder,
 	secureTextEntry,
 	value,
 }: SheetInputProps) {
-	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
+	const { onBlur: handleSheetBlur, onFocus } =
+		useCompatibleBottomSheetAwareHandlers();
+
+	let helperText: React.ReactNode = null;
+
+	if (isInvalid && errorMessage) {
+		helperText = <FieldError>{errorMessage}</FieldError>;
+	} else if (description) {
+		helperText = <Description>{description}</Description>;
+	}
 
 	return (
-		<TextField>
+		<TextField isInvalid={isInvalid} isRequired={isRequired}>
+			{label ? <Label>{label}</Label> : null}
 			<Input
 				autoCapitalize={autoCapitalize}
-				className="border border-border bg-surface"
 				keyboardType={keyboardType}
-				onBlur={onBlur}
+				onBlur={(event) => {
+					handleSheetBlur(event);
+					onBlur?.();
+				}}
 				onChangeText={onChangeText}
 				onFocus={onFocus}
 				placeholder={placeholder}
 				secureTextEntry={secureTextEntry}
 				value={value}
 			/>
+			{helperText}
 		</TextField>
 	);
 }
@@ -215,6 +245,7 @@ export function AuthSignInSheet({
 	const insets = useSafeAreaInsets();
 	const accentForegroundColor = useThemeColor("accent-foreground");
 	const [emailAddress, setEmailAddress] = React.useState("");
+	const [hasEmailBlurred, setHasEmailBlurred] = React.useState(false);
 	const [code, setCode] = React.useState("");
 	const [signUpPassword, setSignUpPassword] = React.useState("");
 	const [isEmailCodeSent, setIsEmailCodeSent] = React.useState(false);
@@ -234,6 +265,11 @@ export function AuthSignInSheet({
 	const isFetching =
 		signInFetchStatus === "fetching" || signUpFetchStatus === "fetching";
 	const codeDeliveryAddress = emailCodeFactor?.safeIdentifier ?? emailAddress;
+	const trimmedEmail = emailAddress.trim();
+	const isEmailFormatInvalid =
+		hasEmailBlurred &&
+		trimmedEmail.length > 0 &&
+		!EMAIL_PATTERN.test(trimmedEmail);
 	const isAuthBusy = isFetching || pendingAuthAction !== null;
 	const isSendingCode = pendingAuthAction === "send";
 	const isResendingCode = pendingAuthAction === "resend";
@@ -521,6 +557,7 @@ export function AuthSignInSheet({
 			setIsEmailCodeSent(false);
 			setResendCooldownSeconds(0);
 			setStatusMessage(null);
+			setHasEmailBlurred(false);
 		}
 	};
 
@@ -637,11 +674,24 @@ export function AuthSignInSheet({
 								<View className="gap-3">
 									<SheetInput
 										autoCapitalize="none"
+										description="Please enter a valid email address."
+										errorMessage="Enter a valid email address."
+										isInvalid={isEmailFormatInvalid}
+										isRequired={true}
 										keyboardType="email-address"
+										label="Email"
+										onBlur={() => setHasEmailBlurred(true)}
 										onChangeText={setEmailAddress}
-										placeholder="Email address"
+										placeholder="Enter your email"
 										value={emailAddress}
 									/>
+									{shouldRenderCaptchaMount ? (
+										<View
+											className="items-center"
+											collapsable={false}
+											nativeID="clerk-captcha"
+										/>
+									) : null}
 								</View>
 								<Button
 									isDisabled={!emailAddress.trim() || isAuthBusy}

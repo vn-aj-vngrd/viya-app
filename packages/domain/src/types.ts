@@ -232,7 +232,9 @@ export type VaultLinkedEntityType =
 	| "booking"
 	| "travelDocument"
 	| "moment"
-	| "readinessItem";
+	| "readinessItem"
+	| "risk"
+	| "tripNote";
 export type VaultItemStatus =
 	| "uploaded"
 	| "processing"

@@ -5,12 +5,14 @@ import {
 	type Priority,
 	type ReadinessCategory,
 	type ReadinessItem,
+	sortReadinessItemsForReview,
+	sortTripRisksForReview,
 	type WorkStatus,
 } from "@viya-app/domain";
-import type { Href } from "expo-router";
 
 import {
 	formatReadableTripDateRange,
+	getCalendarDayOffset,
 	getDateRangeDurationDays,
 } from "@/src/components/date/date-format-utils";
 import { VIYA_ROUTES } from "@/src/constants/routes";
@@ -22,17 +24,10 @@ import type {
 	MissingItem,
 	RecentUpdate,
 	ScheduledItem,
+	TripCountdown,
 	TripDashboardModel,
 	TripWorkspace,
 } from "./trip-dashboard-types";
-
-const priorityRank: Record<string, number> = {
-	blocked: 5,
-	critical: 4,
-	high: 3,
-	medium: 2,
-	low: 1,
-};
 
 const tripTabs: DashboardTab[] = [
 	{ icon: "speedometer-outline", id: "overview", label: "Today" },
@@ -42,7 +37,9 @@ const tripTabs: DashboardTab[] = [
 	{ icon: "folder-open-outline", id: "documents", label: "Docs" },
 	{ icon: "checkbox-outline", id: "checklist", label: "Checklist" },
 	{ icon: "wallet-outline", id: "budget", label: "Budget" },
-	{ icon: "sparkles-outline", id: "viya", label: "Viya" },
+	{ icon: "warning-outline", id: "risks", label: "Risks" },
+	{ icon: "people-outline", id: "companions", label: "People" },
+	{ icon: "document-text-outline", id: "notes", label: "Notes" },
 	{ icon: "navigate-outline", id: "travel", label: "Travel" },
 	{ icon: "images-outline", id: "memories", label: "Memories" },
 	{ icon: "share-social-outline", id: "recap", label: "Recap" },
@@ -153,6 +150,75 @@ export const getTravelerLabel = (groupType: string) => {
 	return `${formatStatus(groupType)} travelers`;
 };
 
+const daysPerWeek = 7;
+const daysPerMonth = 30;
+const daysPerYear = 365;
+
+const formatTripLeadTime = (days: number) => {
+	if (days === 1) {
+		return "Tomorrow";
+	}
+
+	if (days < daysPerWeek) {
+		return `In ${days} days`;
+	}
+
+	if (days < daysPerWeek * 2) {
+		return "In 1 week";
+	}
+
+	if (days < daysPerMonth) {
+		return `In ${Math.round(days / daysPerWeek)} weeks`;
+	}
+
+	if (days < daysPerMonth * 2) {
+		return "In 1 month";
+	}
+
+	if (days < daysPerYear) {
+		return `In ${Math.round(days / daysPerMonth)} months`;
+	}
+
+	return "In 1+ year";
+};
+
+export const getTripCountdown = ({
+	endDate,
+	startDate,
+}: {
+	endDate?: string | null;
+	startDate?: string | null;
+}): TripCountdown | null => {
+	if (!startDate) {
+		return null;
+	}
+
+	const startOffset = getCalendarDayOffset(startDate);
+
+	if (startOffset === null) {
+		return null;
+	}
+
+	if (startOffset > 0) {
+		return { label: formatTripLeadTime(startOffset), tone: "upcoming" };
+	}
+
+	const endOffset = endDate ? getCalendarDayOffset(endDate) : null;
+
+	if (endOffset !== null && endOffset < 0) {
+		return { label: "Completed", tone: "complete" };
+	}
+
+	const totalDays =
+		startDate && endDate ? getDateRangeDurationDays(startDate, endDate) : null;
+	const dayNumber = Math.abs(startOffset) + 1;
+
+	return {
+		label: totalDays ? `Day ${dayNumber} of ${totalDays}` : `Day ${dayNumber}`,
+		tone: "active",
+	};
+};
+
 const getRemainingTripDays = (endDate: string) => {
 	const today = new Date().toISOString().slice(0, 10);
 	const remainingDays = getDateRangeDurationDays(today, endDate);
@@ -199,20 +265,9 @@ const toReadinessItem = (item: Doc<"readinessItems">): ReadinessItem => ({
 });
 
 const getOpenReadinessItems = (items: Doc<"readinessItems">[]) =>
-	items
-		.filter((item) => item.status !== "done" && item.status !== "ignored")
-		.sort((left, right) => {
-			const rightRank =
-				right.status === "blocked"
-					? priorityRank.blocked
-					: (priorityRank[right.priority] ?? 0);
-			const leftRank =
-				left.status === "blocked"
-					? priorityRank.blocked
-					: (priorityRank[left.priority] ?? 0);
-
-			return rightRank - leftRank;
-		});
+	sortReadinessItemsForReview(
+		items.filter((item) => item.status !== "done" && item.status !== "ignored")
+	);
 
 const getScheduledItems = ({
 	itineraryDays,
@@ -356,45 +411,58 @@ const getNextAction = ({
 	};
 };
 
-const getRecentUpdates = (workspace: TripWorkspace): RecentUpdate[] =>
-	[
+const getRecentUpdates = (workspace: TripWorkspace): RecentUpdate[] => {
+	const tripId = workspace.trip._id;
+
+	return [
 		...workspace.bookings
 			.filter((booking) => booking.status === "confirmed")
 			.map((booking) => ({
+				actionLabel: "Open booking",
 				createdAt: booking.updatedAt,
+				href: VIYA_ROUTES.tripBookings(tripId),
 				icon: "briefcase-outline" as const,
 				message: `Confirmed ${booking.title}`,
+				tab: "bookings" as const,
 			})),
 		...workspace.vaultItems.map((item) => ({
+			actionLabel: "Open file",
 			createdAt: item.createdAt,
+			href: VIYA_ROUTES.tripVault(tripId),
 			icon: "document-attach-outline" as const,
 			message: `Uploaded ${item.title}`,
+			tab: "documents" as const,
 		})),
 		...workspace.expenses.map((expense) => ({
+			actionLabel: "Open expense",
 			createdAt: expense.createdAt,
+			href: VIYA_ROUTES.tripBudget(tripId),
 			icon: "receipt-outline" as const,
 			message: `Logged ${expense.title}`,
+			tab: "budget" as const,
 		})),
 		...workspace.moments.map((moment) => ({
+			actionLabel: "Open memory",
 			createdAt: moment.createdAt,
+			href: VIYA_ROUTES.tripMoments(tripId),
 			icon: "images-outline" as const,
 			message: `Saved ${moment.title}`,
+			tab: "memories" as const,
 		})),
 		...workspace.notes.map((note) => ({
+			actionLabel: "Open note",
 			createdAt: note.updatedAt,
+			href: VIYA_ROUTES.tripNotes(tripId),
 			icon: "document-text-outline" as const,
 			message: `Noted ${note.title}`,
+			tab: "notes" as const,
 		})),
 	]
 		.sort((left, right) => right.createdAt - left.createdAt)
 		.slice(0, 4);
+};
 
 const getQuickActions = (tripId: Id<"trips">): DashboardAction[] => [
-	{
-		href: VIYA_ROUTES.viya as Href,
-		icon: "sparkles-outline",
-		label: "Ask Viya",
-	},
 	{
 		href: VIYA_ROUTES.tripVault(tripId),
 		icon: "cloud-upload-outline",
@@ -439,10 +507,13 @@ export const createTripDashboardModel = ({
 	tripId: Id<"trips">;
 	workspace: TripWorkspace;
 }): TripDashboardModel => {
-	const readinessScore = calculateReadinessScore(
-		workspace.readinessItems.map(toReadinessItem)
+	const sortedReadinessItems = sortReadinessItemsForReview(
+		workspace.readinessItems
 	);
-	const openReadinessItems = getOpenReadinessItems(workspace.readinessItems);
+	const readinessScore = calculateReadinessScore(
+		sortedReadinessItems.map(toReadinessItem)
+	);
+	const openReadinessItems = getOpenReadinessItems(sortedReadinessItems);
 	const scheduledItems = getScheduledItems(workspace);
 	const { nextScheduledItem, nowScheduledItem } = getNowAndNext(scheduledItems);
 	const budgetWallet = getBudgetWalletSummary({
@@ -477,10 +548,11 @@ export const createTripDashboardModel = ({
 			.filter((item) => item.kind === "booking" || item.kind === "document")
 			.map((item) => item.title),
 	].slice(0, 4);
+	const sortedRisks = sortTripRisksForReview(workspace.risks);
+	const openRisks = sortedRisks.filter((risk) => risk.status === "open");
+	const travelAlertCount = openRisks.length + missingItems.length;
 	const watchOutItems = [
-		...workspace.risks
-			.filter((risk) => risk.status === "open")
-			.map((risk) => risk.title),
+		...openRisks.map((risk) => risk.title),
 		...missingItems.map((item) => item.title),
 	].slice(0, 4);
 	const statusMetrics: DashboardMetric[] = [
@@ -530,7 +602,7 @@ export const createTripDashboardModel = ({
 			topBlocker: openReadinessItems[0]?.title ?? "No blocker detected",
 		},
 		readinessByCategory: groupBy(
-			workspace.readinessItems,
+			sortedReadinessItems,
 			(item) => item.category
 		).map(({ items, type }) => ({ category: type, items })),
 		recentUpdates: getRecentUpdates(workspace),
@@ -541,14 +613,22 @@ export const createTripDashboardModel = ({
 			checklist: openReadinessItems.length,
 			documents: workspace.vaultItems.length + workspace.documents.length,
 			itinerary: workspace.itineraryItems.length,
+			companions: workspace.companions.length,
 			places:
 				workspace.savedPlaces.length +
 				workspace.itineraryItems.filter((item) => item.locationName).length,
 			memories: workspace.moments.length,
-			travel: watchOutItems.length,
+			notes: workspace.notes.length,
+			risks: openRisks.length,
+			travel: travelAlertCount,
 		},
 		tabs: tripTabs,
 		travelerLabel: getTravelerLabel(workspace.trip.groupType),
+		travelAlertCount,
+		tripCountdown: getTripCountdown({
+			endDate: workspace.trip.endDate,
+			startDate: workspace.trip.startDate,
+		}),
 		tripId,
 		tripWindow: formatTripWindowWithDuration({
 			endDate: workspace.trip.endDate,
@@ -556,6 +636,10 @@ export const createTripDashboardModel = ({
 			startDate: workspace.trip.startDate,
 		}),
 		watchOutItems,
-		workspace,
+		workspace: {
+			...workspace,
+			readinessItems: sortedReadinessItems,
+			risks: sortedRisks,
+		},
 	};
 };

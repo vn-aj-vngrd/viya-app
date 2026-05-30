@@ -56,7 +56,7 @@ const travelStyleIcons: Record<TravelStyle, IoniconName> = {
 	adventure: "compass-outline",
 	balanced: "scale-outline",
 	budget: "wallet-outline",
-	custom: "sparkles-outline",
+	custom: "options-outline",
 	relaxed: "cafe-outline",
 };
 
@@ -90,7 +90,6 @@ interface ManualTripCreateSheetProps {
 	isOpen: boolean;
 	onCreated: (tripId: Id<"trips">) => void;
 	onOpenChange: (isOpen: boolean) => void;
-	onPlanWithViya: () => void;
 }
 
 const initialFormState: ManualTripFormState = {
@@ -299,7 +298,7 @@ const getManualTripSummary = (form: ReturnType<typeof getTrimmedForm>) => {
 		form.interests ? `Interests: ${form.interests}.` : null,
 		form.requirements ? `Requirements: ${form.requirements}.` : null,
 		form.notes ? `Notes: ${form.notes}.` : null,
-		"Viya can use this context to enrich bookings, readiness, and itinerary later.",
+		"Use this context to enrich bookings, readiness, and itinerary later.",
 	].filter(Boolean);
 
 	return details.join(" ");
@@ -355,7 +354,6 @@ export function ManualTripCreateSheet({
 	isOpen,
 	onCreated,
 	onOpenChange,
-	onPlanWithViya,
 }: ManualTripCreateSheetProps) {
 	const insets = useSafeAreaInsets();
 	const { height } = useWindowDimensions();
@@ -447,7 +445,7 @@ export function ManualTripCreateSheet({
 							<View className="flex-1 gap-1">
 								<BottomSheet.Title>Create trip</BottomSheet.Title>
 								<BottomSheet.Description ellipsizeMode="tail" numberOfLines={1}>
-									Add basics now. Viya can refine later.
+									Add the trip basics manually.
 								</BottomSheet.Description>
 							</View>
 							<CloseButton
@@ -562,7 +560,7 @@ export function ManualTripCreateSheet({
 							<SheetTextAreaField
 								label="Extra notes"
 								onChangeText={(value) => updateForm("notes", value)}
-								placeholder="Anything else Viya should remember"
+								placeholder="Anything else to keep with this trip"
 								value={form.notes}
 							/>
 						</ScrollView>
@@ -576,14 +574,6 @@ export function ManualTripCreateSheet({
 							<Button isDisabled={isCreating} onPress={handleCreate} size="lg">
 								{isCreating ? <Spinner size="sm" /> : null}
 								<Button.Label>Create trip</Button.Label>
-							</Button>
-							<Button
-								isDisabled={isCreating}
-								onPress={onPlanWithViya}
-								size="lg"
-								variant="secondary"
-							>
-								<Button.Label>Plan with Viya AI</Button.Label>
 							</Button>
 						</View>
 					</View>

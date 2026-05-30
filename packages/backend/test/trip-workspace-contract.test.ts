@@ -5,8 +5,14 @@ import { describe, it } from "node:test";
 
 const rootPath = resolve(import.meta.dirname, "../../..");
 const tripAgentDraftHelperPattern = /tripAgentDraftApply/;
-const floatingAskViyaBarPattern = /FloatingAskViyaBar/;
+const tripModuleNavigationBarPattern = /TripModuleNavigationBar/;
 const tripModuleScreenFramePattern = /TripModuleScreenFrame/;
+const sortedNotesPattern =
+	/sortedNotes\s*=\s*\[\.\.\.notes\]\.sort\([\s\S]*secondNote\.updatedAt\s*-\s*firstNote\.updatedAt/;
+const returnedSortedNotesPattern = /notes:\s*sortedNotes/;
+const sortedVaultItemsPattern =
+	/sortedVaultItems\s*=\s*\[\.\.\.vaultItems\]\.sort\([\s\S]*secondVaultItem\.createdAt\s*-\s*firstVaultItem\.createdAt/;
+const hydratedSortedVaultItemsPattern = /sortedVaultItems\.map/;
 
 const readWorkspaceFile = (path: string) =>
 	readFileSync(resolve(rootPath, path), "utf8");
@@ -114,6 +120,7 @@ const requiredWorkspaceFields = [
 	"expenses",
 	"itineraryDays",
 	"itineraryItems",
+	"moduleSummaries",
 	"moments",
 	"notes",
 	"readinessItems",
@@ -133,6 +140,21 @@ const requiredAiModules = [
 	"risks",
 	"travel",
 	"recap",
+] as const;
+
+const requiredDashboardModuleRoutes = [
+	"tripItinerary",
+	"tripPlaces",
+	"tripBookings",
+	"tripVault",
+	"tripBudget",
+	"tripReadiness",
+	"tripRisks",
+	"tripCompanions",
+	"tripNotes",
+	"tripTravelMode",
+	"tripMoments",
+	"tripWrapped",
 ] as const;
 
 const requiredFloatingModuleScreens = [
@@ -229,8 +251,8 @@ describe("trip workspace contract", () => {
 
 		assert.match(
 			floatingBarSource,
-			floatingAskViyaBarPattern,
-			"trip module floating bar should reuse the shared dashboard floating bar"
+			tripModuleNavigationBarPattern,
+			"trip module floating bar should reuse the shared dashboard module navigation"
 		);
 
 		for (const screen of requiredFloatingModuleScreens) {
@@ -287,7 +309,41 @@ describe("trip workspace contract", () => {
 		);
 	});
 
-	it("keeps Viya agent shortcuts aligned with supported backend modules", () => {
+	it("keeps workspace notes sorted newest first for latest context views", () => {
+		const workspaceSource = readWorkspaceFile(
+			"packages/backend/convex/tripWorkspace.ts"
+		);
+
+		assert.match(
+			workspaceSource,
+			sortedNotesPattern,
+			"getTripWorkspace should sort notes newest first before returning them"
+		);
+		assert.match(
+			workspaceSource,
+			returnedSortedNotesPattern,
+			"getTripWorkspace should return sorted notes to module screens"
+		);
+	});
+
+	it("keeps workspace Vault files sorted newest first for previews", () => {
+		const workspaceSource = readWorkspaceFile(
+			"packages/backend/convex/tripWorkspace.ts"
+		);
+
+		assert.match(
+			workspaceSource,
+			sortedVaultItemsPattern,
+			"getTripWorkspace should sort Vault files by newest upload before returning them"
+		);
+		assert.match(
+			workspaceSource,
+			hydratedSortedVaultItemsPattern,
+			"getTripWorkspace should hydrate the sorted Vault file list"
+		);
+	});
+
+	it("keeps dashboard module routes aligned with supported backend modules", () => {
 		const dashboardSource = readWorkspaceFile(
 			"apps/native/src/features/trips/trip-dashboard-components.tsx"
 		);
@@ -306,10 +362,13 @@ describe("trip workspace contract", () => {
 				new RegExp(`${moduleName}:`),
 				`backend should map ${moduleName} to an AI model purpose`
 			);
+		}
+
+		for (const routeConstant of requiredDashboardModuleRoutes) {
 			assert.match(
 				dashboardSource,
-				new RegExp(`module: "${moduleName}"`),
-				`workspace should expose a ${moduleName} Viya shortcut`
+				new RegExp(`VIYA_ROUTES\\.${routeConstant}\\(`),
+				`workspace should expose a ${routeConstant} module route`
 			);
 		}
 	});

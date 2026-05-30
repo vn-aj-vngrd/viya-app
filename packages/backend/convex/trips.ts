@@ -11,14 +11,15 @@ import {
 import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
 
-import type { Doc } from "./_generated/dataModel";
-import type { QueryCtx } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import {
 	ensureTripAccess,
 	ensureUserRecord,
 	getRequiredIdentity,
 } from "./lib/auth";
+import { clearDeletedTripEntityReferences } from "./lib/tripLinks";
 
 const maxBlueprintItems = 8;
 const maxTripsPageSize = 24;
@@ -97,6 +98,90 @@ const withReadinessSnapshot = async (ctx: QueryCtx, trip: Doc<"trips">) => {
 		readinessItemCount: readinessItems.length,
 		readinessScore: readinessScore.overallScore,
 	};
+};
+
+const ensureBookingBelongsToTrip = async (
+	ctx: MutationCtx,
+	bookingId: Id<"bookings"> | undefined,
+	tripId: Id<"trips">
+) => {
+	if (!bookingId) {
+		return;
+	}
+
+	const booking = await ctx.db.get(bookingId);
+
+	if (!booking || booking.tripId !== tripId) {
+		throw new ConvexError("BOOKING_TRIP_MISMATCH");
+	}
+};
+
+const ensureVaultItemBelongsToTrip = async (
+	ctx: MutationCtx,
+	vaultItemId: Id<"vaultItems"> | undefined,
+	tripId: Id<"trips">
+) => {
+	if (!vaultItemId) {
+		return;
+	}
+
+	const vaultItem = await ctx.db.get(vaultItemId);
+
+	if (!vaultItem || vaultItem.tripId !== tripId) {
+		throw new ConvexError("VAULT_ITEM_TRIP_MISMATCH");
+	}
+};
+
+const hasOwnObjectProperty = <T extends object>(
+	value: T,
+	key: PropertyKey
+): boolean => key in value;
+
+type ExpenseUpdatePatch = Partial<
+	Pick<
+		Doc<"expenses">,
+		| "amount"
+		| "bookingId"
+		| "category"
+		| "currency"
+		| "notes"
+		| "spentAt"
+		| "title"
+		| "updatedAt"
+		| "vaultItemId"
+	>
+>;
+
+const syncExpenseVaultLink = async (
+	ctx: MutationCtx,
+	previousVaultItemId: Id<"vaultItems"> | undefined,
+	nextVaultItemId: Id<"vaultItems"> | undefined,
+	expenseId: Id<"expenses">
+) => {
+	const now = Date.now();
+
+	if (previousVaultItemId && previousVaultItemId !== nextVaultItemId) {
+		const previousVaultItem = await ctx.db.get(previousVaultItemId);
+
+		if (
+			previousVaultItem?.linkedEntityId === expenseId &&
+			previousVaultItem.linkedEntityType === "expense"
+		) {
+			await ctx.db.patch(previousVaultItemId, {
+				linkedEntityId: undefined,
+				linkedEntityType: undefined,
+				updatedAt: now,
+			});
+		}
+	}
+
+	if (nextVaultItemId) {
+		await ctx.db.patch(nextVaultItemId, {
+			linkedEntityId: expenseId,
+			linkedEntityType: "expense",
+			updatedAt: now,
+		});
+	}
 };
 
 const getTripSearchText = ({
@@ -672,8 +757,14 @@ export const deleteTrip = mutation({
 			itineraryDays,
 			itineraryItems,
 			moments,
+			notes,
+			companions,
 			readinessItems,
 			risks,
+			savedPlaces,
+			draftAgentDrafts,
+			appliedAgentDrafts,
+			dismissedAgentDrafts,
 			vaultItems,
 		] = await Promise.all([
 			ctx.db
@@ -701,12 +792,42 @@ export const deleteTrip = mutation({
 				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
 				.collect(),
 			ctx.db
+				.query("tripNotes")
+				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+				.collect(),
+			ctx.db
+				.query("tripCompanions")
+				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+				.collect(),
+			ctx.db
 				.query("readinessItems")
 				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
 				.collect(),
 			ctx.db
 				.query("risks")
 				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+				.collect(),
+			ctx.db
+				.query("savedPlaces")
+				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+				.collect(),
+			ctx.db
+				.query("tripAgentDrafts")
+				.withIndex("by_trip_status", (q) =>
+					q.eq("tripId", args.tripId).eq("status", "draft")
+				)
+				.collect(),
+			ctx.db
+				.query("tripAgentDrafts")
+				.withIndex("by_trip_status", (q) =>
+					q.eq("tripId", args.tripId).eq("status", "applied")
+				)
+				.collect(),
+			ctx.db
+				.query("tripAgentDrafts")
+				.withIndex("by_trip_status", (q) =>
+					q.eq("tripId", args.tripId).eq("status", "dismissed")
+				)
 				.collect(),
 			ctx.db
 				.query("vaultItems")
@@ -727,8 +848,14 @@ export const deleteTrip = mutation({
 			...itineraryDays,
 			...itineraryItems,
 			...moments,
+			...notes,
+			...companions,
 			...readinessItems,
 			...risks,
+			...savedPlaces,
+			...draftAgentDrafts,
+			...appliedAgentDrafts,
+			...dismissedAgentDrafts,
 		]) {
 			await ctx.db.delete(item._id);
 		}
@@ -738,11 +865,30 @@ export const deleteTrip = mutation({
 			await ctx.db.delete(item._id);
 		}
 
+		const now = Date.now();
 		for (const thread of chatThreads) {
 			if (thread.tripId === args.tripId) {
+				const pendingQuestions = await ctx.db
+					.query("chatQuestionPrompts")
+					.withIndex("by_owner_thread_status_updatedAt", (q) =>
+						q
+							.eq("ownerId", identity.subject)
+							.eq("threadId", thread.threadId)
+							.eq("status", "pending")
+					)
+					.collect();
+
+				for (const question of pendingQuestions) {
+					await ctx.db.patch(question._id, {
+						status: "dismissed",
+						updatedAt: now,
+					});
+				}
+
 				await ctx.db.patch(thread._id, {
+					mode: "chat",
 					tripId: undefined,
-					updatedAt: Date.now(),
+					updatedAt: now,
 				});
 			}
 		}
@@ -756,16 +902,20 @@ export const deleteTrip = mutation({
 export const addTripExpense = mutation({
 	args: {
 		amount: v.number(),
+		bookingId: v.optional(v.id("bookings")),
 		category: expenseCategoryValidator,
 		currency: v.optional(v.string()),
 		notes: v.optional(v.string()),
 		spentAt: v.string(),
 		title: v.string(),
 		tripId: v.id("trips"),
+		vaultItemId: v.optional(v.id("vaultItems")),
 	},
 	handler: async (ctx, args) => {
 		const identity = await getRequiredIdentity(ctx);
 		await ensureTripAccess(ctx, args.tripId, identity.subject);
+		await ensureBookingBelongsToTrip(ctx, args.bookingId, args.tripId);
+		await ensureVaultItemBelongsToTrip(ctx, args.vaultItemId, args.tripId);
 
 		if (!(Number.isFinite(args.amount) && args.amount > 0)) {
 			throw new ConvexError("INVALID_EXPENSE_AMOUNT");
@@ -779,6 +929,7 @@ export const addTripExpense = mutation({
 		const now = Date.now();
 		const expenseId = await ctx.db.insert("expenses", {
 			amount: args.amount,
+			bookingId: args.bookingId,
 			category: args.category,
 			createdAt: now,
 			currency: args.currency ?? "PHP",
@@ -788,7 +939,9 @@ export const addTripExpense = mutation({
 			title,
 			tripId: args.tripId,
 			updatedAt: now,
+			vaultItemId: args.vaultItemId,
 		});
+		await syncExpenseVaultLink(ctx, undefined, args.vaultItemId, expenseId);
 		await ctx.db.patch(args.tripId, { updatedAt: now });
 
 		return ctx.db.get(expenseId);
@@ -816,6 +969,14 @@ export const updateTripExpense = mutation({
 		}
 
 		await ensureTripAccess(ctx, expense.tripId, identity.subject);
+		const shouldUpdateBooking = hasOwnObjectProperty(args, "bookingId");
+		const shouldUpdateVaultItem = hasOwnObjectProperty(args, "vaultItemId");
+		if (shouldUpdateBooking) {
+			await ensureBookingBelongsToTrip(ctx, args.bookingId, expense.tripId);
+		}
+		if (shouldUpdateVaultItem) {
+			await ensureVaultItemBelongsToTrip(ctx, args.vaultItemId, expense.tripId);
+		}
 
 		if (
 			args.amount !== undefined &&
@@ -829,18 +990,44 @@ export const updateTripExpense = mutation({
 			throw new ConvexError("INVALID_EXPENSE_TITLE");
 		}
 
-		await ctx.db.patch(args.expenseId, {
-			amount: args.amount,
-			bookingId: args.bookingId,
-			category: args.category,
-			currency: args.currency,
-			notes: args.notes?.trim() || undefined,
-			spentAt: args.spentAt,
-			title,
-			updatedAt: Date.now(),
-			vaultItemId: args.vaultItemId,
-		});
-		await ctx.db.patch(expense.tripId, { updatedAt: Date.now() });
+		const now = Date.now();
+		const patch: ExpenseUpdatePatch = { updatedAt: now };
+
+		if (args.amount !== undefined) {
+			patch.amount = args.amount;
+		}
+		if (shouldUpdateBooking) {
+			patch.bookingId = args.bookingId;
+		}
+		if (args.category !== undefined) {
+			patch.category = args.category;
+		}
+		if (args.currency !== undefined) {
+			patch.currency = args.currency;
+		}
+		if (hasOwnObjectProperty(args, "notes")) {
+			patch.notes = args.notes?.trim() || undefined;
+		}
+		if (args.spentAt !== undefined) {
+			patch.spentAt = args.spentAt;
+		}
+		if (title !== undefined) {
+			patch.title = title;
+		}
+		if (shouldUpdateVaultItem) {
+			patch.vaultItemId = args.vaultItemId;
+		}
+
+		await ctx.db.patch(args.expenseId, patch);
+		if (shouldUpdateVaultItem) {
+			await syncExpenseVaultLink(
+				ctx,
+				expense.vaultItemId,
+				args.vaultItemId,
+				args.expenseId
+			);
+		}
+		await ctx.db.patch(expense.tripId, { updatedAt: now });
 
 		return ctx.db.get(args.expenseId);
 	},
@@ -857,6 +1044,12 @@ export const deleteTripExpense = mutation({
 		}
 
 		await ensureTripAccess(ctx, expense.tripId, identity.subject);
+		await clearDeletedTripEntityReferences({
+			ctx,
+			linkedEntityId: args.expenseId,
+			linkedEntityType: "expense",
+			tripId: expense.tripId,
+		});
 		await ctx.db.delete(args.expenseId);
 		await ctx.db.patch(expense.tripId, { updatedAt: Date.now() });
 

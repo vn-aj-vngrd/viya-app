@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { getTripModulesSheetListMaxHeight } from "./trip-dashboard-layout";
+import {
+	getTripModulesSheetListMaxHeight,
+	shouldShowTripDashboardFocusSections,
+} from "./trip-dashboard-layout";
 
 describe("trip dashboard layout", () => {
 	test("bounds trip module launcher list inside its bottom sheet", () => {
@@ -19,5 +22,9 @@ describe("trip dashboard layout", () => {
 				windowHeight: 568,
 			})
 		).toBeGreaterThanOrEqual(280);
+	});
+
+	test("shows dashboard focus sections on the primary trip dashboard", () => {
+		expect(shouldShowTripDashboardFocusSections()).toBe(true);
 	});
 });

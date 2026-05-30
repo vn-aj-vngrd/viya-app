@@ -10,6 +10,11 @@ import { ConvexError, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { type MutationCtx, mutation, query } from "./_generated/server";
 import { ensureTripAccess, getRequiredIdentity } from "./lib/auth";
+import {
+	ensureLinkedTripEntityBelongsToTrip,
+	getLinkedTripEntityLinkFields,
+	getLinkedTripEntityLinkUpdatePatch,
+} from "./lib/tripLinks";
 
 const ensureOptionalTripAccess = async (
 	ctx: Parameters<typeof ensureTripAccess>[0],
@@ -106,6 +111,135 @@ const touchTrip = async (ctx: MutationCtx, tripId: Id<"trips">) => {
 	await ctx.db.patch(tripId, { updatedAt: Date.now() });
 };
 
+const clearVaultItemProofReferences = async (
+	ctx: MutationCtx,
+	tripId: Id<"trips">,
+	vaultItemId: Id<"vaultItems">,
+	now: number
+) => {
+	const [bookings, documents, expenses] = await Promise.all([
+		ctx.db
+			.query("bookings")
+			.withIndex("by_trip", (q) => q.eq("tripId", tripId))
+			.collect(),
+		ctx.db
+			.query("travelDocuments")
+			.withIndex("by_trip", (q) => q.eq("tripId", tripId))
+			.collect(),
+		ctx.db
+			.query("expenses")
+			.withIndex("by_trip", (q) => q.eq("tripId", tripId))
+			.collect(),
+	]);
+
+	for (const booking of bookings) {
+		if (booking.vaultItemId === vaultItemId) {
+			await ctx.db.patch(booking._id, {
+				updatedAt: now,
+				vaultItemId: undefined,
+			});
+		}
+	}
+
+	for (const document of documents) {
+		if (document.vaultItemId === vaultItemId) {
+			await ctx.db.patch(document._id, {
+				updatedAt: now,
+				vaultItemId: undefined,
+			});
+		}
+	}
+
+	for (const expense of expenses) {
+		if (expense.vaultItemId === vaultItemId) {
+			await ctx.db.patch(expense._id, {
+				updatedAt: now,
+				vaultItemId: undefined,
+			});
+		}
+	}
+};
+
+const clearVaultItemRelatedEntityReferences = async (
+	ctx: MutationCtx,
+	tripId: Id<"trips">,
+	vaultItemId: Id<"vaultItems">,
+	now: number
+) => {
+	const [notes, risks] = await Promise.all([
+		ctx.db
+			.query("tripNotes")
+			.withIndex("by_trip", (q) => q.eq("tripId", tripId))
+			.collect(),
+		ctx.db
+			.query("risks")
+			.withIndex("by_trip", (q) => q.eq("tripId", tripId))
+			.collect(),
+	]);
+
+	for (const note of notes) {
+		if (
+			note.relatedEntityId === vaultItemId &&
+			note.relatedEntityType === "vaultItem"
+		) {
+			await ctx.db.patch(note._id, {
+				relatedEntityId: undefined,
+				relatedEntityType: undefined,
+				updatedAt: now,
+			});
+		}
+	}
+
+	for (const risk of risks) {
+		if (
+			risk.relatedEntityId === vaultItemId &&
+			risk.relatedEntityType === "vaultItem"
+		) {
+			await ctx.db.patch(risk._id, {
+				relatedEntityId: undefined,
+				relatedEntityType: undefined,
+			});
+		}
+	}
+};
+
+const clearVaultItemLinkedVaultReferences = async (
+	ctx: MutationCtx,
+	tripId: Id<"trips">,
+	vaultItemId: Id<"vaultItems">,
+	now: number
+) => {
+	const vaultItems = await ctx.db
+		.query("vaultItems")
+		.withIndex("by_trip", (q) => q.eq("tripId", tripId))
+		.collect();
+
+	for (const vaultItem of vaultItems) {
+		if (
+			vaultItem._id !== vaultItemId &&
+			vaultItem.linkedEntityId === vaultItemId &&
+			vaultItem.linkedEntityType === "vaultItem"
+		) {
+			await ctx.db.patch(vaultItem._id, {
+				linkedEntityId: undefined,
+				linkedEntityType: undefined,
+				updatedAt: now,
+			});
+		}
+	}
+};
+
+const clearDeletedVaultItemReferences = async (
+	ctx: MutationCtx,
+	tripId: Id<"trips">,
+	vaultItemId: Id<"vaultItems">
+) => {
+	const now = Date.now();
+	await clearVaultItemProofReferences(ctx, tripId, vaultItemId, now);
+	await clearVaultItemRelatedEntityReferences(ctx, tripId, vaultItemId, now);
+	await clearVaultItemLinkedVaultReferences(ctx, tripId, vaultItemId, now);
+};
+
 const getRequiredVaultItem = async (
 	ctx: MutationCtx,
 	vaultItemId: Id<"vaultItems">,
@@ -120,68 +254,180 @@ const getRequiredVaultItem = async (
 	return item;
 };
 
-interface LinkedEntityInput {
+interface VaultLinkedEntityPatch {
+	linkedEntityId: string;
+	linkedEntityType: string;
+}
+
+interface VaultLinkedEntityReferenceInput {
+	linkedEntityId?: string;
+	linkedEntityType?: string;
+	vaultItemId: Id<"vaultItems">;
+}
+
+const hasOwnObjectProperty = <T extends object>(
+	value: T,
+	key: PropertyKey
+): boolean => key in value;
+
+const ensureVaultLinkBelongsToTrip = async ({
+	ctx,
+	linkedEntityId,
+	linkedEntityType,
+	tripId,
+}: {
 	ctx: MutationCtx;
 	linkedEntityId?: string;
 	linkedEntityType?: string;
 	tripId?: Id<"trips">;
-}
+}) => {
+	if (!(linkedEntityId || linkedEntityType)) {
+		return;
+	}
 
-const getLinkedEntityTripId = async ({
-	ctx,
-	linkedEntityId,
-	linkedEntityType,
-}: LinkedEntityInput) => {
+	if (!tripId) {
+		throw new ConvexError("LINKED_ENTITY_TRIP_MISMATCH");
+	}
+
+	await ensureLinkedTripEntityBelongsToTrip({
+		ctx,
+		linkedEntityId,
+		linkedEntityType,
+		tripId,
+	});
+};
+
+const clearVaultLinkedEntityReference = async (
+	ctx: MutationCtx,
+	{
+		linkedEntityId,
+		linkedEntityType,
+		vaultItemId,
+	}: VaultLinkedEntityReferenceInput,
+	now: number
+) => {
 	if (!(linkedEntityId && linkedEntityType)) {
-		return null;
+		return;
 	}
 
 	if (linkedEntityType === "booking") {
 		const bookingId = ctx.db.normalizeId("bookings", linkedEntityId);
 		const booking = bookingId ? await ctx.db.get(bookingId) : null;
 
-		return booking?.tripId ?? null;
+		if (booking?.vaultItemId === vaultItemId) {
+			await ctx.db.patch(booking._id, {
+				updatedAt: now,
+				vaultItemId: undefined,
+			});
+		}
 	}
 
 	if (linkedEntityType === "travelDocument") {
 		const documentId = ctx.db.normalizeId("travelDocuments", linkedEntityId);
 		const document = documentId ? await ctx.db.get(documentId) : null;
 
-		return document?.tripId ?? null;
+		if (document?.vaultItemId === vaultItemId) {
+			await ctx.db.patch(document._id, {
+				updatedAt: now,
+				vaultItemId: undefined,
+			});
+		}
 	}
 
-	if (linkedEntityType === "moment") {
-		const momentId = ctx.db.normalizeId("moments", linkedEntityId);
-		const moment = momentId ? await ctx.db.get(momentId) : null;
+	if (linkedEntityType === "expense") {
+		const expenseId = ctx.db.normalizeId("expenses", linkedEntityId);
+		const expense = expenseId ? await ctx.db.get(expenseId) : null;
 
-		return moment?.tripId ?? null;
+		if (expense?.vaultItemId === vaultItemId) {
+			await ctx.db.patch(expense._id, {
+				updatedAt: now,
+				vaultItemId: undefined,
+			});
+		}
 	}
-
-	if (linkedEntityType === "readinessItem") {
-		const readinessItemId = ctx.db.normalizeId(
-			"readinessItems",
-			linkedEntityId
-		);
-		const readinessItem = readinessItemId
-			? await ctx.db.get(readinessItemId)
-			: null;
-
-		return readinessItem?.tripId ?? null;
-	}
-
-	return null;
 };
 
-const ensureLinkedEntityBelongsToTrip = async (input: LinkedEntityInput) => {
-	if (!(input.linkedEntityId && input.linkedEntityType && input.tripId)) {
+const setVaultLinkedEntityReference = async (
+	ctx: MutationCtx,
+	{
+		linkedEntityId,
+		linkedEntityType,
+		vaultItemId,
+	}: VaultLinkedEntityReferenceInput,
+	now: number
+) => {
+	if (!(linkedEntityId && linkedEntityType)) {
 		return;
 	}
 
-	const linkedTripId = await getLinkedEntityTripId(input);
+	if (linkedEntityType === "booking") {
+		const bookingId = ctx.db.normalizeId("bookings", linkedEntityId);
 
-	if (linkedTripId !== input.tripId) {
-		throw new ConvexError("LINKED_ENTITY_TRIP_MISMATCH");
+		if (bookingId) {
+			await ctx.db.patch(bookingId, {
+				updatedAt: now,
+				vaultItemId,
+			});
+		}
 	}
+
+	if (linkedEntityType === "travelDocument") {
+		const documentId = ctx.db.normalizeId("travelDocuments", linkedEntityId);
+
+		if (documentId) {
+			await ctx.db.patch(documentId, {
+				updatedAt: now,
+				vaultItemId,
+			});
+		}
+	}
+
+	if (linkedEntityType === "expense") {
+		const expenseId = ctx.db.normalizeId("expenses", linkedEntityId);
+
+		if (expenseId) {
+			await ctx.db.patch(expenseId, {
+				updatedAt: now,
+				vaultItemId,
+			});
+		}
+	}
+};
+
+const syncVaultLinkedEntityReferences = async (
+	ctx: MutationCtx,
+	item: Pick<Doc<"vaultItems">, "linkedEntityId" | "linkedEntityType" | "_id">,
+	nextReference: VaultLinkedEntityReferenceInput
+) => {
+	const now = Date.now();
+	const nextLinkedEntityId = nextReference.linkedEntityId || undefined;
+	const nextLinkedEntityType = nextReference.linkedEntityType || undefined;
+	const hasChanged =
+		item.linkedEntityId !== nextLinkedEntityId ||
+		item.linkedEntityType !== nextLinkedEntityType;
+
+	if (!hasChanged) {
+		return;
+	}
+
+	await clearVaultLinkedEntityReference(
+		ctx,
+		{
+			linkedEntityId: item.linkedEntityId,
+			linkedEntityType: item.linkedEntityType,
+			vaultItemId: item._id,
+		},
+		now
+	);
+	await setVaultLinkedEntityReference(
+		ctx,
+		{
+			linkedEntityId: nextLinkedEntityId,
+			linkedEntityType: nextLinkedEntityType,
+			vaultItemId: nextReference.vaultItemId,
+		},
+		now
+	);
 };
 
 export const generateUploadUrl = mutation({
@@ -216,6 +462,12 @@ export const saveVaultItem = mutation({
 	handler: async (ctx, args) => {
 		const identity = await getRequiredIdentity(ctx);
 		await ensureOptionalTripAccess(ctx, args.tripId, identity.subject);
+		await ensureVaultLinkBelongsToTrip({
+			ctx,
+			linkedEntityId: args.linkedEntityId,
+			linkedEntityType: args.linkedEntityType,
+			tripId: args.tripId,
+		});
 
 		const now = Date.now();
 		const vaultItemId = await ctx.db.insert("vaultItems", {
@@ -229,11 +481,22 @@ export const saveVaultItem = mutation({
 			title: args.title,
 			note: args.note,
 			status: "ready",
-			linkedEntityType: args.linkedEntityType,
-			linkedEntityId: args.linkedEntityId,
+			...getLinkedTripEntityLinkFields({
+				linkedEntityId: args.linkedEntityId,
+				linkedEntityType: args.linkedEntityType,
+			}),
 			createdAt: now,
 			updatedAt: now,
 		});
+		await setVaultLinkedEntityReference(
+			ctx,
+			{
+				linkedEntityId: args.linkedEntityId,
+				linkedEntityType: args.linkedEntityType,
+				vaultItemId,
+			},
+			now
+		);
 
 		return { vaultItemId };
 	},
@@ -291,6 +554,7 @@ export const confirmTripSyncReview = mutation({
 			tripId: args.tripId,
 			updatedAt: now,
 		});
+		let vaultLinkedEntityPatch: VaultLinkedEntityPatch | null = null;
 
 		if (args.extraction.booking) {
 			const booking = args.extraction.booking;
@@ -319,17 +583,25 @@ export const confirmTripSyncReview = mutation({
 
 			if (matchingBooking) {
 				await ctx.db.patch(matchingBooking._id, bookingPatch);
+				vaultLinkedEntityPatch = {
+					linkedEntityId: matchingBooking._id,
+					linkedEntityType: "booking",
+				};
 			} else {
-				await ctx.db.insert("bookings", {
+				const bookingId = await ctx.db.insert("bookings", {
 					...bookingPatch,
 					createdAt: now,
 					tripId: args.tripId,
 				});
+				vaultLinkedEntityPatch = {
+					linkedEntityId: bookingId,
+					linkedEntityType: "booking",
+				};
 			}
 		}
 
 		if (args.kind === "document" || args.extraction.documentType !== "other") {
-			await ctx.db.insert("travelDocuments", {
+			const documentId = await ctx.db.insert("travelDocuments", {
 				createdAt: now,
 				status: "uploaded",
 				title: args.extraction.extractedTitle,
@@ -338,6 +610,11 @@ export const confirmTripSyncReview = mutation({
 				updatedAt: now,
 				vaultItemId,
 			});
+
+			vaultLinkedEntityPatch ??= {
+				linkedEntityId: documentId,
+				linkedEntityType: "travelDocument",
+			};
 		}
 
 		const existingReadinessItems = await ctx.db
@@ -366,6 +643,13 @@ export const confirmTripSyncReview = mutation({
 			});
 		}
 
+		if (vaultLinkedEntityPatch) {
+			await ctx.db.patch(vaultItemId, {
+				...vaultLinkedEntityPatch,
+				updatedAt: now,
+			});
+		}
+
 		await recalculateTripReadiness(ctx, args.tripId);
 
 		return { vaultItemId };
@@ -391,9 +675,12 @@ export const listTripVaultItems = query({
 					.query("vaultItems")
 					.withIndex("by_owner", (q) => q.eq("ownerId", identity.subject))
 					.collect();
+		const sortedItems = [...items].sort(
+			(firstItem, secondItem) => secondItem.createdAt - firstItem.createdAt
+		);
 
 		return Promise.all(
-			items.map(async (item) => ({
+			sortedItems.map(async (item) => ({
 				...item,
 				url: await ctx.storage.getUrl(item.storageId),
 			}))
@@ -411,6 +698,10 @@ export const deleteVaultItem = mutation({
 
 		if (!item || item.ownerId !== identity.subject) {
 			throw new ConvexError("VAULT_ITEM_NOT_FOUND");
+		}
+
+		if (item.tripId) {
+			await clearDeletedVaultItemReferences(ctx, item.tripId, args.vaultItemId);
 		}
 
 		await ctx.storage.delete(item.storageId);
@@ -449,17 +740,31 @@ export const updateVaultItem = mutation({
 			args.vaultItemId,
 			identity.subject
 		);
-		await ensureLinkedEntityBelongsToTrip({
+		await ensureVaultLinkBelongsToTrip({
 			ctx,
 			linkedEntityId: args.linkedEntityId,
 			linkedEntityType: args.linkedEntityType,
 			tripId: item.tripId,
 		});
-		const { vaultItemId, ...patch } = args;
+		const shouldUpdateLink =
+			hasOwnObjectProperty(args, "linkedEntityId") ||
+			hasOwnObjectProperty(args, "linkedEntityType");
+		const { linkedEntityId, linkedEntityType, vaultItemId, ...patch } = args;
 		await ctx.db.patch(vaultItemId, {
 			...patch,
+			...getLinkedTripEntityLinkUpdatePatch({
+				linkedEntityId,
+				linkedEntityType,
+			}),
 			updatedAt: Date.now(),
 		});
+		if (shouldUpdateLink) {
+			await syncVaultLinkedEntityReferences(ctx, item, {
+				linkedEntityId,
+				linkedEntityType,
+				vaultItemId,
+			});
+		}
 
 		if (item.tripId) {
 			await touchTrip(ctx, item.tripId);
@@ -482,7 +787,7 @@ export const linkVaultItem = mutation({
 			args.vaultItemId,
 			identity.subject
 		);
-		await ensureLinkedEntityBelongsToTrip({
+		await ensureVaultLinkBelongsToTrip({
 			ctx,
 			linkedEntityId: args.linkedEntityId,
 			linkedEntityType: args.linkedEntityType,
@@ -492,6 +797,11 @@ export const linkVaultItem = mutation({
 			linkedEntityId: args.linkedEntityId,
 			linkedEntityType: args.linkedEntityType,
 			updatedAt: Date.now(),
+		});
+		await syncVaultLinkedEntityReferences(ctx, item, {
+			linkedEntityId: args.linkedEntityId,
+			linkedEntityType: args.linkedEntityType,
+			vaultItemId: args.vaultItemId,
 		});
 
 		if (item.tripId) {

@@ -3,6 +3,12 @@ import { ConvexError, v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { type MutationCtx, mutation, query } from "./_generated/server";
 import { ensureTripAccess, getRequiredIdentity } from "./lib/auth";
+import {
+	clearDeletedTripEntityReferences,
+	ensureLinkedTripEntityBelongsToTrip,
+	getLinkedTripEntityFields,
+	getLinkedTripEntityUpdatePatch,
+} from "./lib/tripLinks";
 
 const riskSeverityValidator = v.union(
 	v.literal("low"),
@@ -85,6 +91,8 @@ export const createRisk = mutation({
 	args: {
 		tripId: v.id("trips"),
 		message: v.string(),
+		relatedEntityId: v.optional(v.string()),
+		relatedEntityType: v.optional(v.string()),
 		severity: riskSeverityValidator,
 		suggestedAction: v.string(),
 		title: v.string(),
@@ -93,10 +101,20 @@ export const createRisk = mutation({
 	handler: async (ctx, args) => {
 		const identity = await getRequiredIdentity(ctx);
 		await ensureTripAccess(ctx, args.tripId, identity.subject);
+		await ensureLinkedTripEntityBelongsToTrip({
+			ctx,
+			linkedEntityId: args.relatedEntityId,
+			linkedEntityType: args.relatedEntityType,
+			tripId: args.tripId,
+		});
 		const riskId = await ctx.db.insert("risks", {
 			aiReason: "Created by the traveler.",
 			createdAt: Date.now(),
 			message: args.message,
+			...getLinkedTripEntityFields({
+				linkedEntityId: args.relatedEntityId,
+				linkedEntityType: args.relatedEntityType,
+			}),
 			severity: args.severity,
 			status: "open",
 			suggestedAction: args.suggestedAction,
@@ -125,8 +143,20 @@ export const updateRisk = mutation({
 	handler: async (ctx, args) => {
 		const identity = await getRequiredIdentity(ctx);
 		const risk = await getRequiredRisk(ctx, args.riskId, identity.subject);
-		const { riskId, ...patch } = args;
-		await ctx.db.patch(riskId, patch);
+		await ensureLinkedTripEntityBelongsToTrip({
+			ctx,
+			linkedEntityId: args.relatedEntityId,
+			linkedEntityType: args.relatedEntityType,
+			tripId: risk.tripId,
+		});
+		const { relatedEntityId, relatedEntityType, riskId, ...patch } = args;
+		await ctx.db.patch(riskId, {
+			...patch,
+			...getLinkedTripEntityUpdatePatch({
+				linkedEntityId: relatedEntityId,
+				linkedEntityType: relatedEntityType,
+			}),
+		});
 		await touchTrip(ctx, risk.tripId);
 
 		return ctx.db.get(riskId);
@@ -138,6 +168,12 @@ export const deleteRisk = mutation({
 	handler: async (ctx, args) => {
 		const identity = await getRequiredIdentity(ctx);
 		const risk = await getRequiredRisk(ctx, args.riskId, identity.subject);
+		await clearDeletedTripEntityReferences({
+			ctx,
+			linkedEntityId: args.riskId,
+			linkedEntityType: "risk",
+			tripId: risk.tripId,
+		});
 		await ctx.db.delete(args.riskId);
 		await touchTrip(ctx, risk.tripId);
 

@@ -22,6 +22,7 @@ import type * as companions from "../companions.js";
 import type * as healthCheck from "../healthCheck.js";
 import type * as itinerary from "../itinerary.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_tripLinks from "../lib/tripLinks.js";
 import type * as locations from "../locations.js";
 import type * as moments from "../moments.js";
 import type * as notes from "../notes.js";
@@ -56,6 +57,7 @@ declare const fullApi: ApiFromModules<{
   healthCheck: typeof healthCheck;
   itinerary: typeof itinerary;
   "lib/auth": typeof lib_auth;
+  "lib/tripLinks": typeof lib_tripLinks;
   locations: typeof locations;
   moments: typeof moments;
   notes: typeof notes;

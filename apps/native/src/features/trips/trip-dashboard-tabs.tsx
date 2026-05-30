@@ -1,5 +1,5 @@
 import type { Href } from "expo-router";
-import { Button, Chip, Text } from "heroui-native";
+import { Button, Text } from "heroui-native";
 import { View } from "react-native";
 
 import { VIYA_ROUTES } from "@/src/constants/routes";
@@ -10,13 +10,23 @@ import {
 	LinkButton,
 	Section,
 } from "./trip-dashboard-components";
-import type { TripDashboardModel, TripTab } from "./trip-dashboard-types";
+import type {
+	IoniconName,
+	TripDashboardModel,
+	TripTab,
+} from "./trip-dashboard-types";
 import { formatMoney, formatStatus } from "./trip-dashboard-utils";
+import {
+	getTripRelatedEntityHref,
+	getTripRelatedEntityLabel,
+	getTripRelatedEntityLabelByKey,
+} from "./trip-related-entities";
 
 const updateDateFormatter = new Intl.DateTimeFormat("en-US", {
 	day: "numeric",
 	month: "short",
 });
+const dashboardPreviewLimit = 4;
 
 const getTimeRange = ({
 	endTime,
@@ -31,6 +41,149 @@ const getTimeRange = ({
 
 	return startTime || "Time TBD";
 };
+
+const getCompanionDetail = ({
+	email,
+	phone,
+}: {
+	email?: string | null;
+	phone?: string | null;
+}) => {
+	const detail = [email, phone].filter(Boolean).join(" - ");
+
+	return detail || "Contact details not added yet";
+};
+
+const getNotePreview = ({
+	body,
+	category,
+}: {
+	body?: string | null;
+	category: string;
+}) => {
+	const trimmedBody = body?.trim();
+
+	return (
+		trimmedBody || `No note body yet. Category: ${formatStatus(category)}.`
+	);
+};
+
+const getNoteRelatedLabel = (
+	note: TripDashboardModel["workspace"]["notes"][number],
+	relatedEntityLabelByKey: Map<string, string>
+) =>
+	getTripRelatedEntityLabel(
+		{
+			relatedEntityId: note.relatedEntityId,
+			relatedEntityType: note.relatedEntityType,
+		},
+		relatedEntityLabelByKey
+	);
+
+const getRiskRelatedLabel = (
+	risk: TripDashboardModel["workspace"]["risks"][number],
+	relatedEntityLabelByKey: Map<string, string>
+) =>
+	getTripRelatedEntityLabel(
+		{
+			relatedEntityId: risk.relatedEntityId,
+			relatedEntityType: risk.relatedEntityType,
+		},
+		relatedEntityLabelByKey
+	);
+
+const getRiskDetail = (
+	risk: TripDashboardModel["workspace"]["risks"][number],
+	relatedEntityLabelByKey: Map<string, string>
+) =>
+	[
+		formatStatus(risk.type),
+		getRiskRelatedLabel(risk, relatedEntityLabelByKey),
+		risk.suggestedAction,
+	]
+		.filter(Boolean)
+		.join(" - ");
+
+const getMomentPreview = ({
+	caption,
+	locationName,
+	note,
+}: {
+	caption?: string | null;
+	locationName?: string | null;
+	note?: string | null;
+}) => {
+	const preview = note?.trim() || caption?.trim() || locationName?.trim();
+
+	return preview || "Add a caption or note to give this memory context.";
+};
+
+const getTripSummaryPreview = ({
+	destination,
+	summary,
+}: {
+	destination: string;
+	summary?: string | null;
+}) => {
+	const trimmedSummary = summary?.trim();
+
+	return (
+		trimmedSummary ||
+		`Review highlights, spend, bookings, and files before wrapping ${destination}.`
+	);
+};
+
+function DashboardPreviewActionRow({
+	actionLabel,
+	detail,
+	href,
+	icon,
+	label,
+	right,
+}: {
+	actionLabel: string;
+	detail: string;
+	href: Href;
+	icon: IoniconName;
+	label: string;
+	right?: string;
+}) {
+	return (
+		<View className="gap-2 rounded-[18px] bg-surface-secondary p-3">
+			<InfoRow detail={detail} icon={icon} label={label} right={right} />
+			<LinkButton href={href} icon="open-outline">
+				{actionLabel}
+			</LinkButton>
+		</View>
+	);
+}
+
+function TravelAlertRow({
+	actionLabel,
+	detail,
+	href,
+	icon,
+	label,
+	right,
+}: {
+	actionLabel: string;
+	detail: string;
+	href: Href;
+	icon: IoniconName;
+	label: string;
+	right?: string;
+}) {
+	return (
+		<DashboardPreviewActionRow
+			actionLabel={actionLabel}
+			detail={detail}
+			href={href}
+			icon={icon}
+			label={label}
+			right={right}
+		/>
+	);
+}
 
 function MissingList({
 	items,
@@ -91,7 +244,7 @@ function TimelinePreview({ model }: { model: TripDashboardModel }) {
 						? `${getTimeRange(nextScheduledItem.item)} - ${
 								nextScheduledItem.item.locationName || "Location TBD"
 							}`
-						: "Viya will surface the next step once the plan has timing."
+						: "Add timed itinerary items to surface the next step."
 				}
 				icon="play-forward-outline"
 				label={nextScheduledItem?.item.title ?? "No next item"}
@@ -147,28 +300,16 @@ export function OverviewTab({
 					Manage budget
 				</LinkButton>
 			</Section>
-
-			<Section icon="time-outline" title="Recent Updates">
-				{model.recentUpdates.length === 0 ? (
-					<EmptyCopy>Trip changes will appear here.</EmptyCopy>
-				) : (
-					<View className="gap-2">
-						{model.recentUpdates.map((update) => (
-							<InfoRow
-								detail={updateDateFormatter.format(new Date(update.createdAt))}
-								icon={update.icon}
-								key={`${update.createdAt}-${update.message}`}
-								label={update.message}
-							/>
-						))}
-					</View>
-				)}
-			</Section>
 		</View>
 	);
 }
 
 export function ItineraryTab({ model }: { model: TripDashboardModel }) {
+	const visibleDays = model.workspace.itineraryDays.slice(
+		0,
+		dashboardPreviewLimit
+	);
+
 	return (
 		<View className="gap-4">
 			<Section icon="calendar-outline" title="Trip Plan">
@@ -180,43 +321,71 @@ export function ItineraryTab({ model }: { model: TripDashboardModel }) {
 				</LinkButton>
 			</Section>
 			{model.workspace.itineraryDays.length === 0 ? (
-				<EmptyCopy icon="calendar-outline">No itinerary days yet.</EmptyCopy>
+				<EmptyCopy
+					actionHref={VIYA_ROUTES.tripItinerary(model.tripId)}
+					actionLabel="Add first day"
+					icon="calendar-outline"
+				>
+					No itinerary days yet.
+				</EmptyCopy>
 			) : (
-				model.workspace.itineraryDays.map((day) => {
-					const dayItems = model.workspace.itineraryItems.filter(
-						(item) => item.dayId === day._id
-					);
+				<>
+					{visibleDays.map((day) => {
+						const dayItems = model.workspace.itineraryItems.filter(
+							(item) => item.dayId === day._id
+						);
+						const visibleDayItems = dayItems.slice(0, dashboardPreviewLimit);
 
-					return (
-						<Section
-							icon="map-outline"
-							key={day._id}
-							title={`Day ${day.dayNumber}: ${day.title}`}
-						>
-							<Text color="muted" type="body-sm">
-								{day.date} - {day.theme} -{" "}
-								{formatMoney(day.estimatedCost, model.currency)}
-							</Text>
-							{dayItems.length === 0 ? (
-								<EmptyCopy>No scheduled items for this day.</EmptyCopy>
-							) : (
-								<View className="gap-2">
-									{dayItems.map((item) => (
-										<InfoRow
-											detail={`${getTimeRange(item)} - ${
-												item.locationName || "Location TBD"
-											}`}
-											icon="ellipse-outline"
-											key={item._id}
-											label={item.title}
-											right={formatMoney(item.estimatedCost, model.currency)}
-										/>
-									))}
-								</View>
-							)}
-						</Section>
-					);
-				})
+						return (
+							<Section
+								icon="map-outline"
+								key={day._id}
+								title={`Day ${day.dayNumber}: ${day.title}`}
+							>
+								<Text color="muted" type="body-sm">
+									{day.date} - {day.theme} -{" "}
+									{formatMoney(day.estimatedCost, model.currency)}
+								</Text>
+								{dayItems.length === 0 ? (
+									<EmptyCopy
+										actionHref={VIYA_ROUTES.tripItinerary(model.tripId)}
+										actionLabel="Add item"
+									>
+										No scheduled items for this day.
+									</EmptyCopy>
+								) : (
+									<View className="gap-2">
+										{visibleDayItems.map((item) => (
+											<DashboardPreviewActionRow
+												actionLabel="Open itinerary item"
+												detail={`${getTimeRange(item)} - ${
+													item.locationName || "Location TBD"
+												}`}
+												href={VIYA_ROUTES.tripItinerary(model.tripId)}
+												icon="ellipse-outline"
+												key={item._id}
+												label={item.title}
+												right={formatMoney(item.estimatedCost, model.currency)}
+											/>
+										))}
+										{dayItems.length > visibleDayItems.length ? (
+											<LinkButton
+												href={VIYA_ROUTES.tripItinerary(model.tripId)}
+											>
+												Open full day
+											</LinkButton>
+										) : null}
+									</View>
+								)}
+							</Section>
+						);
+					})}
+					{model.workspace.itineraryDays.length > visibleDays.length ? (
+						<LinkButton href={VIYA_ROUTES.tripItinerary(model.tripId)}>
+							Open all days
+						</LinkButton>
+					) : null}
+				</>
 			)}
 		</View>
 	);
@@ -226,6 +395,15 @@ export function PlacesTab({ model }: { model: TripDashboardModel }) {
 	const itineraryPlaceCount = model.workspace.itineraryItems.filter((item) =>
 		Boolean(item.locationName)
 	).length;
+	const savedPlacePreview = model.workspace.savedPlaces.slice(
+		0,
+		dashboardPreviewLimit
+	);
+	const itineraryStopPreview = model.workspace.itineraryItems
+		.filter((item) => Boolean(item.locationName))
+		.slice(0, dashboardPreviewLimit);
+	const hasPlacePreview =
+		savedPlacePreview.length > 0 || itineraryStopPreview.length > 0;
 
 	return (
 		<View className="gap-4">
@@ -251,11 +429,57 @@ export function PlacesTab({ model }: { model: TripDashboardModel }) {
 					/>
 				</View>
 			</Section>
+			{hasPlacePreview ? (
+				<Section icon="pin-outline" title="Saved Route Notes">
+					<View className="gap-2">
+						{savedPlacePreview.map((place) => (
+							<DashboardPreviewActionRow
+								actionLabel="Open saved place"
+								detail={`${place.locationName} - ${formatStatus(place.category)}`}
+								href={VIYA_ROUTES.tripPlaces(model.tripId)}
+								icon="bookmark-outline"
+								key={place._id}
+								label={place.title}
+								right="Saved"
+							/>
+						))}
+						{itineraryStopPreview.map((item) => (
+							<DashboardPreviewActionRow
+								actionLabel="Open itinerary stop"
+								detail={item.locationName ?? "Location TBD"}
+								href={VIYA_ROUTES.tripItinerary(model.tripId)}
+								icon="calendar-outline"
+								key={item._id}
+								label={item.title}
+								right="Itinerary"
+							/>
+						))}
+					</View>
+				</Section>
+			) : (
+				<EmptyCopy
+					actionHref={VIYA_ROUTES.tripPlaces(model.tripId)}
+					actionLabel="Add place"
+					icon="map-outline"
+				>
+					Add saved places or itinerary stops to build route context.
+				</EmptyCopy>
+			)}
 		</View>
 	);
 }
 
 export function BookingsTab({ model }: { model: TripDashboardModel }) {
+	const visibleBookingGroups = model.bookingsByType.slice(
+		0,
+		dashboardPreviewLimit
+	);
+	const hasMoreBookings =
+		model.bookingsByType.length > visibleBookingGroups.length ||
+		visibleBookingGroups.some(
+			(group) => group.items.length > dashboardPreviewLimit
+		);
+
 	return (
 		<View className="gap-4">
 			<Section icon="briefcase-outline" title="Bookings">
@@ -273,35 +497,65 @@ export function BookingsTab({ model }: { model: TripDashboardModel }) {
 				</View>
 			</Section>
 			{model.bookingsByType.length === 0 ? (
-				<EmptyCopy icon="ticket-outline">No booking targets yet.</EmptyCopy>
+				<EmptyCopy
+					actionHref={VIYA_ROUTES.tripBookings(model.tripId)}
+					actionLabel="Add booking target"
+					icon="ticket-outline"
+				>
+					No booking targets yet.
+				</EmptyCopy>
 			) : (
-				model.bookingsByType.map((group) => (
-					<Section
-						icon="ticket-outline"
-						key={group.type}
-						title={formatStatus(group.type)}
-					>
-						<View className="gap-2">
-							{group.items.map((booking) => (
-								<InfoRow
-									detail={`${booking.provider ?? "Provider TBD"} - Ref ${
-										booking.confirmationCode ?? "TBD"
-									}`}
-									icon="briefcase-outline"
-									key={booking._id}
-									label={booking.title}
-									right={formatStatus(booking.status)}
-								/>
-							))}
-						</View>
-					</Section>
-				))
+				<>
+					{visibleBookingGroups.map((group) => (
+						<Section
+							icon="ticket-outline"
+							key={group.type}
+							title={formatStatus(group.type)}
+						>
+							<View className="gap-2">
+								{group.items.slice(0, dashboardPreviewLimit).map((booking) => (
+									<DashboardPreviewActionRow
+										actionLabel="Open booking"
+										detail={`${booking.provider ?? "Provider TBD"} - Ref ${
+											booking.confirmationCode ?? "TBD"
+										}`}
+										href={VIYA_ROUTES.tripBookings(model.tripId)}
+										icon="briefcase-outline"
+										key={booking._id}
+										label={booking.title}
+										right={formatStatus(booking.status)}
+									/>
+								))}
+							</View>
+						</Section>
+					))}
+					{hasMoreBookings ? (
+						<LinkButton href={VIYA_ROUTES.tripBookings(model.tripId)}>
+							Open all bookings
+						</LinkButton>
+					) : null}
+				</>
 			)}
 		</View>
 	);
 }
 
 export function DocumentsTab({ model }: { model: TripDashboardModel }) {
+	const relatedEntityLabelByKey = getTripRelatedEntityLabelByKey(
+		model.workspace
+	);
+	const visibleDocuments = model.workspace.documents.slice(
+		0,
+		dashboardPreviewLimit
+	);
+	const visibleVaultItems = model.workspace.vaultItems.slice(
+		0,
+		dashboardPreviewLimit
+	);
+	const visibleDocumentCount =
+		visibleDocuments.length + visibleVaultItems.length;
+	const totalDocumentCount =
+		model.workspace.documents.length + model.workspace.vaultItems.length;
 	const hasDocuments =
 		model.workspace.documents.length > 0 ||
 		model.workspace.vaultItems.length > 0;
@@ -320,27 +574,59 @@ export function DocumentsTab({ model }: { model: TripDashboardModel }) {
 			{hasDocuments ? (
 				<Section icon="document-text-outline" title="Saved">
 					<View className="gap-2">
-						{model.workspace.documents.map((document) => (
-							<InfoRow
+						{visibleDocuments.map((document) => (
+							<DashboardPreviewActionRow
+								actionLabel="Open document"
 								detail={`${formatStatus(document.type)} - ${document.status}`}
+								href={VIYA_ROUTES.tripVault(model.tripId)}
 								icon="document-outline"
 								key={document._id}
 								label={document.title}
 							/>
 						))}
-						{model.workspace.vaultItems.map((item) => (
-							<InfoRow
-								detail={`${formatStatus(item.kind)} - ${item.fileName}`}
-								icon="document-attach-outline"
-								key={item._id}
-								label={item.title}
-								right={formatStatus(item.status)}
-							/>
-						))}
+						{visibleVaultItems.map((item) => {
+							const linkedEntityLabel = getTripRelatedEntityLabel(
+								{
+									relatedEntityId: item.linkedEntityId,
+									relatedEntityType: item.linkedEntityType,
+								},
+								relatedEntityLabelByKey
+							);
+							const detail = linkedEntityLabel
+								? `${formatStatus(item.kind)} - ${linkedEntityLabel}`
+								: `${formatStatus(item.kind)} - ${item.fileName}`;
+							const linkedEntityHref = getTripRelatedEntityHref({
+								relatedEntityType: item.linkedEntityType,
+								tripId: model.tripId,
+							});
+
+							return (
+								<DashboardPreviewActionRow
+									actionLabel={
+										linkedEntityHref ? "Open linked item" : "Open file"
+									}
+									detail={detail}
+									href={linkedEntityHref ?? VIYA_ROUTES.tripVault(model.tripId)}
+									icon="document-attach-outline"
+									key={item._id}
+									label={item.title}
+									right={formatStatus(item.status)}
+								/>
+							);
+						})}
+						{totalDocumentCount > visibleDocumentCount ? (
+							<LinkButton href={VIYA_ROUTES.tripVault(model.tripId)}>
+								Open all documents
+							</LinkButton>
+						) : null}
 					</View>
 				</Section>
 			) : (
-				<EmptyCopy icon="folder-open-outline">
+				<EmptyCopy
+					actionHref={VIYA_ROUTES.tripVault(model.tripId)}
+					actionLabel="Upload document"
+					icon="folder-open-outline"
+				>
 					No documents uploaded yet.
 				</EmptyCopy>
 			)}
@@ -349,6 +635,16 @@ export function DocumentsTab({ model }: { model: TripDashboardModel }) {
 }
 
 export function ChecklistTab({ model }: { model: TripDashboardModel }) {
+	const visibleReadinessGroups = model.readinessByCategory.slice(
+		0,
+		dashboardPreviewLimit
+	);
+	const hasMoreReadinessItems =
+		model.readinessByCategory.length > visibleReadinessGroups.length ||
+		visibleReadinessGroups.some(
+			(group) => group.items.length > dashboardPreviewLimit
+		);
+
 	return (
 		<View className="gap-4">
 			<Section icon="checkbox-outline" title="Checklist">
@@ -362,18 +658,20 @@ export function ChecklistTab({ model }: { model: TripDashboardModel }) {
 			<Section icon="alert-circle-outline" title="Open Items">
 				<MissingList items={model.missingItems} limit={8} />
 			</Section>
-			{model.readinessByCategory.map((group) => (
+			{visibleReadinessGroups.map((group) => (
 				<Section
 					icon="list-outline"
 					key={group.category}
 					title={formatStatus(group.category)}
 				>
 					<View className="gap-2">
-						{group.items.map((item) => (
-							<InfoRow
+						{group.items.slice(0, dashboardPreviewLimit).map((item) => (
+							<DashboardPreviewActionRow
+								actionLabel="Open checklist item"
 								detail={`${formatStatus(item.priority)} - ${
 									item.dueDate || "No due date"
 								}`}
+								href={VIYA_ROUTES.tripReadiness(model.tripId)}
 								icon={
 									item.status === "done"
 										? "checkmark-circle-outline"
@@ -387,11 +685,21 @@ export function ChecklistTab({ model }: { model: TripDashboardModel }) {
 					</View>
 				</Section>
 			))}
+			{hasMoreReadinessItems ? (
+				<LinkButton href={VIYA_ROUTES.tripReadiness(model.tripId)}>
+					Open full checklist
+				</LinkButton>
+			) : null}
 		</View>
 	);
 }
 
 export function BudgetTab({ model }: { model: TripDashboardModel }) {
+	const visibleBudgetCategories = model.budget.categoryBreakdown.slice(
+		0,
+		dashboardPreviewLimit
+	);
+
 	return (
 		<View className="gap-4">
 			<Section icon="wallet-outline" title="Budget">
@@ -419,16 +727,31 @@ export function BudgetTab({ model }: { model: TripDashboardModel }) {
 			</Section>
 			<Section icon="pie-chart-outline" title="Categories">
 				{model.budget.categoryBreakdown.length === 0 ? (
-					<EmptyCopy>No booked costs or expenses yet.</EmptyCopy>
+					<EmptyCopy
+						actionHref={VIYA_ROUTES.tripBudget(model.tripId)}
+						actionLabel="Log expense"
+					>
+						No booked costs or expenses yet.
+					</EmptyCopy>
 				) : (
 					<View className="gap-2">
-						{model.budget.categoryBreakdown.map((item) => (
-							<InfoRow
+						{visibleBudgetCategories.map((item) => (
+							<DashboardPreviewActionRow
+								actionLabel="Review category spend"
+								detail="Tracked category"
+								href={VIYA_ROUTES.tripBudget(model.tripId)}
+								icon="pie-chart-outline"
 								key={item.category}
 								label={formatStatus(item.category)}
 								right={formatMoney(item.amount, model.currency)}
 							/>
 						))}
+						{model.budget.categoryBreakdown.length >
+						visibleBudgetCategories.length ? (
+							<LinkButton href={VIYA_ROUTES.tripBudget(model.tripId)}>
+								Open full budget
+							</LinkButton>
+						) : null}
 					</View>
 				)}
 			</Section>
@@ -436,55 +759,75 @@ export function BudgetTab({ model }: { model: TripDashboardModel }) {
 	);
 }
 
-export function ViyaTab() {
-	const prompts = [
-		"What am I missing?",
-		"Check my readiness.",
-		"What should I do next?",
-		"Can I still afford this?",
-		"Create my recap.",
-	];
-
-	return (
-		<View className="gap-4">
-			<Section icon="sparkles-outline" title="Viya">
-				<Text color="muted" type="body-sm">
-					Viya should answer from this trip context and ask before applying
-					changes.
-				</Text>
-				<LinkButton href={VIYA_ROUTES.viya as Href} variant="primary">
-					Open Viya chat
-				</LinkButton>
-			</Section>
-			<Section icon="chatbubble-ellipses-outline" title="Useful Prompts">
-				<View className="flex-row flex-wrap gap-2">
-					{prompts.map((prompt) => (
-						<LinkButton href={VIYA_ROUTES.viya as Href} key={prompt}>
-							{prompt}
-						</LinkButton>
-					))}
-				</View>
-			</Section>
-		</View>
-	);
-}
-
 export function TravelTab({ model }: { model: TripDashboardModel }) {
+	const relatedEntityLabelByKey = getTripRelatedEntityLabelByKey(
+		model.workspace
+	);
+	const openRisks = model.workspace.risks.filter(
+		(risk) => risk.status === "open"
+	);
+	const visibleTravelRisks = openRisks.slice(0, dashboardPreviewLimit);
+	const visibleMissingAlerts = model.missingItems.slice(
+		0,
+		Math.max(0, dashboardPreviewLimit - visibleTravelRisks.length)
+	);
+	const visibleActiveDocuments = model.activeDocuments.slice(
+		0,
+		dashboardPreviewLimit
+	);
+	const travelAlertCount = openRisks.length + model.missingItems.length;
+
 	return (
 		<View className="gap-4">
 			<Section icon="navigate-outline" title="Travel Mode">
 				<TimelinePreview model={model} />
+				<View className="flex-row flex-wrap gap-2">
+					<LinkButton href={VIYA_ROUTES.tripTravelMode(model.tripId)}>
+						Open travel mode
+					</LinkButton>
+					<LinkButton href={VIYA_ROUTES.tripItinerary(model.tripId)}>
+						Adjust timeline
+					</LinkButton>
+				</View>
 			</Section>
-			<Section icon="warning-outline" title="Watch Out">
-				{model.watchOutItems.length === 0 ? (
-					<EmptyCopy icon="checkmark-circle-outline">
-						No active warnings.
+			<Section icon="warning-outline" title="Risk Alerts">
+				{travelAlertCount === 0 ? (
+					<EmptyCopy
+						actionHref={VIYA_ROUTES.tripRisks(model.tripId)}
+						actionLabel="Add risk"
+						icon="checkmark-circle-outline"
+					>
+						No active risks.
 					</EmptyCopy>
 				) : (
 					<View className="gap-2">
-						{model.watchOutItems.map((item) => (
-							<InfoRow icon="warning-outline" key={item} label={item} />
+						{visibleTravelRisks.map((risk) => (
+							<TravelAlertRow
+								actionLabel="Review risk"
+								detail={getRiskDetail(risk, relatedEntityLabelByKey)}
+								href={VIYA_ROUTES.tripRisks(model.tripId)}
+								icon="warning-outline"
+								key={risk._id}
+								label={risk.title}
+								right={formatStatus(risk.severity)}
+							/>
 						))}
+						{visibleMissingAlerts.map((item) => (
+							<TravelAlertRow
+								actionLabel="Fix gap"
+								detail={item.category}
+								href={item.href}
+								icon="flag-outline"
+								key={`${item.category}-${item.title}`}
+								label={item.title}
+							/>
+						))}
+						{travelAlertCount >
+						visibleTravelRisks.length + visibleMissingAlerts.length ? (
+							<LinkButton href={VIYA_ROUTES.tripRisks(model.tripId)}>
+								Open all alerts
+							</LinkButton>
+						) : null}
 					</View>
 				)}
 			</Section>
@@ -498,16 +841,26 @@ export function TravelTab({ model }: { model: TripDashboardModel }) {
 			</Section>
 			<Section icon="documents-outline" title="Important Documents">
 				{model.activeDocuments.length === 0 ? (
-					<EmptyCopy>No important documents uploaded yet.</EmptyCopy>
+					<EmptyCopy
+						actionHref={VIYA_ROUTES.tripVault(model.tripId)}
+						actionLabel="Upload document"
+					>
+						No important documents uploaded yet.
+					</EmptyCopy>
 				) : (
 					<View className="gap-2">
-						{model.activeDocuments.map((document) => (
+						{visibleActiveDocuments.map((document) => (
 							<InfoRow
 								icon="document-outline"
 								key={document}
 								label={document}
 							/>
 						))}
+						{model.activeDocuments.length > visibleActiveDocuments.length ? (
+							<LinkButton href={VIYA_ROUTES.tripVault(model.tripId)}>
+								Open all documents
+							</LinkButton>
+						) : null}
 					</View>
 				)}
 			</Section>
@@ -515,71 +868,301 @@ export function TravelTab({ model }: { model: TripDashboardModel }) {
 	);
 }
 
+export function RisksTab({ model }: { model: TripDashboardModel }) {
+	const relatedEntityLabelByKey = getTripRelatedEntityLabelByKey(
+		model.workspace
+	);
+	const openRisks = model.workspace.risks.filter(
+		(risk) => risk.status === "open"
+	);
+	const visibleOpenRisks = openRisks.slice(0, dashboardPreviewLimit);
+	const resolvedRisks = model.workspace.risks.filter(
+		(risk) => risk.status !== "open"
+	);
+	const visibleResolvedRisks = resolvedRisks.slice(0, dashboardPreviewLimit);
+
+	return (
+		<View className="gap-4">
+			<Section icon="warning-outline" title="Risks">
+				<Text color="muted" type="body-sm">
+					Track schedule, booking, budget, document, safety, and transport risks
+					before they affect the trip.
+				</Text>
+				<LinkButton href={VIYA_ROUTES.tripRisks(model.tripId)}>
+					Manage risks
+				</LinkButton>
+			</Section>
+			<Section icon="alert-circle-outline" title="Open Risks">
+				{openRisks.length === 0 ? (
+					<EmptyCopy
+						actionHref={VIYA_ROUTES.tripRisks(model.tripId)}
+						actionLabel="Add risk"
+						icon="checkmark-circle-outline"
+					>
+						No open risks right now.
+					</EmptyCopy>
+				) : (
+					<View className="gap-2">
+						{visibleOpenRisks.map((risk) => (
+							<DashboardPreviewActionRow
+								actionLabel="Open risk"
+								detail={getRiskDetail(risk, relatedEntityLabelByKey)}
+								href={VIYA_ROUTES.tripRisks(model.tripId)}
+								icon="warning-outline"
+								key={risk._id}
+								label={risk.title}
+								right={formatStatus(risk.severity)}
+							/>
+						))}
+						{openRisks.length > visibleOpenRisks.length ? (
+							<LinkButton href={VIYA_ROUTES.tripRisks(model.tripId)}>
+								Open all risks
+							</LinkButton>
+						) : null}
+					</View>
+				)}
+			</Section>
+			{resolvedRisks.length > 0 ? (
+				<Section icon="checkmark-done-outline" title="Resolved">
+					<View className="gap-2">
+						{visibleResolvedRisks.map((risk) => (
+							<DashboardPreviewActionRow
+								actionLabel="Review resolved risk"
+								detail={getRiskDetail(risk, relatedEntityLabelByKey)}
+								href={VIYA_ROUTES.tripRisks(model.tripId)}
+								icon="checkmark-circle-outline"
+								key={risk._id}
+								label={risk.title}
+								right={formatStatus(risk.status)}
+							/>
+						))}
+						{resolvedRisks.length > visibleResolvedRisks.length ? (
+							<LinkButton href={VIYA_ROUTES.tripRisks(model.tripId)}>
+								Review resolved risks
+							</LinkButton>
+						) : null}
+					</View>
+				</Section>
+			) : null}
+		</View>
+	);
+}
+
+export function CompanionsTab({ model }: { model: TripDashboardModel }) {
+	const visibleCompanions = model.workspace.companions.slice(
+		0,
+		dashboardPreviewLimit
+	);
+
+	return (
+		<View className="gap-4">
+			<Section icon="people-outline" title="Companions">
+				<Text color="muted" type="body-sm">
+					Keep travelers, organizers, emergency contacts, and role notes close
+					to the plan.
+				</Text>
+				<LinkButton href={VIYA_ROUTES.tripCompanions(model.tripId)}>
+					Manage companions
+				</LinkButton>
+			</Section>
+			{model.workspace.companions.length === 0 ? (
+				<EmptyCopy
+					actionHref={VIYA_ROUTES.tripCompanions(model.tripId)}
+					actionLabel="Add companion"
+					icon="people-outline"
+				>
+					No companions added yet.
+				</EmptyCopy>
+			) : (
+				<Section icon="person-circle-outline" title="Travel Party">
+					<View className="gap-2">
+						{visibleCompanions.map((companion) => (
+							<DashboardPreviewActionRow
+								actionLabel="Open companion"
+								detail={getCompanionDetail(companion)}
+								href={VIYA_ROUTES.tripCompanions(model.tripId)}
+								icon="person-outline"
+								key={companion._id}
+								label={companion.name}
+								right={formatStatus(companion.role)}
+							/>
+						))}
+						{model.workspace.companions.length > visibleCompanions.length ? (
+							<LinkButton href={VIYA_ROUTES.tripCompanions(model.tripId)}>
+								Open all companions
+							</LinkButton>
+						) : null}
+					</View>
+				</Section>
+			)}
+		</View>
+	);
+}
+
+export function NotesTab({ model }: { model: TripDashboardModel }) {
+	const visibleNotes = model.workspace.notes.slice(0, dashboardPreviewLimit);
+	const relatedEntityLabelByKey = getTripRelatedEntityLabelByKey(
+		model.workspace
+	);
+
+	return (
+		<View className="gap-4">
+			<Section icon="document-text-outline" title="Notes">
+				<Text color="muted" type="body-sm">
+					Save decisions, reminders, constraints, and shared planning context
+					for the whole trip.
+				</Text>
+				<LinkButton href={VIYA_ROUTES.tripNotes(model.tripId)}>
+					Manage notes
+				</LinkButton>
+			</Section>
+			{model.workspace.notes.length === 0 ? (
+				<EmptyCopy
+					actionHref={VIYA_ROUTES.tripNotes(model.tripId)}
+					actionLabel="Add note"
+					icon="document-text-outline"
+				>
+					No notes saved yet.
+				</EmptyCopy>
+			) : (
+				<View className="gap-2">
+					{visibleNotes.map((note) => {
+						const relatedLabel = getNoteRelatedLabel(
+							note,
+							relatedEntityLabelByKey
+						);
+
+						return (
+							<DashboardPreviewActionRow
+								actionLabel="Open note"
+								detail={[relatedLabel, getNotePreview(note)]
+									.filter(Boolean)
+									.join(" - ")}
+								href={VIYA_ROUTES.tripNotes(model.tripId)}
+								icon="reader-outline"
+								key={note._id}
+								label={note.title}
+								right={formatStatus(note.category)}
+							/>
+						);
+					})}
+					{model.workspace.notes.length > visibleNotes.length ? (
+						<LinkButton href={VIYA_ROUTES.tripNotes(model.tripId)}>
+							Open all notes
+						</LinkButton>
+					) : null}
+				</View>
+			)}
+		</View>
+	);
+}
+
 export function MemoriesTab({ model }: { model: TripDashboardModel }) {
+	const visibleMoments = model.workspace.moments.slice(
+		0,
+		dashboardPreviewLimit
+	);
+
 	return (
 		<View className="gap-4">
 			<Section icon="images-outline" title="Memories">
 				<Text color="muted" type="body-sm">
 					Capture moments during the trip. They become the recap source.
 				</Text>
-				<LinkButton href={VIYA_ROUTES.viya as Href}>Add with Viya</LinkButton>
+				<LinkButton href={VIYA_ROUTES.tripMoments(model.tripId)}>
+					Add memory
+				</LinkButton>
 			</Section>
 			{model.workspace.moments.length === 0 ? (
-				<EmptyCopy icon="images-outline">No memories yet.</EmptyCopy>
+				<EmptyCopy
+					actionHref={VIYA_ROUTES.tripMoments(model.tripId)}
+					actionLabel="Add memory"
+					icon="images-outline"
+				>
+					No memories yet.
+				</EmptyCopy>
 			) : (
-				model.workspace.moments.map((moment) => (
-					<Section icon="image-outline" key={moment._id} title={moment.title}>
-						<Text color="muted" type="body-sm">
-							{moment.locationName || "Location TBD"} -{" "}
-							{updateDateFormatter.format(new Date(moment.createdAt))}
-						</Text>
-						<Text.Paragraph color="muted" type="body-sm">
-							{moment.note || moment.caption}
-						</Text.Paragraph>
-						{moment.isHighlight ? (
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>Highlight</Chip.Label>
-							</Chip>
-						) : null}
-					</Section>
-				))
+				<View className="gap-2">
+					{visibleMoments.map((moment) => (
+						<DashboardPreviewActionRow
+							actionLabel="Open memory"
+							detail={[
+								moment.locationName || "Location TBD",
+								updateDateFormatter.format(new Date(moment.createdAt)),
+								getMomentPreview(moment),
+							].join(" - ")}
+							href={VIYA_ROUTES.tripMoments(model.tripId)}
+							icon="image-outline"
+							key={moment._id}
+							label={moment.title}
+							right={moment.isHighlight ? "Highlight" : undefined}
+						/>
+					))}
+					{model.workspace.moments.length > visibleMoments.length ? (
+						<LinkButton href={VIYA_ROUTES.tripMoments(model.tripId)}>
+							Open all memories
+						</LinkButton>
+					) : null}
+				</View>
 			)}
 		</View>
 	);
 }
 
 export function RecapTab({ model }: { model: TripDashboardModel }) {
+	const visibleHighlights = model.highlights.slice(0, dashboardPreviewLimit);
+
 	return (
 		<View className="gap-4">
 			<Section icon="share-social-outline" title="Recap">
 				<Text.Paragraph color="muted" type="body-sm">
-					{model.workspace.trip.summary}
+					{getTripSummaryPreview(model.workspace.trip)}
 				</Text.Paragraph>
 				<View className="flex-row flex-wrap gap-2">
-					<LinkButton href={VIYA_ROUTES.viya as Href}>
-						Generate with Viya
+					<LinkButton href={VIYA_ROUTES.tripMoments(model.tripId)}>
+						Edit moments
 					</LinkButton>
-					<LinkButton href={VIYA_ROUTES.viya as Href}>
-						Draft captions
+					<LinkButton href={VIYA_ROUTES.tripWrapped(model.tripId)}>
+						Open recap
 					</LinkButton>
 				</View>
 			</Section>
 			<Section icon="star-outline" title="Highlights">
 				{model.highlights.length === 0 ? (
-					<EmptyCopy>Highlights will come from saved memories.</EmptyCopy>
+					<EmptyCopy
+						actionHref={VIYA_ROUTES.tripMoments(model.tripId)}
+						actionLabel="Add highlight"
+					>
+						Highlights will come from saved memories.
+					</EmptyCopy>
 				) : (
 					<View className="gap-2">
-						{model.highlights.map((highlight) => (
-							<InfoRow icon="star-outline" key={highlight} label={highlight} />
+						{visibleHighlights.map((highlight) => (
+							<DashboardPreviewActionRow
+								actionLabel="Open highlight"
+								detail="Included in the trip recap"
+								href={VIYA_ROUTES.tripWrapped(model.tripId)}
+								icon="star-outline"
+								key={highlight}
+								label={highlight}
+							/>
 						))}
+						{model.highlights.length > visibleHighlights.length ? (
+							<LinkButton href={VIYA_ROUTES.tripWrapped(model.tripId)}>
+								Open full recap
+							</LinkButton>
+						) : null}
 					</View>
 				)}
 			</Section>
 			<Section icon="cash-outline" title="Spend Summary">
-				<InfoRow
+				<DashboardPreviewActionRow
+					actionLabel="Review recap spend"
 					detail="Tracked spend"
+					href={VIYA_ROUTES.tripBudget(model.tripId)}
 					icon="cash-outline"
 					label={formatMoney(model.budget.totalTrackedSpend, model.currency)}
+					right={model.budget.status}
 				/>
 			</Section>
 		</View>
@@ -623,8 +1206,16 @@ export function TripTabContent({
 		return <BudgetTab model={model} />;
 	}
 
-	if (activeTab === "viya") {
-		return <ViyaTab />;
+	if (activeTab === "risks") {
+		return <RisksTab model={model} />;
+	}
+
+	if (activeTab === "companions") {
+		return <CompanionsTab model={model} />;
+	}
+
+	if (activeTab === "notes") {
+		return <NotesTab model={model} />;
 	}
 
 	if (activeTab === "travel") {

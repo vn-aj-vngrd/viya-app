@@ -8,13 +8,13 @@ import { EmptyState } from "@/src/components/empty-state";
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 
 import {
-	FloatingAskViyaBar,
 	MainModules,
-	TripAgentDraftPanel,
 	TripHero,
+	TripModuleNavigationBar,
 	TripStickyHeader,
 	TripTabPicker,
 } from "./trip-dashboard-components";
+import { shouldShowTripDashboardFocusSections } from "./trip-dashboard-layout";
 import { TripTabContent } from "./trip-dashboard-tabs";
 import type { TripTab, TripWorkspace } from "./trip-dashboard-types";
 import { createTripDashboardModel } from "./trip-dashboard-utils";
@@ -31,7 +31,7 @@ export function TripDashboardScreen({
 		tripId ? { tripId } : "skip"
 	);
 	const [activeTab, setActiveTab] = useState<TripTab>(initialTab);
-	const shouldShowFocusSections = initialTab !== "overview";
+	const shouldShowFocusSections = shouldShowTripDashboardFocusSections();
 
 	const model = useMemo(() => {
 		if (!(tripId && workspace)) {
@@ -56,6 +56,18 @@ export function TripDashboardScreen({
 		);
 	}
 
+	if (workspace === null) {
+		return (
+			<Container className="px-4 pb-28">
+				<EmptyState
+					description="This trip was deleted or is no longer available."
+					icon="map-outline"
+					title="Trip not found"
+				/>
+			</Container>
+		);
+	}
+
 	if (workspace === undefined || !model) {
 		return <ScreenLoadingState />;
 	}
@@ -70,7 +82,6 @@ export function TripDashboardScreen({
 			>
 				<View className="gap-3 pb-28">
 					<TripHero model={model} />
-					<TripAgentDraftPanel model={model} />
 					<MainModules model={model} />
 					{shouldShowFocusSections ? (
 						<>
@@ -88,7 +99,7 @@ export function TripDashboardScreen({
 					) : null}
 				</View>
 			</Container>
-			<FloatingAskViyaBar activeTab={activeTab} model={model} />
+			<TripModuleNavigationBar activeTab={activeTab} model={model} />
 		</View>
 	);
 }

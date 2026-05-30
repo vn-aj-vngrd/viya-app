@@ -92,6 +92,17 @@ export const getDateRangeDurationDays = (
 	);
 };
 
+export const getCalendarDayOffset = (targetDate: string) => {
+	const target = getUtcDate(targetDate);
+	const today = getUtcDate(new Date().toISOString().slice(0, 10));
+
+	if (!(target && today)) {
+		return null;
+	}
+
+	return Math.round((target.getTime() - today.getTime()) / dateMs);
+};
+
 export const formatReadableTripDateRange = ({
 	endDate,
 	fallbackLabel = "Dates TBD",

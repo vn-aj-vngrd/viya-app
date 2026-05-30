@@ -6,6 +6,7 @@ import {
 	READINESS_CATEGORY_LABELS,
 	type ReadinessCategory,
 } from "@viya-app/domain";
+import { type Href, Link } from "expo-router";
 import { Button, Surface, Text } from "heroui-native";
 import { View } from "react-native";
 
@@ -36,6 +37,8 @@ function RowPill({ label }: { label: string }) {
 }
 
 interface ReadinessItemRowProps {
+	assignedToName?: string;
+	categoryHref: Href | null;
 	item: Doc<"readinessItems">;
 	onDelete: (readinessItemId: Id<"readinessItems">) => void;
 	onEdit: (item: Doc<"readinessItems">) => void;
@@ -43,19 +46,26 @@ interface ReadinessItemRowProps {
 		readinessItemId: Id<"readinessItems">,
 		status: (typeof statusOptions)[number]
 	) => void;
+	ownerHref: Href | null;
 }
 
 export function ReadinessItemRow({
+	assignedToName,
+	categoryHref,
 	item,
 	onDelete,
 	onEdit,
+	ownerHref,
 	onStatusChange,
 }: ReadinessItemRowProps) {
 	return (
 		<Surface className="gap-3 rounded-[24px] border border-border bg-surface p-4">
 			<View className="flex-row items-start gap-3">
-				<View className="h-9 w-9 items-center justify-center rounded-full bg-primary/10">
-					<Ionicons color="#0A84FF" name="checkmark-circle-outline" size={18} />
+				<View
+					className="h-9 w-9 items-center justify-center rounded-full"
+					style={{ backgroundColor: "rgba(94, 92, 230, 0.12)" }}
+				>
+					<Ionicons color="#5E5CE6" name="checkmark-circle-outline" size={18} />
 				</View>
 				<View className="flex-1 gap-2">
 					<View className="flex-row flex-wrap gap-2">
@@ -65,6 +75,7 @@ export function ReadinessItemRow({
 							}
 						/>
 						<RowPill label={PRIORITY_LABELS[item.priority as Priority]} />
+						<RowPill label={assignedToName ?? "Unassigned"} />
 					</View>
 					<Text type="body-sm" weight="bold">
 						{item.title}
@@ -112,6 +123,22 @@ export function ReadinessItemRow({
 				)}
 			</View>
 			<View className="flex-row flex-wrap gap-2">
+				{categoryHref ? (
+					<Link asChild href={categoryHref}>
+						<Button className="flex-1" size="sm" variant="secondary">
+							<Ionicons color="#0A84FF" name="open-outline" size={15} />
+							<Button.Label>Open category</Button.Label>
+						</Button>
+					</Link>
+				) : null}
+				{ownerHref ? (
+					<Link asChild href={ownerHref}>
+						<Button className="flex-1" size="sm" variant="secondary">
+							<Ionicons color="#0A84FF" name="people-outline" size={15} />
+							<Button.Label>Open owner</Button.Label>
+						</Button>
+					</Link>
+				) : null}
 				<Button
 					className="flex-1"
 					onPress={() => onEdit(item)}

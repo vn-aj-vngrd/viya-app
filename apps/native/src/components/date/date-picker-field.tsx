@@ -298,6 +298,52 @@ function DateTriggerField({
 	);
 }
 
+function DateRangeButtonTrigger({
+	className,
+	iconColor = selectedDateColor,
+	isDisabled,
+	label,
+	onOpen,
+	placeholder,
+	valueLabel,
+}: {
+	className?: string;
+	iconColor?: string;
+	isDisabled?: boolean;
+	label: string;
+	onOpen: () => void;
+	placeholder: string;
+	valueLabel: string | null;
+}) {
+	return (
+		<Pressable
+			accessibilityLabel={label}
+			accessibilityRole="button"
+			className={
+				className ??
+				"h-11 flex-row items-center gap-2 self-start rounded-full border border-border/70 bg-white px-3"
+			}
+			disabled={isDisabled}
+			onPress={onOpen}
+			style={({ pressed }) => ({
+				opacity: isDisabled ? 0.5 : 1,
+				transform: [{ scale: pressed && !isDisabled ? 0.98 : 1 }],
+			})}
+		>
+			<Ionicons color={iconColor} name="calendar-outline" size={17} />
+			<Text
+				className="min-w-0 flex-1"
+				numberOfLines={1}
+				type="body-sm"
+				weight="semibold"
+			>
+				{valueLabel ?? placeholder}
+			</Text>
+			<Ionicons color="#71717A" name="chevron-down" size={14} />
+		</Pressable>
+	);
+}
+
 interface DatePickerFieldProps {
 	accentColor?: string;
 	dateDisplayFormat?: DateDisplayFormat;
@@ -420,6 +466,7 @@ export function DatePickerField({
 
 interface DateRangePickerFieldProps {
 	accentColor?: string;
+	className?: string;
 	dateDisplayFormat?: DateDisplayFormat;
 	errorText?: string;
 	formatDateRange?: (start: Date, end: Date) => string;
@@ -436,10 +483,14 @@ interface DateRangePickerFieldProps {
 	placeholder?: string;
 	presentation?: Presentation;
 	rangeSeparator?: string;
+	triggerClassName?: string;
+	triggerIconColor?: string;
+	triggerVariant?: "button" | "field";
 	value: DateRangeValue;
 }
 
 export function DateRangePickerField({
+	className,
 	dateDisplayFormat = "medium",
 	errorText,
 	formatDateRange,
@@ -455,6 +506,9 @@ export function DateRangePickerField({
 	onValueChange,
 	placeholder = "Choose a date range",
 	rangeSeparator = "–",
+	triggerClassName,
+	triggerIconColor,
+	triggerVariant = "field",
 	value,
 }: DateRangePickerFieldProps) {
 	const insets = useSafeAreaInsets();
@@ -501,23 +555,37 @@ export function DateRangePickerField({
 	};
 
 	return (
-		<TextField className="gap-2">
-			<Label>
-				<RequiredLabelText isRequired={isRequired} label={label} />
-			</Label>
-			<DateTriggerField
-				isDisabled={isDisabled}
-				isInvalid={isInvalid}
-				label={label}
-				onOpen={() => updateOpen(true)}
-				placeholder={placeholder}
-				valueLabel={valueLabel}
-			/>
-			<FieldHelperText
-				errorText={errorText}
-				helperText={helperText}
-				isInvalid={isInvalid}
-			/>
+		<TextField className={className ?? "gap-2"}>
+			{triggerVariant === "field" ? (
+				<>
+					<Label>
+						<RequiredLabelText isRequired={isRequired} label={label} />
+					</Label>
+					<DateTriggerField
+						isDisabled={isDisabled}
+						isInvalid={isInvalid}
+						label={label}
+						onOpen={() => updateOpen(true)}
+						placeholder={placeholder}
+						valueLabel={valueLabel}
+					/>
+					<FieldHelperText
+						errorText={errorText}
+						helperText={helperText}
+						isInvalid={isInvalid}
+					/>
+				</>
+			) : (
+				<DateRangeButtonTrigger
+					className={triggerClassName}
+					iconColor={triggerIconColor}
+					isDisabled={isDisabled}
+					label={label}
+					onOpen={() => updateOpen(true)}
+					placeholder={placeholder}
+					valueLabel={valueLabel}
+				/>
+			)}
 
 			<BottomSheet isOpen={isOpen} onOpenChange={updateOpen}>
 				<BottomSheet.Portal>

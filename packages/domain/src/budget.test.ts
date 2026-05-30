@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getBudgetWalletSummary } from "./budget";
+import { getBudgetWalletSummary, sortTripExpensesForReview } from "./budget";
 
 describe("budget wallet selectors", () => {
 	it("combines confirmed bookings and manual expenses", () => {
@@ -46,5 +46,71 @@ describe("budget wallet selectors", () => {
 			{ amount: 750, category: "food" },
 		]);
 		expect(summary.dailySafeSpend).toBe(4250);
+	});
+
+	it("orders category spend by highest amount first", () => {
+		const summary = getBudgetWalletSummary({
+			bookings: [
+				{ cost: 900, currency: "PHP", status: "confirmed", type: "food" },
+				{ cost: 4500, currency: "PHP", status: "confirmed", type: "hotel" },
+			],
+			budgetAmount: 10_000,
+			budgetCurrency: "PHP",
+			expenses: [
+				{ amount: 600, category: "food", currency: "PHP" },
+				{ amount: 1500, category: "transport", currency: "PHP" },
+			],
+			itineraryItems: [],
+			remainingTripDays: 2,
+		});
+
+		expect(summary.categoryBreakdown).toEqual([
+			{ amount: 4500, category: "hotel" },
+			{ amount: 1500, category: "food" },
+			{ amount: 1500, category: "transport" },
+		]);
+	});
+
+	it("orders expenses by newest spend date and latest update first", () => {
+		const expenses = [
+			{
+				_id: "older",
+				createdAt: 10,
+				spentAt: "2026-04-02",
+				title: "Older ferry",
+				updatedAt: 20,
+			},
+			{
+				_id: "newer-edit",
+				createdAt: 11,
+				spentAt: "2026-04-03",
+				title: "Dinner",
+				updatedAt: 80,
+			},
+			{
+				_id: "newer-date",
+				createdAt: 12,
+				spentAt: "2026-04-04",
+				title: "Museum",
+				updatedAt: 30,
+			},
+			{
+				_id: "same-date-older-edit",
+				createdAt: 13,
+				spentAt: "2026-04-03",
+				title: "Train",
+				updatedAt: 40,
+			},
+		] as const;
+
+		expect(
+			sortTripExpensesForReview(expenses).map((expense) => expense._id)
+		).toEqual(["newer-date", "newer-edit", "same-date-older-edit", "older"]);
+		expect(expenses.map((expense) => expense._id)).toEqual([
+			"older",
+			"newer-edit",
+			"newer-date",
+			"same-date-older-edit",
+		]);
 	});
 });

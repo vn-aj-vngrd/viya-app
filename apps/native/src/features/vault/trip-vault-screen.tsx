@@ -1,6 +1,8 @@
+import { Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
+import type { Href } from "expo-router";
 import { Link } from "expo-router";
 import {
 	BottomSheet,
@@ -15,7 +17,7 @@ import {
 } from "heroui-native";
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { ScrollView, View } from "react-native";
+import { Linking, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Container } from "@/components/container";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
@@ -24,7 +26,15 @@ import { RouteHeader } from "@/src/components/navigation/route-header";
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 import { TripModuleScreenFrame } from "@/src/features/trips/trip-module-floating-bar";
-import { TripModuleViyaAssistCard } from "@/src/features/trips/trip-module-viya-assist-card";
+import { TripModuleManualEntryCard } from "@/src/features/trips/trip-module-manual-entry-card";
+import {
+	getLinkedEntityMutationFields,
+	getRelatedEntityKey,
+	getTripRelatedEntityLabel,
+	getTripRelatedEntityLabelByKey,
+	getTripRelatedEntityOptions,
+	type TripRelatedEntityOption,
+} from "@/src/features/trips/trip-related-entities";
 import { useTripIdParam } from "@/src/features/trips/use-trip-id-param";
 import { TripSyncReviewSheet } from "./tripsync-review-sheet";
 import type { PendingTripSyncReview } from "./tripsync-types";
@@ -33,18 +43,14 @@ import { VaultPreviewCard } from "./vault-preview-card";
 
 interface VaultForm {
 	kind: string;
-	linkedEntityId: string;
-	linkedEntityType: string;
 	note: string;
+	relatedEntityKey: string;
 	title: string;
 }
 
-interface VaultLinkOption {
-	detail: string;
-	id: string;
-	label: string;
-	type: "booking" | "travelDocument" | "moment" | "readinessItem";
-}
+type VaultListItem = Doc<"vaultItems"> & {
+	url?: string | null;
+};
 
 type VaultKind =
 	| "booking"
@@ -54,19 +60,65 @@ type VaultKind =
 	| "noteAttachment"
 	| "other";
 
-const vaultKinds = new Set<string>([
+const vaultKindOptions = [
 	"booking",
 	"document",
 	"momentPhoto",
 	"receipt",
 	"noteAttachment",
 	"other",
-]);
+] as const;
+
+const vaultKinds = new Set<string>(vaultKindOptions);
 
 const getVaultKind = (value: string): VaultKind => {
 	const kind = value.trim();
 
 	return vaultKinds.has(kind) ? (kind as VaultKind) : "other";
+};
+
+const formatVaultKindLabel = (value: string) =>
+	value
+		.replaceAll("_", " ")
+		.replaceAll(/([a-z])([A-Z])/g, "$1 $2")
+		.split(" ")
+		.filter(Boolean)
+		.map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
+		.join(" ");
+
+const getVaultRelatedHref = ({
+	relatedEntityType,
+	tripId,
+}: {
+	relatedEntityType?: string;
+	tripId: Id<"trips">;
+}): Href | null => {
+	switch (relatedEntityType) {
+		case "booking":
+			return VIYA_ROUTES.tripBookings(tripId);
+		case "companion":
+			return VIYA_ROUTES.tripCompanions(tripId);
+		case "expense":
+			return VIYA_ROUTES.tripBudget(tripId);
+		case "itineraryDay":
+		case "itineraryItem":
+			return VIYA_ROUTES.tripItinerary(tripId);
+		case "moment":
+			return VIYA_ROUTES.tripMoments(tripId);
+		case "readinessItem":
+			return VIYA_ROUTES.tripReadiness(tripId);
+		case "risk":
+			return VIYA_ROUTES.tripRisks(tripId);
+		case "savedPlace":
+			return VIYA_ROUTES.tripPlaces(tripId);
+		case "travelDocument":
+		case "vaultItem":
+			return VIYA_ROUTES.tripVault(tripId);
+		case "tripNote":
+			return VIYA_ROUTES.tripNotes(tripId);
+		default:
+			return null;
+	}
 };
 
 function SheetField({
@@ -110,7 +162,36 @@ function VaultPill({ children }: { children: ReactNode }) {
 	);
 }
 
+function VaultKindPicker({
+	onChange,
+	value,
+}: {
+	onChange: (value: string) => void;
+	value: string;
+}) {
+	return (
+		<View className="gap-2">
+			<Text color="muted" type="body-xs" weight="semibold">
+				KIND
+			</Text>
+			<View className="flex-row flex-wrap gap-2">
+				{vaultKindOptions.map((kind) => (
+					<Button
+						key={kind}
+						onPress={() => onChange(kind)}
+						size="sm"
+						variant={value === kind ? "primary" : "secondary"}
+					>
+						<Button.Label>{formatVaultKindLabel(kind)}</Button.Label>
+					</Button>
+				))}
+			</View>
+		</View>
+	);
+}
+
 function VaultEditSheet({
+	errorMessage,
 	form,
 	isOpen,
 	isSaving,
@@ -119,10 +200,11 @@ function VaultEditSheet({
 	onSubmit,
 	onUpdateForm,
 }: {
+	errorMessage: string | null;
 	form: VaultForm;
 	isOpen: boolean;
 	isSaving: boolean;
-	linkOptions: VaultLinkOption[];
+	linkOptions: TripRelatedEntityOption[];
 	onOpenChange: (isOpen: boolean) => void;
 	onSubmit: () => void;
 	onUpdateForm: (key: keyof VaultForm, value: string) => void;
@@ -161,10 +243,8 @@ function VaultEditSheet({
 							placeholder="Hotel confirmation"
 							value={form.title}
 						/>
-						<SheetField
-							label="Kind"
-							onChangeText={(value) => onUpdateForm("kind", value)}
-							placeholder="booking, document, receipt"
+						<VaultKindPicker
+							onChange={(value) => onUpdateForm("kind", value)}
 							value={form.kind}
 						/>
 						<SheetField
@@ -190,25 +270,21 @@ function VaultEditSheet({
 								>
 									<Button
 										onPress={() => {
-											onUpdateForm("linkedEntityId", "");
-											onUpdateForm("linkedEntityType", "");
+											onUpdateForm("relatedEntityKey", "");
 										}}
 										size="sm"
-										variant={form.linkedEntityId ? "secondary" : "primary"}
+										variant={form.relatedEntityKey ? "secondary" : "primary"}
 									>
 										<Button.Label>No linked item</Button.Label>
 									</Button>
 									{linkOptions.map((option) => {
-										const isSelected =
-											form.linkedEntityId === option.id &&
-											form.linkedEntityType === option.type;
+										const isSelected = form.relatedEntityKey === option.key;
 
 										return (
 											<Button
-												key={`${option.type}:${option.id}`}
+												key={option.key}
 												onPress={() => {
-													onUpdateForm("linkedEntityId", option.id);
-													onUpdateForm("linkedEntityType", option.type);
+													onUpdateForm("relatedEntityKey", option.key);
 												}}
 												size="sm"
 												variant={isSelected ? "primary" : "secondary"}
@@ -222,6 +298,11 @@ function VaultEditSheet({
 								</ScrollView>
 							)}
 						</View>
+						{errorMessage ? (
+							<Text className="text-danger" type="body-sm">
+								{errorMessage}
+							</Text>
+						) : null}
 						<Button isDisabled={isSaving} onPress={onSubmit} size="lg">
 							{isSaving ? <Spinner size="sm" /> : null}
 							<Button.Label>Save item</Button.Label>
@@ -230,6 +311,91 @@ function VaultEditSheet({
 				</BottomSheet.Content>
 			</BottomSheet.Portal>
 		</BottomSheet>
+	);
+}
+
+function LatestVaultFileSummary({
+	handleOpenVaultFile,
+	isUploading,
+	latestFile,
+	latestFileRelatedHref,
+	openEditSheet,
+	onUploadFirstFile,
+}: {
+	handleOpenVaultFile: (url?: string | null) => Promise<void>;
+	isUploading: boolean;
+	latestFile: VaultListItem | null;
+	latestFileRelatedHref: Href | null;
+	openEditSheet: (item: VaultListItem) => void;
+	onUploadFirstFile: () => void;
+}) {
+	return (
+		<View className="gap-3 rounded-[24px] bg-surface p-4">
+			<View className="flex-row items-center gap-3">
+				<View
+					className="h-9 w-9 items-center justify-center rounded-full"
+					style={{ backgroundColor: "rgba(90, 200, 250, 0.16)" }}
+				>
+					<Ionicons color="#5AC8FA" name="document-attach-outline" size={18} />
+				</View>
+				<View className="min-w-0 flex-1 gap-1">
+					<Text color="muted" type="body-xs" weight="semibold">
+						LATEST FILE
+					</Text>
+					<Text numberOfLines={1} type="body-sm" weight="bold">
+						{latestFile?.title ?? "No file synced yet"}
+					</Text>
+				</View>
+			</View>
+			<Text color="muted" numberOfLines={2} type="body-sm">
+				{latestFile
+					? `${formatVaultKindLabel(latestFile.kind)} · ${
+							latestFile.linkedEntityType
+								? "Linked to trip context"
+								: "Ready to link"
+						}`
+					: "Upload a booking, document, receipt, or screenshot to start the vault."}
+			</Text>
+			{latestFile ? (
+				<View className="flex-row flex-wrap gap-2">
+					<Button
+						className="flex-1"
+						onPress={() => {
+							handleOpenVaultFile(latestFile.url).catch(() => undefined);
+						}}
+						size="sm"
+					>
+						<Ionicons color="#FFFFFF" name="open-outline" size={16} />
+						<Button.Label>Open latest file</Button.Label>
+					</Button>
+					<Button
+						className="flex-1"
+						onPress={() => openEditSheet(latestFile)}
+						size="sm"
+						variant="secondary"
+					>
+						<Ionicons color="#0A84FF" name="create-outline" size={16} />
+						<Button.Label>Edit latest file</Button.Label>
+					</Button>
+					{latestFileRelatedHref ? (
+						<Link asChild href={latestFileRelatedHref}>
+							<Button className="w-full" size="sm" variant="secondary">
+								<Ionicons color="#0A84FF" name="git-branch-outline" size={16} />
+								<Button.Label>Open latest link</Button.Label>
+							</Button>
+						</Link>
+					) : null}
+				</View>
+			) : (
+				<Button isDisabled={isUploading} onPress={onUploadFirstFile} size="sm">
+					{isUploading ? <Spinner size="sm" /> : null}
+					<Ionicons color="#FFFFFF" name="cloud-upload-outline" size={16} />
+					<Button.Label>
+						{isUploading ? "Uploading..." : "Upload first file"}
+					</Button.Label>
+				</Button>
+			)}
+		</View>
 	);
 }
 
@@ -246,16 +412,19 @@ export function TripVaultScreen() {
 	const confirmTripSyncReview = useMutation(api.vault.confirmTripSyncReview);
 	const deleteVaultItem = useMutation(api.vault.deleteVaultItem);
 	const updateVaultItem = useMutation(api.vault.updateVaultItem);
-	const { errorMessage, isUploading, pickDocument, pickPhoto } =
-		useVaultUpload();
+	const {
+		errorMessage: uploadErrorMessage,
+		isUploading,
+		pickDocument,
+		pickPhoto,
+	} = useVaultUpload();
 	const [editingItemId, setEditingItemId] = useState<Id<"vaultItems"> | null>(
 		null
 	);
 	const [editForm, setEditForm] = useState<VaultForm>({
 		kind: "document",
-		linkedEntityId: "",
-		linkedEntityType: "",
 		note: "",
+		relatedEntityKey: "",
 		title: "",
 	});
 	const [pendingReview, setPendingReview] =
@@ -263,6 +432,12 @@ export function TripVaultScreen() {
 	const [isConfirming, setIsConfirming] = useState(false);
 	const [isSavingEdit, setIsSavingEdit] = useState(false);
 	const [didSync, setDidSync] = useState(false);
+	const [vaultErrorMessage, setVaultErrorMessage] = useState<string | null>(
+		null
+	);
+	const [openFileErrorMessage, setOpenFileErrorMessage] = useState<
+		string | null
+	>(null);
 
 	if (!tripId) {
 		return (
@@ -281,6 +456,7 @@ export function TripVaultScreen() {
 	}
 
 	const handleUpload = async (kind: "booking" | "document" | "receipt") => {
+		setVaultErrorMessage(null);
 		const review = await pickDocument({ kind, tripId });
 		if (review) {
 			setPendingReview(review);
@@ -289,6 +465,7 @@ export function TripVaultScreen() {
 	};
 
 	const handlePhotoUpload = async () => {
+		setVaultErrorMessage(null);
 		const review = await pickPhoto({ tripId });
 		if (review) {
 			setPendingReview(review);
@@ -301,6 +478,7 @@ export function TripVaultScreen() {
 			return;
 		}
 
+		setVaultErrorMessage(null);
 		setIsConfirming(true);
 		try {
 			await confirmTripSyncReview({
@@ -314,18 +492,23 @@ export function TripVaultScreen() {
 			});
 			setPendingReview(null);
 			setDidSync(true);
+		} catch {
+			setVaultErrorMessage("Could not save TripSync review.");
 		} finally {
 			setIsConfirming(false);
 		}
 	};
 
 	const openEditSheet = (item: Doc<"vaultItems">) => {
+		setVaultErrorMessage(null);
 		setEditingItemId(item._id);
 		setEditForm({
 			kind: item.kind,
-			linkedEntityId: item.linkedEntityId ?? "",
-			linkedEntityType: item.linkedEntityType ?? "",
 			note: item.note ?? "",
+			relatedEntityKey: getRelatedEntityKey({
+				id: item.linkedEntityId,
+				type: item.linkedEntityType,
+			}),
 			title: item.title,
 		});
 	};
@@ -337,64 +520,98 @@ export function TripVaultScreen() {
 
 		const title = editForm.title.trim();
 		if (!title) {
+			setVaultErrorMessage("Add a file title.");
 			return;
 		}
 
+		setVaultErrorMessage(null);
 		setIsSavingEdit(true);
 		try {
+			const linkedEntityFields = getLinkedEntityMutationFields({
+				relatedEntityKey: editForm.relatedEntityKey,
+				shouldClear: true,
+			});
 			await updateVaultItem({
 				kind: getVaultKind(editForm.kind),
-				linkedEntityId: editForm.linkedEntityId.trim() || undefined,
-				linkedEntityType: editForm.linkedEntityType.trim() || undefined,
+				...linkedEntityFields,
 				note: editForm.note.trim() || undefined,
 				title,
 				vaultItemId: editingItemId,
 			});
 			setEditingItemId(null);
+		} catch {
+			setVaultErrorMessage("Could not save vault item.");
 		} finally {
 			setIsSavingEdit(false);
 		}
 	};
+	const handleDeleteVaultItem = async (vaultItemId: Id<"vaultItems">) => {
+		setVaultErrorMessage(null);
+		try {
+			await deleteVaultItem({ vaultItemId });
+		} catch {
+			setVaultErrorMessage("Could not delete vault item.");
+		}
+	};
+	const handleOpenVaultFile = async (url?: string | null) => {
+		if (!url) {
+			setOpenFileErrorMessage("File preview is not available yet.");
+			return;
+		}
 
-	const linkOptions: VaultLinkOption[] = workspace
-		? [
-				...workspace.bookings.map((booking) => ({
-					detail: booking.type,
-					id: booking._id,
-					label: booking.title,
-					type: "booking" as const,
-				})),
-				...workspace.documents.map((document) => ({
-					detail: document.type,
-					id: document._id,
-					label: document.title,
-					type: "travelDocument" as const,
-				})),
-				...workspace.moments.map((moment) => ({
-					detail: moment.locationName || "Moment",
-					id: moment._id,
-					label: moment.title,
-					type: "moment" as const,
-				})),
-				...workspace.readinessItems.map((item) => ({
-					detail: item.category,
-					id: item._id,
-					label: item.title,
-					type: "readinessItem" as const,
-				})),
-			]
+		setOpenFileErrorMessage(null);
+		try {
+			await Linking.openURL(url);
+		} catch {
+			setOpenFileErrorMessage("Could not open this file.");
+		}
+	};
+
+	const linkOptions = workspace
+		? getTripRelatedEntityOptions(workspace, {
+				expenseLimit: 8,
+				includeNotes: true,
+				includeRisks: true,
+				includeVaultItems: false,
+				itineraryItemLimit: 8,
+				noteLimit: 8,
+				riskLimit: 8,
+			})
 		: [];
-	const linkLabelByKey = new Map(
-		linkOptions.map((option) => [
-			`${option.type}:${option.id}`,
-			`${option.label} · ${option.detail}`,
-		])
-	);
+	const linkLabelByKey = workspace
+		? getTripRelatedEntityLabelByKey(workspace)
+		: new Map<string, string>();
+	const linkedFileCount = vaultItems.filter(
+		(item) => item.linkedEntityId && item.linkedEntityType
+	).length;
+	const receiptCount = vaultItems.filter(
+		(item) => item.kind === "receipt"
+	).length;
+	const documentCount = vaultItems.filter(
+		(item) => item.kind === "document" || item.kind === "booking"
+	).length;
+	const latestFile = vaultItems.at(0) ?? null;
+	const latestFileRelatedHref = latestFile
+		? getVaultRelatedHref({
+				relatedEntityType: latestFile.linkedEntityType,
+				tripId,
+			})
+		: null;
+	const linkTargetLabel =
+		workspace === undefined
+			? "Loading links"
+			: `${linkOptions.length} link targets`;
 
 	const savedFilesContent = (() => {
 		if (vaultItems.length === 0) {
 			return (
 				<EmptyState
+					action={{
+						label: isUploading ? "Uploading..." : "Upload file",
+						onPress: () => {
+							handleUpload("document").catch(() => undefined);
+						},
+					}}
 					description="Upload confirmations, travel documents, receipts, or useful screenshots."
 					icon="folder-open-outline"
 					title="No synced files"
@@ -410,18 +627,30 @@ export function TripVaultScreen() {
 						fileName={item.fileName}
 						key={item._id}
 						kind={item.kind}
+						linkedEntityHref={getVaultRelatedHref({
+							relatedEntityType: item.linkedEntityType,
+							tripId,
+						})}
 						linkedEntityLabel={
 							item.linkedEntityType && item.linkedEntityId
-								? (linkLabelByKey.get(
-										`${item.linkedEntityType}:${item.linkedEntityId}`
+								? (getTripRelatedEntityLabel(
+										{
+											relatedEntityId: item.linkedEntityId,
+											relatedEntityType: item.linkedEntityType,
+										},
+										linkLabelByKey
 									) ?? item.linkedEntityType)
 								: undefined
 						}
 						onDelete={() => {
-							deleteVaultItem({ vaultItemId: item._id }).catch(() => undefined);
+							handleDeleteVaultItem(item._id).catch(() => undefined);
 						}}
 						onEdit={() => openEditSheet(item)}
+						onOpenFile={() => {
+							handleOpenVaultFile(item.url).catch(() => undefined);
+						}}
 						title={item.title}
+						url={item.url}
 					/>
 				))}
 			</View>
@@ -429,30 +658,79 @@ export function TripVaultScreen() {
 	})();
 
 	return (
-		<TripModuleScreenFrame activeTab="documents" tripId={tripId}>
+		<TripModuleScreenFrame
+			activeTab="documents"
+			header={
+				<RouteHeader
+					eyebrow="Sync"
+					icon="cloud-upload-outline"
+					subtitle="Upload, label, link, and review files before they update trip records."
+					title="TripSync Vault"
+				/>
+			}
+			tripId={tripId}
+		>
 			<Container
 				className="px-4 pb-28"
 				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
 			>
 				<View className="gap-4 pb-4">
-					<RouteHeader
-						eyebrow="Sync"
-						icon="cloud-upload-outline"
-						subtitle="Review extracted details before they update bookings, documents, and readiness."
-						title="TripSync Vault"
-					/>
-					<TripModuleViyaAssistCard
-						agentModule="documents"
-						description="Extract booking context, organize documents, or ask what files are still missing."
+					<TripModuleManualEntryCard
+						description="Upload confirmations, IDs, receipts, screenshots, and photos, then link each file to the right trip item."
+						isPrimaryDisabled={isUploading}
+						isSecondaryDisabled={isUploading}
 						moduleLabel="documents"
-						tripId={tripId}
+						onPrimaryPress={() => {
+							handleUpload("document").catch(() => undefined);
+						}}
+						onSecondaryPress={() => {
+							handlePhotoUpload().catch(() => undefined);
+						}}
+						primaryActionIcon="cloud-upload-outline"
+						primaryActionLabel={isUploading ? "Uploading..." : "Upload file"}
+						secondaryActionIcon="images-outline"
+						secondaryActionLabel="Add photo"
 					/>
 
-					<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
+					<Surface className="gap-4 rounded-[30px] bg-surface-secondary p-4">
+						<View className="flex-row items-start justify-between gap-3">
+							<View className="min-w-0 flex-1 gap-1">
+								<Text.Heading type="h5" weight="semibold">
+									Document inbox
+								</Text.Heading>
+								<Text color="muted" type="body-sm">
+									Upload once, review extraction, then link files to the trip.
+								</Text>
+							</View>
+							<View
+								className="h-11 w-11 items-center justify-center rounded-full"
+								style={{ backgroundColor: "rgba(90, 200, 250, 0.14)" }}
+							>
+								<Ionicons
+									color="#5AC8FA"
+									name="folder-open-outline"
+									size={20}
+								/>
+							</View>
+						</View>
 						<View className="flex-row flex-wrap gap-2">
-							<VaultPill>{vaultItems?.length ?? 0} files</VaultPill>
+							<VaultPill>{vaultItems.length} files</VaultPill>
+							<VaultPill>{linkedFileCount} linked</VaultPill>
+							<VaultPill>{documentCount} docs</VaultPill>
+							<VaultPill>{receiptCount} receipts</VaultPill>
+							<VaultPill>{linkTargetLabel}</VaultPill>
 							<VaultPill>Review before save</VaultPill>
 						</View>
+						<LatestVaultFileSummary
+							handleOpenVaultFile={handleOpenVaultFile}
+							isUploading={isUploading}
+							latestFile={latestFile}
+							latestFileRelatedHref={latestFileRelatedHref}
+							onUploadFirstFile={() => {
+								handleUpload("document").catch(() => undefined);
+							}}
+							openEditSheet={openEditSheet}
+						/>
 						<View className="flex-row flex-wrap gap-2">
 							<Button
 								className="flex-1"
@@ -462,6 +740,7 @@ export function TripVaultScreen() {
 								}}
 								size="sm"
 							>
+								<Ionicons color="#FFFFFF" name="ticket-outline" size={16} />
 								<Button.Label>Booking</Button.Label>
 							</Button>
 							<Button
@@ -473,6 +752,7 @@ export function TripVaultScreen() {
 								size="sm"
 								variant="secondary"
 							>
+								<Ionicons color="#0A84FF" name="document-outline" size={16} />
 								<Button.Label>Document</Button.Label>
 							</Button>
 							<Button
@@ -484,6 +764,7 @@ export function TripVaultScreen() {
 								size="sm"
 								variant="secondary"
 							>
+								<Ionicons color="#0A84FF" name="receipt-outline" size={16} />
 								<Button.Label>Receipt</Button.Label>
 							</Button>
 							<Button
@@ -495,6 +776,7 @@ export function TripVaultScreen() {
 								size="sm"
 								variant="tertiary"
 							>
+								<Ionicons color="#6B7280" name="camera-outline" size={16} />
 								<Button.Label>Photo or screenshot</Button.Label>
 							</Button>
 						</View>
@@ -506,9 +788,19 @@ export function TripVaultScreen() {
 								</Text>
 							</View>
 						) : null}
-						{errorMessage ? (
+						{uploadErrorMessage ? (
 							<Text className="text-danger" type="body-sm">
-								{errorMessage}
+								{uploadErrorMessage}
+							</Text>
+						) : null}
+						{vaultErrorMessage ? (
+							<Text className="text-danger" type="body-sm">
+								{vaultErrorMessage}
+							</Text>
+						) : null}
+						{openFileErrorMessage ? (
+							<Text className="text-danger" type="body-sm">
+								{openFileErrorMessage}
 							</Text>
 						) : null}
 						{didSync ? (
@@ -543,6 +835,7 @@ export function TripVaultScreen() {
 					review={pendingReview}
 				/>
 				<VaultEditSheet
+					errorMessage={vaultErrorMessage}
 					form={editForm}
 					isOpen={Boolean(editingItemId)}
 					isSaving={isSavingEdit}
@@ -550,12 +843,14 @@ export function TripVaultScreen() {
 					onOpenChange={(isOpen) => {
 						if (!isOpen) {
 							setEditingItemId(null);
+							setVaultErrorMessage(null);
 						}
 					}}
 					onSubmit={() => {
 						handleSaveEdit().catch(() => undefined);
 					}}
 					onUpdateForm={(key, value) => {
+						setVaultErrorMessage(null);
 						setEditForm((currentForm) => ({ ...currentForm, [key]: value }));
 					}}
 				/>

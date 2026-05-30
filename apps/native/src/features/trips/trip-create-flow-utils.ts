@@ -3,10 +3,6 @@ import { formatReadableTripDateRange } from "@/src/components/date/date-format-u
 const isoDatePattern = /^\d{4}-\d{2}-\d{2}$/;
 const whitespacePattern = /\s+/g;
 const defaultTripDate = "";
-const millisecondsPerDay = 86_400_000;
-const defaultDailyBudgetPerTraveler = 2500;
-const minimumSuggestedBudget = 3000;
-const budgetRoundingIncrement = 1000;
 
 export const tripCreateStepOrder = [
 	"destination",
@@ -58,7 +54,6 @@ export type TripStyle = (typeof tripStyleOptions)[number];
 export type TripPace = (typeof paceOptions)[number];
 export type BudgetScope = (typeof budgetScopeOptions)[number];
 export type BudgetStrictness = (typeof budgetStrictnessOptions)[number];
-export type BudgetSuggestionSource = "ai" | "fallback";
 
 export interface TripCreateFlowState {
 	budgetAmount: string;
@@ -132,45 +127,6 @@ const labels = {
 	},
 } as const;
 
-const durationPreferenceDayCounts = {
-	"1-2-weeks": 10,
-	"3-4-days": 4,
-	"5-7-days": 6,
-	weekend: 2,
-} as const satisfies Record<DurationPreference, number>;
-
-const paceBudgetMultipliers = {
-	balanced: 1,
-	light: 0.85,
-	packed: 1.2,
-} as const satisfies Record<TripPace, number>;
-
-const styleBudgetMultipliers = {
-	adventure: 1.12,
-	culture: 1,
-	food: 1.08,
-	nature: 0.95,
-	relaxed: 1,
-	shopping: 1.18,
-	themeParks: 1.25,
-	workLeisure: 1.15,
-} as const satisfies Record<TripStyle, number>;
-
-const destinationBudgetMultipliers = [
-	{ keywords: ["japan", "tokyo", "osaka", "kyoto"], multiplier: 1.55 },
-	{ keywords: ["hong kong", "singapore"], multiplier: 1.45 },
-	{ keywords: ["korea", "seoul"], multiplier: 1.35 },
-	{ keywords: ["taiwan", "taipei", "thailand", "bangkok"], multiplier: 1.15 },
-	{
-		keywords: ["usa", "united states", "europe", "london", "paris"],
-		multiplier: 2,
-	},
-	{
-		keywords: ["cebu", "bohol", "siargao", "boracay", "palawan"],
-		multiplier: 0.9,
-	},
-] as const;
-
 const cleanText = (value: string) =>
 	value.replace(whitespacePattern, " ").trim();
 
@@ -190,92 +146,6 @@ const getTravelStyle = (styles: readonly TripStyle[], pace: TripPace) => {
 
 const getDefaultTitle = (destination: string) =>
 	destination ? `${destination} Trip` : "New Trip";
-
-const getTripDayCount = (state: TripCreateFlowState) => {
-	if (
-		isoDatePattern.test(state.startDate) &&
-		isoDatePattern.test(state.endDate)
-	) {
-		const startTime = Date.parse(`${state.startDate}T00:00:00.000Z`);
-		const endTime = Date.parse(`${state.endDate}T00:00:00.000Z`);
-
-		if (Number.isFinite(startTime) && Number.isFinite(endTime)) {
-			return Math.max(
-				1,
-				Math.round((endTime - startTime) / millisecondsPerDay) + 1
-			);
-		}
-	}
-
-	return state.durationPreference
-		? durationPreferenceDayCounts[state.durationPreference]
-		: durationPreferenceDayCounts["3-4-days"];
-};
-
-const getDestinationBudgetMultiplier = (destination: string) => {
-	const normalizedDestination = cleanText(destination).toLowerCase();
-	const matchingDestination = destinationBudgetMultipliers.find((entry) =>
-		entry.keywords.some((keyword) => normalizedDestination.includes(keyword))
-	);
-
-	return matchingDestination?.multiplier ?? 1;
-};
-
-const getStyleBudgetMultiplier = (styles: readonly TripStyle[]) => {
-	if (styles.length === 0) {
-		return 1;
-	}
-
-	const total = styles.reduce(
-		(sum, style) => sum + styleBudgetMultipliers[style],
-		0
-	);
-
-	return total / styles.length;
-};
-
-export const getSuggestedBudgetAmount = (state: TripCreateFlowState) => {
-	const travelerCount = parseTravelerCount(state.travelerCount) ?? 1;
-	const days = getTripDayCount(state);
-	const totalBudget =
-		defaultDailyBudgetPerTraveler *
-		days *
-		travelerCount *
-		paceBudgetMultipliers[state.pace] *
-		getStyleBudgetMultiplier(state.styles) *
-		getDestinationBudgetMultiplier(state.destination);
-	const scopedBudget =
-		state.budgetScope === "perPerson"
-			? totalBudget / travelerCount
-			: totalBudget;
-	const roundedBudget =
-		Math.ceil(scopedBudget / budgetRoundingIncrement) * budgetRoundingIncrement;
-
-	return Math.max(minimumSuggestedBudget, roundedBudget);
-};
-
-export const getSuggestedBudgetPrefill = (
-	currentValue: string,
-	suggestedAmount: number,
-	previousPrefillValue?: string,
-	source: BudgetSuggestionSource = "ai"
-) => {
-	if (source !== "ai") {
-		return currentValue;
-	}
-
-	const normalizedValue = cleanText(currentValue).replaceAll(",", "");
-
-	if (
-		!normalizedValue ||
-		normalizedValue === "0" ||
-		normalizedValue === previousPrefillValue
-	) {
-		return suggestedAmount.toString();
-	}
-
-	return currentValue;
-};
 
 export const createInitialTripCreateFlowState = (): TripCreateFlowState =>
 	({
@@ -401,7 +271,7 @@ export const getTripCreateSummary = (state: TripCreateFlowState) => {
 		budgetAmount
 			? `Budget: PHP ${budgetAmount.toLocaleString()} ${labels.budgetScope[state.budgetScope]}, ${state.budgetStrictness}.`
 			: null,
-		"Viya can use this context to enrich itinerary, places, budget, and readiness.",
+		"Use this context to enrich itinerary, places, budget, and readiness.",
 	].filter(Boolean);
 
 	return details.join(" ");

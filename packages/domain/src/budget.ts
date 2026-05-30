@@ -11,6 +11,13 @@ interface BudgetExpenseLike {
 	currency?: string;
 }
 
+interface TripExpenseReviewSortInput {
+	createdAt?: number;
+	spentAt: string;
+	title: string;
+	updatedAt?: number;
+}
+
 interface BudgetItineraryItemLike {
 	category: string;
 	estimatedCost?: number;
@@ -44,6 +51,28 @@ const addCategoryAmount = (
 
 const getPositiveAmount = (amount?: number) =>
 	Number.isFinite(amount) && amount ? Math.max(0, amount) : 0;
+
+const sortCategoryTotals = (
+	firstCategory: BudgetCategoryTotal,
+	secondCategory: BudgetCategoryTotal
+) =>
+	secondCategory.amount - firstCategory.amount ||
+	firstCategory.category.localeCompare(secondCategory.category);
+
+const compareTripExpensesForReview = (
+	firstExpense: TripExpenseReviewSortInput,
+	secondExpense: TripExpenseReviewSortInput
+) =>
+	secondExpense.spentAt.localeCompare(firstExpense.spentAt) ||
+	(secondExpense.updatedAt ?? 0) - (firstExpense.updatedAt ?? 0) ||
+	(secondExpense.createdAt ?? 0) - (firstExpense.createdAt ?? 0) ||
+	firstExpense.title.localeCompare(secondExpense.title);
+
+export const sortTripExpensesForReview = <
+	Expense extends TripExpenseReviewSortInput,
+>(
+	expenses: readonly Expense[]
+) => [...expenses].sort(compareTripExpensesForReview);
 
 export const getBudgetWalletSummary = ({
 	bookings,
@@ -84,7 +113,9 @@ export const getBudgetWalletSummary = ({
 	const dailySafeSpend = Math.floor(remainingAmount / safeSpendDays);
 	const categoryBreakdown: BudgetCategoryTotal[] = Array.from(
 		categoryTotals.entries()
-	).map(([category, amount]) => ({ amount, category }));
+	)
+		.map(([category, amount]) => ({ amount, category }))
+		.sort(sortCategoryTotals);
 
 	return {
 		categoryBreakdown,

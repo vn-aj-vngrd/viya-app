@@ -8,6 +8,25 @@ import type { ReadinessCategory, ReadinessItem, ReadinessScore } from "./types";
 const incompleteStatuses = new Set<string>(INCOMPLETE_READINESS_STATUSES);
 const ACTIVE_GAP_SCORE_WEIGHT = 0.25;
 const UNCOVERED_CATEGORY_SCORE_PENALTY = 8 / 3;
+const readinessReviewStatusPriority: Record<string, number> = {
+	blocked: 0,
+	inProgress: 1,
+	todo: 2,
+	done: 3,
+	ignored: 4,
+};
+const readinessReviewPriorityRank: Record<string, number> = {
+	critical: 4,
+	high: 3,
+	medium: 2,
+	low: 1,
+};
+interface ReadinessReviewSortInput {
+	dueDate: string;
+	priority: string;
+	status: string;
+	title: string;
+}
 export const REQUIRED_READINESS_CATEGORIES = [
 	"bookings",
 	"documents",
@@ -25,6 +44,45 @@ const getItemPenalty = (item: ReadinessItem): number => {
 
 	return READINESS_PRIORITY_PENALTY[item.priority];
 };
+
+const getReadinessReviewStatusPriority = (status: string) =>
+	readinessReviewStatusPriority[status] ?? 5;
+
+const getReadinessReviewPriorityRank = (priority: string) =>
+	readinessReviewPriorityRank[priority] ?? 0;
+
+export const sortReadinessItemsForReview = <
+	Item extends ReadinessReviewSortInput,
+>(
+	items: readonly Item[]
+): Item[] =>
+	[...items].sort((leftItem, rightItem) => {
+		const statusDelta =
+			getReadinessReviewStatusPriority(leftItem.status) -
+			getReadinessReviewStatusPriority(rightItem.status);
+
+		if (statusDelta !== 0) {
+			return statusDelta;
+		}
+
+		const priorityDelta =
+			getReadinessReviewPriorityRank(rightItem.priority) -
+			getReadinessReviewPriorityRank(leftItem.priority);
+
+		if (priorityDelta !== 0) {
+			return priorityDelta;
+		}
+
+		const leftDueDate = leftItem.dueDate || "9999-12-31";
+		const rightDueDate = rightItem.dueDate || "9999-12-31";
+		const dueDateDelta = leftDueDate.localeCompare(rightDueDate);
+
+		if (dueDateDelta !== 0) {
+			return dueDateDelta;
+		}
+
+		return leftItem.title.localeCompare(rightItem.title);
+	});
 
 const summarizeScore = (
 	overallScore: number,

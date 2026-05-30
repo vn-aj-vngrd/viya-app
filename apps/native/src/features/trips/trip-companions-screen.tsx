@@ -15,17 +15,16 @@ import {
 	TextArea,
 	TextField,
 } from "heroui-native";
+import type { ComponentProps } from "react";
 import { useState } from "react";
-import { ScrollView, View } from "react-native";
+import { Linking, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Container } from "@/components/container";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 import { EmptyState } from "@/src/components/empty-state";
-import { RouteHeader } from "@/src/components/navigation/route-header";
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
-
 import { TripModuleScreenFrame } from "./trip-module-floating-bar";
-import { TripModuleViyaAssistCard } from "./trip-module-viya-assist-card";
+import { TripModuleManualEntryCard } from "./trip-module-manual-entry-card";
 import { useTripIdParam } from "./use-trip-id-param";
 
 interface CompanionForm {
@@ -43,6 +42,38 @@ const initialCompanionForm: CompanionForm = {
 	phone: "",
 	role: "traveler",
 };
+
+const initialLeadCompanionForm: CompanionForm = {
+	...initialCompanionForm,
+	role: "organizer",
+};
+
+const companionRoleOptions = [
+	"traveler",
+	"organizer",
+	"emergencyContact",
+	"driver",
+	"payer",
+	"localContact",
+	"child",
+	"other",
+] as const;
+
+const unsafePhoneUriCharactersPattern = /[^\d+]/g;
+
+const formatCompanionRoleLabel = (value: string) =>
+	value
+		.replaceAll("_", " ")
+		.replaceAll(/([a-z])([A-Z])/g, "$1 $2")
+		.split(" ")
+		.filter(Boolean)
+		.map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
+		.join(" ");
+
+const getPhoneContactUrl = (scheme: "sms" | "tel", phone: string) =>
+	`${scheme}:${phone.replace(unsafePhoneUriCharactersPattern, "")}`;
+
+const getEmailContactUrl = (email: string) => `mailto:${email.trim()}`;
 
 function SheetField({
 	label,
@@ -75,7 +106,36 @@ function SheetField({
 	);
 }
 
+function CompanionRolePicker({
+	onChange,
+	value,
+}: {
+	onChange: (value: string) => void;
+	value: string;
+}) {
+	return (
+		<View className="gap-2">
+			<Text color="muted" type="body-xs" weight="semibold">
+				ROLE
+			</Text>
+			<View className="flex-row flex-wrap gap-2">
+				{companionRoleOptions.map((role) => (
+					<Button
+						key={role}
+						onPress={() => onChange(role)}
+						size="sm"
+						variant={value === role ? "primary" : "secondary"}
+					>
+						<Button.Label>{formatCompanionRoleLabel(role)}</Button.Label>
+					</Button>
+				))}
+			</View>
+		</View>
+	);
+}
+
 function CompanionSheet({
+	errorMessage,
 	form,
 	isOpen,
 	isSaving,
@@ -84,6 +144,7 @@ function CompanionSheet({
 	onSubmit,
 	onUpdateForm,
 }: {
+	errorMessage: string | null;
 	form: CompanionForm;
 	isOpen: boolean;
 	isSaving: boolean;
@@ -135,10 +196,8 @@ function CompanionSheet({
 								placeholder="Alex Reyes"
 								value={form.name}
 							/>
-							<SheetField
-								label="Role"
-								onChangeText={(value) => onUpdateForm("role", value)}
-								placeholder="traveler, organizer, emergency contact"
+							<CompanionRolePicker
+								onChange={(value) => onUpdateForm("role", value)}
 								value={form.role}
 							/>
 							<SheetField
@@ -168,6 +227,11 @@ function CompanionSheet({
 								/>
 							</TextField>
 						</ScrollView>
+						{errorMessage ? (
+							<Text className="text-danger" type="body-sm">
+								{errorMessage}
+							</Text>
+						) : null}
 						<Button isDisabled={isSaving} onPress={onSubmit} size="lg">
 							{isSaving ? <Spinner size="sm" /> : null}
 							<Button.Label>
@@ -178,6 +242,23 @@ function CompanionSheet({
 				</BottomSheet.Content>
 			</BottomSheet.Portal>
 		</BottomSheet>
+	);
+}
+
+function CompanionContactButton({
+	icon,
+	label,
+	onPress,
+}: {
+	icon: ComponentProps<typeof Ionicons>["name"];
+	label: string;
+	onPress: () => void;
+}) {
+	return (
+		<Button className="min-w-[30%] flex-1" onPress={onPress} size="sm">
+			<Ionicons color="#FFFFFF" name={icon} size={15} />
+			<Button.Label>{label}</Button.Label>
+		</Button>
 	);
 }
 
@@ -197,16 +278,33 @@ export function TripCompanionsScreen() {
 	const [isSaving, setIsSaving] = useState(false);
 	const [pendingCompanionId, setPendingCompanionId] =
 		useState<Id<"tripCompanions"> | null>(null);
+	const [companionErrorMessage, setCompanionErrorMessage] = useState<
+		string | null
+	>(null);
+	const [contactErrorMessage, setContactErrorMessage] = useState<string | null>(
+		null
+	);
 
 	const updateForm = (key: keyof CompanionForm, value: string) => {
+		setCompanionErrorMessage(null);
 		setForm((currentForm) => ({ ...currentForm, [key]: value }));
 	};
-	const openCreateSheet = () => {
+	const openCompanionSheet = (nextForm: CompanionForm) => {
+		setCompanionErrorMessage(null);
+		setContactErrorMessage(null);
 		setEditingCompanionId(null);
-		setForm(initialCompanionForm);
+		setForm(nextForm);
 		setIsSheetOpen(true);
 	};
+	const openCreateSheet = () => {
+		openCompanionSheet(initialCompanionForm);
+	};
+	const openLeadContactSheet = () => {
+		openCompanionSheet(initialLeadCompanionForm);
+	};
 	const openEditSheet = (companion: Doc<"tripCompanions">) => {
+		setCompanionErrorMessage(null);
+		setContactErrorMessage(null);
 		setEditingCompanionId(companion._id);
 		setForm({
 			email: companion.email ?? "",
@@ -234,9 +332,11 @@ export function TripCompanionsScreen() {
 		const name = form.name.trim();
 
 		if (!name) {
+			setCompanionErrorMessage("Add a companion name.");
 			return;
 		}
 
+		setCompanionErrorMessage(null);
 		setIsSaving(true);
 		try {
 			const companionPatch = {
@@ -261,8 +361,19 @@ export function TripCompanionsScreen() {
 			setEditingCompanionId(null);
 			setForm(initialCompanionForm);
 			setIsSheetOpen(false);
+		} catch {
+			setCompanionErrorMessage("Could not save companion.");
 		} finally {
 			setIsSaving(false);
+		}
+	};
+
+	const handleOpenContact = async (url: string) => {
+		setContactErrorMessage(null);
+		try {
+			await Linking.openURL(url);
+		} catch {
+			setContactErrorMessage("Could not open this contact action.");
 		}
 	};
 
@@ -270,6 +381,8 @@ export function TripCompanionsScreen() {
 		setPendingCompanionId(companionId);
 		try {
 			await deleteCompanion({ companionId });
+		} catch {
+			setCompanionErrorMessage("Could not delete companion.");
 		} finally {
 			setPendingCompanionId(null);
 		}
@@ -279,6 +392,17 @@ export function TripCompanionsScreen() {
 		return <ScreenLoadingState />;
 	}
 
+	const contactReadyCount = companions.filter(
+		(companion) => companion.email || companion.phone
+	).length;
+	const emergencyContactCount = companions.filter(
+		(companion) => companion.role === "emergencyContact"
+	).length;
+	const leadCompanion =
+		companions.find((companion) => companion.role === "organizer") ??
+		companions.at(0) ??
+		null;
+
 	return (
 		<TripModuleScreenFrame activeTab="companions" tripId={tripId}>
 			<Container
@@ -286,39 +410,148 @@ export function TripCompanionsScreen() {
 				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
 			>
 				<View className="gap-4 pb-4">
-					<RouteHeader
-						eyebrow="Coordinate"
-						icon="people-outline"
-						subtitle="Travelers, organizers, and emergency contacts for this trip."
-						title="Companions"
-					/>
-					<TripModuleViyaAssistCard
-						description="Ask Viya how to coordinate roles, contacts, and group reminders."
+					<TripModuleManualEntryCard
+						description="Save traveler roles, contact details, emergency contacts, and coordination notes."
 						moduleLabel="companions"
-						tripId={tripId}
+						onPrimaryPress={openCreateSheet}
+						primaryActionIcon="people-outline"
+						primaryActionLabel="Add companion"
 					/>
+					{contactErrorMessage ? (
+						<Text className="px-1 text-danger" type="body-sm">
+							{contactErrorMessage}
+						</Text>
+					) : null}
 
-					<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
-						<View className="flex-row items-center gap-3">
-							<View className="h-11 w-11 items-center justify-center rounded-full bg-primary/10">
-								<Ionicons color="#0A84FF" name="people-outline" size={20} />
-							</View>
-							<View className="flex-1 gap-1">
-								<Text type="body" weight="bold">
-									{companions.length} companions
-								</Text>
+					<Surface className="gap-4 rounded-[30px] bg-surface-secondary p-4">
+						<View className="flex-row items-start justify-between gap-3">
+							<View className="min-w-0 flex-1 gap-1">
+								<Text.Heading type="h5" weight="semibold">
+									Group coordination
+								</Text.Heading>
 								<Text color="muted" type="body-sm">
-									Keep group and emergency coordination in the workspace.
+									Keep travelers, contacts, and responsibilities easy to scan.
 								</Text>
+							</View>
+							<View
+								className="h-11 w-11 items-center justify-center rounded-full"
+								style={{ backgroundColor: "rgba(255, 45, 85, 0.1)" }}
+							>
+								<Ionicons color="#FF2D55" name="people-outline" size={20} />
 							</View>
 						</View>
-						<Button onPress={openCreateSheet}>
-							<Button.Label>Add companion</Button.Label>
-						</Button>
+						<View className="flex-row flex-wrap gap-2">
+							<Chip size="sm" variant="secondary">
+								<Chip.Label>{companions.length} people</Chip.Label>
+							</Chip>
+							<Chip size="sm" variant="secondary">
+								<Chip.Label>{contactReadyCount} reachable</Chip.Label>
+							</Chip>
+							<Chip size="sm" variant="secondary">
+								<Chip.Label>
+									{emergencyContactCount} emergency contacts
+								</Chip.Label>
+							</Chip>
+						</View>
+						<View className="gap-3 rounded-[24px] bg-surface p-4">
+							<View className="flex-row items-center gap-3">
+								<View
+									className="h-9 w-9 items-center justify-center rounded-full"
+									style={{ backgroundColor: "rgba(255, 45, 85, 0.12)" }}
+								>
+									<Ionicons color="#FF2D55" name="person-outline" size={18} />
+								</View>
+								<View className="min-w-0 flex-1 gap-1">
+									<Text color="muted" type="body-xs" weight="semibold">
+										LEAD CONTACT
+									</Text>
+									<Text numberOfLines={1} type="body-sm" weight="bold">
+										{leadCompanion?.name ?? "No lead contact yet"}
+									</Text>
+								</View>
+							</View>
+							<Text color="muted" numberOfLines={2} type="body-sm">
+								{leadCompanion
+									? `${formatCompanionRoleLabel(leadCompanion.role)} · ${
+											[leadCompanion.email, leadCompanion.phone]
+												.filter(Boolean)
+												.join(" · ") || "No contact detail saved"
+										}`
+									: "Add a traveler or organizer so the group has a clear coordination anchor."}
+							</Text>
+							{leadCompanion?.notes ? (
+								<Text.Paragraph color="muted" type="body-sm">
+									{leadCompanion.notes}
+								</Text.Paragraph>
+							) : null}
+							{leadCompanion ? (
+								<View className="flex-row flex-wrap gap-2">
+									<Button
+										className="min-w-[30%] flex-1"
+										onPress={() => openEditSheet(leadCompanion)}
+										size="sm"
+										variant="secondary"
+									>
+										<Ionicons color="#0A84FF" name="create-outline" size={15} />
+										<Button.Label>Review lead</Button.Label>
+									</Button>
+									{leadCompanion.phone ? (
+										<>
+											<CompanionContactButton
+												icon="call-outline"
+												label="Call lead"
+												onPress={() => {
+													handleOpenContact(
+														getPhoneContactUrl("tel", leadCompanion.phone ?? "")
+													).catch(() => undefined);
+												}}
+											/>
+											<CompanionContactButton
+												icon="chatbubble-outline"
+												label="Message lead"
+												onPress={() => {
+													handleOpenContact(
+														getPhoneContactUrl("sms", leadCompanion.phone ?? "")
+													).catch(() => undefined);
+												}}
+											/>
+										</>
+									) : null}
+									{leadCompanion.email ? (
+										<CompanionContactButton
+											icon="mail-outline"
+											label="Email lead"
+											onPress={() => {
+												handleOpenContact(
+													getEmailContactUrl(leadCompanion.email ?? "")
+												).catch(() => undefined);
+											}}
+										/>
+									) : null}
+								</View>
+							) : (
+								<Button
+									onPress={openLeadContactSheet}
+									size="sm"
+									variant="secondary"
+								>
+									<Ionicons
+										color="#0A84FF"
+										name="person-add-outline"
+										size={16}
+									/>
+									<Button.Label>Add lead contact</Button.Label>
+								</Button>
+							)}
+						</View>
 					</Surface>
 
 					{companions.length === 0 ? (
 						<EmptyState
+							action={{
+								label: "Add companion",
+								onPress: openCreateSheet,
+							}}
 							description="Add travelers, coordinators, or emergency contacts."
 							icon="people-outline"
 							title="No companions yet"
@@ -350,6 +583,43 @@ export function TripCompanionsScreen() {
 											{companion.notes}
 										</Text.Paragraph>
 									) : null}
+									{companion.phone || companion.email ? (
+										<View className="flex-row flex-wrap gap-2">
+											{companion.phone ? (
+												<>
+													<CompanionContactButton
+														icon="call-outline"
+														label="Call"
+														onPress={() => {
+															handleOpenContact(
+																getPhoneContactUrl("tel", companion.phone ?? "")
+															).catch(() => undefined);
+														}}
+													/>
+													<CompanionContactButton
+														icon="chatbubble-outline"
+														label="Message"
+														onPress={() => {
+															handleOpenContact(
+																getPhoneContactUrl("sms", companion.phone ?? "")
+															).catch(() => undefined);
+														}}
+													/>
+												</>
+											) : null}
+											{companion.email ? (
+												<CompanionContactButton
+													icon="mail-outline"
+													label="Email"
+													onPress={() => {
+														handleOpenContact(
+															getEmailContactUrl(companion.email ?? "")
+														).catch(() => undefined);
+													}}
+												/>
+											) : null}
+										</View>
+									) : null}
 									<View className="flex-row flex-wrap gap-2">
 										<Button
 											className="flex-1"
@@ -379,6 +649,7 @@ export function TripCompanionsScreen() {
 					)}
 				</View>
 				<CompanionSheet
+					errorMessage={companionErrorMessage}
 					form={form}
 					isOpen={isSheetOpen}
 					isSaving={isSaving}
@@ -387,6 +658,7 @@ export function TripCompanionsScreen() {
 						setIsSheetOpen(isOpen);
 						if (!isOpen) {
 							setEditingCompanionId(null);
+							setCompanionErrorMessage(null);
 							setForm(initialCompanionForm);
 						}
 					}}

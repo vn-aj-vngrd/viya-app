@@ -9,6 +9,7 @@ const tripRoute = (tripId: Id<"trips">, leaf = "") =>
 
 export const VIYA_ROUTES = {
 	home: "/(app)/(tabs)",
+	ai: "/(app)/ai",
 	newTrip: "/(app)/trips/new",
 	preferences: "/(app)/onboarding/preferences",
 	profile: "/(app)/(tabs)/profile",

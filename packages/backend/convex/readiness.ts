@@ -4,13 +4,15 @@ import {
 	type Priority,
 	type ReadinessCategory,
 	type ReadinessItem,
+	sortReadinessItemsForReview,
 	type WorkStatus,
 } from "@viya-app/domain";
 import { ConvexError, v } from "convex/values";
 
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { type MutationCtx, mutation, query } from "./_generated/server";
 import { ensureTripAccess, getRequiredIdentity } from "./lib/auth";
+import { clearDeletedTripEntityReferences } from "./lib/tripLinks";
 
 const baselineReadinessItems: Record<
 	ReadinessCategory,
@@ -88,6 +90,43 @@ const priorityValidator = v.union(
 	v.literal("critical")
 );
 
+interface ReadinessAssigneePatch {
+	assignedToMemberId?: string;
+}
+
+const hasOwnObjectProperty = <T extends object>(
+	value: T,
+	key: PropertyKey
+): boolean => key in value;
+
+const getReadinessAssigneePatch = async (
+	ctx: MutationCtx,
+	assignedToMemberId: string | undefined,
+	tripId: Id<"trips">
+): Promise<ReadinessAssigneePatch> => {
+	if (assignedToMemberId === undefined) {
+		return {};
+	}
+
+	const normalizedCompanionId = assignedToMemberId.trim();
+
+	if (!normalizedCompanionId) {
+		return { assignedToMemberId: undefined };
+	}
+
+	const companionId = ctx.db.normalizeId(
+		"tripCompanions",
+		normalizedCompanionId
+	);
+	const companion = companionId ? await ctx.db.get(companionId) : null;
+
+	if (!companion || companion.tripId !== tripId) {
+		throw new ConvexError("COMPANION_TRIP_MISMATCH");
+	}
+
+	return { assignedToMemberId: companion._id };
+};
+
 const toDomainReadinessItem = (item: Doc<"readinessItems">): ReadinessItem => ({
 	id: item._id,
 	tripId: item.tripId,
@@ -128,10 +167,12 @@ export const listReadinessItems = query({
 		const identity = await getRequiredIdentity(ctx);
 		await ensureTripAccess(ctx, args.tripId, identity.subject);
 
-		return ctx.db
+		const items = await ctx.db
 			.query("readinessItems")
 			.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
 			.collect();
+
+		return sortReadinessItemsForReview(items);
 	},
 });
 
@@ -167,6 +208,7 @@ export const updateReadinessItem = mutation({
 export const createReadinessItem = mutation({
 	args: {
 		tripId: v.id("trips"),
+		assignedToMemberId: v.optional(v.string()),
 		category: readinessCategoryValidator,
 		description: v.string(),
 		dueDate: v.string(),
@@ -178,7 +220,11 @@ export const createReadinessItem = mutation({
 		await ensureTripAccess(ctx, args.tripId, identity.subject);
 		const itemId = await ctx.db.insert("readinessItems", {
 			aiReason: "Created by the traveler.",
-			assignedToMemberId: undefined,
+			...(await getReadinessAssigneePatch(
+				ctx,
+				args.assignedToMemberId,
+				args.tripId
+			)),
 			category: args.category,
 			description: args.description,
 			dueDate: args.dueDate,
@@ -222,8 +268,18 @@ export const updateReadinessItemDetails = mutation({
 		}
 
 		await ensureTripAccess(ctx, item.tripId, identity.subject);
-		const { readinessItemId, ...patch } = args;
-		await ctx.db.patch(readinessItemId, patch);
+		const shouldUpdateAssignee = hasOwnObjectProperty(
+			args,
+			"assignedToMemberId"
+		);
+		const { assignedToMemberId, readinessItemId, ...patch } = args;
+		const assigneePatch = shouldUpdateAssignee
+			? await getReadinessAssigneePatch(ctx, assignedToMemberId, item.tripId)
+			: {};
+		await ctx.db.patch(readinessItemId, {
+			...patch,
+			...assigneePatch,
+		});
 		await updateTripReadinessScore(ctx, item.tripId);
 
 		return ctx.db.get(readinessItemId);
@@ -243,6 +299,12 @@ export const deleteReadinessItem = mutation({
 		}
 
 		await ensureTripAccess(ctx, item.tripId, identity.subject);
+		await clearDeletedTripEntityReferences({
+			ctx,
+			linkedEntityId: args.readinessItemId,
+			linkedEntityType: "readinessItem",
+			tripId: item.tripId,
+		});
 		await ctx.db.delete(args.readinessItemId);
 		await updateTripReadinessScore(ctx, item.tripId);
 

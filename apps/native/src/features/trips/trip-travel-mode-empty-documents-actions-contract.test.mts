@@ -1,0 +1,23 @@
+import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+const rootPath = resolve(import.meta.dirname, "../../../../..");
+
+const readWorkspaceFile = (path: string) =>
+	readFileSync(resolve(rootPath, path), "utf8");
+
+describe("trip travel mode empty document actions contract", () => {
+	it("keeps empty travel-day booking and document panels connected to setup", () => {
+		const source = readWorkspaceFile(
+			"apps/native/src/features/trips/trip-travel-mode-screen.tsx"
+		);
+
+		expect(source).toContain("No confirmed bookings");
+		expect(source).toContain("No documents uploaded");
+		expect(source).toContain('actionLabel="Review bookings"');
+		expect(source).toContain('actionLabel="Upload documents"');
+		expect(source).toContain("actionHref={VIYA_ROUTES.tripBookings(tripId)}");
+		expect(source).toContain("actionHref={VIYA_ROUTES.tripVault(tripId)}");
+	});
+});

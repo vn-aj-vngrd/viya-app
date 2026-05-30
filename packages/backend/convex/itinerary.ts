@@ -1,8 +1,10 @@
+import { sortTripItineraryItemsForTimeline } from "@viya-app/domain";
 import { ConvexError, v } from "convex/values";
 
 import type { Doc, Id } from "./_generated/dataModel";
 import { type MutationCtx, mutation, query } from "./_generated/server";
 import { ensureTripAccess, getRequiredIdentity } from "./lib/auth";
+import { clearDeletedTripEntityReferences } from "./lib/tripLinks";
 
 const itineraryItemCategoryValidator = v.union(
 	v.literal("activity"),
@@ -85,6 +87,40 @@ const ensureMatchingDay = async (
 	return day;
 };
 
+interface ItineraryBookingPatch {
+	bookingId?: string;
+}
+
+const hasOwnObjectProperty = <T extends object>(
+	value: T,
+	key: PropertyKey
+): boolean => key in value;
+
+const getItineraryBookingPatch = async (
+	ctx: MutationCtx,
+	bookingId: string | undefined,
+	tripId: Id<"trips">
+): Promise<ItineraryBookingPatch> => {
+	if (bookingId === undefined) {
+		return {};
+	}
+
+	const normalizedBookingId = bookingId.trim();
+
+	if (!normalizedBookingId) {
+		return { bookingId: undefined };
+	}
+
+	const id = ctx.db.normalizeId("bookings", normalizedBookingId);
+	const booking = id ? await ctx.db.get(id) : null;
+
+	if (!booking || booking.tripId !== tripId) {
+		throw new ConvexError("BOOKING_TRIP_MISMATCH");
+	}
+
+	return { bookingId: booking._id };
+};
+
 const ensureItineraryPlace = async (
 	ctx: MutationCtx,
 	item: Doc<"itineraryItems">
@@ -143,15 +179,16 @@ export const listTripItinerary = query({
 				.collect(),
 		]);
 
+		const sortedDays = [...days].sort(
+			(firstDay, secondDay) => firstDay.dayNumber - secondDay.dayNumber
+		);
+		const dayOrderById = new Map(
+			sortedDays.map((day) => [day._id, day.dayNumber])
+		);
+
 		return {
-			days: [...days].sort(
-				(firstDay, secondDay) => firstDay.dayNumber - secondDay.dayNumber
-			),
-			items: [...items].sort((firstItem, secondItem) =>
-				`${firstItem.startTime}-${firstItem.title}`.localeCompare(
-					`${secondItem.startTime}-${secondItem.title}`
-				)
-			),
+			days: sortedDays,
+			items: sortTripItineraryItemsForTimeline(items, dayOrderById),
 		};
 	},
 });
@@ -214,17 +251,57 @@ export const deleteItineraryDay = mutation({
 			args.dayId,
 			identity.subject
 		);
-		const items = await ctx.db
-			.query("itineraryItems")
-			.withIndex("by_trip", (q) => q.eq("tripId", day.tripId))
-			.collect();
+		const [items, places, moments] = await Promise.all([
+			ctx.db
+				.query("itineraryItems")
+				.withIndex("by_trip", (q) => q.eq("tripId", day.tripId))
+				.collect(),
+			ctx.db
+				.query("savedPlaces")
+				.withIndex("by_trip", (q) => q.eq("tripId", day.tripId))
+				.collect(),
+			ctx.db
+				.query("moments")
+				.withIndex("by_trip", (q) => q.eq("tripId", day.tripId))
+				.collect(),
+		]);
+		const now = Date.now();
 
 		for (const item of items) {
 			if (item.dayId === args.dayId) {
+				await clearDeletedTripEntityReferences({
+					ctx,
+					linkedEntityId: item._id,
+					linkedEntityType: "itineraryItem",
+					tripId: day.tripId,
+				});
 				await ctx.db.delete(item._id);
 			}
 		}
 
+		for (const place of places) {
+			if (place.assignedDayId === args.dayId) {
+				await ctx.db.patch(place._id, {
+					assignedDayId: undefined,
+					updatedAt: now,
+				});
+			}
+		}
+
+		for (const moment of moments) {
+			if (moment.dayId === args.dayId) {
+				await ctx.db.patch(moment._id, {
+					dayId: undefined,
+				});
+			}
+		}
+
+		await clearDeletedTripEntityReferences({
+			ctx,
+			linkedEntityId: args.dayId,
+			linkedEntityType: "itineraryDay",
+			tripId: day.tripId,
+		});
 		await ctx.db.delete(args.dayId);
 		await touchTrip(ctx, day.tripId);
 
@@ -256,7 +333,11 @@ export const createItineraryItem = mutation({
 		const identity = await getRequiredIdentity(ctx);
 		await ensureTripAccess(ctx, args.tripId, identity.subject);
 		await ensureMatchingDay(ctx, args.dayId, args.tripId);
-		const itemId = await ctx.db.insert("itineraryItems", args);
+		const { bookingId, ...itemArgs } = args;
+		const itemId = await ctx.db.insert("itineraryItems", {
+			...itemArgs,
+			...(await getItineraryBookingPatch(ctx, bookingId, args.tripId)),
+		});
 		const item = await ctx.db.get(itemId);
 
 		if (item) {
@@ -301,8 +382,15 @@ export const updateItineraryItem = mutation({
 			await ensureMatchingDay(ctx, args.dayId, item.tripId);
 		}
 
-		const { itemId, ...patch } = args;
-		await ctx.db.patch(itemId, patch);
+		const shouldUpdateBooking = hasOwnObjectProperty(args, "bookingId");
+		const { bookingId, itemId, ...patch } = args;
+		const bookingPatch = shouldUpdateBooking
+			? await getItineraryBookingPatch(ctx, bookingId, item.tripId)
+			: {};
+		await ctx.db.patch(itemId, {
+			...patch,
+			...bookingPatch,
+		});
 		const updatedItem = await ctx.db.get(itemId);
 
 		if (updatedItem) {
@@ -356,6 +444,12 @@ export const deleteItineraryItem = mutation({
 			args.itemId,
 			identity.subject
 		);
+		await clearDeletedTripEntityReferences({
+			ctx,
+			linkedEntityId: args.itemId,
+			linkedEntityType: "itineraryItem",
+			tripId: item.tripId,
+		});
 		await ctx.db.delete(args.itemId);
 		await touchTrip(ctx, item.tripId);
 

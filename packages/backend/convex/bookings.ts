@@ -3,6 +3,7 @@ import { ConvexError, v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { type MutationCtx, mutation, query } from "./_generated/server";
 import { ensureTripAccess, getRequiredIdentity } from "./lib/auth";
+import { clearDeletedTripEntityReferences } from "./lib/tripLinks";
 
 const bookingTypeValidator = v.union(
 	v.literal("flight"),
@@ -58,16 +59,103 @@ const ensureVaultItemBelongsToTrip = async (
 	}
 };
 
+const hasOwnObjectProperty = <T extends object>(
+	value: T,
+	key: PropertyKey
+): boolean => key in value;
+
+const syncBookingVaultLink = async (
+	ctx: MutationCtx,
+	previousVaultItemId: Id<"vaultItems"> | undefined,
+	nextVaultItemId: Id<"vaultItems"> | undefined,
+	bookingId: Id<"bookings">
+) => {
+	const now = Date.now();
+
+	if (previousVaultItemId && previousVaultItemId !== nextVaultItemId) {
+		const previousVaultItem = await ctx.db.get(previousVaultItemId);
+
+		if (
+			previousVaultItem?.linkedEntityId === bookingId &&
+			previousVaultItem.linkedEntityType === "booking"
+		) {
+			await ctx.db.patch(previousVaultItemId, {
+				linkedEntityId: undefined,
+				linkedEntityType: undefined,
+				updatedAt: now,
+			});
+		}
+	}
+
+	if (nextVaultItemId) {
+		await ctx.db.patch(nextVaultItemId, {
+			linkedEntityId: bookingId,
+			linkedEntityType: "booking",
+			updatedAt: now,
+		});
+	}
+};
+
+const clearDeletedBookingReferences = async (
+	ctx: MutationCtx,
+	bookingId: Id<"bookings">,
+	tripId: Id<"trips">
+) => {
+	const now = Date.now();
+	const [expenses, itineraryItems] = await Promise.all([
+		ctx.db
+			.query("expenses")
+			.withIndex("by_trip", (q) => q.eq("tripId", tripId))
+			.collect(),
+		ctx.db
+			.query("itineraryItems")
+			.withIndex("by_trip", (q) => q.eq("tripId", tripId))
+			.collect(),
+	]);
+
+	for (const expense of expenses) {
+		if (expense.bookingId === bookingId) {
+			await ctx.db.patch(expense._id, {
+				bookingId: undefined,
+				updatedAt: now,
+			});
+		}
+	}
+
+	for (const item of itineraryItems) {
+		if (item.bookingId === bookingId) {
+			await ctx.db.patch(item._id, {
+				bookingId: undefined,
+			});
+		}
+	}
+
+	await clearDeletedTripEntityReferences({
+		ctx,
+		linkedEntityId: bookingId,
+		linkedEntityType: "booking",
+		now,
+		tripId,
+	});
+};
+
 export const listTripBookings = query({
 	args: { tripId: v.id("trips") },
 	handler: async (ctx, args) => {
 		const identity = await getRequiredIdentity(ctx);
 		await ensureTripAccess(ctx, args.tripId, identity.subject);
 
-		return ctx.db
+		const bookings = await ctx.db
 			.query("bookings")
 			.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
 			.collect();
+		const sortedBookings = [...bookings].sort((firstBooking, secondBooking) =>
+			`${firstBooking.startDateTime ?? ""}-${firstBooking.title}`.localeCompare(
+				`${secondBooking.startDateTime ?? ""}-${secondBooking.title}`
+			)
+		);
+
+		return sortedBookings;
 	},
 });
 
@@ -123,6 +211,7 @@ export const createBookingTarget = mutation({
 			status: args.status ?? "target",
 			updatedAt: now,
 		});
+		await syncBookingVaultLink(ctx, undefined, args.vaultItemId, bookingId);
 		await touchTrip(ctx, args.tripId);
 
 		return ctx.db.get(bookingId);
@@ -155,12 +244,24 @@ export const updateBooking = mutation({
 			args.bookingId,
 			identity.subject
 		);
-		await ensureVaultItemBelongsToTrip(ctx, args.vaultItemId, booking.tripId);
-		const { bookingId, ...patch } = args;
+		const shouldUpdateVaultItem = hasOwnObjectProperty(args, "vaultItemId");
+		if (shouldUpdateVaultItem) {
+			await ensureVaultItemBelongsToTrip(ctx, args.vaultItemId, booking.tripId);
+		}
+		const { bookingId, vaultItemId, ...patch } = args;
 		await ctx.db.patch(bookingId, {
 			...patch,
+			...(shouldUpdateVaultItem ? { vaultItemId } : {}),
 			updatedAt: Date.now(),
 		});
+		if (shouldUpdateVaultItem) {
+			await syncBookingVaultLink(
+				ctx,
+				booking.vaultItemId,
+				vaultItemId,
+				bookingId
+			);
+		}
 		await touchTrip(ctx, booking.tripId);
 
 		return ctx.db.get(bookingId);
@@ -184,11 +285,12 @@ export const linkBookingVaultItem = mutation({
 			updatedAt: Date.now(),
 			vaultItemId: args.vaultItemId,
 		});
-		await ctx.db.patch(args.vaultItemId, {
-			linkedEntityId: args.bookingId,
-			linkedEntityType: "booking",
-			updatedAt: Date.now(),
-		});
+		await syncBookingVaultLink(
+			ctx,
+			booking.vaultItemId,
+			args.vaultItemId,
+			args.bookingId
+		);
 		await touchTrip(ctx, booking.tripId);
 
 		return ctx.db.get(args.bookingId);
@@ -204,6 +306,7 @@ export const deleteBooking = mutation({
 			args.bookingId,
 			identity.subject
 		);
+		await clearDeletedBookingReferences(ctx, args.bookingId, booking.tripId);
 		await ctx.db.delete(args.bookingId);
 		await touchTrip(ctx, booking.tripId);
 

@@ -237,6 +237,8 @@ export default defineSchema({
 		title: v.string(),
 		body: v.string(),
 		category: v.string(),
+		relatedEntityType: v.optional(v.string()),
+		relatedEntityId: v.optional(v.string()),
 		createdAt: v.number(),
 		updatedAt: v.number(),
 	}).index("by_trip", ["tripId"]),

@@ -16,3 +16,5 @@ export const getTripModulesSheetListMaxHeight = ({
 			Math.max(bottomInset, minimumBottomInset) -
 			tripModulesSheetChromeHeight
 	);
+
+export const shouldShowTripDashboardFocusSections = () => false;
