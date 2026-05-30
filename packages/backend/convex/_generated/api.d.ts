@@ -35,6 +35,7 @@ import type * as tripWorkspace from "../tripWorkspace.js";
 import type * as trips from "../trips.js";
 import type * as users from "../users.js";
 import type * as vault from "../vault.js";
+import type * as wipe from "../wipe.js";
 
 import type {
   ApiFromModules,
@@ -70,6 +71,7 @@ declare const fullApi: ApiFromModules<{
   trips: typeof trips;
   users: typeof users;
   vault: typeof vault;
+  wipe: typeof wipe;
 }>;
 
 /**
