@@ -5,21 +5,17 @@ import {
 	reloadAsync,
 } from "expo-updates";
 import { Button, Spinner, Surface, Text } from "heroui-native";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-type UpdateStatus = "checking" | "downloading" | "ready" | "error" | "idle";
+type UpdateStatus = "downloading" | "ready" | "idle";
 
 const updateAccentColor = "#0A84FF";
+const isDevelopment = process.env.NODE_ENV === "development";
 
 const getStatusCopy = (status: UpdateStatus) => {
 	switch (status) {
-		case "checking":
-			return {
-				description: "Checking for the latest version.",
-				title: "Checking updates",
-			};
 		case "downloading":
 			return {
 				description: "Downloading in the background.",
@@ -38,27 +34,43 @@ const getStatusCopy = (status: UpdateStatus) => {
 export function OTAUpdateBanner() {
 	const [status, setStatus] = useState<UpdateStatus>("idle");
 	const insets = useSafeAreaInsets();
-
-	const checkForUpdate = useCallback(async () => {
-		try {
-			setStatus("checking");
-			const update = await checkForUpdateAsync();
-
-			if (update.isAvailable) {
-				setStatus("downloading");
-				await fetchUpdateAsync();
-				setStatus("ready");
-			} else {
-				setStatus("idle");
-			}
-		} catch {
-			setStatus("error");
-		}
-	}, []);
+	const isChecking = useRef(false);
 
 	useEffect(() => {
-		checkForUpdate();
-	}, [checkForUpdate]);
+		if (isDevelopment || isChecking.current) {
+			return;
+		}
+
+		isChecking.current = true;
+		let isMounted = true;
+
+		const checkForUpdate = async () => {
+			try {
+				const update = await checkForUpdateAsync();
+
+				if (!(isMounted && update.isAvailable)) {
+					return;
+				}
+
+				setStatus("downloading");
+				await fetchUpdateAsync();
+
+				if (isMounted) {
+					setStatus("ready");
+				}
+			} catch {
+				// expo-updates can throw when unavailable; launch should continue.
+			}
+		};
+
+		checkForUpdate().catch(() => {
+			// Launch should continue if update checks are unavailable.
+		});
+
+		return () => {
+			isMounted = false;
+		};
+	}, []);
 
 	async function handleRestart() {
 		await reloadAsync();
@@ -70,7 +82,7 @@ export function OTAUpdateBanner() {
 		return null;
 	}
 
-	const isBusy = status === "checking" || status === "downloading";
+	const isBusy = status === "downloading";
 
 	return (
 		<View
