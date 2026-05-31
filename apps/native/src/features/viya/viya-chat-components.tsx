@@ -679,6 +679,109 @@ export function TripContextSheet({
 	);
 }
 
+export function TripContextActionRow({
+	currentTrip,
+	hasTrips,
+	onPress,
+}: {
+	currentTrip: ChatTripContextItem | null;
+	hasTrips: boolean;
+	onPress: () => void;
+}) {
+	const mutedColor = useThemeColor("muted");
+	const dateRange = currentTrip
+		? formatReadableTripDateRange({
+				endDate: currentTrip.endDate,
+				startDate: currentTrip.startDate,
+			})
+		: null;
+	const title = currentTrip?.title ?? "Choose trip context";
+	let description = "Create a trip first to give Viya trip context.";
+
+	if (currentTrip) {
+		description = `${currentTrip.destination} - ${dateRange}`;
+	} else if (hasTrips) {
+		description =
+			"Use a saved trip for itinerary, vault, budget, and readiness.";
+	}
+
+	return (
+		<Pressable
+			accessibilityLabel={
+				currentTrip
+					? `Change trip context from ${currentTrip.title}`
+					: "Choose trip context"
+			}
+			accessibilityRole="button"
+			className="min-h-16 flex-row items-center gap-3 rounded-[22px] bg-surface px-3 py-3"
+			onPress={onPress}
+			style={({ pressed }) => ({
+				transform: [{ scale: pressed ? 0.99 : 1 }],
+			})}
+		>
+			<View className="h-10 w-10 items-center justify-center rounded-full bg-warning/10">
+				<Ionicons color="#FF9F0A" name="briefcase-outline" size={19} />
+			</View>
+			<View className="min-w-0 flex-1 gap-0.5">
+				<Text numberOfLines={1} type="body-sm" weight="bold">
+					{title}
+				</Text>
+				<Text color="muted" numberOfLines={2} type="body-xs">
+					{description}
+				</Text>
+			</View>
+			<Ionicons color={mutedColor} name="chevron-forward" size={18} />
+		</Pressable>
+	);
+}
+
+export function TripContextChip({
+	currentTrip,
+	isClearable,
+	onClear,
+	onPress,
+}: {
+	currentTrip: ChatTripContextItem;
+	isClearable: boolean;
+	onClear: () => void;
+	onPress: () => void;
+}) {
+	const mutedColor = useThemeColor("muted");
+
+	return (
+		<View className="flex-row px-1 pb-1">
+			<Surface className="max-w-full flex-row items-center gap-1 rounded-full border border-border bg-surface py-1 pr-1 pl-2">
+				<Pressable
+					accessibilityLabel={`Change trip context from ${currentTrip.title}`}
+					accessibilityRole="button"
+					className="min-w-0 flex-row items-center gap-1.5 py-1 pr-1"
+					onPress={onPress}
+				>
+					<Ionicons color="#FF9F0A" name="briefcase-outline" size={14} />
+					<Text
+						className="min-w-0 flex-shrink"
+						numberOfLines={1}
+						type="body-xs"
+						weight="bold"
+					>
+						{currentTrip.title}
+					</Text>
+				</Pressable>
+				{isClearable ? (
+					<Pressable
+						accessibilityLabel="Clear trip context"
+						accessibilityRole="button"
+						className="h-7 w-7 items-center justify-center rounded-full bg-default"
+						onPress={onClear}
+					>
+						<Ionicons color={mutedColor} name="close" size={14} />
+					</Pressable>
+				) : null}
+			</Surface>
+		</View>
+	);
+}
+
 export function QuestionOptionsDock({
 	isLoading,
 	onSelectOption,

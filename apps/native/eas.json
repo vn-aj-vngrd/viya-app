@@ -1,0 +1,33 @@
+{
+  "cli": {
+    "version": ">= 16.0.1",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_MONOREPO_ROOT": "../.."
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_MONOREPO_ROOT": "../.."
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "EXPO_MONOREPO_ROOT": "../.."
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

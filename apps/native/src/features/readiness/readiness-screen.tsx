@@ -30,6 +30,7 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Svg, { Circle } from "react-native-svg";
 import { Container } from "@/components/container";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 import { EmptyState } from "@/src/components/empty-state";
@@ -37,7 +38,6 @@ import { NavigationIconButton } from "@/src/components/navigation/navigation-ico
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 import { TripModuleScreenFrame } from "@/src/features/trips/trip-module-floating-bar";
-import { TripModuleManualEntryCard } from "@/src/features/trips/trip-module-manual-entry-card";
 import { useTripIdParam } from "@/src/features/trips/use-trip-id-param";
 
 import { ReadinessCategoryCard } from "./readiness-category-card";
@@ -111,6 +111,52 @@ const readinessCategoryOptions = [
 const priorityOptions = ["low", "medium", "high", "critical"] as const;
 const readinessCategories = new Set<string>(readinessCategoryOptions);
 const priorities = new Set<string>(priorityOptions);
+const readinessAccent = "#0A84FF";
+const readinessTrackStyle = { backgroundColor: "rgba(10, 132, 255, 0.12)" };
+const readinessRingSize = 48;
+const readinessRingStroke = 4;
+const readinessRingRadius = (readinessRingSize - readinessRingStroke) / 2;
+const readinessRingCircumference = 2 * Math.PI * readinessRingRadius;
+const readinessRingCenter = readinessRingSize / 2;
+
+const workspaceModuleGroups = [
+	{
+		accentBackgroundColor: "rgba(191, 90, 242, 0.12)",
+		accentColor: "#BF5AF2",
+		categories: ["schedule", "transport", "weather"] as const,
+		detail: "Schedule, transfers, and weather",
+		icon: "calendar-outline",
+		label: "Itinerary",
+		route: VIYA_ROUTES.tripItinerary,
+	},
+	{
+		accentBackgroundColor: "rgba(10, 165, 181, 0.12)",
+		accentColor: "#0AA5B5",
+		categories: ["budget"] as const,
+		detail: "Spend, receipts, and daily pace",
+		icon: "wallet-outline",
+		label: "Budget",
+		route: VIYA_ROUTES.tripBudget,
+	},
+	{
+		accentBackgroundColor: "rgba(255, 159, 10, 0.12)",
+		accentColor: "#FF9F0A",
+		categories: ["documents", "bookings", "packing"] as const,
+		detail: "Bookings, passports, tickets, and documents",
+		icon: "folder-open-outline",
+		label: "Vault",
+		route: VIYA_ROUTES.tripVault,
+	},
+	{
+		accentBackgroundColor: "rgba(52, 199, 89, 0.12)",
+		accentColor: "#34C759",
+		categories: ["safety", "group", "backupPlan"] as const,
+		detail: "Safety, group coverage, and backups",
+		icon: "shield-checkmark-outline",
+		label: "Readiness",
+		route: VIYA_ROUTES.tripReadiness,
+	},
+] as const;
 
 const getReadinessCategory = (value: string): ReadinessCategory => {
 	const category = value.trim();
@@ -292,7 +338,7 @@ function ReadinessAssigneePicker({
 
 function ReadinessPill({ children }: { children: ReactNode }) {
 	return (
-		<View className="rounded-full border border-border bg-white px-3 py-1.5">
+		<View className="rounded-full bg-surface-secondary px-3 py-1.5">
 			<Text color="muted" type="body-xs" weight="semibold">
 				{children}
 			</Text>
@@ -302,13 +348,190 @@ function ReadinessPill({ children }: { children: ReactNode }) {
 
 function ReadinessMetric({ label, value }: { label: string; value: string }) {
 	return (
-		<View className="min-w-[47%] flex-1 gap-0.5">
-			<Text color="muted" type="body-xs" weight="semibold">
-				{label.toUpperCase()}
+		<View className="min-w-[45%] flex-1 gap-0.5">
+			<Text color="muted" numberOfLines={1} type="body-xs">
+				{label}
 			</Text>
-			<Text numberOfLines={1} type="body-sm" weight="bold">
+			<Text numberOfLines={1} type="body-sm" weight="semibold">
 				{value}
 			</Text>
+		</View>
+	);
+}
+
+function ReadinessProgressBar({ score }: { score: number }) {
+	const clampedScore = Math.max(0, Math.min(100, score));
+
+	return (
+		<View
+			className="h-2 overflow-hidden rounded-full"
+			style={readinessTrackStyle}
+		>
+			<View
+				className="h-full rounded-full"
+				style={{ backgroundColor: readinessAccent, width: `${clampedScore}%` }}
+			/>
+		</View>
+	);
+}
+
+const getReadinessTone = (progress: number, hasCoverage: boolean) => {
+	if (!hasCoverage) {
+		return "#A1A1AA";
+	}
+
+	if (progress >= 70) {
+		return "#1CCB68";
+	}
+
+	if (progress >= 40) {
+		return "#FF9F0A";
+	}
+
+	return "#FF3B30";
+};
+
+function ReadinessRing({
+	hasCoverage,
+	progress,
+}: {
+	hasCoverage: boolean;
+	progress: number;
+}) {
+	const tone = getReadinessTone(progress, hasCoverage);
+	const boundedProgress = Math.min(100, Math.max(0, Math.round(progress)));
+	const dashOffset = readinessRingCircumference * (1 - boundedProgress / 100);
+
+	return (
+		<View
+			className="items-center justify-center rounded-full bg-surface"
+			style={{ height: readinessRingSize, width: readinessRingSize }}
+		>
+			<Svg
+				height={readinessRingSize}
+				style={{ position: "absolute", transform: [{ rotate: "-90deg" }] }}
+				width={readinessRingSize}
+			>
+				<Circle
+					cx={readinessRingCenter}
+					cy={readinessRingCenter}
+					fill="none"
+					r={readinessRingRadius}
+					stroke="rgba(24, 24, 27, 0.08)"
+					strokeWidth={readinessRingStroke}
+				/>
+				{hasCoverage ? (
+					<Circle
+						cx={readinessRingCenter}
+						cy={readinessRingCenter}
+						fill="none"
+						r={readinessRingRadius}
+						stroke={tone}
+						strokeDasharray={readinessRingCircumference}
+						strokeDashoffset={dashOffset}
+						strokeLinecap="round"
+						strokeWidth={readinessRingStroke}
+					/>
+				) : null}
+			</Svg>
+			{hasCoverage && boundedProgress >= 100 ? (
+				<Ionicons color={tone} name="checkmark" size={22} />
+			) : null}
+			{hasCoverage && boundedProgress < 100 ? (
+				<Text style={{ color: tone, fontSize: 13 }} weight="bold">
+					{boundedProgress}
+				</Text>
+			) : null}
+			{hasCoverage ? null : (
+				<Ionicons color={tone} name="sparkles-outline" size={16} />
+			)}
+		</View>
+	);
+}
+
+function ReadinessOverview({
+	assignedOpenCount,
+	completedCount,
+	domainItemCount,
+	highestPriorityLabel,
+	highestPriorityItem,
+	onCreateTask,
+	onFixTopGap,
+	openCount,
+	score,
+	tripId,
+	urgentOpenCount,
+	weakestCategoryLabel,
+}: {
+	assignedOpenCount: number;
+	completedCount: number;
+	domainItemCount: number;
+	highestPriorityLabel: string;
+	highestPriorityItem?: Doc<"readinessItems">;
+	onCreateTask: () => void;
+	onFixTopGap: () => void;
+	openCount: number;
+	score: ReturnType<typeof calculateReadinessScore>;
+	tripId: Id<"trips">;
+	urgentOpenCount: number;
+	weakestCategoryLabel: string;
+}) {
+	const isTravelReady = score.overallScore >= 90;
+	const hasReadinessCoverage = domainItemCount > 0;
+
+	return (
+		<View className="gap-4 rounded-[30px] border border-border bg-surface p-5">
+			<View className="flex-row items-start justify-between gap-4">
+				<View className="min-w-0 flex-1 gap-1">
+					<Text color="muted" type="body-xs" weight="semibold">
+						READINESS
+					</Text>
+					<Text.Heading type="h4" weight="semibold">
+						{score.overallScore}% ready
+					</Text.Heading>
+					<Text color="muted" numberOfLines={2} type="body-sm">
+						{score.summary}
+					</Text>
+				</View>
+				<View className="items-end gap-2">
+					<ReadinessRing
+						hasCoverage={hasReadinessCoverage}
+						progress={score.overallScore}
+					/>
+					<Button onPress={onCreateTask} size="sm" variant="secondary">
+						<Ionicons color="#0A84FF" name="add-circle-outline" size={16} />
+						<Button.Label>Add task</Button.Label>
+					</Button>
+				</View>
+			</View>
+			<ReadinessProgressBar score={score.overallScore} />
+			<View className="flex-row flex-wrap gap-x-4 gap-y-3">
+				<ReadinessMetric
+					label="Done"
+					value={`${completedCount}/${domainItemCount}`}
+				/>
+				<ReadinessMetric label="Open" value={`${openCount} tasks`} />
+				<ReadinessMetric label="Urgent" value={`${urgentOpenCount}`} />
+				<ReadinessMetric label="Assigned" value={`${assignedOpenCount}`} />
+				<ReadinessMetric label="Weakest" value={weakestCategoryLabel} />
+				<ReadinessMetric label="Priority" value={highestPriorityLabel} />
+			</View>
+			{isTravelReady ? (
+				<Link asChild href={VIYA_ROUTES.tripTravelMode(tripId)}>
+					<Button size="sm">
+						<Button.Label>Open travel mode</Button.Label>
+					</Button>
+				</Link>
+			) : (
+				<Button
+					isDisabled={!highestPriorityItem}
+					onPress={onFixTopGap}
+					size="sm"
+					variant="secondary"
+				>
+					<Button.Label>Fix highest-priority gap</Button.Label>
+				</Button>
+			)}
 		</View>
 	);
 }
@@ -331,21 +554,21 @@ function TopReadinessGapSummary({
 	ownerHref: Href | null;
 }) {
 	return (
-		<View className="gap-3 rounded-[24px] bg-surface p-4">
+		<View className="gap-3 rounded-[28px] border border-border bg-surface p-4">
 			<View className="flex-row items-center gap-3">
 				<View className="h-9 w-9 items-center justify-center rounded-full bg-primary/10">
 					<Ionicons color="#0A84FF" name="alert-outline" size={18} />
 				</View>
 				<View className="min-w-0 flex-1 gap-1">
 					<Text color="muted" type="body-xs" weight="semibold">
-						TOP GAP
+						NEXT GAP
 					</Text>
-					<Text numberOfLines={1} type="body-sm" weight="bold">
+					<Text numberOfLines={1} type="body" weight="semibold">
 						{item?.title ?? "No open gap"}
 					</Text>
 				</View>
 			</View>
-			<Text.Paragraph color="muted" type="body-sm">
+			<Text.Paragraph color="muted" numberOfLines={2} type="body-sm">
 				{item
 					? item.description
 					: "All required readiness tasks are resolved or ignored."}
@@ -362,13 +585,30 @@ function TopReadinessGapSummary({
 						<ReadinessPill>{assignedToName ?? "Unassigned"}</ReadinessPill>
 					</View>
 					<View className="flex-row flex-wrap gap-2">
-						<Button className="flex-1" onPress={onReview} size="sm">
+						<Button
+							className="min-w-[140px] flex-1"
+							onPress={onReview}
+							size="sm"
+						>
 							<Ionicons color="#FFFFFF" name="create-outline" size={16} />
 							<Button.Label>Review top gap</Button.Label>
 						</Button>
+						<Button
+							className="min-w-[132px] flex-1"
+							onPress={onMarkDone}
+							size="sm"
+							variant="secondary"
+						>
+							<Ionicons color="#0A84FF" name="checkmark-outline" size={15} />
+							<Button.Label>Mark top done</Button.Label>
+						</Button>
 						{categoryHref ? (
 							<Link asChild href={categoryHref}>
-								<Button className="flex-1" size="sm" variant="secondary">
+								<Button
+									className="min-w-[148px] flex-1"
+									size="sm"
+									variant="secondary"
+								>
 									<Ionicons color="#0A84FF" name="open-outline" size={15} />
 									<Button.Label>Open top category</Button.Label>
 								</Button>
@@ -376,20 +616,16 @@ function TopReadinessGapSummary({
 						) : null}
 						{ownerHref ? (
 							<Link asChild href={ownerHref}>
-								<Button className="flex-1" size="sm" variant="secondary">
+								<Button
+									className="min-w-[132px] flex-1"
+									size="sm"
+									variant="secondary"
+								>
 									<Ionicons color="#0A84FF" name="people-outline" size={15} />
 									<Button.Label>Open top owner</Button.Label>
 								</Button>
 							</Link>
 						) : null}
-						<Button
-							className="flex-1"
-							onPress={onMarkDone}
-							size="sm"
-							variant="secondary"
-						>
-							<Button.Label>Mark top done</Button.Label>
-						</Button>
 					</View>
 				</>
 			) : (
@@ -706,6 +942,29 @@ export function ReadinessScreen() {
 	const highestPriorityAssignedName = getAssignedToName(
 		highestPriorityItem?.assignedToMemberId
 	);
+	const workspaceModules = workspaceModuleGroups.map((module) => {
+		const moduleCategories = new Set<ReadinessCategory>(module.categories);
+		const moduleItems = domainItems.filter((item) =>
+			moduleCategories.has(item.category)
+		);
+		const moduleOpenItems = moduleItems.filter(
+			(item) => item.status !== "done" && item.status !== "ignored"
+		);
+		const moduleScore = Math.round(
+			module.categories.reduce(
+				(total, category) => total + score.categoryScores[category],
+				0
+			) / module.categories.length
+		);
+
+		return {
+			...module,
+			categoryHref: module.route(tripId),
+			highestPriority: getHighestPriority(moduleItems),
+			openCount: moduleOpenItems.length,
+			score: moduleScore,
+		};
+	});
 
 	return (
 		<TripModuleScreenFrame
@@ -723,7 +982,7 @@ export function ReadinessScreen() {
 				<ScrollView
 					contentContainerStyle={{
 						flexGrow: 1,
-						gap: 16,
+						gap: 14,
 						paddingBottom: 112,
 						paddingHorizontal: 16,
 					}}
@@ -731,141 +990,85 @@ export function ReadinessScreen() {
 					keyboardShouldPersistTaps="handled"
 					showsVerticalScrollIndicator={false}
 				>
-					<TripModuleManualEntryCard
-						description="Add and resolve concrete prep tasks for documents, bookings, packing, budget, safety, and backup plans."
-						moduleLabel="readiness"
-						onPrimaryPress={openCreateSheet}
-						primaryActionIcon="checkbox-outline"
-						primaryActionLabel="Add task"
-					/>
 					{readinessErrorMessage ? (
 						<Text className="text-danger" type="body-sm">
 							{readinessErrorMessage}
 						</Text>
 					) : null}
 
-					<View className="gap-4">
-						<View className="flex-row items-start justify-between gap-3">
-							<View className="min-w-0 flex-1 gap-1">
+					<ReadinessOverview
+						assignedOpenCount={assignedOpenCount}
+						completedCount={completedCount}
+						domainItemCount={domainItems.length}
+						highestPriorityItem={highestPriorityItem}
+						highestPriorityLabel={
+							highestPriorityDomainItem
+								? PRIORITY_LABELS[highestPriorityDomainItem.priority]
+								: "Clear"
+						}
+						onCreateTask={openCreateSheet}
+						onFixTopGap={() => {
+							if (highestPriorityItem) {
+								openEditSheet(highestPriorityItem);
+							}
+						}}
+						openCount={openItems.length}
+						score={score}
+						tripId={tripId}
+						urgentOpenCount={urgentOpenCount}
+						weakestCategoryLabel={weakestCategoryLabel}
+					/>
+
+					<TopReadinessGapSummary
+						assignedToName={highestPriorityAssignedName}
+						categoryHref={highestPriorityCategoryHref}
+						item={highestPriorityItem}
+						onCreateTopGap={openCreateSheet}
+						onMarkDone={() => {
+							if (highestPriorityItem) {
+								runReadinessAction(() =>
+									updateReadinessItem({
+										readinessItemId: highestPriorityItem._id,
+										status: "done",
+									})
+								).catch(() => undefined);
+							}
+						}}
+						onReview={() => {
+							if (highestPriorityItem) {
+								openEditSheet(highestPriorityItem);
+							}
+						}}
+						ownerHref={highestPriorityOwnerHref}
+					/>
+
+					<View className="gap-3">
+						<View className="flex-row items-end justify-between gap-4">
+							<View className="min-w-0 flex-1">
 								<Text.Heading type="h5" weight="semibold">
-									Prep control
+									Workspace
 								</Text.Heading>
 								<Text color="muted" type="body-sm">
-									Resolve blockers before switching into Travel Mode.
+									Open the module that owns each gap.
 								</Text>
 							</View>
-							<View className="h-11 w-11 items-center justify-center rounded-full bg-surface-secondary">
-								<Ionicons
-									color="#0A84FF"
-									name="shield-checkmark-outline"
-									size={20}
-								/>
-							</View>
-						</View>
-						<View className="flex-row flex-wrap gap-2">
-							<ReadinessPill>Check</ReadinessPill>
-							<ReadinessPill>{openItems.length} open</ReadinessPill>
-							<ReadinessPill>{urgentOpenCount} urgent</ReadinessPill>
-							<ReadinessPill>{assignedOpenCount} assigned</ReadinessPill>
-						</View>
-						<View className="flex-row items-end justify-between gap-4">
-							<View className="flex-1 gap-1">
-								<Text color="muted" type="body-xs" weight="semibold">
-									READINESS SCORE
-								</Text>
-								<Text.Paragraph color="muted" type="body-sm">
-									{score.summary}
-								</Text.Paragraph>
-							</View>
-							<Text.Heading className="text-5xl" type="h1" weight="semibold">
-								{score.overallScore}
-							</Text.Heading>
 						</View>
 						<View className="flex-row flex-wrap gap-3">
-							<ReadinessMetric
-								label="Done"
-								value={`${completedCount}/${domainItems.length}`}
-							/>
-							<ReadinessMetric label="Weakest" value={weakestCategoryLabel} />
-							<ReadinessMetric
-								label="Priority"
-								value={
-									highestPriorityDomainItem
-										? PRIORITY_LABELS[highestPriorityDomainItem.priority]
-										: "Clear"
-								}
-							/>
-							<ReadinessMetric
-								label="Assigned"
-								value={`${assignedOpenCount}/${openItems.length} open`}
-							/>
-						</View>
-						<TopReadinessGapSummary
-							assignedToName={highestPriorityAssignedName}
-							categoryHref={highestPriorityCategoryHref}
-							item={highestPriorityItem}
-							onCreateTopGap={openCreateSheet}
-							onMarkDone={() => {
-								if (highestPriorityItem) {
-									runReadinessAction(() =>
-										updateReadinessItem({
-											readinessItemId: highestPriorityItem._id,
-											status: "done",
-										})
-									).catch(() => undefined);
-								}
-							}}
-							onReview={() => {
-								if (highestPriorityItem) {
-									openEditSheet(highestPriorityItem);
-								}
-							}}
-							ownerHref={highestPriorityOwnerHref}
-						/>
-						{score.overallScore >= 90 ? (
-							<Link asChild href={VIYA_ROUTES.tripTravelMode(tripId)}>
-								<Button>
-									<Button.Label>Open travel mode</Button.Label>
-								</Button>
-							</Link>
-						) : (
-							<Button
-								isDisabled={!highestPriorityItem}
-								onPress={() => {
-									if (highestPriorityItem) {
-										openEditSheet(highestPriorityItem);
-									}
-								}}
-								variant="secondary"
-							>
-								<Button.Label>Fix highest-priority gap</Button.Label>
-							</Button>
-						)}
-					</View>
-
-					<View className="flex-row flex-wrap gap-3">
-						{categories.map(([category, categoryScore]) => {
-							const categoryItems = domainItems.filter(
-								(item) => item.category === category
-							);
-							const categoryOpenItems = categoryItems.filter(
-								(item) => item.status !== "done" && item.status !== "ignored"
-							);
-
-							return (
+							{workspaceModules.map((module) => (
 								<ReadinessCategoryCard
-									category={category}
-									categoryHref={getReadinessCategoryHref({
-										category,
-										tripId,
-									})}
-									highestPriority={getHighestPriority(categoryItems)}
-									key={category}
-									openCount={categoryOpenItems.length}
-									score={categoryScore}
+									accentBackgroundColor={module.accentBackgroundColor}
+									accentColor={module.accentColor}
+									categoryHref={module.categoryHref}
+									detail={module.detail}
+									highestPriority={module.highestPriority}
+									icon={module.icon}
+									key={module.label}
+									label={module.label}
+									openCount={module.openCount}
+									score={module.score}
 								/>
-							);
-						})}
+							))}
+						</View>
 					</View>
 
 					<View className="gap-3">

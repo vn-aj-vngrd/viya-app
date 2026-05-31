@@ -37,10 +37,11 @@ import { useVaultUpload } from "@/src/features/vault/use-vault-upload";
 
 import {
 	ChatHistorySheet,
-	ChatModeSelector,
 	HeaderActionGroup,
 	QuestionOptionsDock,
 	SlashCommandMenu,
+	TripContextActionRow,
+	TripContextChip,
 	TripContextSheet,
 	ViyaChatEmptyContent,
 	ViyaMessageList,
@@ -197,38 +198,6 @@ interface BlueprintTripCreatorOptions {
 	threadId: string | null;
 	threadIdsByContext: ThreadIdsByContext;
 }
-
-interface ModeSelectHandlerOptions {
-	currentTripId: Id<"trips"> | null;
-	onAwaitingAssistantMessageCountChange: (messageCount: number | null) => void;
-	onChatModeChange: (mode: ChatModeId) => void;
-	onErrorMessageChange: (message: string | null) => void;
-	onModeMenuOpenChange: (isOpen: boolean) => void;
-	onNoticeMessageChange: (message: string | null) => void;
-}
-
-const createModeSelectHandler =
-	({
-		currentTripId,
-		onAwaitingAssistantMessageCountChange,
-		onChatModeChange,
-		onErrorMessageChange,
-		onModeMenuOpenChange,
-		onNoticeMessageChange,
-	}: ModeSelectHandlerOptions) =>
-	(mode: ChatModeId) => {
-		if (mode === "trip" && !currentTripId) {
-			onErrorMessageChange("Create a trip first to use Trip mode.");
-			onModeMenuOpenChange(false);
-			return;
-		}
-
-		onChatModeChange(mode);
-		onModeMenuOpenChange(false);
-		onErrorMessageChange(null);
-		onNoticeMessageChange(null);
-		onAwaitingAssistantMessageCountChange(null);
-	};
 
 const createBlueprintTripHandler =
 	({
@@ -418,7 +387,6 @@ export function ViyaChatScreen() {
 	const [isHistorySheetOpen, setIsHistorySheetOpen] = useState(false);
 	const [isComposerActionsOpen, setIsComposerActionsOpen] = useState(false);
 	const [isComposerSheetOpen, setIsComposerSheetOpen] = useState(false);
-	const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
 	const [isTripContextSheetOpen, setIsTripContextSheetOpen] = useState(false);
 	const [isCreatingTripFromBlueprint, setIsCreatingTripFromBlueprint] =
 		useState(false);
@@ -443,8 +411,15 @@ export function ViyaChatScreen() {
 	const mutedColor = useThemeColor("muted");
 	const trips = useQuery(api.trips.listTrips);
 	const selectableTripContexts = getSelectableTripContexts(trips);
-	const currentTrip = getSelectedTripContext(trips, selectedTripId);
-	const currentTripId = currentTrip?._id ?? createdTripId;
+	const currentTrip = selectedTripId
+		? getSelectedTripContext(trips, selectedTripId)
+		: null;
+	const currentTripId =
+		currentTrip?._id ??
+		(trips === undefined || selectedTripId === createdTripId
+			? selectedTripId
+			: null) ??
+		(chatMode === "trip" ? createdTripId : null);
 	const selectedModeOption = getChatModeOption(chatMode);
 	const threadContextKey = getThreadContextKey(chatMode, currentTripId);
 	const threadId = threadIdsByContext[threadContextKey] ?? null;
@@ -739,7 +714,6 @@ export function ViyaChatScreen() {
 		setErrorMessage(null);
 		setNoticeMessage(null);
 		setIsLoading(true);
-		setIsModeMenuOpen(false);
 		setAwaitingAssistantMessageCount(messageCount);
 		setPendingPromptMessageIndex(messageCount);
 		setPendingPrompt(value);
@@ -772,21 +746,6 @@ export function ViyaChatScreen() {
 		router.replace(getViyaBackRoute({ fromTab, returnTo }));
 	};
 
-	const handleModeSelect = createModeSelectHandler({
-		currentTripId,
-		onAwaitingAssistantMessageCountChange: setAwaitingAssistantMessageCount,
-		onChatModeChange: (nextMode) => {
-			if (isTripModeLocked && nextMode !== "trip") {
-				return;
-			}
-
-			setChatMode(nextMode);
-		},
-		onErrorMessageChange: setErrorMessage,
-		onModeMenuOpenChange: setIsModeMenuOpen,
-		onNoticeMessageChange: setNoticeMessage,
-	});
-
 	const handleNewChatPress = () => {
 		chatSessionIdRef.current += 1;
 		const nextThreadIds = { ...threadIdsByContext };
@@ -804,7 +763,6 @@ export function ViyaChatScreen() {
 		setAwaitingAssistantMessageCount(null);
 		setErrorMessage(null);
 		setNoticeMessage(null);
-		setIsModeMenuOpen(false);
 
 		if (Object.keys(nextThreadIds).length === 0) {
 			runAsyncTask(removeStoredThreadIdsByContext());
@@ -848,7 +806,6 @@ export function ViyaChatScreen() {
 		setPendingPromptMessageIndex(null);
 		setAwaitingAssistantMessageCount(null);
 		setIsHistorySheetOpen(false);
-		setIsModeMenuOpen(false);
 		runAsyncTask(persistStoredThreadIdsByContext(nextThreadIds));
 	};
 
@@ -860,6 +817,24 @@ export function ViyaChatScreen() {
 		setAwaitingAssistantMessageCount(null);
 		setPendingPromptMessageIndex(null);
 		setIsTripContextSheetOpen(false);
+	};
+
+	const handleTripContextPickerPress = () => {
+		setIsComposerActionsOpen(false);
+		setIsTripContextSheetOpen(true);
+	};
+
+	const handleTripContextClear = () => {
+		if (isTripModeLocked) {
+			return;
+		}
+
+		setSelectedTripId(null);
+		setChatMode("chat");
+		setErrorMessage(null);
+		setNoticeMessage(null);
+		setAwaitingAssistantMessageCount(null);
+		setPendingPromptMessageIndex(null);
 	};
 
 	const handleQuestionOptionSelect = (value: string) => {
@@ -884,7 +859,8 @@ export function ViyaChatScreen() {
 		try {
 			const review = await pickDocument({
 				kind: "document",
-				tripId: chatMode === "trip" ? currentTripId : undefined,
+				tripId:
+					chatMode === "trip" && currentTripId ? currentTripId : undefined,
 			});
 
 			if (!review) {
@@ -981,7 +957,6 @@ export function ViyaChatScreen() {
 
 		setErrorMessage(null);
 		setNoticeMessage(null);
-		setIsModeMenuOpen(false);
 		applySlashCommandSelection({
 			activeSlashCommand,
 			command,
@@ -1032,16 +1007,12 @@ export function ViyaChatScreen() {
 								accessibilityLabel="Back to previous tab"
 								onPress={handleBackPress}
 							/>
-							<ChatModeSelector
-								currentTripId={currentTripId}
-								includeTripMode={isTripModeLocked}
-								isLocked={isTripModeLocked}
-								isOpen={isModeMenuOpen}
-								onOpenChange={setIsModeMenuOpen}
-								onSelect={handleModeSelect}
-								selectedMode={chatMode}
-								threadIdsByContext={threadIdsByContext}
-							/>
+							<View className="h-12 flex-row items-center gap-2 rounded-full border border-border bg-surface px-4">
+								<Ionicons color="#0A84FF" name="sparkles-outline" size={17} />
+								<Text style={{ color: "#0A84FF" }} type="body-sm" weight="bold">
+									Chat
+								</Text>
+							</View>
 						</View>
 						<HeaderActionGroup
 							onHistoryPress={() => setIsHistorySheetOpen(true)}
@@ -1136,6 +1107,14 @@ export function ViyaChatScreen() {
 							<Text className="px-4 text-danger" type="body-xs">
 								{vaultUploadErrorMessage}
 							</Text>
+						) : null}
+						{chatMode === "trip" && currentTrip ? (
+							<TripContextChip
+								currentTrip={currentTrip}
+								isClearable={!isTripModeLocked}
+								onClear={handleTripContextClear}
+								onPress={() => setIsTripContextSheetOpen(true)}
+							/>
 						) : null}
 						<View className="flex-row items-end gap-2">
 							<Pressable
@@ -1272,9 +1251,16 @@ export function ViyaChatScreen() {
 							<View className="gap-1 px-1">
 								<BottomSheet.Title>Viya actions</BottomSheet.Title>
 								<BottomSheet.Description>
-									Start a trip with AI or add files for context.
+									Choose trip context, start a trip, or add files.
 								</BottomSheet.Description>
 							</View>
+							{isTripModeLocked ? null : (
+								<TripContextActionRow
+									currentTrip={currentTrip}
+									hasTrips={selectableTripContexts.length > 0}
+									onPress={handleTripContextPickerPress}
+								/>
+							)}
 							<Pressable
 								accessibilityLabel="Create a trip with Viya"
 								accessibilityRole="button"
@@ -1432,7 +1418,7 @@ export function ViyaChatScreen() {
 				isOpen={isTripContextSheetOpen}
 				onOpenChange={setIsTripContextSheetOpen}
 				onSelect={handleTripContextSelect}
-				selectedTripId={currentTripId}
+				selectedTripId={currentTripId ?? null}
 				trips={selectableTripContexts}
 			/>
 		</Container>

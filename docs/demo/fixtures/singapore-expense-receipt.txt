@@ -3,4 +3,4 @@ Date: September 28, 2026
 Items: MRT stored value, tourist SIM, coffee, and airport transfer buffer
 Amount paid: SGD 82
 Category: Transport
-Notes: Linked to budget and travel mode for day-one operating context.
+Notes: Linked to budget and readiness for day-one operating context.

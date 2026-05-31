@@ -1,0 +1,26 @@
+Task mode: create
+Primary deck profile: product-platform
+Secondary gates: consumer/travel visual proof, product challenge leave-behind clarity
+
+Research references used:
+- Sequoia Capital, "Writing a Business Plan": company purpose, problem, solution, why now, market potential, competition, business model, team, financials, vision.
+- Y Combinator, "How to Pitch Your Company": get to what the company does quickly, lead with the strongest proof, and keep the pitch clear.
+- Airbnb original deck analyses: early travel pitch decks work when the problem, solution, market validation, and product proof are simple and concrete.
+- Philippine Statistics Authority, 2024 tourism satellite account: tourism contributed 8.9% to Philippine GDP in 2024.
+- Philippine News Agency / Bureau of Immigration, 2024 traveler records: 19M inbound and outbound travelers, including 6.7M foreign departures.
+
+Challenge requirements mapped:
+- Product Name & Tagline: slide 1.
+- The Problem: slide 2.
+- The Solution: slide 3.
+- AI Tools Used: slide 5.
+- Target User / Market: slide 7. Current segments are budget-conscious travelers, first-time travelers, young professionals/couples/barkadas, and frequent local travelers.
+- How to Use the Product: slides 6 and 8.
+- Working product proof and recorded-demo-ready path: slides 4, 6, and 8.
+
+Identity and asset provenance:
+- Viya app screens are actual iOS Simulator screenshots captured locally from the working app.
+- No unofficial third-party logos are used.
+- AI tools use labeled visual badges rather than invented or unofficial logo marks. Viya itself is described as the product, not counted as an external AI tool.
+- Singapore trip is synthetic demo data based on local fixture documents, not real bookings.
+- Current pitch scope ends at readiness: Home dashboard/suggestions, AI chat, create trip, itinerary, budget, Vault, and readiness.

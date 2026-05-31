@@ -1,8 +1,8 @@
-# Singapore Solo AI Workspace Happy Path
+# Singapore Group AI Workspace Happy Path
 
 ## Demo Frame
 
-This demo tells a solo Singapore business-conference reward trip story. Viya acts as a sharp travel chief-of-staff: practical, witty, and focused on turning a travel idea into a connected, ready workspace.
+This demo tells a Singapore group business-conference reward trip story. Viya acts as a sharp travel chief-of-staff: practical, witty, and focused on turning a travel idea into a connected, ready workspace.
 
 The trip is fictional demo data. The bookings and fixture documents are not real reservations.
 
@@ -19,20 +19,17 @@ The user can still ask questions to Viya at any point, but the proof is that ans
 
 ## Demo Goal
 
-End with 100% travel preparedness for a solo Singapore reward trip. Every connected trip module should have visible evidence:
+End with 100% travel preparedness for a Singapore group reward trip. Every connected trip module should have visible evidence:
 
 - Itinerary: four planned days with realistic buffers.
 - Vault: flight, hotel, event pass, receipt, and readiness note saved.
-- Bookings: confirmed flight and hotel, with the event pass linked as a document.
 - Budget: PHP planning budget, confirmed costs, and SGD receipt evidence.
 - Readiness: passport, SG Arrival Card, badge pickup, flight, hotel, budget, schedule, and outfit checks.
-- Risks: jet lag, airport transfer buffer, badge pickup timing, and overscheduled conference days.
-- Travel Mode: next event, hotel information, document shortcuts, and daily budget context.
 
 ## Opening Prompt
 
 ```txt
-Viya, plan my solo Singapore business-conference reward trip. I'm going for Tech Week, want it polished but not exhausting, and I need the workspace to handle flights, hotel, event pass, budget, itinerary, readiness, and a little victory lap. Ask only what you need, then build the trip.
+Viya, plan my Singapore group business-conference reward trip. I'm going for Tech Week, want it polished but not exhausting, and I need the workspace to handle flights, hotel, event pass, budget, itinerary, readiness, and a little victory lap. Ask only what you need, then build the trip.
 ```
 
 ## Presenter Script
@@ -62,11 +59,11 @@ Viya, plan my solo Singapore business-conference reward trip. I'm going for Tech
    - Free-time style: light food, one skyline moment, no packed evenings.
 10. Viya generates a Trip Blueprint with:
     - Destination: Singapore.
-    - Traveler: solo.
+    - Travelers: small team.
     - Purpose: business conference reward trip.
     - Event anchor: Tech Week Singapore at Marina Bay Sands.
     - Pace: polished but not exhausting.
-    - Required modules: itinerary, Vault, bookings, budget, readiness, risks, and travel mode.
+    - Required modules: itinerary, Vault, budget, and readiness.
 11. Confirm trip creation.
 12. The app opens the Trip Workspace Overview.
 13. Confirm `Open Viya for this trip` is visible.
@@ -75,11 +72,8 @@ Viya, plan my solo Singapore business-conference reward trip. I'm going for Tech
 16. Viya enters Agent Mode directly on the Overview card and stages reviewable workspace drafts:
     - Create itinerary.
     - Prepare Vault.
-    - Identify booking targets and missing proof.
     - Track budget.
-    - Add risks and backups.
     - Run readiness audit.
-    - Prepare Travel Mode context.
 17. Upload or inject the demo fixture files in Vault:
     - `singapore-flight-confirmation.txt`
     - `singapore-hotel-voucher.txt`
@@ -92,7 +86,7 @@ Viya, plan my solo Singapore business-conference reward trip. I'm going for Tech
     - "What is missing before this is travel-ready?"
     - "Can you make the conference days less exhausting?"
     - "Act on the missing prep, but stage anything I should review."
-21. Viya answers in Ask Mode when explaining tradeoffs, then switches to Agent Mode when staging itinerary, risk, budget, readiness, and travel mode updates.
+21. Viya answers in Ask Mode when explaining tradeoffs, then switches to Agent Mode when staging itinerary, budget, Vault, and readiness updates.
 22. Apply the itinerary draft.
 23. Apply the readiness and risk drafts.
 24. Run the readiness audit.
@@ -109,14 +103,11 @@ Viya, plan my solo Singapore business-conference reward trip. I'm going for Tech
 
 ## Expected Final State
 
-- Trip Profile: `Singapore Solo Tech Week Reward`
+- Trip Profile: `Singapore Group Tech Week Reward`
 - Destination: `Singapore`
 - Dates: `2026-09-28` to `2026-10-01`
-- Travelers: solo
+- Travelers: small team
 - Itinerary: 4 days
 - Vault: 5 fixture files
-- Bookings: confirmed flight, confirmed hotel, and event pass document
 - Budget: PHP 90,000 planning ceiling, PHP flight and hotel costs, plus SGD 82 expense evidence
 - Readiness: 100% travel preparedness with no critical blocker after final checks
-- Risks: jet lag, airport transfer buffer, badge pickup, and overscheduled conference days
-- Travel Mode: next event, hotel details, document shortcuts, and daily budget context

@@ -9,19 +9,25 @@
       "bundler": "metro",
       "favicon": "./assets/images/viya-favicon.png"
     },
-    "name": "",
-    "slug": "viya-app",
+    "name": "Viya",
+    "slug": "viya",
+    "extra": {
+      "eas": {
+        "projectId": "a886cc8e-2ed1-4bff-b4ca-652939f4b2cf"
+      }
+    },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/viya-android-foreground.png",
         "backgroundImage": "./assets/images/viya-android-background.png",
         "backgroundColor": "#00000000",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
-      }
+      },
+      "package": "com.vnajvngrd.viya"
     },
     "ios": {
       "infoPlist": {
-        "CFBundleDisplayName": ""
+        "CFBundleDisplayName": "Viya"
       }
     },
     "plugins": ["expo-font"],

@@ -1256,13 +1256,10 @@ const getTripWorkspaceModuleGroups = (
 	const bookingCount = model.workspace.bookings.length;
 	const itineraryDayCount = model.workspace.itineraryDays.length;
 	const itineraryItemCount = model.workspace.itineraryItems.length;
-	const vaultDetail =
-		bookingCount > 0 || documentCount > 0
-			? `${formatCountLabel(bookingCount, "booking")} · ${formatCountLabel(
-					documentCount,
-					"file"
-				)}`
-			: "No files";
+	const vaultValue =
+		bookingCount > 0
+			? formatCountLabel(bookingCount, "booking")
+			: formatCountLabel(documentCount, "file");
 	const overviewItem: TripWorkspaceModule = {
 		detail: "Trip snapshot, next actions, and workspace summary",
 		href: VIYA_ROUTES.tripDashboard(model.tripId),
@@ -1298,7 +1295,7 @@ const getTripWorkspaceModuleGroups = (
 			icon: "folder-open-outline",
 			label: "Vault",
 			tab: "documents",
-			value: vaultDetail,
+			value: vaultValue,
 		},
 		{
 			detail: model.readiness.topBlocker,
@@ -1353,7 +1350,7 @@ function ModuleLauncherBadge({
 	}
 
 	return (
-		<View className="min-w-0 max-w-28 shrink items-center rounded-full border border-border bg-white px-2 py-1">
+		<View className="min-w-0 max-w-32 shrink items-center rounded-full border border-border bg-white px-2 py-1">
 			<Text
 				numberOfLines={1}
 				style={{ color: accent.color }}
@@ -1459,7 +1456,7 @@ function TripModulesSheet({
 			<BottomSheet.Portal>
 				<BottomSheet.Overlay />
 				<BottomSheet.Content
-					backgroundClassName="rounded-t-[36px] bg-background"
+					backgroundClassName="rounded-t-[36px] bg-surface"
 					enablePanDownToClose={true}
 					snapPoints={["78%"]}
 				>
@@ -1619,7 +1616,7 @@ function WorkspaceModuleTile({ item }: { item: TripWorkspaceModule }) {
 						<View className="h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-surface-secondary">
 							<Ionicons color={accent.color} name={item.icon} size={18} />
 						</View>
-						<View className="min-w-0 max-w-28 shrink rounded-full border border-border bg-white px-2.5 py-1">
+						<View className="min-w-0 max-w-32 shrink rounded-full border border-border bg-white px-2.5 py-1">
 							<Text
 								numberOfLines={1}
 								style={{ color: accent.color }}

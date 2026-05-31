@@ -1,6 +1,6 @@
 Hotel Voucher
 Hotel: City Hall Business Hotel
-Guest: Solo builder
+Guests: Small founder / builder team
 Check-in: September 28, 2026, 15:00
 Check-out: October 1, 2026, 11:00
 Area: Marina Bay / City Hall, Singapore

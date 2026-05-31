@@ -28,7 +28,7 @@ const statusOptions = [
 
 function RowPill({ label }: { label: string }) {
 	return (
-		<View className="rounded-full border border-border bg-white px-2.5 py-1">
+		<View className="rounded-full bg-surface-secondary px-2.5 py-1">
 			<Text color="muted" type="body-xs" weight="semibold">
 				{label}
 			</Text>
@@ -58,30 +58,37 @@ export function ReadinessItemRow({
 	ownerHref,
 	onStatusChange,
 }: ReadinessItemRowProps) {
+	const categoryLabel =
+		READINESS_CATEGORY_LABELS[item.category as ReadinessCategory];
+	const priorityLabel = PRIORITY_LABELS[item.priority as Priority];
+	const dueDateLabel = item.dueDate ? `Due ${item.dueDate}` : "No due date";
+	const metaLabel = `${categoryLabel} - ${priorityLabel} - ${
+		assignedToName ?? "Unassigned"
+	} - ${dueDateLabel}`;
+
 	return (
 		<View className="gap-3 rounded-[24px] border border-border bg-surface p-4">
 			<View className="flex-row items-start gap-3">
-				<View className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary">
-					<Ionicons color="#5E5CE6" name="checkmark-circle-outline" size={18} />
+				<View className="mt-0.5 h-8 w-8 items-center justify-center rounded-full bg-surface-secondary">
+					<Ionicons
+						color={item.status === "done" ? "#34C759" : "#5E5CE6"}
+						name={
+							item.status === "done"
+								? "checkmark-circle"
+								: "checkmark-circle-outline"
+						}
+						size={17}
+					/>
 				</View>
-				<View className="min-w-0 flex-1 gap-2">
-					<View className="flex-row flex-wrap gap-2">
-						<RowPill
-							label={
-								READINESS_CATEGORY_LABELS[item.category as ReadinessCategory]
-							}
-						/>
-						<RowPill label={PRIORITY_LABELS[item.priority as Priority]} />
-						<RowPill label={assignedToName ?? "Unassigned"} />
-					</View>
-					<Text type="body-sm" weight="bold">
+				<View className="min-w-0 flex-1 gap-1">
+					<Text numberOfLines={2} type="body-sm" weight="semibold">
 						{item.title}
 					</Text>
-					<Text.Paragraph color="muted" type="body-sm">
+					<Text.Paragraph color="muted" numberOfLines={2} type="body-sm">
 						{item.description}
 					</Text.Paragraph>
-					<Text color="muted" type="body-xs">
-						Due {item.dueDate}
+					<Text color="muted" numberOfLines={1} type="body-xs">
+						{metaLabel}
 					</Text>
 				</View>
 				<Menu>
@@ -139,11 +146,7 @@ export function ReadinessItemRow({
 				</Menu>
 			</View>
 			<View className="flex-row flex-wrap items-center gap-2">
-				<View className="rounded-full border border-border bg-white px-3 py-2">
-					<Text type="body-sm" weight="semibold">
-						{statusLabels[item.status] ?? item.status}
-					</Text>
-				</View>
+				<RowPill label={statusLabels[item.status] ?? item.status} />
 				{item.status === "inProgress" ? null : (
 					<Button
 						onPress={() => onStatusChange(item._id, "inProgress")}

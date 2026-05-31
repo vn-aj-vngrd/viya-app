@@ -19,5 +19,8 @@ describe("trip dashboard simplified workspace contract", () => {
 		expect(source).toContain('label: "Vault"');
 		expect(source).toContain('label: "Readiness"');
 		expect(source).toContain("Bookings, passports, tickets, and documents");
+		expect(source).toContain(
+			'backgroundClassName="rounded-t-[36px] bg-surface"'
+		);
 	});
 });
