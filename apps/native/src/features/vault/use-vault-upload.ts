@@ -2,6 +2,7 @@ import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
 import { useAction, useMutation } from "convex/react";
 import { getDocumentAsync } from "expo-document-picker";
+import { File, UploadType } from "expo-file-system";
 import { launchImageLibraryAsync } from "expo-image-picker";
 import { useState } from "react";
 
@@ -23,20 +24,21 @@ interface ConvexUploadResponse {
 }
 
 const uploadToStorage = async (uploadUrl: string, input: VaultUploadInput) => {
-	const blob = await fetch(input.uri).then((response) => response.blob());
-	const response = await fetch(uploadUrl, {
-		body: blob,
+	const file = new File(input.uri);
+	const response = await file.upload(uploadUrl, {
 		headers: {
 			"Content-Type": input.mimeType,
 		},
-		method: "POST",
+		httpMethod: "POST",
+		mimeType: input.mimeType,
+		uploadType: UploadType.BINARY_CONTENT,
 	});
 
-	if (!response.ok) {
+	if (response.status < 200 || response.status >= 300) {
 		throw new Error("Vault upload failed.");
 	}
 
-	return (await response.json()) as ConvexUploadResponse;
+	return JSON.parse(response.body) as ConvexUploadResponse;
 };
 
 export function useVaultUpload() {

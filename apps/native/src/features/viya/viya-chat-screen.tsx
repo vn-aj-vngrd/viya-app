@@ -841,16 +841,6 @@ export function ViyaChatScreen() {
 		runAsyncTask(handleSubmit(value));
 	};
 
-	const handleCreateTripWithAiPress = () => {
-		setIsComposerActionsOpen(false);
-		setChatMode("chat");
-		runAsyncTask(
-			handleSubmit(
-				"Help me create a trip. Ask me one setup question at a time, then draft a Trip Blueprint when you have enough details."
-			)
-		);
-	};
-
 	const handleFileUploadPress = async () => {
 		setIsComposerActionsOpen(false);
 		setErrorMessage(null);
@@ -1251,7 +1241,7 @@ export function ViyaChatScreen() {
 							<View className="gap-1 px-1">
 								<BottomSheet.Title>Viya actions</BottomSheet.Title>
 								<BottomSheet.Description>
-									Choose trip context, start a trip, or add files.
+									Choose trip context or add files.
 								</BottomSheet.Description>
 							</View>
 							{isTripModeLocked ? null : (
@@ -1261,25 +1251,6 @@ export function ViyaChatScreen() {
 									onPress={handleTripContextPickerPress}
 								/>
 							)}
-							<Pressable
-								accessibilityLabel="Create a trip with Viya"
-								accessibilityRole="button"
-								className="min-h-16 flex-row items-center gap-3 rounded-[22px] bg-surface px-3 py-3"
-								onPress={handleCreateTripWithAiPress}
-							>
-								<View className="h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-									<Ionicons color="#0A84FF" name="map-outline" size={19} />
-								</View>
-								<View className="min-w-0 flex-1 gap-0.5">
-									<Text type="body-sm" weight="bold">
-										Create trip
-									</Text>
-									<Text color="muted" numberOfLines={2} type="body-xs">
-										Viya asks the setup questions and drafts the trip.
-									</Text>
-								</View>
-								<Ionicons color={mutedColor} name="chevron-forward" size={18} />
-							</Pressable>
 							<Pressable
 								accessibilityLabel="Add files for Viya"
 								accessibilityRole="button"
