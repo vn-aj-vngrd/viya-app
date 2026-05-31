@@ -4,9 +4,10 @@ import { fetchDestinationImageUrl } from "@/src/features/trips/trip-cover-image"
 
 /**
  * Module-level cache so destination photos resolve once per app session and
- * survive re-renders and navigation. `undefined` is a cached "no image" result.
+ * survive re-renders and navigation. Misses are not cached because Android
+ * preview network failures can be transient.
  */
-const imageUrlCache = new Map<string, string | undefined>();
+const imageUrlCache = new Map<string, string>();
 const inFlightRequests = new Map<string, Promise<string | undefined>>();
 
 const resolveDestinationImage = (name: string) => {
@@ -20,7 +21,9 @@ const resolveDestinationImage = (name: string) => {
 	}
 
 	const request = fetchDestinationImageUrl(name).then((url) => {
-		imageUrlCache.set(name, url);
+		if (url) {
+			imageUrlCache.set(name, url);
+		}
 		inFlightRequests.delete(name);
 		return url;
 	});
@@ -32,8 +35,10 @@ const resolveDestinationImage = (name: string) => {
 const seedFromCache = (names: string[]) => {
 	const seeded: Record<string, string | undefined> = {};
 	for (const name of names) {
-		if (imageUrlCache.has(name)) {
-			seeded[name] = imageUrlCache.get(name);
+		const cachedUrl = imageUrlCache.get(name);
+
+		if (cachedUrl) {
+			seeded[name] = cachedUrl;
 		}
 	}
 	return seeded;
@@ -41,8 +46,8 @@ const seedFromCache = (names: string[]) => {
 
 /**
  * Resolve a representative photo URL for each destination name. Returns a map
- * keyed by name; a missing key means "still loading", an explicit `undefined`
- * means "resolved with no image". Already-cached names are returned synchronously.
+ * keyed by name; a missing key means "still loading" or "no image resolved".
+ * Already-cached names are returned synchronously.
  */
 export const useDestinationImages = (names: string[]) => {
 	const cacheKey = names.join("|");

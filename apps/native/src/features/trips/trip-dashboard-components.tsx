@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
 import { useMutation } from "convex/react";
+import { Image } from "expo-image";
 import { type Href, Link, useRouter } from "expo-router";
 import {
 	BottomSheet,
@@ -20,9 +21,9 @@ import {
 import type { ReactNode } from "react";
 import { useRef, useState } from "react";
 import {
-	ImageBackground,
 	Pressable,
 	ScrollView,
+	StyleSheet,
 	useWindowDimensions,
 	View,
 } from "react-native";
@@ -62,6 +63,7 @@ const mutedColor = "#71717A";
 const foregroundColor = "#18181B";
 const borderColor = "rgba(24, 24, 27, 0.08)";
 const softBackgroundColor = "rgba(24, 24, 27, 0.04)";
+const coverImageFillStyle = StyleSheet.absoluteFill;
 export const tripFloatingBarBottomInset = 24;
 export const tripFloatingBarGap = 6;
 const viyaButtonNavigationThrottleMs = 800;
@@ -1120,11 +1122,12 @@ function TripHeroCover({
 	if (coverImageUrl) {
 		return (
 			<View className="h-24 w-24 overflow-hidden rounded-[22px] bg-surface-secondary">
-				<ImageBackground
+				<Image
 					accessibilityIgnoresInvertColors={true}
-					className="h-full w-full"
-					imageStyle={{ borderRadius: 22 }}
+					cachePolicy="memory-disk"
+					contentFit="cover"
 					source={{ uri: coverImageUrl }}
+					style={coverImageFillStyle}
 				/>
 				<View
 					className="absolute inset-0 rounded-[22px]"

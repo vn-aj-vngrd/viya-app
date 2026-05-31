@@ -5,6 +5,40 @@ const whitespacePattern = /\s+/g;
 const commaSpacingPattern = /\s*,\s*/g;
 const encodedSeparatorPattern = /_/g;
 
+const destinationImageUrlOverrides: Record<string, string> = {
+	baguio:
+		"https://upload.wikimedia.org/wikipedia/commons/thumb/a/a6/Baguio_city_proper_overlooking_Burnham-Harrison_side_%28Baguio_city%3B_12-04-2022%29.jpg/330px-Baguio_city_proper_overlooking_Burnham-Harrison_side_%28Baguio_city%3B_12-04-2022%29.jpg",
+	batanes:
+		"https://upload.wikimedia.org/wikipedia/commons/thumb/9/97/Sabtang_Batanes.jpg/330px-Sabtang_Batanes.jpg",
+	bohol:
+		"https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/Chocolate_Hills_Bohol_Philippines.jpg/330px-Chocolate_Hills_Bohol_Philippines.jpg",
+	boracay:
+		"https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Boracay_White_Beach.png/330px-Boracay_White_Beach.png",
+	cebu: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Osme%C3%B1a_Peak%2C_Cebu%2C_Philippines.jpg/330px-Osme%C3%B1a_Peak%2C_Cebu%2C_Philippines.jpg",
+	indonesia:
+		"https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Pura_Taman_Ayun%2C_Bali%2C_Indonesia.jpg/330px-Pura_Taman_Ayun%2C_Bali%2C_Indonesia.jpg",
+	japan:
+		"https://upload.wikimedia.org/wikipedia/commons/thumb/3/3c/Kiyomizu.jpg/330px-Kiyomizu.jpg",
+	"new zealand":
+		"https://upload.wikimedia.org/wikipedia/commons/thumb/6/6a/Milford_Sound_%28New_Zealand%29.jpg/330px-Milford_Sound_%28New_Zealand%29.jpg",
+	palawan:
+		"https://upload.wikimedia.org/wikipedia/commons/thumb/1/13/Kayangan_Lake%2C_Coron_-_Palawan.jpg/330px-Kayangan_Lake%2C_Coron_-_Palawan.jpg",
+	siargao:
+		"https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Siargao_Island%2C_PH%2C_Sentinel-2.jpg/330px-Siargao_Island%2C_PH%2C_Sentinel-2.jpg",
+	singapore:
+		"https://upload.wikimedia.org/wikipedia/commons/thumb/f/f3/Raffles_Hotel_Singapore_-_panoramio.jpg/330px-Raffles_Hotel_Singapore_-_panoramio.jpg",
+	"south korea":
+		"https://upload.wikimedia.org/wikipedia/commons/thumb/2/22/%EA%B0%80%EC%9D%84%EC%98%B7%EC%9D%84_%EC%9E%85%EC%9D%80_%ED%96%A5%EC%9B%90%EC%A0%95.jpg/330px-%EA%B0%80%EC%9D%84%EC%98%B7%EC%9D%84_%EC%9E%85%EC%9D%80_%ED%96%A5%EC%9B%90%EC%A0%95.jpg",
+	taiwan:
+		"https://upload.wikimedia.org/wikipedia/commons/thumb/2/20/%2720210501_Taipei_Night_Skyline.jpg/330px-%2720210501_Taipei_Night_Skyline.jpg",
+	thailand:
+		"https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/0000140_-_Wat_Arun_Ratchawararam_005.jpg/330px-0000140_-_Wat_Arun_Ratchawararam_005.jpg",
+	vigan:
+		"https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Allan_Jay_Quesada_-_Vigan_Cathedral_001.jpg/330px-Allan_Jay_Quesada_-_Vigan_Cathedral_001.jpg",
+	vietnam:
+		"https://upload.wikimedia.org/wikipedia/commons/thumb/b/b3/Halong_bay_vietnam.JPG/330px-Halong_bay_vietnam.JPG",
+};
+
 const usStateNamesByAbbreviation: Record<string, string> = {
 	AK: "Alaska",
 	AL: "Alabama",
@@ -70,6 +104,9 @@ interface WikipediaSummaryResponse {
 
 const isHttpsUrl = (value: unknown): value is string =>
 	typeof value === "string" && value.startsWith("https://");
+
+const toDestinationImageOverrideKey = (value: string) =>
+	value.trim().replace(whitespacePattern, " ").toLowerCase();
 
 const toWikipediaTitle = (value: string) =>
 	value
@@ -153,6 +190,13 @@ export const isDecorativeDestinationImageUrl = (url: string | undefined) => {
 export const fetchDestinationImageUrl = async (
 	destination: string
 ): Promise<string | undefined> => {
+	const overrideImageUrl =
+		destinationImageUrlOverrides[toDestinationImageOverrideKey(destination)];
+
+	if (overrideImageUrl) {
+		return overrideImageUrl;
+	}
+
 	const searchTitles = getDestinationImageSearchTitles(destination);
 
 	if (searchTitles.length === 0) {

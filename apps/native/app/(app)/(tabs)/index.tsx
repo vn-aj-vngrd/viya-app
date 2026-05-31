@@ -14,7 +14,7 @@ import { Link, useRouter } from "expo-router";
 import { Button, Surface, Text } from "heroui-native";
 import type { ComponentProps, ReactNode } from "react";
 import { useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Container } from "@/components/container";
@@ -30,6 +30,7 @@ import { HomeLoadingState } from "@/src/features/home/home-skeleton";
 import { philippineDestinations } from "@/src/features/home/philippine-destinations";
 import { useDestinationImages } from "@/src/features/home/use-destination-images";
 import { ManualTripCreateSheet } from "@/src/features/trips/manual-trip-create-sheet";
+import { isDecorativeDestinationImageUrl } from "@/src/features/trips/trip-cover-image";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
 
@@ -38,6 +39,7 @@ const successSoftBackgroundStyle = { backgroundColor: "#E4F8EF" };
 const warmSoftBackgroundStyle = { backgroundColor: "#FFF7ED" };
 
 const coverImageTransitionMs = 320;
+const imageFillStyle = StyleSheet.absoluteFill;
 const insightWashColors = [
 	"rgba(10,132,255,0.12)",
 	"rgba(10,132,255,0.02)",
@@ -182,13 +184,17 @@ function ActiveTripCard({
 	tripWindow: string;
 }) {
 	const fallbackImageNames = getDestinationImageFallbackNames(destination);
+	const shouldUseFallbackImage =
+		!coverImageUrl || isDecorativeDestinationImageUrl(coverImageUrl);
 	const fallbackImageUrls = useDestinationImages(
-		coverImageUrl ? [] : fallbackImageNames
+		shouldUseFallbackImage ? fallbackImageNames : []
 	);
 	const fallbackImageUrl = fallbackImageNames
 		.map((name) => fallbackImageUrls[name])
 		.find((url): url is string => Boolean(url));
-	const tripImageUrl = coverImageUrl ?? fallbackImageUrl;
+	const tripImageUrl = shouldUseFallbackImage
+		? fallbackImageUrl
+		: (coverImageUrl ?? fallbackImageUrl);
 	const readinessLabel =
 		readinessScore > 0 ? `${readinessScore}% ready` : "Readiness open";
 
@@ -205,7 +211,7 @@ function ActiveTripCard({
 							cachePolicy="memory-disk"
 							contentFit="cover"
 							source={{ uri: tripImageUrl }}
-							style={{ height: "100%", width: "100%" }}
+							style={imageFillStyle}
 							transition={coverImageTransitionMs}
 						/>
 					) : (

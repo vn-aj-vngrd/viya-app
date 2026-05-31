@@ -4,11 +4,12 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { Surface, Text } from "heroui-native";
 import type { ComponentProps } from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
 
 const imageTransitionMs = 320;
+const imageFillStyle = StyleSheet.absoluteFill;
 const scrimColors = ["rgba(0,0,0,0)", "rgba(0,0,0,0.18)"] as const;
 
 export function CountrySuggestionCard({
@@ -47,7 +48,7 @@ export function CountrySuggestionCard({
 							cachePolicy="memory-disk"
 							contentFit="cover"
 							source={{ uri: imageUrl }}
-							style={{ height: "100%", width: "100%" }}
+							style={imageFillStyle}
 							transition={imageTransitionMs}
 						/>
 					) : null}

@@ -3,6 +3,7 @@ import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Doc } from "@viya-app/backend/convex/_generated/dataModel";
 import { TRIP_STATUSES } from "@viya-app/domain";
 import { usePaginatedQuery } from "convex/react";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {
@@ -21,10 +22,10 @@ import {
 } from "react";
 import {
 	FlatList,
-	ImageBackground,
 	type ListRenderItem,
 	Pressable,
 	ScrollView,
+	StyleSheet,
 	TextInput,
 	View,
 } from "react-native";
@@ -55,6 +56,7 @@ type ActiveTripFilter = Exclude<PrimaryTripFilter, "all"> | StatusTripFilter;
 type FilterIconName = ComponentProps<typeof Feather>["name"];
 
 const tripsPageSize = 8;
+const coverImageFillStyle = StyleSheet.absoluteFill;
 const skeletonRows = ["first", "second", "third"] as const;
 const primaryTripFilters: Array<{
 	icon: FilterIconName;
@@ -526,11 +528,12 @@ function TripThumbnail({
 	if (coverImageUrl) {
 		return (
 			<View className="h-[84px] w-[84px] overflow-hidden rounded-[18px] bg-surface-secondary">
-				<ImageBackground
+				<Image
 					accessibilityIgnoresInvertColors={true}
-					className="h-full w-full"
-					imageStyle={{ borderRadius: 18 }}
+					cachePolicy="memory-disk"
+					contentFit="cover"
 					source={{ uri: coverImageUrl }}
+					style={coverImageFillStyle}
 				/>
 				<View
 					className="absolute inset-0 rounded-[18px]"
