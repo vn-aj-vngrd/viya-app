@@ -10,7 +10,10 @@ const normalizedModeFilterPattern = /normalizedMode !== args\.mode/;
 const tripIdFilterPattern = /thread\.tripId !== args\.tripId/;
 const tripModeHistoryArgsPattern = /chatMode === "trip" && currentTripId/;
 const tripModeArgPattern = /mode: "trip"/;
+const currentModeHistoryArgsPattern = /mode: chatMode/;
 const currentTripIdArgPattern = /tripId: currentTripId/;
+const questionMarkerEmDashPattern = /\\s\\-–—/;
+const markerLineQuestionPattern = /markerLineQuestion\?\.includes\("\?"\)/;
 const spendIntentPattern = /spendIntentPattern/;
 const maybeLogTripChatExpensePattern = /maybeLogTripChatExpense/;
 const expensesContextPattern = /expenses: expenses\.map/;
@@ -38,11 +41,26 @@ describe("chat history trip scoping", () => {
 		assert.match(source, currentTripIdArgPattern);
 	});
 
+	it("passes mode-scoped history args from chat and plan modes", () => {
+		const source = readWorkspaceFile(
+			"apps/native/src/features/viya/viya-chat-screen.tsx"
+		);
+
+		assert.match(source, currentModeHistoryArgsPattern);
+	});
+
 	it("logs clear spend messages and includes expenses in trip chat context", () => {
 		const source = readWorkspaceFile("packages/backend/convex/chat.ts");
 
 		assert.match(source, spendIntentPattern);
 		assert.match(source, maybeLogTripChatExpensePattern);
 		assert.match(source, expensesContextPattern);
+	});
+
+	it("recognizes inline question labels from assistant output", () => {
+		const source = readWorkspaceFile("packages/backend/convex/chat.ts");
+
+		assert.match(source, questionMarkerEmDashPattern);
+		assert.match(source, markerLineQuestionPattern);
 	});
 });

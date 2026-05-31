@@ -70,6 +70,8 @@ const generationSteps = [
 	{ icon: "checkbox-outline", label: "Preparing workspace" },
 ] as const satisfies readonly { icon: IconName; label: string }[];
 const stepAdvanceIntervalMs = 1500;
+const minimumGenerationDurationMs =
+	generationSteps.length * stepAdvanceIntervalMs + 450;
 
 const starterInsights = [
 	{
@@ -117,6 +119,52 @@ const progressSegmentKeys = [
 const getStepPosition = (step: TripCreateStep) => {
 	const index = tripCreateStepOrder.indexOf(step);
 	return { current: Math.max(index + 1, 1), total: tripCreateStepOrder.length };
+};
+
+const wait = (durationMs: number) =>
+	new Promise((resolve) => {
+		setTimeout(resolve, durationMs);
+	});
+
+const normalizeDestinationSuggestion = (value: string) =>
+	value.trim().replace(/\s+/g, " ").toLowerCase();
+
+const getUniqueAvailableDestinationSuggestions = ({
+	currentDestination,
+	existingDestinations,
+	suggestions,
+}: {
+	currentDestination: string;
+	existingDestinations: readonly string[];
+	suggestions: readonly string[];
+}) => {
+	const excludedDestinations = new Set(
+		[...existingDestinations, currentDestination]
+			.map(normalizeDestinationSuggestion)
+			.filter(Boolean)
+	);
+	const seenSuggestions = new Set<string>();
+	const availableSuggestions: string[] = [];
+
+	for (const suggestion of suggestions) {
+		const normalizedSuggestion = normalizeDestinationSuggestion(suggestion);
+
+		if (!normalizedSuggestion) {
+			continue;
+		}
+
+		if (
+			excludedDestinations.has(normalizedSuggestion) ||
+			seenSuggestions.has(normalizedSuggestion)
+		) {
+			continue;
+		}
+
+		seenSuggestions.add(normalizedSuggestion);
+		availableSuggestions.push(suggestion);
+	}
+
+	return availableSuggestions;
 };
 
 function Reveal({
@@ -728,17 +776,17 @@ function GeneratingBrandMark() {
 	});
 
 	return (
-		<View className="h-24 w-24 items-center justify-center">
+		<View className="h-[72px] w-[72px] items-center justify-center">
 			<Animated.View
-				className="absolute h-24 w-24 rounded-full"
+				className="absolute h-[72px] w-[72px] rounded-full"
 				style={[{ backgroundColor: "#0A84FF" }, outerRingStyle]}
 			/>
 			<Animated.View
-				className="absolute h-24 w-24 rounded-full"
+				className="absolute h-[72px] w-[72px] rounded-full"
 				style={[{ backgroundColor: "#0A84FF" }, innerRingStyle]}
 			/>
 			<View
-				className="h-[68px] w-[68px] items-center justify-center rounded-[26px] border border-border bg-surface"
+				className="h-12 w-12 items-center justify-center rounded-full border border-border bg-surface"
 				style={{
 					shadowColor: "#0A84FF",
 					shadowOffset: { height: 8, width: 0 },
@@ -746,7 +794,7 @@ function GeneratingBrandMark() {
 					shadowRadius: 18,
 				}}
 			>
-				<Ionicons color="#0A84FF" name="map-outline" size={34} />
+				<Ionicons color="#0A84FF" name="map-outline" size={24} />
 			</View>
 		</View>
 	);
@@ -811,12 +859,12 @@ function GenerationStepRow({
 	}));
 
 	const isPending = status === "pending";
-	let chip: ReactNode = <Ionicons color="#A1A1AA" name={icon} size={18} />;
+	let chip: ReactNode = <Ionicons color="#A1A1AA" name={icon} size={16} />;
 
 	if (status === "active") {
 		chip = <Spinner size="sm" />;
 	} else if (status === "complete") {
-		chip = <Ionicons color="#0A84FF" name="checkmark" size={18} />;
+		chip = <Ionicons color="#0A84FF" name="checkmark" size={16} />;
 	}
 
 	return (
@@ -830,7 +878,7 @@ function GenerationStepRow({
 				}}
 			>
 				<View
-					className="h-9 w-9 items-center justify-center rounded-full"
+					className="h-8 w-8 items-center justify-center rounded-full"
 					style={{ backgroundColor: isPending ? "#F4F4F5" : "#EAF2FF" }}
 				>
 					{chip}
@@ -844,7 +892,7 @@ function GenerationStepRow({
 					{label}
 				</Text>
 				{status === "complete" ? (
-					<Ionicons color="#0A84FF" name="checkmark-circle" size={20} />
+					<Ionicons color="#0A84FF" name="checkmark-circle" size={18} />
 				) : null}
 			</Surface>
 		</Animated.View>
@@ -854,21 +902,21 @@ function GenerationStepRow({
 function GeneratingScreen() {
 	const insets = useSafeAreaInsets();
 	const [activeIndex, setActiveIndex] = useState(0);
-	const lastIndex = generationSteps.length - 1;
+	const finalIndex = generationSteps.length;
 
 	useEffect(() => {
-		if (activeIndex >= lastIndex) {
+		if (activeIndex >= finalIndex) {
 			return;
 		}
 
 		const timer = setTimeout(() => {
-			setActiveIndex((current) => Math.min(current + 1, lastIndex));
+			setActiveIndex((current) => Math.min(current + 1, finalIndex));
 		}, stepAdvanceIntervalMs);
 
 		return () => clearTimeout(timer);
-	}, [activeIndex, lastIndex]);
+	}, [activeIndex]);
 
-	const progress = (activeIndex + 0.5) / generationSteps.length;
+	const progress = Math.min(1, (activeIndex + 0.5) / generationSteps.length);
 
 	const getStepStatus = (index: number): GenerationStepStatus => {
 		if (index < activeIndex) {
@@ -958,16 +1006,16 @@ function StarterSuccessBadge() {
 	}));
 
 	return (
-		<View className="h-[76px] w-[76px] items-center justify-center">
+		<View className="h-14 w-14 items-center justify-center">
 			<Animated.View
-				className="absolute h-[76px] w-[76px] rounded-full"
+				className="absolute h-14 w-14 rounded-full"
 				style={[{ backgroundColor: "#0A84FF" }, haloStyle]}
 			/>
 			<Animated.View
-				className="h-[64px] w-[64px] items-center justify-center rounded-[24px]"
+				className="h-12 w-12 items-center justify-center rounded-full"
 				style={[{ backgroundColor: "#EAF2FF" }, badgeStyle]}
 			>
-				<Ionicons color="#0A84FF" name="checkmark-sharp" size={36} />
+				<Ionicons color="#0A84FF" name="checkmark-sharp" size={26} />
 			</Animated.View>
 		</View>
 	);
@@ -990,8 +1038,8 @@ function StarterPreviewScreen({
 			<View className="flex-1">
 				<ScrollView
 					contentContainerStyle={{
-						gap: 20,
-						paddingBottom: 32,
+						gap: 24,
+						paddingBottom: Math.max(insets.bottom + 128, 148),
 						paddingHorizontal: 20,
 						paddingTop: Math.max(insets.top + 28, 48),
 					}}
@@ -1019,25 +1067,23 @@ function StarterPreviewScreen({
 						</View>
 					</Reveal>
 					<Reveal delayMs={260}>
-						<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
+						<View className="gap-3">
 							<Text type="body" weight="bold">
 								{state.destination || "New trip"} setup
 							</Text>
-							<View className="flex-row">
+							<View className="flex-row gap-3">
 								<PreviewMetric
 									accent="#0A84FF"
 									icon="people-outline"
 									label="Travelers"
 									value={travelerCount.toString()}
 								/>
-								<View className="mx-3 w-px self-stretch bg-border" />
 								<PreviewMetric
 									accent="#059669"
 									icon="speedometer-outline"
 									label="Pace"
 									value={getTripCreateOptionLabel("pace", state.pace)}
 								/>
-								<View className="mx-3 w-px self-stretch bg-border" />
 								<PreviewMetric
 									accent="#E97816"
 									icon="wallet-outline"
@@ -1047,16 +1093,16 @@ function StarterPreviewScreen({
 									}
 								/>
 							</View>
-						</Surface>
+						</View>
 					</Reveal>
 					<Reveal delayMs={400}>
-						<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
+						<View className="gap-3">
 							<Text type="body" weight="bold">
 								Setup checklist
 							</Text>
 							{starterInsights.map((insight) => (
-								<View
-									className="flex-row items-center gap-3"
+								<Surface
+									className="flex-row items-center gap-3 rounded-3xl border border-border bg-surface px-4 py-3.5"
 									key={insight.text}
 								>
 									<View
@@ -1076,18 +1122,19 @@ function StarterPreviewScreen({
 									>
 										{insight.text}
 									</Text>
-								</View>
+								</Surface>
 							))}
-						</Surface>
+						</View>
 					</Reveal>
 				</ScrollView>
 				<Reveal delayMs={520}>
 					<View
-						className="border-border border-t bg-background px-5 pt-3"
-						style={{ paddingBottom: Math.max(insets.bottom, 16) }}
+						className="absolute right-0 bottom-0 left-0 bg-background px-5"
+						style={{ paddingBottom: Math.max(insets.bottom + 8, 18) }}
 					>
-						<Button onPress={onOpen} size="lg">
+						<Button className="gap-2" onPress={onOpen} size="lg">
 							<Button.Label>Open trip</Button.Label>
+							<Ionicons color="#FFFFFF" name="arrow-forward" size={18} />
 						</Button>
 					</View>
 				</Reveal>
@@ -1108,7 +1155,7 @@ function PreviewMetric({
 	value: string;
 }) {
 	return (
-		<View className="min-w-0 flex-1 gap-2">
+		<Surface className="min-w-0 flex-1 gap-2 rounded-3xl border border-border bg-surface p-4">
 			<View
 				className="h-8 w-8 items-center justify-center rounded-full"
 				style={{ backgroundColor: `${accent}18` }}
@@ -1123,7 +1170,7 @@ function PreviewMetric({
 					{value}
 				</Text>
 			</View>
-		</View>
+		</Surface>
 	);
 }
 
@@ -1131,6 +1178,7 @@ export function ManualTripCreateScreen() {
 	const router = useRouter();
 	const createTrip = useMutation(api.trips.createTrip);
 	const currentPreferences = useQuery(api.preferences.getCurrentPreferences);
+	const existingTrips = useQuery(api.trips.listTrips);
 	const runLocationSuggestionSearch = useAction(
 		api.locations.searchLocationSuggestions
 	);
@@ -1152,12 +1200,19 @@ export function ManualTripCreateScreen() {
 	);
 	const destinationSuggestions = useMemo(() => {
 		const suggestions = getPreferenceSuggestions(currentPreferences ?? {});
-
-		return [
+		const preferredDestinations = [
 			...suggestions.countrySuggestions.map((suggestion) => suggestion.country),
 			...suggestions.placeSuggestions.map((suggestion) => suggestion.location),
-		].slice(0, 6);
-	}, [currentPreferences]);
+		];
+
+		return getUniqueAvailableDestinationSuggestions({
+			currentDestination: state.destination,
+			existingDestinations: (existingTrips ?? []).map(
+				(trip) => trip.destination
+			),
+			suggestions: preferredDestinations,
+		}).slice(0, 6);
+	}, [currentPreferences, existingTrips, state.destination]);
 	const updateState = <Key extends keyof TripCreateFlowState>(
 		key: Key,
 		value: TripCreateFlowState[Key]
@@ -1203,8 +1258,14 @@ export function ManualTripCreateScreen() {
 		try {
 			setFlowPhase("generating");
 			const payload = getCreateTripPayload(state);
-			const coverImageUrl = await fetchTripCoverImageUrl(payload.destination);
-			const result = await createTrip({ ...payload, coverImageUrl });
+			const creationPromise = (async () => {
+				const coverImageUrl = await fetchTripCoverImageUrl(payload.destination);
+				return createTrip({ ...payload, coverImageUrl });
+			})();
+			const [result] = await Promise.all([
+				creationPromise,
+				wait(minimumGenerationDurationMs),
+			]);
 			setCreatedTripId(result.tripId);
 			setFlowPhase("starter");
 		} catch (error) {

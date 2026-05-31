@@ -25,7 +25,12 @@ const nextActionsPattern = /### Next actions/i;
 const travelersPattern = /### Travelers/i;
 const pacePattern = /### Pace/i;
 const manualTripSetupPattern = /manual trip setup/i;
-const blueprintNowPattern = /Generate a Trip Blueprint now/i;
+const manualSetupFlowPattern = /destination, dates or duration, travelers/i;
+const noManualDateTypingPattern = /do not ask them to manually type dates/i;
+const explicitConfirmationPattern = /explicit confirmation to create the trip/i;
+const leadConversationPattern =
+	/Begin Plan mode by asking the first useful setup question/i;
+const standaloneQuestionLinePattern = /standalone `Question N\/4` line/i;
 const assumptionPattern = /assumptions/i;
 const needsConfirmationPattern = /needs confirmation/i;
 const oneQuestionPattern = /Ask at most one direct question/i;
@@ -51,6 +56,7 @@ const tripContext = "Current trip: Palawan family beach trip.";
 const tripContextPattern = /Current trip: Palawan family beach trip/i;
 const chatModePattern = /Mode: Chat/i;
 const fileExtractionContextPattern = /uploaded or pasted file extraction text/i;
+const chatTripCreationPattern = /When the user wants to create a trip/i;
 const budgetSuggestionModePattern = /Mode: Budget suggestion/i;
 const budgetSuggestionAmountPattern = /Heuristic budget estimate: PHP 19000/i;
 const budgetSuggestionCurrencyPattern = /Return one PHP budget amount/i;
@@ -83,6 +89,7 @@ describe("Viya prompt guardrails", () => {
 
 		assert.match(prompt, chatModePattern);
 		assert.match(prompt, fileExtractionContextPattern);
+		assert.match(prompt, chatTripCreationPattern);
 	});
 
 	it("limits every assistant response to one question", () => {
@@ -123,14 +130,19 @@ describe("Viya prompt guardrails", () => {
 		assert.match(prompt, bookingTargetsPattern);
 		assert.match(prompt, nextActionsPattern);
 		assert.match(prompt, noLaterIntakeQuestionPattern);
+		assert.match(prompt, manualSetupFlowPattern);
+		assert.match(prompt, noManualDateTypingPattern);
+		assert.match(prompt, explicitConfirmationPattern);
+		assert.match(prompt, leadConversationPattern);
+		assert.match(prompt, standaloneQuestionLinePattern);
 	});
 
-	it("allows users to request a blueprint before intake is complete", () => {
+	it("lets Viya decide when the setup is ready for creation", () => {
 		const prompt = buildChatModeSystemPrompt("plan");
 
-		assert.match(prompt, blueprintNowPattern);
 		assert.match(prompt, assumptionPattern);
 		assert.match(prompt, needsConfirmationPattern);
+		assert.match(prompt, explicitConfirmationPattern);
 	});
 
 	it("includes preference context in plan mode prompts", () => {

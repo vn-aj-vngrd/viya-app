@@ -532,7 +532,10 @@ function StartPlanningCard({ onCreatePress }: { onCreatePress: () => void }) {
 				<Link
 					asChild
 					href={{
-						params: { mode: "plan" },
+						params: {
+							prompt:
+								"Help me create a trip. Ask me one setup question at a time.",
+						},
 						pathname: "/(app)/(tabs)/viya",
 					}}
 				>
@@ -613,7 +616,7 @@ function EmptyHomeState({
 
 	const handleSuggestionPress = (prompt: string) => {
 		router.push({
-			params: { mode: "plan", prompt },
+			params: { prompt },
 			pathname: "/(app)/(tabs)/viya",
 		});
 	};
@@ -665,7 +668,7 @@ export default function HomeScreen() {
 
 	const handleSuggestionPress = (prompt: string) => {
 		router.push({
-			params: { mode: "plan", prompt },
+			params: { prompt },
 			pathname: "/(app)/(tabs)/viya",
 		});
 	};

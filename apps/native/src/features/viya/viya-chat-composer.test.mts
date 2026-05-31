@@ -6,7 +6,6 @@ import {
 } from "./viya-chat-constants";
 import {
 	extractTripBlueprint,
-	getDraftTripBlueprintPrompt,
 	getPromptSuggestions,
 	getSelectableTripContexts,
 	getSelectedTripContext,
@@ -65,12 +64,12 @@ describe("getComposerInputLayout", () => {
 });
 
 describe("Viya chat modes", () => {
-	test("exposes chat and planning in the general mode selector", () => {
-		expect(CHAT_MODE_OPTIONS.map((option) => option.id)).toEqual([
-			"chat",
-			"plan",
-		]);
+	test("exposes only general chat in the general mode selector", () => {
+		expect(CHAT_MODE_OPTIONS.map((option) => option.id)).toEqual(["chat"]);
 		expect(SLASH_COMMAND_OPTIONS.map((option) => option.id)).toContain("chat");
+		expect(SLASH_COMMAND_OPTIONS.map((option) => option.id)).not.toContain(
+			"plan"
+		);
 	});
 
 	test("hides planning slash commands when trip mode is locked", () => {
@@ -109,19 +108,6 @@ describe("Viya chat modes", () => {
 		expect(suggestions[0]?.title).toBe("Check this readiness");
 		expect(suggestions[0]?.prompt).toContain("Japan Trip");
 		expect(suggestions[0]?.prompt).toContain("open checklist items");
-	});
-});
-
-describe("draft blueprint fast path", () => {
-	test("asks Viya to generate a manual-style setup with clear assumptions", () => {
-		expect(getDraftTripBlueprintPrompt()).toContain(
-			"Generate a Trip Blueprint now"
-		);
-		expect(getDraftTripBlueprintPrompt()).toContain("manual trip setup fields");
-		expect(getDraftTripBlueprintPrompt()).toContain("travelers");
-		expect(getDraftTripBlueprintPrompt()).toContain("pace");
-		expect(getDraftTripBlueprintPrompt()).toContain("sensible assumptions");
-		expect(getDraftTripBlueprintPrompt()).toContain("needs confirmation");
 	});
 });
 

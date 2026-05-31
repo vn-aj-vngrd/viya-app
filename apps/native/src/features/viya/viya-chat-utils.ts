@@ -144,9 +144,6 @@ export const shouldPopViyaBackRoute = ({
 	return Boolean(canGoBack && launchRoute && isAppReturnRoute(launchRoute));
 };
 
-export const getDraftTripBlueprintPrompt = () =>
-	"Generate a Trip Blueprint now using the manual trip setup fields: destination, route, dates, travelers, budget, pace, itinerary style, booking targets, requirements, risks, and next actions. Make sensible assumptions for missing fields and clearly mark anything that needs confirmation.";
-
 export const isCurrentChatRequest = ({
 	activeSessionId,
 	requestSessionId,
@@ -187,7 +184,7 @@ export const getChatModeOption = (mode: ChatModeId) =>
 	CHAT_MODE_OPTIONS[0];
 
 export const isChatModeId = (value: MenuKey): value is ChatModeId =>
-	CHAT_MODE_OPTIONS.some((option) => option.id === value);
+	ALL_CHAT_MODE_OPTIONS.some((option) => option.id === value);
 
 export const getThreadContextKey = (
 	mode: ChatModeId,

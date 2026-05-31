@@ -479,6 +479,7 @@ const getRiskSeverity = (item: string) => {
 const matchesTripFilters = ({
 	filters,
 	isCompleted,
+	isFavorite,
 	isPlanning,
 	isUpcoming,
 	needsReadiness,
@@ -486,6 +487,7 @@ const matchesTripFilters = ({
 }: {
 	filters: Set<string>;
 	isCompleted: boolean;
+	isFavorite: boolean;
 	isPlanning: boolean;
 	isUpcoming: boolean;
 	needsReadiness: boolean;
@@ -495,6 +497,7 @@ const matchesTripFilters = ({
 		filters.has("planning") && isPlanning,
 		filters.has("traveling") && tripStatus === "traveling",
 		filters.has("needsReadiness") && needsReadiness,
+		filters.has("favorites") && isFavorite,
 		filters.has("upcoming") && isUpcoming,
 		filters.has("completed") && isCompleted,
 		filters.has(getTripStatusFilter(tripStatus)),
@@ -520,6 +523,7 @@ export const searchTrips = query({
 					v.literal("planning"),
 					v.literal("traveling"),
 					v.literal("needsReadiness"),
+					v.literal("favorites"),
 					v.literal("upcoming"),
 					v.literal("completed"),
 					v.literal("status:planning"),
@@ -561,10 +565,12 @@ export const searchTrips = query({
 				const isCompleted =
 					TRIP_COMPLETED_STATUSES.includes(trip.status as never) ||
 					(!!trip.endDate && trip.endDate < today);
+				const isFavorite = trip.isFavorite ?? false;
 				if (
 					!matchesTripFilters({
 						filters,
 						isCompleted,
+						isFavorite,
 						isPlanning,
 						isUpcoming,
 						needsReadiness,

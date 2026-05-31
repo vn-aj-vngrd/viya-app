@@ -3,6 +3,7 @@ import { Button, Spinner, Surface, Text, useThemeColor } from "heroui-native";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+	FlatList,
 	type NativeScrollEvent,
 	type NativeSyntheticEvent,
 	useWindowDimensions,
@@ -10,20 +11,18 @@ import {
 } from "react-native";
 import Animated, {
 	Easing,
+	FadeIn,
+	FadeInDown,
 	FadeInLeft,
 	FadeInRight,
-	FadeInUp,
 	FadeOut,
-	scrollTo,
-	useAnimatedRef,
 	useAnimatedStyle,
-	useDerivedValue,
 	useSharedValue,
 	withDelay,
-	withRepeat,
 	withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Svg, { Circle } from "react-native-svg";
 
 import { Container } from "@/components/container";
 import { ViyaMark } from "@/src/components/viya-mark";
@@ -36,7 +35,6 @@ import {
 type ActId = "dream" | "prepare" | "remember";
 
 interface OnboardingAct {
-	dwellMs: number;
 	eyebrow: string;
 	id: ActId;
 	subtitle: string;
@@ -45,7 +43,6 @@ interface OnboardingAct {
 
 const ONBOARDING_ACTS = [
 	{
-		dwellMs: 6800,
 		eyebrow: "DREAM IT",
 		id: "dream",
 		subtitle:
@@ -53,7 +50,6 @@ const ONBOARDING_ACTS = [
 		title: "Plan a trip\njust by chatting.",
 	},
 	{
-		dwellMs: 4200,
 		eyebrow: "GET READY",
 		id: "prepare",
 		subtitle:
@@ -61,7 +57,6 @@ const ONBOARDING_ACTS = [
 		title: "Know you're ready\nbefore you go.",
 	},
 	{
-		dwellMs: 4600,
 		eyebrow: "REMEMBER IT",
 		id: "remember",
 		subtitle:
@@ -74,97 +69,78 @@ const FIRST_INDEX = 0;
 const FINAL_INDEX = ONBOARDING_ACTS.length - 1;
 const COMPACT_HEIGHT_THRESHOLD = 740;
 const PREVIEW_HEIGHT = 440;
-const COMPACT_PREVIEW_HEIGHT = 320;
-const ADVANCE_TRANSITION_MS = 620;
-const PROGRESS_DOT_SIZE = 6;
-const ACTIVE_DOT_WIDTH = 22;
+const COMPACT_PREVIEW_HEIGHT = 360;
+const CAROUSEL_DWELL_MS = 10_000;
+const CHAT_BUBBLE_IN_MS = 420;
+const CHAT_BUBBLE_STAGGER_MS = 760;
+const CHECKLIST_ITEM_COUNT = 4;
+const CHECK_REVEAL_MS = 420;
+const CHECK_REVEAL_STAGGER_MS = 120;
+const CHECK_AFTER_REVEAL_DELAY_MS = 420;
+const CHECK_ANIMATION_MS = 420;
+const CHECK_STAGGER_MS = 520;
+const CHECK_SEQUENCE_START_MS =
+	CHECK_REVEAL_STAGGER_MS * (CHECKLIST_ITEM_COUNT - 1) +
+	CHECK_REVEAL_MS +
+	CHECK_AFTER_REVEAL_DELAY_MS;
+const READINESS_ANIMATION_MS =
+	CHECK_STAGGER_MS * (CHECKLIST_ITEM_COUNT - 1) + CHECK_ANIMATION_MS;
+const READINESS_RING_SIZE = 96;
+const READINESS_RING_STROKE = 8;
+const READINESS_RING_RADIUS = (READINESS_RING_SIZE - READINESS_RING_STROKE) / 2;
+const READINESS_RING_CIRCUMFERENCE = 2 * Math.PI * READINESS_RING_RADIUS;
+const READINESS_TARGET_PERCENT = 100;
+const RECAP_CARD_IN_MS = 500;
+const RECAP_CHIP_STAGGER_MS = 120;
 
-const CONVERSATION_TURNS = [
+const CHAT_BUBBLES = [
 	{
-		prompt: "a relaxing beach trip around ₱30k",
-		reply: "Palawan's perfect for that. Quiet islands, food spots, or both?",
+		fromViya: true,
+		id: "viya-open",
+		text: "Tell me your dream trip — I'll plan it.",
 	},
 	{
-		prompt: "5 lowkey days in Palawan, foodie",
-		reply: "Love it — I'll plan food-first days with slow, easy mornings.",
+		fromViya: false,
+		id: "user-brief",
+		text: "a relaxing beach trip around ₱30k",
+	},
+	{
+		fromViya: true,
+		id: "viya-focus",
+		text: "Palawan's perfect for that. Quiet islands, food spots, or both?",
+	},
+	{
+		fromViya: false,
+		id: "user-refine",
+		text: "5 lowkey days in Palawan, foodie",
+	},
+	{
+		fromViya: true,
+		id: "viya-plan",
+		text: "Love it — I'll plan food-first days with slow, easy mornings.",
 	},
 ] as const;
 
-type ConversationPhase = "typing" | "thinking" | "answered";
-
-const TYPE_CHAR_MS = 46;
-const SEND_PAUSE_MS = 480;
-const THINKING_MS = 1100;
-const ANSWERED_HOLD_MS = 2600;
-const FINAL_STATIC_HOLD_MS = 1500;
-const BUBBLE_IN_MS = 360;
 const BUBBLE_OUT_MS = 220;
-const DOT_PULSE_MS = 460;
-const CARET_BLINK_MS = 540;
-const TYPING_DOT_DELAYS = [0, 140, 280] as const;
-
-function useTypedText(text: string, isActive: boolean) {
-	const [typed, setTyped] = useState("");
-
-	useEffect(() => {
-		if (!isActive) {
-			return;
-		}
-
-		setTyped("");
-		let charCount = 0;
-		const intervalId = setInterval(() => {
-			charCount += 1;
-			setTyped(text.slice(0, charCount));
-
-			if (charCount >= text.length) {
-				clearInterval(intervalId);
-			}
-		}, TYPE_CHAR_MS);
-
-		return () => clearInterval(intervalId);
-	}, [text, isActive]);
-
-	return typed;
-}
-
-function Caret({ color }: { color: string }) {
-	const opacity = useSharedValue(1);
-
-	useEffect(() => {
-		opacity.value = withRepeat(
-			withTiming(0, { duration: CARET_BLINK_MS }),
-			-1,
-			true
-		);
-	}, [opacity]);
-
-	const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
-
-	return (
-		<Animated.View
-			style={[
-				{ backgroundColor: color, borderRadius: 1, height: 18, width: 2 },
-				style,
-			]}
-		/>
-	);
-}
 
 interface ChatBubbleProps {
 	children: ReactNode;
+	delay: number;
 	fromViya: boolean;
 }
 
-function ChatBubble({ children, fromViya }: ChatBubbleProps) {
+function ChatBubble({ children, delay, fromViya }: ChatBubbleProps) {
 	const accent = useThemeColor("accent");
 	const accentForeground = useThemeColor("accent-foreground");
+	const entering = fromViya
+		? FadeInLeft.duration(CHAT_BUBBLE_IN_MS).delay(delay)
+		: FadeInRight.duration(CHAT_BUBBLE_IN_MS).delay(delay);
 
 	if (fromViya) {
 		return (
 			<Animated.View
 				className="self-start"
-				entering={FadeInLeft.duration(BUBBLE_IN_MS)}
+				entering={entering}
 				exiting={FadeOut.duration(BUBBLE_OUT_MS)}
 			>
 				<Surface className="max-w-[82%] rounded-3xl rounded-bl-md border border-border px-4 py-2.5">
@@ -179,7 +155,7 @@ function ChatBubble({ children, fromViya }: ChatBubbleProps) {
 	return (
 		<Animated.View
 			className="self-end"
-			entering={FadeInRight.duration(BUBBLE_IN_MS)}
+			entering={entering}
 			exiting={FadeOut.duration(BUBBLE_OUT_MS)}
 		>
 			<View
@@ -198,148 +174,29 @@ function ChatBubble({ children, fromViya }: ChatBubbleProps) {
 	);
 }
 
-function TypingDot({ delay }: { delay: number }) {
-	const muted = useThemeColor("muted");
-	const opacity = useSharedValue(0.25);
-
-	useEffect(() => {
-		opacity.value = withDelay(
-			delay,
-			withRepeat(withTiming(1, { duration: DOT_PULSE_MS }), -1, true)
-		);
-	}, [delay, opacity]);
-
-	const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
-
-	return (
-		<Animated.View
-			style={[
-				{ backgroundColor: muted, borderRadius: 3, height: 6, width: 6 },
-				style,
-			]}
-		/>
-	);
-}
-
-function TypingIndicator() {
-	return (
-		<Animated.View
-			className="self-start"
-			entering={FadeInLeft.duration(BUBBLE_IN_MS)}
-			exiting={FadeOut.duration(BUBBLE_OUT_MS)}
-		>
-			<Surface className="flex-row items-center gap-1.5 rounded-3xl rounded-bl-md border border-border px-4 py-3.5">
-				{TYPING_DOT_DELAYS.map((delay) => (
-					<TypingDot delay={delay} key={delay} />
-				))}
-			</Surface>
-		</Animated.View>
-	);
-}
-
-function DreamPreview({
-	onSequenceComplete,
-}: {
-	onSequenceComplete: () => void;
-}) {
+function DreamPreview() {
 	const accent = useThemeColor("accent");
 	const accentForeground = useThemeColor("accent-foreground");
-	const [turnIndex, setTurnIndex] = useState(0);
-	const [phase, setPhase] = useState<ConversationPhase>("typing");
-	const hasCompletedRef = useRef(false);
-
-	const turn = CONVERSATION_TURNS[turnIndex];
-	const isTyping = phase === "typing";
-	const typed = useTypedText(turn.prompt, isTyping);
-	const promptLength = turn.prompt.length;
-
-	useEffect(() => {
-		if (phase === "typing") {
-			const toThinking = setTimeout(
-				() => setPhase("thinking"),
-				promptLength * TYPE_CHAR_MS + SEND_PAUSE_MS
-			);
-
-			return () => clearTimeout(toThinking);
-		}
-
-		if (phase === "thinking") {
-			const toAnswered = setTimeout(() => setPhase("answered"), THINKING_MS);
-
-			return () => clearTimeout(toAnswered);
-		}
-
-		const toNextTurn = setTimeout(
-			() => {
-				const isLastTurn = turnIndex === CONVERSATION_TURNS.length - 1;
-				if (isLastTurn) {
-					if (!hasCompletedRef.current) {
-						hasCompletedRef.current = true;
-						onSequenceComplete();
-					}
-					return;
-				}
-
-				setTurnIndex((index) => index + 1);
-				setPhase("typing");
-			},
-			turnIndex === CONVERSATION_TURNS.length - 1
-				? FINAL_STATIC_HOLD_MS
-				: ANSWERED_HOLD_MS
-		);
-
-		return () => clearTimeout(toNextTurn);
-	}, [onSequenceComplete, phase, promptLength, turnIndex]);
 
 	return (
 		<View className="flex-1 justify-between gap-4">
 			<View className="gap-2.5">
-				<Animated.View
-					className="self-start"
-					entering={FadeInLeft.duration(BUBBLE_IN_MS).delay(120)}
-				>
-					<Surface className="max-w-[82%] rounded-3xl rounded-bl-md border border-border px-4 py-2.5">
-						<Text type="body-sm" weight="medium">
-							Tell me your dream trip — I'll plan it.
-						</Text>
-					</Surface>
-				</Animated.View>
-				{turnIndex > 0 || !isTyping ? (
-					<ChatBubble fromViya={false}>
-						{CONVERSATION_TURNS[0].prompt}
+				{CHAT_BUBBLES.map((bubble, index) => (
+					<ChatBubble
+						delay={120 + index * CHAT_BUBBLE_STAGGER_MS}
+						fromViya={bubble.fromViya}
+						key={bubble.id}
+					>
+						{bubble.text}
 					</ChatBubble>
-				) : null}
-				{turnIndex > 0 || (turnIndex === 0 && phase === "answered") ? (
-					<ChatBubble fromViya={true}>{CONVERSATION_TURNS[0].reply}</ChatBubble>
-				) : null}
-				{turnIndex === 0 && phase === "thinking" ? <TypingIndicator /> : null}
-				{turnIndex === 1 && !isTyping ? (
-					<ChatBubble fromViya={false}>
-						{CONVERSATION_TURNS[1].prompt}
-					</ChatBubble>
-				) : null}
-				{turnIndex === 1 && phase === "thinking" ? <TypingIndicator /> : null}
-				{turnIndex === 1 && phase === "answered" ? (
-					<ChatBubble fromViya={true}>{CONVERSATION_TURNS[1].reply}</ChatBubble>
-				) : null}
+				))}
 			</View>
 
 			<Surface className="flex-row items-center gap-2 rounded-full border border-border px-4 py-3">
 				<View className="min-h-[18px] flex-1 flex-row items-center">
-					{isTyping && typed.length > 0 ? (
-						<Text type="body-sm" weight="medium">
-							{typed}
-						</Text>
-					) : (
-						<Text color="muted" type="body-sm">
-							Ask Viya anything…
-						</Text>
-					)}
-					{isTyping ? (
-						<View className="ml-0.5">
-							<Caret color={accent} />
-						</View>
-					) : null}
+					<Text color="muted" type="body-sm">
+						Ask Viya anything…
+					</Text>
 				</View>
 				<View
 					className="h-9 w-9 items-center justify-center rounded-full"
@@ -353,30 +210,57 @@ function DreamPreview({
 }
 
 function CheckRow({
-	delay,
-	done,
+	checkDelay,
 	label,
+	revealDelay,
 }: {
-	delay: number;
-	done: boolean;
+	checkDelay: number;
 	label: string;
+	revealDelay: number;
 }) {
 	const accent = useThemeColor("accent");
 	const muted = useThemeColor("muted");
+	const checkedProgress = useSharedValue(0);
+
+	useEffect(() => {
+		checkedProgress.value = withDelay(
+			checkDelay,
+			withTiming(1, {
+				duration: CHECK_ANIMATION_MS,
+				easing: Easing.out(Easing.cubic),
+			})
+		);
+	}, [checkDelay, checkedProgress]);
+
+	const uncheckedStyle = useAnimatedStyle(() => ({
+		opacity: 1 - checkedProgress.value,
+	}));
+	const checkedStyle = useAnimatedStyle(() => ({
+		opacity: checkedProgress.value,
+		transform: [{ scale: 0.82 + checkedProgress.value * 0.18 }],
+	}));
+	const labelStyle = useAnimatedStyle(() => ({
+		opacity: 0.55 + checkedProgress.value * 0.45,
+	}));
 
 	return (
 		<Animated.View
 			className="flex-row items-center gap-2.5"
-			entering={FadeInUp.delay(delay).duration(420)}
+			entering={FadeInLeft.delay(revealDelay).duration(CHECK_REVEAL_MS)}
 		>
-			<Ionicons
-				color={done ? accent : muted}
-				name={done ? "checkmark-circle" : "ellipse-outline"}
-				size={20}
-			/>
-			<Text color={done ? "default" : "muted"} type="body-sm" weight="medium">
-				{label}
-			</Text>
+			<View className="h-5 w-5 items-center justify-center">
+				<Animated.View className="absolute" style={uncheckedStyle}>
+					<Ionicons color={muted} name="ellipse-outline" size={20} />
+				</Animated.View>
+				<Animated.View className="absolute" style={checkedStyle}>
+					<Ionicons color={accent} name="checkmark-circle" size={20} />
+				</Animated.View>
+			</View>
+			<Animated.View style={labelStyle}>
+				<Text type="body-sm" weight="medium">
+					{label}
+				</Text>
+			</Animated.View>
 		</Animated.View>
 	);
 }
@@ -384,24 +268,68 @@ function CheckRow({
 function ReadinessRing({ value }: { value: number }) {
 	const accent = useThemeColor("accent");
 	const border = useThemeColor("border");
+	const [displayValue, setDisplayValue] = useState(0);
+	const [ringProgress, setRingProgress] = useState(0);
+
+	useEffect(() => {
+		let frameId: number | null = null;
+		const startedAt = Date.now();
+
+		const update = () => {
+			const elapsed = Math.max(
+				0,
+				Date.now() - startedAt - CHECK_SEQUENCE_START_MS
+			);
+			const nextProgress = Math.min(1, elapsed / READINESS_ANIMATION_MS);
+			setRingProgress(nextProgress);
+			setDisplayValue(Math.round(value * nextProgress));
+
+			if (nextProgress < 1) {
+				frameId = requestAnimationFrame(update);
+			}
+		};
+
+		frameId = requestAnimationFrame(update);
+
+		return () => {
+			if (frameId !== null) {
+				cancelAnimationFrame(frameId);
+			}
+		};
+	}, [value]);
+
+	const strokeDashoffset = READINESS_RING_CIRCUMFERENCE * (1 - ringProgress);
 
 	return (
-		<View
-			className="h-24 w-24 items-center justify-center rounded-full"
-			style={{ borderColor: border, borderWidth: 8 }}
-		>
-			<View
-				className="absolute h-24 w-24 rounded-full"
-				style={{
-					borderBottomColor: "transparent",
-					borderColor: accent,
-					borderLeftColor: "transparent",
-					borderWidth: 8,
-					transform: [{ rotate: "-45deg" }],
-				}}
-			/>
+		<View className="h-24 w-24 items-center justify-center rounded-full">
+			<Svg
+				height={READINESS_RING_SIZE}
+				style={{ position: "absolute" }}
+				width={READINESS_RING_SIZE}
+			>
+				<Circle
+					cx={READINESS_RING_SIZE / 2}
+					cy={READINESS_RING_SIZE / 2}
+					fill="none"
+					r={READINESS_RING_RADIUS}
+					stroke={border}
+					strokeWidth={READINESS_RING_STROKE}
+				/>
+				<Circle
+					cx={READINESS_RING_SIZE / 2}
+					cy={READINESS_RING_SIZE / 2}
+					fill="none"
+					r={READINESS_RING_RADIUS}
+					stroke={accent}
+					strokeDasharray={READINESS_RING_CIRCUMFERENCE}
+					strokeDashoffset={strokeDashoffset}
+					strokeLinecap="round"
+					strokeWidth={READINESS_RING_STROKE}
+					transform={`rotate(-90 ${READINESS_RING_SIZE / 2} ${READINESS_RING_SIZE / 2})`}
+				/>
+			</Svg>
 			<Text.Heading type="h3" weight="semibold">
-				{value}%
+				{displayValue}%
 			</Text.Heading>
 		</View>
 	);
@@ -410,25 +338,43 @@ function ReadinessRing({ value }: { value: number }) {
 function PreparePreview() {
 	return (
 		<View className="flex-1 justify-center gap-4">
-			<Surface className="flex-row items-center justify-between rounded-[30px] border border-border p-5">
-				<View className="gap-1">
-					<Text color="muted" type="body-xs" weight="semibold">
-						TRIP READINESS
-					</Text>
-					<Text.Heading type="h4" weight="semibold">
-						Almost ready
-					</Text.Heading>
-					<Text color="muted" type="body-xs">
-						2 things left to confirm
-					</Text>
-				</View>
-				<ReadinessRing value={82} />
-			</Surface>
+			<Animated.View entering={FadeIn.duration(420)}>
+				<Surface className="flex-row items-center justify-between rounded-[30px] border border-border p-5">
+					<View className="gap-1">
+						<Text color="muted" type="body-xs" weight="semibold">
+							TRIP READINESS
+						</Text>
+						<Text.Heading type="h4" weight="semibold">
+							Ready to go
+						</Text.Heading>
+						<Text color="muted" type="body-xs">
+							All essentials checked
+						</Text>
+					</View>
+					<ReadinessRing value={READINESS_TARGET_PERCENT} />
+				</Surface>
+			</Animated.View>
 			<Surface className="gap-3 rounded-[30px] border border-border p-5">
-				<CheckRow delay={300} done={true} label="Flight confirmed" />
-				<CheckRow delay={400} done={true} label="Hotel booked & saved" />
-				<CheckRow delay={500} done={false} label="Add airport transfer" />
-				<CheckRow delay={600} done={false} label="Pack for light rain" />
+				<CheckRow
+					checkDelay={CHECK_SEQUENCE_START_MS}
+					label="Flight confirmed"
+					revealDelay={0}
+				/>
+				<CheckRow
+					checkDelay={CHECK_SEQUENCE_START_MS + CHECK_STAGGER_MS}
+					label="Hotel booked & saved"
+					revealDelay={CHECK_REVEAL_STAGGER_MS}
+				/>
+				<CheckRow
+					checkDelay={CHECK_SEQUENCE_START_MS + CHECK_STAGGER_MS * 2}
+					label="Add airport transfer"
+					revealDelay={CHECK_REVEAL_STAGGER_MS * 2}
+				/>
+				<CheckRow
+					checkDelay={CHECK_SEQUENCE_START_MS + CHECK_STAGGER_MS * 3}
+					label="Pack for light rain"
+					revealDelay={CHECK_REVEAL_STAGGER_MS * 3}
+				/>
 			</Surface>
 		</View>
 	);
@@ -437,10 +383,10 @@ function PreparePreview() {
 function StatChip({ delay, label }: { delay: number; label: string }) {
 	return (
 		<Animated.View
-			className="flex-1"
-			entering={FadeInUp.delay(delay).duration(420)}
+			className="min-w-[96px] flex-1"
+			entering={FadeInDown.delay(delay).duration(420)}
 		>
-			<Surface className="rounded-2xl border border-border px-2 py-3">
+			<Surface className="min-h-[48px] justify-center rounded-2xl border border-border px-2 py-3">
 				<Text align="center" type="body-xs" weight="semibold">
 					{label}
 				</Text>
@@ -457,7 +403,7 @@ function RememberPreview() {
 		<View className="flex-1 justify-center gap-3">
 			<Animated.View
 				className="flex-1 justify-between rounded-[34px] p-6"
-				entering={FadeInUp.delay(120).duration(440)}
+				entering={FadeIn.duration(RECAP_CARD_IN_MS).delay(120)}
 				style={{ backgroundColor: accent, maxHeight: 280 }}
 			>
 				<View className="flex-row items-center justify-between">
@@ -492,23 +438,20 @@ function RememberPreview() {
 				</View>
 			</Animated.View>
 			<View className="flex-row gap-2">
-				<StatChip delay={420} label="Share recap" />
-				<StatChip delay={500} label="Reuse as guide" />
-				<StatChip delay={580} label="Trip insights" />
+				<StatChip delay={520} label="Share recap" />
+				<StatChip delay={520 + RECAP_CHIP_STAGGER_MS} label="Reuse as guide" />
+				<StatChip
+					delay={520 + RECAP_CHIP_STAGGER_MS * 2}
+					label="Trip insights"
+				/>
 			</View>
 		</View>
 	);
 }
 
-function ActPreview({
-	id,
-	onDreamPreviewComplete,
-}: {
-	id: ActId;
-	onDreamPreviewComplete: () => void;
-}) {
+function ActPreview({ id }: { id: ActId }) {
 	if (id === "dream") {
-		return <DreamPreview onSequenceComplete={onDreamPreviewComplete} />;
+		return <DreamPreview />;
 	}
 
 	if (id === "prepare") {
@@ -522,29 +465,17 @@ interface ActPageProps {
 	act: OnboardingAct;
 	isActive: boolean;
 	isCompact: boolean;
-	onDreamPreviewComplete: () => void;
 	width: number;
 }
 
-function ActPage({
-	act,
-	isActive,
-	isCompact,
-	onDreamPreviewComplete,
-	width,
-}: ActPageProps) {
+function ActPage({ act, isActive, isCompact, width }: ActPageProps) {
 	const accent = useThemeColor("accent");
 	const previewHeight = isCompact ? COMPACT_PREVIEW_HEIGHT : PREVIEW_HEIGHT;
 
 	return (
 		<View className="flex-1 justify-center px-6" style={{ width }}>
 			<View className="justify-center" style={{ height: previewHeight }}>
-				{isActive ? (
-					<ActPreview
-						id={act.id}
-						onDreamPreviewComplete={onDreamPreviewComplete}
-					/>
-				) : null}
+				{isActive ? <ActPreview id={act.id} /> : null}
 			</View>
 			<View className="gap-2 pt-4">
 				<Text
@@ -574,25 +505,57 @@ function ActPage({
 }
 
 function PageDots({ activeIndex }: { activeIndex: number }) {
-	const accent = useThemeColor("accent");
+	return (
+		<View className="flex-row gap-2">
+			{ONBOARDING_ACTS.map((act, index) => {
+				let status: ProgressSegmentStatus = "pending";
+				if (index < activeIndex) {
+					status = "complete";
+				} else if (index === activeIndex) {
+					status = "active";
+				}
+
+				return <ProgressSegment key={act.id} status={status} />;
+			})}
+		</View>
+	);
+}
+
+type ProgressSegmentStatus = "active" | "complete" | "pending";
+
+function ProgressSegment({ status }: { status: ProgressSegmentStatus }) {
 	const border = useThemeColor("border");
+	const accent = useThemeColor("accent");
+	const progress = useSharedValue(status === "complete" ? 1 : 0);
+
+	useEffect(() => {
+		if (status === "active") {
+			progress.value = 0;
+			progress.value = withTiming(1, { duration: CAROUSEL_DWELL_MS });
+			return;
+		}
+
+		progress.value = status === "complete" ? 1 : 0;
+	}, [progress, status]);
+
+	const fillStyle = useAnimatedStyle(() => ({
+		width: `${progress.value * 100}%`,
+	}));
 
 	return (
-		<View className="flex-row justify-center gap-1.5">
-			{ONBOARDING_ACTS.map((act, index) => {
-				const isActive = index === activeIndex;
-
-				return (
-					<View
-						className="h-1.5 rounded-full"
-						key={act.id}
-						style={{
-							backgroundColor: isActive ? accent : border,
-							width: isActive ? ACTIVE_DOT_WIDTH : PROGRESS_DOT_SIZE,
-						}}
-					/>
-				);
-			})}
+		<View
+			className="h-1.5 flex-1 overflow-hidden rounded-full"
+			style={{ backgroundColor: border }}
+		>
+			<Animated.View
+				className="h-full rounded-full"
+				style={[
+					{
+						backgroundColor: accent,
+					},
+					fillStyle,
+				]}
+			/>
 		</View>
 	);
 }
@@ -601,19 +564,12 @@ export default function AuthOnboardingScreen() {
 	const insets = useSafeAreaInsets();
 	const { height, width } = useWindowDimensions();
 	const accentForeground = useThemeColor("accent-foreground");
-	const animatedRef = useAnimatedRef<Animated.FlatList<OnboardingAct>>();
-	const activeIndexRef = useRef(FIRST_INDEX);
-	const hasAutoAdvancedFromDreamRef = useRef(false);
+	const carouselRef = useRef<FlatList<OnboardingAct>>(null);
 	const hasInteractedRef = useRef(false);
 	const [activeIndex, setActiveIndex] = useState(FIRST_INDEX);
 	const [isCheckingCompletion, setIsCheckingCompletion] = useState(true);
 	const [isSignInSheetOpen, setIsSignInSheetOpen] = useState(false);
 	const isCompactHeight = height < COMPACT_HEIGHT_THRESHOLD;
-	const scrollOffset = useSharedValue(0);
-
-	useDerivedValue(() => {
-		scrollTo(animatedRef, scrollOffset.value, 0, false);
-	});
 
 	useEffect(() => {
 		let isMounted = true;
@@ -629,24 +585,16 @@ export default function AuthOnboardingScreen() {
 		};
 	}, []);
 
-	const goToIndex = useCallback(
-		(nextIndex: number) => {
-			activeIndexRef.current = nextIndex;
-			scrollOffset.value = withTiming(nextIndex * width, {
-				duration: ADVANCE_TRANSITION_MS,
-				easing: Easing.inOut(Easing.cubic),
-			});
-			setActiveIndex(nextIndex);
-		},
-		[scrollOffset, width]
-	);
+	const goToIndex = useCallback((nextIndex: number) => {
+		carouselRef.current?.scrollToIndex({
+			animated: true,
+			index: nextIndex,
+		});
+		setActiveIndex(nextIndex);
+	}, []);
 
 	useEffect(() => {
 		if (isCheckingCompletion || isSignInSheetOpen || width <= 0) {
-			return;
-		}
-
-		if (activeIndex === FIRST_INDEX && !hasAutoAdvancedFromDreamRef.current) {
 			return;
 		}
 
@@ -658,7 +606,6 @@ export default function AuthOnboardingScreen() {
 			return;
 		}
 
-		const dwell = ONBOARDING_ACTS[activeIndex].dwellMs;
 		const timer = setTimeout(() => {
 			if (hasInteractedRef.current) {
 				return;
@@ -666,7 +613,7 @@ export default function AuthOnboardingScreen() {
 
 			const nextIndex = activeIndex + 1;
 			goToIndex(nextIndex);
-		}, dwell);
+		}, CAROUSEL_DWELL_MS);
 
 		return () => clearTimeout(timer);
 	}, [activeIndex, goToIndex, isCheckingCompletion, isSignInSheetOpen, width]);
@@ -685,39 +632,16 @@ export default function AuthOnboardingScreen() {
 					Math.round(event.nativeEvent.contentOffset.x / width)
 				)
 			);
-
-			scrollOffset.value = nextIndex * width;
-
 			if (nextIndex !== activeIndex) {
-				activeIndexRef.current = nextIndex;
 				setActiveIndex(nextIndex);
 			}
 		},
-		[activeIndex, scrollOffset, width]
+		[activeIndex, width]
 	);
 
 	const handleScrollBeginDrag = useCallback(() => {
 		hasInteractedRef.current = true;
 	}, []);
-
-	const handleDreamPreviewComplete = useCallback(() => {
-		if (activeIndexRef.current !== FIRST_INDEX || isSignInSheetOpen) {
-			return;
-		}
-
-		if (hasAutoAdvancedFromDreamRef.current) {
-			return;
-		}
-
-		hasAutoAdvancedFromDreamRef.current = true;
-		goToIndex(FIRST_INDEX + 1);
-	}, [goToIndex, isSignInSheetOpen]);
-
-	useEffect(() => {
-		if (activeIndex === FIRST_INDEX) {
-			hasAutoAdvancedFromDreamRef.current = false;
-		}
-	}, [activeIndex]);
 
 	const renderPage = useCallback(
 		({ item, index }: { item: OnboardingAct; index: number }) => (
@@ -725,11 +649,10 @@ export default function AuthOnboardingScreen() {
 				act={item}
 				isActive={index === activeIndex}
 				isCompact={isCompactHeight}
-				onDreamPreviewComplete={handleDreamPreviewComplete}
 				width={width}
 			/>
 		),
-		[activeIndex, handleDreamPreviewComplete, isCompactHeight, width]
+		[activeIndex, isCompactHeight, width]
 	);
 
 	if (isCheckingCompletion) {
@@ -749,7 +672,7 @@ export default function AuthOnboardingScreen() {
 					<ViyaMark size={46} />
 				</View>
 
-				<Animated.FlatList
+				<FlatList
 					bounces={false}
 					data={ONBOARDING_ACTS}
 					getItemLayout={(_, index) => ({
@@ -761,8 +684,14 @@ export default function AuthOnboardingScreen() {
 					keyExtractor={(item) => item.id}
 					onMomentumScrollEnd={handleScrollEnd}
 					onScrollBeginDrag={handleScrollBeginDrag}
+					onScrollToIndexFailed={(info) => {
+						carouselRef.current?.scrollToOffset({
+							animated: true,
+							offset: info.index * width,
+						});
+					}}
 					pagingEnabled={true}
-					ref={animatedRef}
+					ref={carouselRef}
 					renderItem={renderPage}
 					scrollEventThrottle={16}
 					showsHorizontalScrollIndicator={false}

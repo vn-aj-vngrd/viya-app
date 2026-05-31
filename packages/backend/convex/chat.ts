@@ -37,7 +37,7 @@ const maxQuestionOptions = 4;
 const recentMessageLookupCount = 10;
 const titleMaxLength = 72;
 const previewMaxLength = 140;
-const questionMarkerPattern = /\**question\s+(\d+)\s*\/\s*(\d+)\**[:\s-]*/i;
+const questionMarkerPattern = /\**question\s+(\d+)\s*\/\s*(\d+)\**[:\s\-–—]*/i;
 const numberedOptionPattern = /^\s*(?:[-*]\s*)?\**(\d+)[.)]\**\s+(.+?)\s*$/;
 const markdownEmphasisPattern = /[*_`]/g;
 const leadingQuestionPrefixPattern = /^[-:>\s]+/;
@@ -118,6 +118,8 @@ const extractQuestionPrompt = (text: string) => {
 	}
 
 	const firstOptionIndex = optionRows[0].index;
+	const markerLineQuestion =
+		markerIndex >= 0 ? cleanQuestionText(lines[markerIndex]) : null;
 	const questionCandidates = lines
 		.slice(Math.max(markerIndex + 1, 0), firstOptionIndex)
 		.map(cleanQuestionText)
@@ -128,7 +130,11 @@ const extractQuestionPrompt = (text: string) => {
 		.filter((line) => line.includes("?"));
 	const [questionCandidate] = [...questionCandidates].reverse();
 	const [fallbackCandidate] = [...fallbackCandidates].reverse();
-	const question = questionCandidate ?? fallbackCandidate ?? null;
+	const question =
+		questionCandidate ??
+		(markerLineQuestion?.includes("?") ? markerLineQuestion : null) ??
+		fallbackCandidate ??
+		null;
 
 	if (!question) {
 		return null;

@@ -44,7 +44,7 @@ export const chatInputMaxLength = 1200;
 export const chatInputMaxLines = 12;
 export const chatInputWarningThreshold = 1000;
 export const composerInputMaxHeight = 132;
-export const composerInputMinHeight = 44;
+export const composerInputMinHeight = 36;
 export const expandedComposerInputMaxHeight = 360;
 export const expandedComposerInputMinHeight = 220;
 
@@ -60,18 +60,6 @@ export const CHAT_MODE_OPTIONS = [
 		label: "Chat",
 		placeholder: "Ask Viya",
 		soft: "rgba(10, 132, 255, 0.12)",
-	},
-	{
-		accent: "#BF5AF2",
-		description: "Guided trip planning, one decision at a time.",
-		emptyDescription:
-			"Build routes, compare options, shape budgets, and pressure-test timing before you book.",
-		emptyTitle: "Let's shape the plan",
-		icon: "map-outline",
-		id: "plan",
-		label: "Plan",
-		placeholder: "Ask Viya to plan",
-		soft: "rgba(191, 90, 242, 0.12)",
 	},
 ] as const satisfies readonly ChatModeOption[];
 
@@ -220,15 +208,6 @@ export const SLASH_COMMAND_OPTIONS = [
 		mode: "chat",
 	},
 	{
-		accent: "#BF5AF2",
-		description: "Switch to guided planning.",
-		icon: "map-outline",
-		id: "plan",
-		keywords: ["planning", "intake", "itinerary"],
-		label: "/plan",
-		mode: "plan",
-	},
-	{
 		action: "newChat",
 		accent: "#71717A",
 		description: "Start fresh in the current mode.",
@@ -286,19 +265,25 @@ export const SLASH_COMMAND_OPTIONS = [
 		requiresTrip: true,
 	},
 	{
-		accent: "#BF5AF2",
-		description: "Start planning with one question at a time.",
+		accent: "#0A84FF",
+		description: "Let Viya help create a trip.",
 		icon: "help-circle-outline",
 		id: "ask",
-		keywords: ["questions", "guided", "intake"],
-		label: "/ask",
-		mode: "plan",
+		keywords: ["questions", "guided", "intake", "create", "trip"],
+		label: "/create-trip",
+		mode: "chat",
 		prompt:
-			"Help me plan a trip. Ask me one question at a time before drafting it.",
+			"Help me create a trip. Ask me one setup question at a time, then draft a Trip Blueprint when you have enough details.",
 	},
 ] as const satisfies readonly SlashCommandOption[];
 
-export const composerStyle = {} satisfies StyleProp<ViewStyle>;
+export const composerStyle = {
+	elevation: 2,
+	shadowColor: "#0B1220",
+	shadowOffset: { height: 4, width: 0 },
+	shadowOpacity: 0.08,
+	shadowRadius: 12,
+} satisfies StyleProp<ViewStyle>;
 
 export const questionCardStyle = {
 	borderCurve: "continuous",

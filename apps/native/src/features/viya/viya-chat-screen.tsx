@@ -38,7 +38,6 @@ import { useVaultUpload } from "@/src/features/vault/use-vault-upload";
 import {
 	ChatHistorySheet,
 	ChatModeSelector,
-	DraftBlueprintShortcut,
 	HeaderActionGroup,
 	QuestionOptionsDock,
 	SlashCommandMenu,
@@ -72,7 +71,6 @@ import {
 	getActiveSlashCommand,
 	getChatInputLineCount,
 	getChatModeOption,
-	getDraftTripBlueprintPrompt,
 	getMessageQueryArgs,
 	getNormalizedChatInput,
 	getPromptSuggestions,
@@ -119,8 +117,9 @@ const getThreadIdsAfterTripCreate = ({
 };
 
 const composerInputLineHeight = 21;
-const composerInputPaddingBottom = 10;
-const composerInputPaddingTop = 10;
+const composerInputPaddingBottom = 0;
+const composerInputPaddingTop = 0;
+const composerControlSize = 52;
 const expandedComposerChromeReserve = 260;
 const chatScrollContentBottomPadding = 24;
 const chatComposerGap = 12;
@@ -138,10 +137,6 @@ const getInitialChatMode = ({
 }): ChatModeId => {
 	if (requestedMode === "trip" || routeTripId) {
 		return "trip";
-	}
-
-	if (requestedMode === "plan") {
-		return "plan";
 	}
 
 	return "chat";
@@ -318,15 +313,19 @@ function ComposerTextInput({
 	textColor?: string;
 	value: string;
 }) {
+	const isSingleLineHeight = height <= minHeight;
+	const visibleInputHeight = isSingleLineHeight
+		? composerInputLineHeight + 2
+		: height;
 	const textInputStyle = {
 		backgroundColor: "transparent",
 		color: textColor,
 		fontSize: 15,
 		fontWeight: "500" as const,
-		height,
+		height: visibleInputHeight,
 		lineHeight: composerInputLineHeight,
-		maxHeight,
-		minHeight,
+		maxHeight: isSingleLineHeight ? visibleInputHeight : maxHeight,
+		minHeight: isSingleLineHeight ? visibleInputHeight : minHeight,
 		paddingHorizontal: 0,
 		paddingRight: rightPadding,
 		paddingTop: composerInputPaddingTop,
@@ -337,7 +336,13 @@ function ComposerTextInput({
 	const measurementValue = value || " ";
 
 	return (
-		<View style={{ height, width: "100%" }}>
+		<View
+			style={{
+				height,
+				justifyContent: isSingleLineHeight ? "center" : "flex-start",
+				width: "100%",
+			}}
+		>
 			<NativeText
 				onLayout={(event) =>
 					onMeasuredHeightChange(event.nativeEvent.layout.height)
@@ -409,6 +414,7 @@ export function ViyaChatScreen() {
 	const [chatMode, setChatMode] = useState<ChatModeId>(initialMode);
 	const [createdTripId, setCreatedTripId] = useState<Id<"trips"> | null>(null);
 	const [isHistorySheetOpen, setIsHistorySheetOpen] = useState(false);
+	const [isComposerActionsOpen, setIsComposerActionsOpen] = useState(false);
 	const [isComposerSheetOpen, setIsComposerSheetOpen] = useState(false);
 	const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
 	const [isTripContextSheetOpen, setIsTripContextSheetOpen] = useState(false);
@@ -484,7 +490,7 @@ export function ViyaChatScreen() {
 					mode: "trip",
 					tripId: currentTripId,
 				} as const)
-			: ({ limit: 50 } as const);
+			: ({ limit: 50, mode: chatMode } as const);
 	const chatHistory = useQuery(api.chat.listHistory, chatHistoryArgs);
 	const pendingQuestion = useQuery(api.chat.getPendingQuestion, { threadId });
 
@@ -535,15 +541,6 @@ export function ViyaChatScreen() {
 	);
 	const shouldShowQuestionCard = Boolean(
 		pendingQuestion && !shouldShowSlashCommandMenu
-	);
-	const hasPlanUserInput = displayedMessages.some(
-		(message) => message.role === "user" && getUiMessageText(message)
-	);
-	const shouldShowDraftBlueprintShortcut = Boolean(
-		chatMode === "plan" &&
-			hasPlanUserInput &&
-			!isAwaitingViya &&
-			!shouldShowSlashCommandMenu
 	);
 	const composerInputLayout = getComposerInputLayout({
 		contentHeight: composerContentHeight,
@@ -791,43 +788,6 @@ export function ViyaChatScreen() {
 		runAsyncTask(persistStoredThreadIdsByContext(nextThreadIds));
 	};
 
-	const handleAddToTripPress = async () => {
-		if (!currentTripId) {
-			setErrorMessage("Create a trip before linking chat context.");
-			return;
-		}
-
-		if (!threadId) {
-			setErrorMessage("Send a message before linking chat context.");
-			return;
-		}
-
-		const tripContextKey = getThreadContextKey("trip", currentTripId);
-		const nextThreadIds = {
-			...threadIdsByContext,
-			[tripContextKey]: threadId,
-		};
-		delete nextThreadIds[threadContextKey];
-
-		try {
-			await linkThreadToTrip({ threadId, tripId: currentTripId });
-			setThreadIdsByContext(nextThreadIds);
-			setChatMode("trip");
-			setErrorMessage(null);
-			setNoticeMessage(null);
-			setAwaitingAssistantMessageCount(null);
-			setPendingPromptMessageIndex(null);
-			setIsModeMenuOpen(false);
-			runAsyncTask(persistStoredThreadIdsByContext(nextThreadIds));
-		} catch (error) {
-			setErrorMessage(
-				error instanceof Error
-					? error.message
-					: "Viya could not link this chat to your trip."
-			);
-		}
-	};
-
 	const handleHistorySelect = (item: ChatHistoryItem) => {
 		if (isTripModeLocked && item.mode !== "trip") {
 			setErrorMessage("Trip AI stays in Trip mode for this workspace.");
@@ -880,11 +840,18 @@ export function ViyaChatScreen() {
 		runAsyncTask(handleSubmit(value));
 	};
 
-	const handleDraftBlueprintPress = () => {
-		runAsyncTask(handleSubmit(getDraftTripBlueprintPrompt()));
+	const handleCreateTripWithAiPress = () => {
+		setIsComposerActionsOpen(false);
+		setChatMode("chat");
+		runAsyncTask(
+			handleSubmit(
+				"Help me create a trip. Ask me one setup question at a time, then draft a Trip Blueprint when you have enough details."
+			)
+		);
 	};
 
 	const handleFileUploadPress = async () => {
+		setIsComposerActionsOpen(false);
 		setErrorMessage(null);
 		setNoticeMessage(null);
 
@@ -1016,27 +983,6 @@ export function ViyaChatScreen() {
 		threadId,
 		threadIdsByContext,
 	});
-	const currentTripChip =
-		chatMode === "trip" && currentTrip ? (
-			<Pressable
-				accessibilityLabel={`Current trip context is ${currentTrip.title}`}
-				accessibilityRole="button"
-				className="min-w-0 flex-row items-center gap-1.5 rounded-full border border-warning/30 bg-warning/10 px-3 py-2"
-				onPress={() => setIsTripContextSheetOpen(true)}
-			>
-				<Ionicons color="#FF9F0A" name="briefcase-outline" size={14} />
-				<Text
-					adjustsFontSizeToFit={true}
-					numberOfLines={1}
-					style={{ color: "#9A5A00", maxWidth: 120 }}
-					type="body-sm"
-					weight="bold"
-				>
-					{currentTrip.title}
-				</Text>
-			</Pressable>
-		) : null;
-
 	return (
 		<Container isScrollable={false}>
 			<KeyboardAvoidingView
@@ -1060,25 +1006,20 @@ export function ViyaChatScreen() {
 								accessibilityLabel="Back to previous tab"
 								onPress={handleBackPress}
 							/>
-							{currentTripChip ?? (
-								<ChatModeSelector
-									currentTripId={currentTripId}
-									isLocked={isTripModeLocked}
-									isOpen={isModeMenuOpen}
-									onOpenChange={setIsModeMenuOpen}
-									onSelect={handleModeSelect}
-									selectedMode={chatMode}
-									threadIdsByContext={threadIdsByContext}
-								/>
-							)}
+							<ChatModeSelector
+								currentTripId={currentTripId}
+								includeTripMode={isTripModeLocked}
+								isLocked={isTripModeLocked}
+								isOpen={isModeMenuOpen}
+								onOpenChange={setIsModeMenuOpen}
+								onSelect={handleModeSelect}
+								selectedMode={chatMode}
+								threadIdsByContext={threadIdsByContext}
+							/>
 						</View>
 						<HeaderActionGroup
-							currentThreadId={threadId}
-							currentTripId={currentTripId}
-							onAddToTripPress={handleAddToTripPress}
 							onHistoryPress={() => setIsHistorySheetOpen(true)}
 							onNewChatPress={handleNewChatPress}
-							threadIdsByContext={threadIdsByContext}
 						/>
 					</View>
 
@@ -1151,14 +1092,8 @@ export function ViyaChatScreen() {
 						</View>
 					) : null}
 
-					{shouldShowDraftBlueprintShortcut || shouldShowQuestionCard ? (
+					{shouldShowQuestionCard ? (
 						<View className="gap-2">
-							{shouldShowDraftBlueprintShortcut ? (
-								<DraftBlueprintShortcut
-									isDisabled={isAwaitingViya}
-									onPress={handleDraftBlueprintPress}
-								/>
-							) : null}
 							{shouldShowQuestionCard ? (
 								<QuestionOptionsDock
 									isLoading={isAwaitingViya}
@@ -1176,10 +1111,7 @@ export function ViyaChatScreen() {
 								{vaultUploadErrorMessage}
 							</Text>
 						) : null}
-						<Surface
-							className="relative flex-row items-center gap-2 rounded-[28px] border border-border bg-surface px-3 py-2"
-							style={composerStyle}
-						>
+						<View className="flex-row items-end gap-2">
 							<Pressable
 								accessibilityLabel={
 									chatMode === "trip"
@@ -1192,12 +1124,14 @@ export function ViyaChatScreen() {
 										isUploadingVaultFile || isConfirmingVaultUpload
 									),
 								}}
-								className="h-11 w-11 items-center justify-center rounded-full border"
+								className="items-center justify-center rounded-full bg-surface"
 								disabled={isUploadingVaultFile || isConfirmingVaultUpload}
-								onPress={() => {
-									runAsyncTask(handleFileUploadPress());
+								onPress={() => setIsComposerActionsOpen(true)}
+								style={{
+									...composerStyle,
+									height: composerControlSize,
+									width: composerControlSize,
 								}}
-								style={{ backgroundColor: "#FFFFFF", borderColor: "#D4D4D8" }}
 							>
 								{isUploadingVaultFile ? (
 									<Spinner size="sm" />
@@ -1205,79 +1139,88 @@ export function ViyaChatScreen() {
 									<Ionicons color="#18181B" name="add" size={22} />
 								)}
 							</Pressable>
-							<View
-								className="relative flex-1"
-								style={{ height: composerInputLayout.height }}
+							<Surface
+								className="relative min-w-0 flex-1 flex-row items-center gap-2 rounded-[28px] bg-surface py-2 pr-2 pl-5"
+								style={{
+									...composerStyle,
+									minHeight: composerControlSize,
+								}}
 							>
-								<ComposerTextInput
-									height={composerInputLayout.height}
-									isEditable={!isAwaitingViya}
-									isScrollable={composerInputLayout.isScrollable}
-									maxHeight={composerInputMaxHeight}
-									minHeight={composerInputMinHeight}
-									onChangeText={handleComposerTextChange}
-									onMeasuredHeightChange={setComposerContentHeight}
-									onSubmit={() => {
-										runAsyncTask(handleSubmit());
+								<View
+									className="relative flex-1"
+									style={{ height: composerInputLayout.height }}
+								>
+									<ComposerTextInput
+										height={composerInputLayout.height}
+										isEditable={!isAwaitingViya}
+										isScrollable={composerInputLayout.isScrollable}
+										maxHeight={composerInputMaxHeight}
+										minHeight={composerInputMinHeight}
+										onChangeText={handleComposerTextChange}
+										onMeasuredHeightChange={setComposerContentHeight}
+										onSubmit={() => {
+											runAsyncTask(handleSubmit());
+										}}
+										placeholder={selectedModeOption.placeholder}
+										placeholderTextColor={mutedColor}
+										rightPadding={4}
+										value={input}
+									/>
+								</View>
+								<View
+									className="items-center justify-end"
+									style={{
+										height: Math.max(
+											composerInputLayout.height,
+											composerControlSize - 8
+										),
+										width: 44,
 									}}
-									placeholder={selectedModeOption.placeholder}
-									placeholderTextColor={mutedColor}
-									value={input}
-								/>
-							</View>
-							<View
-								className="items-center justify-center"
-								style={{ height: composerInputLayout.height, width: 44 }}
-							>
-								{composerInputLayout.shouldShowExpand ? (
-									<Pressable
-										accessibilityLabel="Expand message editor"
-										accessibilityRole="button"
-										className="absolute top-0 h-9 w-9 items-center justify-center rounded-full bg-surface"
-										onPress={() => setIsComposerSheetOpen(true)}
-									>
-										<Ionicons
-											color={mutedColor}
-											name="expand-outline"
-											size={18}
-										/>
-									</Pressable>
-								) : null}
-								{canSendMessage ? (
-									<Button
-										isIconOnly={true}
-										onPress={() => handleSubmit()}
-										size="sm"
-										style={{
-											height: 44,
-											marginTop: composerInputLayout.shouldShowExpand
-												? "auto"
-												: 0,
-											width: 44,
-										}}
-										variant="primary"
-									>
-										<Ionicons color="#FFFFFF" name="arrow-up" size={18} />
-									</Button>
-								) : (
-									<Pressable
-										accessibilityLabel="Send message"
-										accessibilityRole="button"
-										accessibilityState={{ disabled: true }}
-										className="h-11 w-11 items-center justify-center rounded-full"
-										disabled={true}
-										style={{
-											backgroundColor: "rgba(24, 24, 27, 0.06)",
-											marginTop: composerInputLayout.shouldShowExpand
-												? "auto"
-												: 0,
-										}}
-									>
-										<Ionicons color="#A1A1AA" name="arrow-up" size={18} />
-									</Pressable>
-								)}
-							</View>
-						</Surface>
+								>
+									{composerInputLayout.shouldShowExpand ? (
+										<Pressable
+											accessibilityLabel="Expand message editor"
+											accessibilityRole="button"
+											className="absolute top-0 h-9 w-9 items-center justify-center rounded-full bg-surface"
+											onPress={() => setIsComposerSheetOpen(true)}
+										>
+											<Ionicons
+												color={mutedColor}
+												name="expand-outline"
+												size={18}
+											/>
+										</Pressable>
+									) : null}
+									{canSendMessage ? (
+										<Button
+											isIconOnly={true}
+											onPress={() => handleSubmit()}
+											size="sm"
+											style={{
+												height: 44,
+												width: 44,
+											}}
+											variant="primary"
+										>
+											<Ionicons color="#FFFFFF" name="arrow-up" size={18} />
+										</Button>
+									) : (
+										<Pressable
+											accessibilityLabel="Send message"
+											accessibilityRole="button"
+											accessibilityState={{ disabled: true }}
+											className="h-11 w-11 items-center justify-center rounded-full"
+											disabled={true}
+											style={{
+												backgroundColor: "rgba(24, 24, 27, 0.06)",
+											}}
+										>
+											<Ionicons color="#A1A1AA" name="arrow-up" size={18} />
+										</Pressable>
+									)}
+								</View>
+							</Surface>
+						</View>
 					</View>
 					{shouldShowInputLimit ? (
 						<Text className="mt-1 px-4" color="muted" type="body-xs">
@@ -1286,6 +1229,85 @@ export function ViyaChatScreen() {
 					) : null}
 				</View>
 			</KeyboardAvoidingView>
+			<BottomSheet
+				isOpen={isComposerActionsOpen}
+				onOpenChange={setIsComposerActionsOpen}
+			>
+				<BottomSheet.Portal>
+					<BottomSheet.Overlay />
+					<BottomSheet.Content
+						backgroundClassName="rounded-t-[36px] bg-background"
+						enablePanDownToClose={true}
+					>
+						<View
+							className="gap-3 px-5 pt-2"
+							style={{ paddingBottom: Math.max(insets.bottom, 18) }}
+						>
+							<View className="gap-1 px-1">
+								<BottomSheet.Title>Viya actions</BottomSheet.Title>
+								<BottomSheet.Description>
+									Start a trip with AI or add files for context.
+								</BottomSheet.Description>
+							</View>
+							<Pressable
+								accessibilityLabel="Create a trip with Viya"
+								accessibilityRole="button"
+								className="min-h-16 flex-row items-center gap-3 rounded-[22px] bg-surface px-3 py-3"
+								onPress={handleCreateTripWithAiPress}
+							>
+								<View className="h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+									<Ionicons color="#0A84FF" name="map-outline" size={19} />
+								</View>
+								<View className="min-w-0 flex-1 gap-0.5">
+									<Text type="body-sm" weight="bold">
+										Create trip
+									</Text>
+									<Text color="muted" numberOfLines={2} type="body-xs">
+										Viya asks the setup questions and drafts the trip.
+									</Text>
+								</View>
+								<Ionicons color={mutedColor} name="chevron-forward" size={18} />
+							</Pressable>
+							<Pressable
+								accessibilityLabel="Add files for Viya"
+								accessibilityRole="button"
+								accessibilityState={{
+									disabled: Boolean(
+										isUploadingVaultFile || isConfirmingVaultUpload
+									),
+								}}
+								className="min-h-16 flex-row items-center gap-3 rounded-[22px] bg-surface px-3 py-3"
+								disabled={isUploadingVaultFile || isConfirmingVaultUpload}
+								onPress={() => {
+									runAsyncTask(handleFileUploadPress());
+								}}
+								style={{ opacity: isUploadingVaultFile ? 0.55 : 1 }}
+							>
+								<View className="h-10 w-10 items-center justify-center rounded-full bg-default">
+									{isUploadingVaultFile ? (
+										<Spinner size="sm" />
+									) : (
+										<Ionicons
+											color="#18181B"
+											name="document-attach-outline"
+											size={19}
+										/>
+									)}
+								</View>
+								<View className="min-w-0 flex-1 gap-0.5">
+									<Text type="body-sm" weight="bold">
+										Add files
+									</Text>
+									<Text color="muted" numberOfLines={2} type="body-xs">
+										Upload documents, bookings, receipts, or notes.
+									</Text>
+								</View>
+								<Ionicons color={mutedColor} name="chevron-forward" size={18} />
+							</Pressable>
+						</View>
+					</BottomSheet.Content>
+				</BottomSheet.Portal>
+			</BottomSheet>
 			<BottomSheet
 				isOpen={isComposerSheetOpen}
 				onOpenChange={setIsComposerSheetOpen}

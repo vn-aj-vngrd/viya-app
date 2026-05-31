@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
+import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
 import { useMutation } from "convex/react";
 import { type Href, Link, useRouter } from "expo-router";
 import {
@@ -12,7 +13,6 @@ import {
 	Spinner,
 	Surface,
 	Text,
-	TextArea,
 	TextField,
 	useThemeColor,
 } from "heroui-native";
@@ -27,12 +27,25 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
+import {
+	DateRangePickerField,
+	type DateRangeValue,
+} from "@/src/components/date/date-picker-field";
 
 import { NavigationBackButton } from "@/src/components/navigation/navigation-back-button";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 import { useDestinationImages } from "@/src/features/home/use-destination-images";
 import { TripMetricBlock } from "@/src/features/trips/trip-card-primitives";
 import { isDecorativeDestinationImageUrl } from "@/src/features/trips/trip-cover-image";
+import {
+	getTripCreateOptionLabel,
+	paceOptions,
+	type TravelerType,
+	type TripPace,
+	type TripStyle,
+	travelerTypeOptions,
+	tripStyleOptions,
+} from "@/src/features/trips/trip-create-flow-utils";
 import { getTripModulesSheetListMaxHeight } from "./trip-dashboard-layout";
 import type {
 	DashboardAction,
@@ -51,8 +64,85 @@ const softBackgroundColor = "rgba(24, 24, 27, 0.04)";
 export const tripFloatingBarBottomInset = 24;
 export const tripFloatingBarGap = 6;
 const viyaButtonNavigationThrottleMs = 800;
+const profilePaceDetails = {
+	balanced: "3-5 activities per day",
+	light: "2-3 main activities per day",
+	packed: "Maximize the trip",
+} as const satisfies Record<TripPace, string>;
+const profilePaceIcons = {
+	balanced: "scale-outline",
+	light: "leaf-outline",
+	packed: "flash-outline",
+} as const satisfies Record<TripPace, IoniconName>;
 
 const destinationParentheticalPattern = /\s*\([^)]*\)/g;
+
+const normalizeProfileOption = (value: string) =>
+	value
+		.trim()
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "");
+
+const getSelectedTravelerType = (value: string): TravelerType =>
+	travelerTypeOptions.find(
+		(option) => normalizeProfileOption(option) === normalizeProfileOption(value)
+	) ?? "solo";
+
+const getSelectedTripPace = (value: string): TripPace =>
+	paceOptions.find(
+		(option) => normalizeProfileOption(option) === normalizeProfileOption(value)
+	) ?? "balanced";
+
+const getSelectedTripStyles = (value: string): TripStyle[] => {
+	const normalizedValue = normalizeProfileOption(value);
+	const selectedStyles = tripStyleOptions.filter((option) => {
+		const normalizedOption = normalizeProfileOption(option);
+		const normalizedLabel = normalizeProfileOption(
+			getTripCreateOptionLabel("style", option)
+		);
+
+		return (
+			normalizedValue.includes(normalizedOption) ||
+			normalizedValue.includes(normalizedLabel)
+		);
+	});
+
+	return selectedStyles.length > 0 ? selectedStyles : ["relaxed"];
+};
+
+const formatProfileTripStyles = (styles: readonly TripStyle[]) =>
+	styles
+		.map((style) => getTripCreateOptionLabel("style", style).toLowerCase())
+		.join(", ");
+
+const getProfileTripSummary = (form: TripProfileForm) => {
+	const selectedTravelerType = getSelectedTravelerType(form.groupType);
+	const selectedStyles = getSelectedTripStyles(form.travelStyle);
+	const selectedPace = getSelectedTripPace(form.pace);
+	const budgetAmount = Number(form.budgetAmount.replaceAll(",", ""));
+	const details = [
+		"Mode: Guided trip setup.",
+		form.destination.trim()
+			? `Destination: ${form.destination.trim()}.`
+			: "Destination: undecided.",
+		form.startDate.trim() && form.endDate.trim()
+			? `Dates: ${form.startDate.trim()} to ${form.endDate.trim()}.`
+			: null,
+		`Travelers: ${getTripCreateOptionLabel("travelerType", selectedTravelerType)}.`,
+		selectedStyles.length > 0
+			? `Style: ${selectedStyles
+					.map((style) => getTripCreateOptionLabel("style", style))
+					.join(", ")}.`
+			: null,
+		`Pace: ${getTripCreateOptionLabel("pace", selectedPace)}.`,
+		Number.isFinite(budgetAmount) && budgetAmount > 0
+			? `Budget: PHP ${budgetAmount.toLocaleString()}.`
+			: null,
+		"Use this context to enrich itinerary, places, budget, and readiness.",
+	].filter(Boolean);
+
+	return details.join(" ");
+};
 
 const tripScreenMeta: Record<TripTab, { icon: IoniconName; label: string }> = {
 	bookings: { icon: "briefcase-outline", label: "Bookings" },
@@ -107,7 +197,6 @@ interface TripProfileForm {
 	groupType: string;
 	pace: string;
 	startDate: string;
-	summary: string;
 	title: string;
 	travelStyle: string;
 }
@@ -143,34 +232,117 @@ function SheetField({
 	);
 }
 
-function SheetTextArea({
-	label,
-	onChangeText,
-	placeholder,
-	value,
+function ProfileFormSection({
+	children,
+	subtitle,
+	title,
 }: {
-	label: string;
-	onChangeText: (value: string) => void;
-	placeholder: string;
-	value: string;
+	children: ReactNode;
+	subtitle?: string;
+	title: string;
 }) {
-	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
-
 	return (
-		<TextField className="gap-2">
-			<Label>
-				<Label.Text>{label}</Label.Text>
-			</Label>
-			<TextArea
-				className="min-h-20 rounded-[18px] border border-border bg-surface px-4 py-3"
-				onBlur={onBlur}
-				onChangeText={onChangeText}
-				onFocus={onFocus}
-				placeholder={placeholder}
-				value={value}
-				variant="secondary"
-			/>
-		</TextField>
+		<View className="gap-3">
+			<View className="gap-0.5">
+				<Text type="body-sm" weight="bold">
+					{title}
+				</Text>
+				{subtitle ? (
+					<Text color="muted" type="body-xs">
+						{subtitle}
+					</Text>
+				) : null}
+			</View>
+			{children}
+		</View>
+	);
+}
+
+function ProfileChoiceChip({
+	isSelected,
+	label,
+	onPress,
+}: {
+	isSelected: boolean;
+	label: string;
+	onPress: () => void;
+}) {
+	return (
+		<Pressable
+			accessibilityRole="button"
+			accessibilityState={{ selected: isSelected }}
+			className="min-h-10 flex-row items-center rounded-full border bg-white px-4"
+			onPress={onPress}
+			style={({ pressed }) => ({
+				backgroundColor: isSelected ? accentColor : "#FFFFFF",
+				borderColor: isSelected ? accentColor : "rgba(24, 24, 27, 0.06)",
+				opacity: pressed ? 0.82 : 1,
+				transform: [{ scale: pressed ? 0.98 : 1 }],
+			})}
+		>
+			<Text
+				style={{ color: isSelected ? "#FFFFFF" : foregroundColor }}
+				type="body-sm"
+				weight="semibold"
+			>
+				{label}
+			</Text>
+		</Pressable>
+	);
+}
+
+function ProfileOptionCard({
+	description,
+	icon,
+	isSelected,
+	onPress,
+	title,
+}: {
+	description: string;
+	icon: IoniconName;
+	isSelected: boolean;
+	onPress: () => void;
+	title: string;
+}) {
+	return (
+		<Pressable
+			accessibilityRole="button"
+			accessibilityState={{ selected: isSelected }}
+			className="rounded-3xl"
+			onPress={onPress}
+			style={({ pressed }) => ({
+				transform: [{ scale: pressed ? 0.99 : 1 }],
+			})}
+		>
+			<Surface
+				className="flex-row items-center gap-3 rounded-3xl border bg-surface p-4"
+				style={{
+					borderColor: isSelected ? accentColor : borderColor,
+				}}
+			>
+				<View
+					className="h-11 w-11 items-center justify-center rounded-full"
+					style={{ backgroundColor: isSelected ? "#EAF2FF" : "#F4F4F5" }}
+				>
+					<Ionicons
+						color={isSelected ? accentColor : mutedColor}
+						name={icon}
+						size={20}
+					/>
+				</View>
+				<View className="min-w-0 flex-1 gap-1">
+					<Text type="body" weight="semibold">
+						{title}
+					</Text>
+					<Text.Paragraph color="muted" type="body-sm">
+						{description}
+					</Text.Paragraph>
+				</View>
+				{isSelected ? (
+					<Ionicons color={accentColor} name="checkmark-circle" size={22} />
+				) : null}
+			</Surface>
+		</Pressable>
 	);
 }
 
@@ -192,6 +364,24 @@ function TripProfileEditSheet({
 	onUpdateForm: (key: keyof TripProfileForm, value: string) => void;
 }) {
 	const insets = useSafeAreaInsets();
+	const dateRange: DateRangeValue = {
+		end: form.endDate,
+		start: form.startDate,
+	};
+	const selectedTravelerType = getSelectedTravelerType(form.groupType);
+	const selectedStyles = getSelectedTripStyles(form.travelStyle);
+	const selectedPace = getSelectedTripPace(form.pace);
+
+	const toggleTripStyle = (style: TripStyle) => {
+		const nextStyles = selectedStyles.includes(style)
+			? selectedStyles.filter((item) => item !== style)
+			: [...selectedStyles, style];
+
+		onUpdateForm(
+			"travelStyle",
+			formatProfileTripStyles(nextStyles.length > 0 ? nextStyles : [style])
+		);
+	};
 
 	return (
 		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
@@ -220,85 +410,107 @@ function TripProfileEditSheet({
 							/>
 						</View>
 						<ScrollView
-							contentContainerStyle={{ gap: 14, paddingBottom: 8 }}
+							contentContainerStyle={{ gap: 22, paddingBottom: 8 }}
 							keyboardShouldPersistTaps="handled"
 							showsVerticalScrollIndicator={false}
 							style={{ maxHeight: 560 }}
 						>
-							<SheetField
-								label="Title"
-								onChangeText={(value) => onUpdateForm("title", value)}
-								placeholder="Summer getaway"
-								value={form.title}
-							/>
-							<SheetField
-								label="Destination"
-								onChangeText={(value) => onUpdateForm("destination", value)}
-								placeholder="Tokyo, Japan"
-								value={form.destination}
-							/>
-							<View className="flex-row gap-3">
-								<View className="min-w-0 flex-1">
+							<ProfileFormSection
+								subtitle="These fields anchor the workspace and trip header."
+								title="Trip identity"
+							>
+								<View className="gap-3">
 									<SheetField
-										label="Start date"
-										onChangeText={(value) => onUpdateForm("startDate", value)}
-										placeholder="2026-07-10"
-										value={form.startDate}
+										label="Title"
+										onChangeText={(value) => onUpdateForm("title", value)}
+										placeholder="Summer getaway"
+										value={form.title}
+									/>
+									<SheetField
+										label="Destination"
+										onChangeText={(value) => onUpdateForm("destination", value)}
+										placeholder="Tokyo, Japan"
+										value={form.destination}
 									/>
 								</View>
-								<View className="min-w-0 flex-1">
-									<SheetField
-										label="End date"
-										onChangeText={(value) => onUpdateForm("endDate", value)}
-										placeholder="2026-07-14"
-										value={form.endDate}
-									/>
+							</ProfileFormSection>
+
+							<ProfileFormSection
+								subtitle="Dates organize itinerary days, bookings, and recaps."
+								title="Schedule"
+							>
+								<DateRangePickerField
+									helperText="Dates set the number of days in this workspace."
+									label="Trip dates"
+									onValueChange={(value) => {
+										onUpdateForm("startDate", value.start);
+										onUpdateForm("endDate", value.end);
+									}}
+									value={dateRange}
+								/>
+							</ProfileFormSection>
+
+							<ProfileFormSection
+								subtitle="Match how this trip should be planned and displayed."
+								title="Travelers"
+							>
+								<View className="flex-row flex-wrap gap-2">
+									{travelerTypeOptions.map((option) => (
+										<ProfileChoiceChip
+											isSelected={selectedTravelerType === option}
+											key={option}
+											label={getTripCreateOptionLabel("travelerType", option)}
+											onPress={() => onUpdateForm("groupType", option)}
+										/>
+									))}
 								</View>
-							</View>
-							<View className="flex-row gap-3">
-								<View className="min-w-0 flex-1">
-									<SheetField
-										label="Budget"
-										onChangeText={(value) =>
-											onUpdateForm("budgetAmount", value)
-										}
-										placeholder="25000"
-										value={form.budgetAmount}
-									/>
+							</ProfileFormSection>
+
+							<ProfileFormSection
+								subtitle="Pick one or more styles so modules keep the right context."
+								title="Trip style"
+							>
+								<View className="flex-row flex-wrap gap-2">
+									{tripStyleOptions.map((option) => (
+										<ProfileChoiceChip
+											isSelected={selectedStyles.includes(option)}
+											key={option}
+											label={getTripCreateOptionLabel("style", option)}
+											onPress={() => toggleTripStyle(option)}
+										/>
+									))}
 								</View>
-								<View className="min-w-0 flex-1">
-									<SheetField
-										label="Travelers"
-										onChangeText={(value) => onUpdateForm("groupType", value)}
-										placeholder="couple"
-										value={form.groupType}
-									/>
+							</ProfileFormSection>
+
+							<ProfileFormSection
+								subtitle="Controls how dense itinerary suggestions should feel."
+								title="Daily pace"
+							>
+								<View className="gap-2">
+									{paceOptions.map((option) => (
+										<ProfileOptionCard
+											description={profilePaceDetails[option]}
+											icon={profilePaceIcons[option]}
+											isSelected={selectedPace === option}
+											key={option}
+											onPress={() => onUpdateForm("pace", option)}
+											title={getTripCreateOptionLabel("pace", option)}
+										/>
+									))}
 								</View>
-							</View>
-							<View className="flex-row gap-3">
-								<View className="min-w-0 flex-1">
-									<SheetField
-										label="Style"
-										onChangeText={(value) => onUpdateForm("travelStyle", value)}
-										placeholder="balanced"
-										value={form.travelStyle}
-									/>
-								</View>
-								<View className="min-w-0 flex-1">
-									<SheetField
-										label="Pace"
-										onChangeText={(value) => onUpdateForm("pace", value)}
-										placeholder="moderate"
-										value={form.pace}
-									/>
-								</View>
-							</View>
-							<SheetTextArea
-								label="Notes"
-								onChangeText={(value) => onUpdateForm("summary", value)}
-								placeholder="Constraints, preferences, booking notes, or reminders"
-								value={form.summary}
-							/>
+							</ProfileFormSection>
+
+							<ProfileFormSection
+								subtitle="The amount tracked by the trip budget wallet."
+								title="Budget"
+							>
+								<SheetField
+									label="Budget amount"
+									onChangeText={(value) => onUpdateForm("budgetAmount", value)}
+									placeholder="25000"
+									value={form.budgetAmount}
+								/>
+							</ProfileFormSection>
 						</ScrollView>
 						{errorMessage ? (
 							<Text className="text-danger" type="body-sm">
@@ -491,7 +703,6 @@ export function TripHeaderActionGroup({
 		groupType: model.workspace.trip.groupType,
 		pace: model.workspace.trip.pace,
 		startDate: model.workspace.trip.startDate,
-		summary: model.workspace.trip.summary,
 		title: model.workspace.trip.title,
 		travelStyle: model.workspace.trip.travelStyle,
 	});
@@ -510,7 +721,6 @@ export function TripHeaderActionGroup({
 			groupType: model.workspace.trip.groupType,
 			pace: model.workspace.trip.pace,
 			startDate: model.workspace.trip.startDate,
-			summary: model.workspace.trip.summary,
 			title: model.workspace.trip.title,
 			travelStyle: model.workspace.trip.travelStyle,
 		});
@@ -539,9 +749,9 @@ export function TripHeaderActionGroup({
 				destination,
 				endDate: profileForm.endDate.trim(),
 				groupType: profileForm.groupType.trim() || "solo",
-				pace: profileForm.pace.trim() || "moderate",
+				pace: profileForm.pace.trim() || "balanced",
 				startDate: profileForm.startDate.trim(),
-				summary: profileForm.summary.trim(),
+				summary: getProfileTripSummary(profileForm),
 				title,
 				travelStyle: profileForm.travelStyle.trim() || "balanced",
 				tripId: model.tripId,
@@ -887,7 +1097,7 @@ function TripHeroCover({
 
 	return (
 		<View className="h-24 w-24 items-center justify-center rounded-[22px] bg-accent-soft">
-			<Text type="body-lg" weight="bold">
+			<Text type="body" weight="bold">
 				{destinationInitial}
 			</Text>
 		</View>

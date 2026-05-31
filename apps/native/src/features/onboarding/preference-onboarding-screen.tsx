@@ -30,6 +30,7 @@ import {
 	Surface,
 	Text,
 	TextField,
+	useThemeColor,
 } from "heroui-native";
 import { type ComponentProps, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
@@ -420,6 +421,7 @@ function useRevealAnimatedStyle(progress: SharedValue<number>) {
 }
 
 function WelcomeIntroScreen({ onContinue }: { onContinue: () => void }) {
+	const accentForeground = useThemeColor("accent-foreground");
 	const contentProgress = useSharedValue(0);
 	const controlsProgress = useSharedValue(0);
 	const previewProgress = useSharedValue(0);
@@ -488,8 +490,16 @@ function WelcomeIntroScreen({ onContinue }: { onContinue: () => void }) {
 						))}
 					</Animated.View>
 					<Animated.View style={controlsStyle}>
-						<Button onPress={onContinue}>
-							<Button.Label>Get started</Button.Label>
+						<Button
+							className="h-[54px] gap-2 rounded-full"
+							onPress={onContinue}
+						>
+							<Button.Label className="text-[17px]">Continue</Button.Label>
+							<Ionicons
+								color={accentForeground}
+								name="arrow-forward"
+								size={18}
+							/>
 						</Button>
 					</Animated.View>
 				</View>

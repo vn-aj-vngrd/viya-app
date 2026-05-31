@@ -5,7 +5,13 @@ import { TRIP_STATUSES } from "@viya-app/domain";
 import { usePaginatedQuery } from "convex/react";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { BottomSheet, Surface, Text, useThemeColor } from "heroui-native";
+import {
+	BottomSheet,
+	Button,
+	Surface,
+	Text,
+	useThemeColor,
+} from "heroui-native";
 import {
 	type ComponentProps,
 	useCallback,
@@ -42,7 +48,7 @@ import { getTripStatusPresentation } from "@/src/features/trips/trip-status-pill
 type Trip = Doc<"trips"> & {
 	readinessItemCount?: number;
 };
-type PrimaryTripFilter = "all" | "completed" | "upcoming";
+type PrimaryTripFilter = "all" | "completed" | "favorites" | "upcoming";
 type UserFacingTripStatus = (typeof TRIP_STATUSES)[number];
 type StatusTripFilter = `status:${UserFacingTripStatus}`;
 type ActiveTripFilter = Exclude<PrimaryTripFilter, "all"> | StatusTripFilter;
@@ -56,6 +62,7 @@ const primaryTripFilters: Array<{
 	value: PrimaryTripFilter;
 }> = [
 	{ icon: "map", label: "All", value: "all" },
+	{ icon: "heart", label: "Favorites", value: "favorites" },
 	{ icon: "calendar", label: "Upcoming", value: "upcoming" },
 	{ icon: "check-circle", label: "Completed", value: "completed" },
 ];
@@ -158,26 +165,47 @@ function TripListSkeleton() {
 	);
 }
 
-function TripsEmptyState({ hasSearch }: { hasSearch: boolean }) {
+function TripsEmptyState({
+	hasSearch,
+	onCreatePress,
+}: {
+	hasSearch: boolean;
+	onCreatePress: () => void;
+}) {
 	return (
-		<View className="flex-1 items-center justify-center gap-3 px-8 py-16">
-			<View className="h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+		<View className="flex-1 items-center justify-center px-8 py-16">
+			<View
+				className={[
+					"h-14 w-14 items-center justify-center rounded-full",
+					hasSearch ? "bg-primary/10" : "",
+				].join(" ")}
+				style={hasSearch ? undefined : { backgroundColor: "#0A84FF" }}
+			>
 				<Ionicons
-					color="#0A84FF"
-					name={hasSearch ? "search" : "add"}
-					size={21}
+					color={hasSearch ? "#0A84FF" : "#FFFFFF"}
+					name={hasSearch ? "search" : "map-outline"}
+					size={24}
 				/>
 			</View>
-			<View className="items-center gap-1">
+			<View className="mt-4 items-center gap-1">
 				<Text type="body" weight="bold">
 					{hasSearch ? "No matching trips" : "No trips yet"}
 				</Text>
 				<Text className="text-center" color="muted" type="body-sm">
 					{hasSearch
 						? "Try a destination, date, or status."
-						: "Use the plus button to start a trip."}
+						: "Start a trip plan and keep every detail in one place."}
 				</Text>
 			</View>
+			{hasSearch ? null : (
+				<Button
+					className="mt-6 h-11 gap-2 rounded-full"
+					onPress={onCreatePress}
+				>
+					<Ionicons color="#FFFFFF" name="add" size={18} />
+					<Button.Label>Create trip</Button.Label>
+				</Button>
+			)}
 		</View>
 	);
 }
@@ -187,7 +215,11 @@ function getActivePrimaryFilter(
 ): PrimaryTripFilter {
 	const [activeFilter] = filters;
 
-	if (activeFilter === "upcoming" || activeFilter === "completed") {
+	if (
+		activeFilter === "favorites" ||
+		activeFilter === "upcoming" ||
+		activeFilter === "completed"
+	) {
 		return activeFilter;
 	}
 
@@ -637,11 +669,11 @@ function TripRow({
 		endDate: trip.endDate,
 		startDate: trip.startDate,
 	});
-	const statusPresentation = getTripStatusPresentation(trip.status);
 	const showDestinationLine = shouldShowDestinationLine(
 		trip.title,
 		trip.destination
 	);
+	const isFavorite = trip.isFavorite ?? false;
 
 	return (
 		<Animated.View
@@ -674,10 +706,6 @@ function TripRow({
 						/>
 						<View className="min-w-0 flex-1 justify-center gap-1.5 py-0.5">
 							<View className="flex-row items-center gap-2">
-								<View
-									className="h-2 w-2 rounded-full"
-									style={{ backgroundColor: statusPresentation.color }}
-								/>
 								<Text
 									className="min-w-0 flex-1"
 									numberOfLines={1}
@@ -686,6 +714,11 @@ function TripRow({
 								>
 									{trip.title}
 								</Text>
+								{isFavorite ? (
+									<View className="h-7 w-7 items-center justify-center rounded-full bg-primary/10">
+										<Ionicons color="#0A84FF" name="heart" size={15} />
+									</View>
+								) : null}
 							</View>
 							{showDestinationLine ? (
 								<Text
@@ -829,7 +862,10 @@ export default function TripsScreen() {
 					isLoadingFirstPage ? (
 						<TripListSkeleton />
 					) : (
-						<TripsEmptyState hasSearch={hasSearch} />
+						<TripsEmptyState
+							hasSearch={hasSearch}
+							onCreatePress={handleManualTripPress}
+						/>
 					)
 				}
 				ListFooterComponent={
