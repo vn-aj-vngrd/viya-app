@@ -20,6 +20,7 @@ import {
 	Text,
 	TextArea,
 	TextField,
+	useToast,
 } from "heroui-native";
 import { type ComponentProps, useState } from "react";
 import { Linking, Pressable, ScrollView, View } from "react-native";
@@ -1396,6 +1397,7 @@ export function TripItineraryScreen() {
 		tripId ? { tripId } : "skip"
 	);
 	const updateTripProfile = useMutation(api.trips.updateTripProfile);
+	const { toast } = useToast();
 	const [tripDateErrorMessage, setTripDateErrorMessage] = useState<
 		string | null
 	>(null);
@@ -1404,6 +1406,24 @@ export function TripItineraryScreen() {
 		start: "",
 	});
 	const [isSavingTripDates, setIsSavingTripDates] = useState(false);
+
+	const showItinerarySuccessToast = (message: string) => {
+		toast.show({
+			description: message,
+			duration: 3600,
+			label: "Itinerary updated",
+			variant: "success",
+		});
+	};
+
+	const showItineraryErrorToast = (message: string) => {
+		toast.show({
+			description: message,
+			duration: 4200,
+			label: "Itinerary needs attention",
+			variant: "danger",
+		});
+	};
 
 	if (!tripId) {
 		return (
@@ -1522,8 +1542,11 @@ export function TripItineraryScreen() {
 				travelStyle: trip.travelStyle ?? "balanced",
 				tripId,
 			});
+			showItinerarySuccessToast("Trip dates updated.");
 		} catch {
-			setTripDateErrorMessage("Could not update trip dates.");
+			const message = "Could not update trip dates.";
+			setTripDateErrorMessage(message);
+			showItineraryErrorToast(message);
 		} finally {
 			setIsSavingTripDates(false);
 		}
@@ -1615,6 +1638,7 @@ export function TripItineraryDayScreen() {
 	const deleteItineraryItem = useMutation(api.itinerary.deleteItineraryItem);
 	const updateItineraryDay = useMutation(api.itinerary.updateItineraryDay);
 	const updateItineraryItem = useMutation(api.itinerary.updateItineraryItem);
+	const { toast } = useToast();
 	const [itemForm, setItemForm] = useState<ItineraryItemForm>(initialItemForm);
 	const [dayForm, setDayForm] = useState<ItineraryDayForm>(initialDayForm);
 	const [editingDayId, setEditingDayId] = useState<Id<"itineraryDays"> | null>(
@@ -1641,7 +1665,24 @@ export function TripItineraryDayScreen() {
 	const [itineraryErrorMessage, setItineraryErrorMessage] = useState<
 		string | null
 	>(null);
-	const [mapErrorMessage, setMapErrorMessage] = useState<string | null>(null);
+
+	const showItinerarySuccessToast = (message: string) => {
+		toast.show({
+			description: message,
+			duration: 3600,
+			label: "Itinerary updated",
+			variant: "success",
+		});
+	};
+
+	const showItineraryErrorToast = (message: string) => {
+		toast.show({
+			description: message,
+			duration: 4200,
+			label: "Itinerary needs attention",
+			variant: "danger",
+		});
+	};
 
 	const updateItemForm = (key: keyof ItineraryItemForm, value: string) => {
 		setItemErrorMessage(null);
@@ -1791,10 +1832,13 @@ export function TripItineraryDayScreen() {
 			if (createdDay) {
 				setSelectedCalendarDayNumber(createdDay.dayNumber);
 				setSelectedDayId(createdDay._id);
+				showItinerarySuccessToast("Itinerary day added.");
 			}
 			return createdDay ?? null;
 		} catch {
-			setItineraryErrorMessage("Could not add itinerary day.");
+			const message = "Could not add itinerary day.";
+			setItineraryErrorMessage(message);
+			showItineraryErrorToast(message);
 			return null;
 		} finally {
 			setIsSavingDay(false);
@@ -1875,8 +1919,11 @@ export function TripItineraryDayScreen() {
 			setIsDaySheetOpen(false);
 			setEditingDayId(null);
 			setDayForm(initialDayForm);
+			showItinerarySuccessToast("Itinerary day saved.");
 		} catch {
-			setDayErrorMessage("Could not save itinerary day.");
+			const message = "Could not save itinerary day.";
+			setDayErrorMessage(message);
+			showItineraryErrorToast(message);
 		} finally {
 			setIsSavingDay(false);
 		}
@@ -1934,8 +1981,13 @@ export function TripItineraryDayScreen() {
 			setIsItemSheetOpen(false);
 			setEditingItemId(null);
 			setItemForm(initialItemForm);
+			showItinerarySuccessToast(
+				editingItemId ? "Itinerary stop saved." : "Itinerary stop added."
+			);
 		} catch {
-			setItemErrorMessage("Could not save itinerary item.");
+			const message = "Could not save itinerary item.";
+			setItemErrorMessage(message);
+			showItineraryErrorToast(message);
 		} finally {
 			setIsSavingItem(false);
 		}
@@ -1944,31 +1996,42 @@ export function TripItineraryDayScreen() {
 		itemId: Id<"itineraryItems">,
 		status: "planned" | "confirmed" | "skipped" | "completed"
 	) => {
+		setItineraryErrorMessage(null);
 		setPendingItemId(itemId);
 		try {
 			await updateItineraryItem({ itemId, status });
 		} catch {
-			setItineraryErrorMessage("Could not update itinerary item.");
+			const message = "Could not update itinerary item.";
+			setItineraryErrorMessage(message);
+			showItineraryErrorToast(message);
 		} finally {
 			setPendingItemId(null);
 		}
 	};
 	const handleDeleteDay = async (dayId: Id<"itineraryDays">) => {
+		setItineraryErrorMessage(null);
 		setPendingDayId(dayId);
 		try {
 			await deleteItineraryDay({ dayId });
+			showItinerarySuccessToast("Itinerary day deleted.");
 		} catch {
-			setItineraryErrorMessage("Could not delete itinerary day.");
+			const message = "Could not delete itinerary day.";
+			setItineraryErrorMessage(message);
+			showItineraryErrorToast(message);
 		} finally {
 			setPendingDayId(null);
 		}
 	};
 	const handleDeleteItem = async (itemId: Id<"itineraryItems">) => {
+		setItineraryErrorMessage(null);
 		setPendingItemId(itemId);
 		try {
 			await deleteItineraryItem({ itemId });
+			showItinerarySuccessToast("Itinerary stop deleted.");
 		} catch {
-			setItineraryErrorMessage("Could not delete itinerary item.");
+			const message = "Could not delete itinerary item.";
+			setItineraryErrorMessage(message);
+			showItineraryErrorToast(message);
 		} finally {
 			setPendingItemId(null);
 		}
@@ -1986,7 +2049,6 @@ export function TripItineraryDayScreen() {
 		longitude?: number;
 		title: string;
 	}) => {
-		setMapErrorMessage(null);
 		try {
 			await Linking.openURL(
 				getTripMapSearchUrl({
@@ -1998,7 +2060,7 @@ export function TripItineraryDayScreen() {
 				})
 			);
 		} catch {
-			setMapErrorMessage("Could not open Maps for this itinerary stop.");
+			showItineraryErrorToast("Could not open Maps for this itinerary stop.");
 		}
 	};
 	return (
@@ -2016,7 +2078,6 @@ export function TripItineraryDayScreen() {
 					showsVerticalScrollIndicator={false}
 				>
 					<ItineraryErrorNotice message={itineraryErrorMessage} />
-					<ItineraryErrorNotice message={mapErrorMessage} />
 					{selectedDay ? (
 						<ItineraryPlannedDayContent
 							bookingLabelById={bookingLabelById}

@@ -16,6 +16,7 @@ import {
 	Text,
 	TextArea,
 	TextField,
+	useToast,
 } from "heroui-native";
 import { useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
@@ -470,6 +471,7 @@ export function TripNotesScreen() {
 	const createTripNote = useMutation(api.notes.createTripNote);
 	const updateTripNote = useMutation(api.notes.updateTripNote);
 	const deleteTripNote = useMutation(api.notes.deleteTripNote);
+	const { toast } = useToast();
 	const [form, setForm] = useState<NoteForm>(initialNoteForm);
 	const [editingNoteId, setEditingNoteId] = useState<Id<"tripNotes"> | null>(
 		null
@@ -480,6 +482,24 @@ export function TripNotesScreen() {
 		null
 	);
 	const [noteErrorMessage, setNoteErrorMessage] = useState<string | null>(null);
+
+	const showNotesSuccessToast = (message: string) => {
+		toast.show({
+			description: message,
+			duration: 3600,
+			label: "Notes updated",
+			variant: "success",
+		});
+	};
+
+	const showNotesErrorToast = (message: string) => {
+		toast.show({
+			description: message,
+			duration: 4200,
+			label: "Notes need attention",
+			variant: "danger",
+		});
+	};
 
 	const updateForm = (key: keyof NoteForm, value: string) => {
 		setNoteErrorMessage(null);
@@ -562,19 +582,26 @@ export function TripNotesScreen() {
 			setEditingNoteId(null);
 			setForm(initialNoteForm);
 			setIsSheetOpen(false);
+			showNotesSuccessToast(editingNoteId ? "Note saved." : "Note added.");
 		} catch {
-			setNoteErrorMessage("Could not save note.");
+			const message = "Could not save note.";
+			setNoteErrorMessage(message);
+			showNotesErrorToast(message);
 		} finally {
 			setIsSaving(false);
 		}
 	};
 
 	const handleDeleteNote = async (noteId: Id<"tripNotes">) => {
+		setNoteErrorMessage(null);
 		setPendingNoteId(noteId);
 		try {
 			await deleteTripNote({ noteId });
+			showNotesSuccessToast("Note deleted.");
 		} catch {
-			setNoteErrorMessage("Could not delete note.");
+			const message = "Could not delete note.";
+			setNoteErrorMessage(message);
+			showNotesErrorToast(message);
 		} finally {
 			setPendingNoteId(null);
 		}

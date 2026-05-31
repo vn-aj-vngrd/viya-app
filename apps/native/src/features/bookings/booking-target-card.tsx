@@ -2,8 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import type { Doc } from "@viya-app/backend/convex/_generated/dataModel";
 import type { Href } from "expo-router";
 import { Link } from "expo-router";
-import { Button, Chip, Spinner, Surface, Text } from "heroui-native";
-import { useState } from "react";
+import { Button, Chip, Spinner, Surface, Text, useToast } from "heroui-native";
 import { Linking, View } from "react-native";
 
 import { formatReadableTripDateRange } from "@/src/components/date/date-format-utils";
@@ -191,33 +190,32 @@ export function BookingTargetCard({
 	proofUrl,
 }: BookingTargetCardProps) {
 	const cost = formatCost(booking.cost, booking.currency);
-	const [providerErrorMessage, setProviderErrorMessage] = useState<
-		string | null
-	>(null);
-	const [proofErrorMessage, setProofErrorMessage] = useState<string | null>(
-		null
-	);
+	const { toast } = useToast();
 	const bookingWindow = formatReadableTripDateRange({
 		endDate: booking.endDateTime,
 		fallbackLabel: "",
 		startDate: booking.startDateTime,
 	});
+	const showBookingErrorToast = (message: string) => {
+		toast.show({
+			description: message,
+			duration: 4200,
+			label: "Booking needs attention",
+			variant: "danger",
+		});
+	};
 	const openProvider = async () => {
 		if (!booking.externalUrl) {
 			return;
 		}
 
-		setProofErrorMessage(null);
-		setProviderErrorMessage(null);
 		try {
 			await Linking.openURL(booking.externalUrl);
 		} catch {
-			setProviderErrorMessage("Could not open provider link.");
+			showBookingErrorToast("Could not open provider link.");
 		}
 	};
 	const openMaps = async () => {
-		setProofErrorMessage(null);
-		setProviderErrorMessage(null);
 		try {
 			await Linking.openURL(
 				getTripMapSearchUrl({
@@ -227,21 +225,19 @@ export function BookingTargetCard({
 				})
 			);
 		} catch {
-			setProviderErrorMessage("Could not open Maps for this booking.");
+			showBookingErrorToast("Could not open Maps for this booking.");
 		}
 	};
 	const onOpenProof = async () => {
 		if (!proofUrl) {
-			setProofErrorMessage("Confirmation file is not available yet.");
+			showBookingErrorToast("Confirmation file is not available yet.");
 			return;
 		}
 
-		setProofErrorMessage(null);
-		setProviderErrorMessage(null);
 		try {
 			await Linking.openURL(proofUrl);
 		} catch {
-			setProofErrorMessage("Could not open this confirmation.");
+			showBookingErrorToast("Could not open this confirmation.");
 		}
 	};
 	const canOpenMaps = hasTripMapSearchTarget({
@@ -348,16 +344,6 @@ export function BookingTargetCard({
 				onUploadConfirmation={onUploadConfirmation}
 				proofUrl={proofUrl}
 			/>
-			{providerErrorMessage ? (
-				<Text className="text-danger" type="body-sm">
-					{providerErrorMessage}
-				</Text>
-			) : null}
-			{proofErrorMessage ? (
-				<Text className="text-danger" type="body-sm">
-					{proofErrorMessage}
-				</Text>
-			) : null}
 		</Surface>
 	);
 }

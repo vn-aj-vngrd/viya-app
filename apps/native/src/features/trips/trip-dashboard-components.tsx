@@ -15,6 +15,7 @@ import {
 	Text,
 	TextField,
 	useThemeColor,
+	useToast,
 } from "heroui-native";
 import type { ReactNode } from "react";
 import { useRef, useState } from "react";
@@ -684,6 +685,7 @@ export function TripHeaderActionGroup({
 	const toggleTripFavorite = useMutation(api.trips.toggleTripFavorite);
 	const archiveTrip = useMutation(api.trips.archiveTrip);
 	const deleteTrip = useMutation(api.trips.deleteTrip);
+	const { toast } = useToast();
 	const isFavorite = model.workspace.trip.isFavorite ?? false;
 	const isArchived = model.workspace.trip.status === "archived";
 	const [isProfileSheetOpen, setIsProfileSheetOpen] = useState(false);
@@ -706,6 +708,24 @@ export function TripHeaderActionGroup({
 		title: model.workspace.trip.title,
 		travelStyle: model.workspace.trip.travelStyle,
 	});
+
+	const showTripSuccessToast = (message: string) => {
+		toast.show({
+			description: message,
+			duration: 3600,
+			label: "Trip updated",
+			variant: "success",
+		});
+	};
+
+	const showTripErrorToast = (message: string) => {
+		toast.show({
+			description: message,
+			duration: 4200,
+			label: "Trip needs attention",
+			variant: "danger",
+		});
+	};
 
 	const updateProfileForm = (key: keyof TripProfileForm, value: string) => {
 		setProfileErrorMessage(null);
@@ -757,8 +777,11 @@ export function TripHeaderActionGroup({
 				tripId: model.tripId,
 			});
 			setIsProfileSheetOpen(false);
+			showTripSuccessToast("Trip profile saved.");
 		} catch {
-			setProfileErrorMessage("Could not update trip profile.");
+			const message = "Could not update trip profile.";
+			setProfileErrorMessage(message);
+			showTripErrorToast(message);
 		} finally {
 			setIsSavingProfile(false);
 		}
@@ -769,16 +792,32 @@ export function TripHeaderActionGroup({
 		toggleTripFavorite({
 			isFavorite: !isFavorite,
 			tripId: model.tripId,
-		}).catch(() => {
-			setActionErrorMessage("Could not update favorite.");
-		});
+		})
+			.then(() => {
+				showTripSuccessToast(
+					isFavorite
+						? "Trip removed from favorites."
+						: "Trip added to favorites."
+				);
+			})
+			.catch(() => {
+				const message = "Could not update favorite.";
+				setActionErrorMessage(message);
+				showTripErrorToast(message);
+			});
 	};
 
 	const handleArchivePress = () => {
 		setActionErrorMessage(null);
-		archiveTrip({ tripId: model.tripId }).catch(() => {
-			setActionErrorMessage("Could not archive trip.");
-		});
+		archiveTrip({ tripId: model.tripId })
+			.then(() => {
+				showTripSuccessToast("Trip archived.");
+			})
+			.catch(() => {
+				const message = "Could not archive trip.";
+				setActionErrorMessage(message);
+				showTripErrorToast(message);
+			});
 	};
 
 	const handleDeleteTrip = async () => {
@@ -787,9 +826,12 @@ export function TripHeaderActionGroup({
 		try {
 			await deleteTrip({ tripId: model.tripId });
 			setIsDeleteSheetOpen(false);
+			showTripSuccessToast("Trip deleted.");
 			router.replace(VIYA_ROUTES.trips as Href);
 		} catch {
-			setActionErrorMessage("Could not delete trip.");
+			const message = "Could not delete trip.";
+			setActionErrorMessage(message);
+			showTripErrorToast(message);
 		} finally {
 			setIsDeletingTrip(false);
 		}

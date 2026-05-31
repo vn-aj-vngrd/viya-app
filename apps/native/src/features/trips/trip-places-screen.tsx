@@ -17,6 +17,7 @@ import {
 	Text,
 	TextArea,
 	TextField,
+	useToast,
 } from "heroui-native";
 import { useState } from "react";
 import { Linking, Pressable, ScrollView, View } from "react-native";
@@ -458,6 +459,7 @@ export function TripPlacesScreen() {
 	const createSavedPlace = useMutation(api.places.createSavedPlace);
 	const deleteSavedPlace = useMutation(api.places.deleteSavedPlace);
 	const updateSavedPlace = useMutation(api.places.updateSavedPlace);
+	const { toast } = useToast();
 	const [form, setForm] = useState<PlaceForm>(initialPlaceForm);
 	const [editingPlaceId, setEditingPlaceId] =
 		useState<Id<"savedPlaces"> | null>(null);
@@ -472,7 +474,24 @@ export function TripPlacesScreen() {
 	const [placeErrorMessage, setPlaceErrorMessage] = useState<string | null>(
 		null
 	);
-	const [mapErrorMessage, setMapErrorMessage] = useState<string | null>(null);
+
+	const showPlacesSuccessToast = (message: string) => {
+		toast.show({
+			description: message,
+			duration: 3600,
+			label: "Places updated",
+			variant: "success",
+		});
+	};
+
+	const showPlacesErrorToast = (message: string) => {
+		toast.show({
+			description: message,
+			duration: 4200,
+			label: "Places need attention",
+			variant: "danger",
+		});
+	};
 
 	const updateForm = (key: keyof PlaceForm, value: string) => {
 		setPlaceErrorMessage(null);
@@ -548,23 +567,28 @@ export function TripPlacesScreen() {
 			setForm(initialPlaceForm);
 			setEditingPlaceId(null);
 			setIsPlaceSheetOpen(false);
+			showPlacesSuccessToast(editingPlaceId ? "Place saved." : "Place added.");
 		} catch (error) {
-			setPlaceErrorMessage(
-				error instanceof Error ? error.message : "Could not save place."
-			);
+			const message =
+				error instanceof Error ? error.message : "Could not save place.";
+			setPlaceErrorMessage(message);
+			showPlacesErrorToast(message);
 		} finally {
 			setIsSaving(false);
 		}
 	};
 
 	const handleDeletePlace = async (placeId: Id<"savedPlaces">) => {
+		setPlaceErrorMessage(null);
 		setDeletingPlaceId(placeId);
 		try {
 			await deleteSavedPlace({ placeId });
+			showPlacesSuccessToast("Place deleted.");
 		} catch (error) {
-			setPlaceErrorMessage(
-				error instanceof Error ? error.message : "Could not delete place."
-			);
+			const message =
+				error instanceof Error ? error.message : "Could not delete place.";
+			setPlaceErrorMessage(message);
+			showPlacesErrorToast(message);
 		} finally {
 			setDeletingPlaceId(null);
 		}
@@ -585,12 +609,16 @@ export function TripPlacesScreen() {
 			);
 			setIsAssignmentSheetOpen(false);
 			setAssigningPlaceId(null);
+			showPlacesSuccessToast(
+				dayId ? "Place assigned to itinerary." : "Place assignment cleared."
+			);
 		} catch (error) {
-			setPlaceErrorMessage(
+			const message =
 				error instanceof Error
 					? error.message
-					: "Could not assign place to day."
-			);
+					: "Could not assign place to day.";
+			setPlaceErrorMessage(message);
+			showPlacesErrorToast(message);
 		} finally {
 			setIsAssigningDay(false);
 		}
@@ -608,7 +636,6 @@ export function TripPlacesScreen() {
 		longitude?: number;
 		title: string;
 	}) => {
-		setMapErrorMessage(null);
 		try {
 			await Linking.openURL(
 				getTripMapSearchUrl({
@@ -620,7 +647,7 @@ export function TripPlacesScreen() {
 				})
 			);
 		} catch {
-			setMapErrorMessage("Could not open Maps for this place.");
+			showPlacesErrorToast("Could not open Maps for this place.");
 		}
 	};
 
@@ -784,12 +811,6 @@ export function TripPlacesScreen() {
 							onAddPlace={openCreateSheet}
 						/>
 					</View>
-					{mapErrorMessage ? (
-						<Text className="px-1 text-danger" type="body-sm">
-							{mapErrorMessage}
-						</Text>
-					) : null}
-
 					{places.savedPlaces.length === 0 &&
 					places.itineraryPlaces.length === 0 ? (
 						<EmptyState

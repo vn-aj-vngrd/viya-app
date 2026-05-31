@@ -1,5 +1,6 @@
+import { Ionicons } from "@expo/vector-icons";
 import { BottomSheet, Button, Spinner, Surface, Text } from "heroui-native";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { ScrollView, View } from "react-native";
 
 import type { PendingTripSyncReview } from "./tripsync-types";
@@ -13,6 +14,18 @@ interface TripSyncReviewSheetProps {
 	review: PendingTripSyncReview | null;
 }
 
+const tripSyncAccentColor = "#0A84FF";
+
+const formatTypeLabel = (value: string) => {
+	const normalizedValue = value.trim();
+
+	if (!normalizedValue) {
+		return normalizedValue;
+	}
+
+	return `${normalizedValue.charAt(0).toUpperCase()}${normalizedValue.slice(1)}`;
+};
+
 function ReviewPill({ children }: { children: ReactNode }) {
 	return (
 		<View className="rounded-full bg-surface px-2.5 py-1">
@@ -23,10 +36,81 @@ function ReviewPill({ children }: { children: ReactNode }) {
 	);
 }
 
+function ReviewSection({
+	children,
+	title,
+}: {
+	children: ReactNode;
+	title: string;
+}) {
+	return (
+		<View className="gap-2">
+			<Text className="px-1" color="muted" type="body-xs" weight="semibold">
+				{title}
+			</Text>
+			<View>{children}</View>
+		</View>
+	);
+}
+
+function ReviewDivider() {
+	return <View className="mx-1 h-px bg-border" />;
+}
+
+function ReviewDetailRow({
+	detail,
+	icon,
+	meta,
+	title,
+}: {
+	detail?: string | null;
+	icon: ComponentProps<typeof Ionicons>["name"];
+	meta?: string | null;
+	title: string;
+}) {
+	const hasSupportingContent = Boolean(detail || meta);
+
+	return (
+		<View
+			className="flex-row gap-3 px-1 py-3"
+			style={{ alignItems: hasSupportingContent ? "flex-start" : "center" }}
+		>
+			<View className="h-9 w-9 items-center justify-center rounded-full bg-accent-soft">
+				<Ionicons color={tripSyncAccentColor} name={icon} size={17} />
+			</View>
+			<View className="min-w-0 flex-1 gap-0.5">
+				<View className="flex-row items-start justify-between gap-3">
+					<Text
+						className="min-w-0 flex-1"
+						numberOfLines={2}
+						type="body-sm"
+						weight="semibold"
+					>
+						{title}
+					</Text>
+					{meta ? (
+						<Text color="muted" numberOfLines={1} type="body-sm">
+							{meta}
+						</Text>
+					) : null}
+				</View>
+				{detail ? (
+					<Text color="muted" numberOfLines={2} type="body-xs">
+						{detail}
+					</Text>
+				) : null}
+			</View>
+		</View>
+	);
+}
+
 const formatExtractedAmount = (
 	amount?: number | null,
 	currency?: string | null
-) => (amount ? `${currency ?? "PHP"} ${amount.toLocaleString()}` : null);
+) =>
+	typeof amount === "number"
+		? `${currency ?? "PHP"} ${amount.toLocaleString()}`
+		: null;
 
 export function TripSyncReviewSheet({
 	isConfirming,
@@ -41,6 +125,12 @@ export function TripSyncReviewSheet({
 		? formatExtractedAmount(
 				extraction.booking.cost,
 				extraction.booking.currency
+			)
+		: null;
+	const expenseAmountLabel = extraction?.expense
+		? formatExtractedAmount(
+				extraction.expense.amount,
+				extraction.expense.currency
 			)
 		: null;
 
@@ -63,13 +153,15 @@ export function TripSyncReviewSheet({
 
 						{extraction ? (
 							<ScrollView
-								contentContainerStyle={{ gap: 12, paddingBottom: 4 }}
+								contentContainerStyle={{ gap: 18, paddingBottom: 4 }}
 								showsVerticalScrollIndicator={false}
 								style={{ maxHeight: 560 }}
 							>
-								<Surface className="gap-2 rounded-[24px] bg-surface-secondary p-4">
+								<Surface className="gap-3 rounded-[28px] border border-border bg-surface-secondary p-4">
 									<View className="flex-row flex-wrap gap-2">
-										<ReviewPill>{review.upload.kind}</ReviewPill>
+										<ReviewPill>
+											{formatTypeLabel(review.upload.kind)}
+										</ReviewPill>
 										<ReviewPill>
 											{Math.round(extraction.confidence * 100)}% confidence
 										</ReviewPill>
@@ -82,71 +174,53 @@ export function TripSyncReviewSheet({
 									</Text.Paragraph>
 								</Surface>
 
-								{extraction.booking ? (
-									<Surface className="gap-1 rounded-[24px] bg-surface-secondary p-4">
-										<Text color="muted" type="body-xs" weight="semibold">
-											BOOKING
-										</Text>
-										<Text type="body-sm" weight="bold">
-											{extraction.booking.title}
-										</Text>
-										<Text color="muted" type="body-xs">
-											{extraction.booking.provider ?? "Provider not detected"}
-										</Text>
-										<Text color="muted" type="body-xs">
-											{extraction.booking.confirmationCode ??
-												"Confirmation code not detected"}
-										</Text>
-										{bookingAmountLabel ? (
-											<Text color="muted" type="body-xs">
-												{bookingAmountLabel}
-											</Text>
-										) : null}
-									</Surface>
-								) : null}
+								<ReviewSection title="EXTRACTED UPDATES">
+									{extraction.booking ? (
+										<>
+											<ReviewDetailRow
+												detail={[
+													extraction.booking.provider ??
+														"Provider not detected",
+													extraction.booking.confirmationCode ??
+														"Confirmation code not detected",
+												].join(" · ")}
+												icon="ticket-outline"
+												meta={bookingAmountLabel}
+												title={extraction.booking.title}
+											/>
+											<ReviewDivider />
+										</>
+									) : null}
 
-								{extraction.expense ? (
-									<Surface className="gap-1 rounded-[24px] bg-surface-secondary p-4">
-										<Text color="muted" type="body-xs" weight="semibold">
-											BUDGET
-										</Text>
-										<Text type="body-sm" weight="bold">
-											{extraction.expense.title}
-										</Text>
-										<Text color="muted" type="body-xs">
-											{extraction.expense.currency} {extraction.expense.amount}
-										</Text>
-										<Text color="muted" type="body-xs">
-											{extraction.expense.category}
-										</Text>
-									</Surface>
-								) : null}
+									{extraction.expense ? (
+										<>
+											<ReviewDetailRow
+												detail={formatTypeLabel(extraction.expense.category)}
+												icon="wallet-outline"
+												meta={expenseAmountLabel}
+												title={extraction.expense.title}
+											/>
+											<ReviewDivider />
+										</>
+									) : null}
 
-								<Surface className="gap-1 rounded-[24px] bg-surface-secondary p-4">
-									<Text color="muted" type="body-xs" weight="semibold">
-										DOCUMENT
-									</Text>
-									<Text type="body-sm" weight="bold">
-										{extraction.documentType}
-									</Text>
-								</Surface>
+									<ReviewDetailRow
+										icon="document-text-outline"
+										title={formatTypeLabel(extraction.documentType)}
+									/>
+								</ReviewSection>
 
 								{extraction.readinessSuggestions.length > 0 ? (
-									<Surface className="gap-2 rounded-[24px] bg-surface-secondary p-4">
-										<Text color="muted" type="body-xs" weight="semibold">
-											READINESS
-										</Text>
+									<ReviewSection title="READINESS">
 										{extraction.readinessSuggestions.map((suggestion) => (
-											<View className="gap-1" key={suggestion.title}>
-												<Text type="body-sm" weight="bold">
-													{suggestion.title}
-												</Text>
-												<Text color="muted" type="body-xs">
-													{suggestion.reason}
-												</Text>
-											</View>
+											<ReviewDetailRow
+												detail={suggestion.reason}
+												icon="checkmark-circle-outline"
+												key={suggestion.title}
+												title={suggestion.title}
+											/>
 										))}
-									</Surface>
+									</ReviewSection>
 								) : null}
 							</ScrollView>
 						) : null}

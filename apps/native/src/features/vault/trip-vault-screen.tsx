@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
@@ -13,9 +13,12 @@ import {
 	Spinner,
 	Text,
 	TextField,
+	useThemeColor,
+	useToast,
 } from "heroui-native";
+import type { ComponentProps } from "react";
 import { useState } from "react";
-import { Linking, ScrollView, View } from "react-native";
+import { Linking, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Container } from "@/components/container";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
@@ -63,14 +66,19 @@ const vaultKindOptions = [
 ] as const;
 
 type VaultGroup = "all" | "booking" | "document" | "receipt" | "photo";
+type VaultGroupIconName = ComponentProps<typeof Feather>["name"];
 
 const vaultGroupOptions = [
-	{ id: "all", label: "All files" },
-	{ id: "booking", label: "Bookings" },
-	{ id: "document", label: "Documents" },
-	{ id: "receipt", label: "Receipts" },
-	{ id: "photo", label: "Photos" },
-] as const satisfies readonly { id: VaultGroup; label: string }[];
+	{ icon: "folder", id: "all", label: "All files" },
+	{ icon: "bookmark", id: "booking", label: "Bookings" },
+	{ icon: "file-text", id: "document", label: "Documents" },
+	{ icon: "credit-card", id: "receipt", label: "Receipts" },
+	{ icon: "image", id: "photo", label: "Photos" },
+] as const satisfies readonly {
+	icon: VaultGroupIconName;
+	id: VaultGroup;
+	label: string;
+}[];
 
 const vaultKinds = new Set<string>(vaultKindOptions);
 
@@ -157,25 +165,41 @@ function SheetField({
 
 function VaultGroupChip({
 	count,
+	icon,
 	isSelected,
 	label,
 	onPress,
 }: {
 	count: number;
+	icon: VaultGroupIconName;
 	isSelected: boolean;
 	label: string;
 	onPress: () => void;
 }) {
+	const foregroundColor = useThemeColor("foreground");
+	const selectedColor = "#0A84FF";
+	const contentColor = isSelected ? selectedColor : foregroundColor;
+
 	return (
-		<Button
+		<Pressable
+			accessibilityLabel={`Filter vault by ${label}`}
+			accessibilityRole="button"
+			accessibilityState={{ selected: isSelected }}
+			className="h-11 flex-row items-center gap-1.5 rounded-full border px-3"
 			onPress={onPress}
-			size="sm"
-			variant={isSelected ? "primary" : "secondary"}
+			style={({ pressed }) => ({
+				backgroundColor: isSelected ? "rgba(10, 132, 255, 0.13)" : "#FFFFFF",
+				borderColor: isSelected
+					? "rgba(10, 132, 255, 0.24)"
+					: "rgba(24, 24, 27, 0.08)",
+				transform: [{ scale: pressed ? 0.98 : 1 }],
+			})}
 		>
-			<Button.Label>
+			<Feather color={contentColor} name={icon} size={15} />
+			<Text style={{ color: contentColor }} type="body-sm" weight="semibold">
 				{label} {count}
-			</Button.Label>
-		</Button>
+			</Text>
+		</Pressable>
 	);
 }
 
@@ -208,7 +232,6 @@ function VaultKindPicker({
 }
 
 function VaultEditSheet({
-	errorMessage,
 	form,
 	isOpen,
 	isSaving,
@@ -217,7 +240,6 @@ function VaultEditSheet({
 	onSubmit,
 	onUpdateForm,
 }: {
-	errorMessage: string | null;
 	form: VaultForm;
 	isOpen: boolean;
 	isSaving: boolean;
@@ -315,11 +337,6 @@ function VaultEditSheet({
 								</ScrollView>
 							)}
 						</View>
-						{errorMessage ? (
-							<Text className="text-danger" type="body-sm">
-								{errorMessage}
-							</Text>
-						) : null}
 						<Button isDisabled={isSaving} onPress={onSubmit} size="lg">
 							{isSaving ? <Spinner size="sm" /> : null}
 							<Button.Label>Save item</Button.Label>
@@ -457,12 +474,24 @@ export function TripVaultScreen() {
 	const confirmTripSyncReview = useMutation(api.vault.confirmTripSyncReview);
 	const deleteVaultItem = useMutation(api.vault.deleteVaultItem);
 	const updateVaultItem = useMutation(api.vault.updateVaultItem);
-	const {
-		errorMessage: uploadErrorMessage,
-		isUploading,
-		pickDocument,
-		pickPhoto,
-	} = useVaultUpload();
+	const { isUploading, pickDocument, pickPhoto } = useVaultUpload();
+	const { toast } = useToast();
+	const showVaultSuccessToast = (message: string) => {
+		toast.show({
+			description: message,
+			duration: 3600,
+			label: "Vault updated",
+			variant: "success",
+		});
+	};
+	const showVaultErrorToast = (message: string) => {
+		toast.show({
+			description: message,
+			duration: 4200,
+			label: "Vault needs attention",
+			variant: "danger",
+		});
+	};
 	const [editingItemId, setEditingItemId] = useState<Id<"vaultItems"> | null>(
 		null
 	);
@@ -480,12 +509,6 @@ export function TripVaultScreen() {
 	const [selectedVaultGroup, setSelectedVaultGroup] =
 		useState<VaultGroup>("all");
 	const [didSync, setDidSync] = useState(false);
-	const [vaultErrorMessage, setVaultErrorMessage] = useState<string | null>(
-		null
-	);
-	const [openFileErrorMessage, setOpenFileErrorMessage] = useState<
-		string | null
-	>(null);
 
 	if (!tripId) {
 		return (
@@ -504,11 +527,19 @@ export function TripVaultScreen() {
 	}
 
 	const handlePhotoUpload = async () => {
-		setVaultErrorMessage(null);
-		const review = await pickPhoto({ tripId });
-		if (review) {
-			setPendingReview(review);
-			setDidSync(false);
+		try {
+			const review = await pickPhoto({ tripId });
+			if (review) {
+				setPendingReview(review);
+				setDidSync(false);
+				showVaultSuccessToast(
+					"Photo uploaded. Review the TripSync extraction before saving."
+				);
+			}
+		} catch (error) {
+			showVaultErrorToast(
+				error instanceof Error ? error.message : "Could not upload photo."
+			);
 		}
 	};
 
@@ -517,7 +548,6 @@ export function TripVaultScreen() {
 			return;
 		}
 
-		setVaultErrorMessage(null);
 		setIsConfirming(true);
 		try {
 			await confirmTripSyncReview({
@@ -531,15 +561,21 @@ export function TripVaultScreen() {
 			});
 			setPendingReview(null);
 			setDidSync(true);
-		} catch {
-			setVaultErrorMessage("Could not save TripSync review.");
+			showVaultSuccessToast(
+				"TripSync review saved. Viya can use this evidence across the workspace."
+			);
+		} catch (error) {
+			showVaultErrorToast(
+				error instanceof Error
+					? error.message
+					: "Could not save TripSync review."
+			);
 		} finally {
 			setIsConfirming(false);
 		}
 	};
 
 	const openEditSheet = (item: Doc<"vaultItems">) => {
-		setVaultErrorMessage(null);
 		setEditingItemId(item._id);
 		setEditForm({
 			kind: item.kind,
@@ -559,11 +595,10 @@ export function TripVaultScreen() {
 
 		const title = editForm.title.trim();
 		if (!title) {
-			setVaultErrorMessage("Add a file title.");
+			showVaultErrorToast("Add a file title.");
 			return;
 		}
 
-		setVaultErrorMessage(null);
 		setIsSavingEdit(true);
 		try {
 			const linkedEntityFields = getLinkedEntityMutationFields({
@@ -578,31 +613,37 @@ export function TripVaultScreen() {
 				vaultItemId: editingItemId,
 			});
 			setEditingItemId(null);
-		} catch {
-			setVaultErrorMessage("Could not save vault item.");
+			showVaultSuccessToast("Vault item saved.");
+		} catch (error) {
+			showVaultErrorToast(
+				error instanceof Error ? error.message : "Could not save vault item."
+			);
 		} finally {
 			setIsSavingEdit(false);
 		}
 	};
 	const handleDeleteVaultItem = async (vaultItemId: Id<"vaultItems">) => {
-		setVaultErrorMessage(null);
 		try {
 			await deleteVaultItem({ vaultItemId });
-		} catch {
-			setVaultErrorMessage("Could not delete vault item.");
+			showVaultSuccessToast("Vault item deleted.");
+		} catch (error) {
+			showVaultErrorToast(
+				error instanceof Error ? error.message : "Could not delete vault item."
+			);
 		}
 	};
 	const handleOpenVaultFile = async (url?: string | null) => {
 		if (!url) {
-			setOpenFileErrorMessage("File preview is not available yet.");
+			showVaultErrorToast("File preview is not available yet.");
 			return;
 		}
 
-		setOpenFileErrorMessage(null);
 		try {
 			await Linking.openURL(url);
-		} catch {
-			setOpenFileErrorMessage("Could not open this file.");
+		} catch (error) {
+			showVaultErrorToast(
+				error instanceof Error ? error.message : "Could not open this file."
+			);
 		}
 	};
 
@@ -659,10 +700,19 @@ export function TripVaultScreen() {
 		upload: () => Promise<PendingTripSyncReview | null>
 	) => {
 		setIsAddSheetOpen(false);
-		const review = await upload();
-		if (review) {
-			setPendingReview(review);
-			setDidSync(false);
+		try {
+			const review = await upload();
+			if (review) {
+				setPendingReview(review);
+				setDidSync(false);
+				showVaultSuccessToast(
+					"File uploaded. Review the TripSync extraction before saving."
+				);
+			}
+		} catch (error) {
+			showVaultErrorToast(
+				error instanceof Error ? error.message : "Could not upload file."
+			);
 		}
 	};
 
@@ -685,22 +735,11 @@ export function TripVaultScreen() {
 
 		if (filteredVaultItems.length === 0) {
 			return (
-				<View className="items-center gap-3 rounded-[28px] bg-surface p-5">
-					<View
-						className="h-12 w-12 items-center justify-center rounded-full"
-						style={{ backgroundColor: "rgba(10, 132, 255, 0.1)" }}
-					>
-						<Ionicons color="#0A84FF" name="folder-open-outline" size={22} />
-					</View>
-					<View className="items-center gap-1">
-						<Text type="body-sm" weight="semibold">
-							No {selectedVaultGroupLabel.toLowerCase()} yet
-						</Text>
-						<Text color="muted" type="body-sm">
-							Add one from the plus button.
-						</Text>
-					</View>
-				</View>
+				<EmptyState
+					description="Add one from the plus button."
+					icon="folder-open-outline"
+					title={`No ${selectedVaultGroupLabel.toLowerCase()} yet`}
+				/>
 			);
 		}
 
@@ -775,6 +814,7 @@ export function TripVaultScreen() {
 							{vaultGroupOptions.map((option) => (
 								<VaultGroupChip
 									count={getVaultGroupCount(option.id)}
+									icon={option.icon}
 									isSelected={selectedVaultGroup === option.id}
 									key={option.id}
 									label={option.label}
@@ -782,11 +822,7 @@ export function TripVaultScreen() {
 								/>
 							))}
 						</ScrollView>
-						{isUploading ||
-						uploadErrorMessage ||
-						vaultErrorMessage ||
-						openFileErrorMessage ||
-						didSync ? (
+						{isUploading || didSync ? (
 							<View className="gap-2">
 								{isUploading ? (
 									<View className="flex-row items-center gap-2">
@@ -795,21 +831,6 @@ export function TripVaultScreen() {
 											Uploading and extracting...
 										</Text>
 									</View>
-								) : null}
-								{uploadErrorMessage ? (
-									<Text className="text-danger" type="body-sm">
-										{uploadErrorMessage}
-									</Text>
-								) : null}
-								{vaultErrorMessage ? (
-									<Text className="text-danger" type="body-sm">
-										{vaultErrorMessage}
-									</Text>
-								) : null}
-								{openFileErrorMessage ? (
-									<Text className="text-danger" type="body-sm">
-										{openFileErrorMessage}
-									</Text>
 								) : null}
 								{didSync ? (
 									<Link asChild href={VIYA_ROUTES.tripReadiness(tripId)}>
@@ -839,7 +860,6 @@ export function TripVaultScreen() {
 					review={pendingReview}
 				/>
 				<VaultEditSheet
-					errorMessage={vaultErrorMessage}
 					form={editForm}
 					isOpen={Boolean(editingItemId)}
 					isSaving={isSavingEdit}
@@ -847,14 +867,12 @@ export function TripVaultScreen() {
 					onOpenChange={(isOpen) => {
 						if (!isOpen) {
 							setEditingItemId(null);
-							setVaultErrorMessage(null);
 						}
 					}}
 					onSubmit={() => {
 						handleSaveEdit().catch(() => undefined);
 					}}
 					onUpdateForm={(key, value) => {
-						setVaultErrorMessage(null);
 						setEditForm((currentForm) => ({ ...currentForm, [key]: value }));
 					}}
 				/>

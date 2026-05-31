@@ -20,6 +20,7 @@ import {
 	Text,
 	TextArea,
 	TextField,
+	useToast,
 } from "heroui-native";
 import { useState } from "react";
 import { ScrollView, View } from "react-native";
@@ -525,12 +526,31 @@ export default function TripRisksScreen() {
 	const dismissRisk = useMutation(api.risks.dismissRisk);
 	const mitigateRisk = useMutation(api.risks.mitigateRisk);
 	const updateRisk = useMutation(api.risks.updateRisk);
+	const { toast } = useToast();
 	const [form, setForm] = useState<RiskForm>(initialRiskForm);
 	const [editingRiskId, setEditingRiskId] = useState<Id<"risks"> | null>(null);
 	const [isSheetOpen, setIsSheetOpen] = useState(false);
 	const [isSaving, setIsSaving] = useState(false);
 	const [pendingRiskId, setPendingRiskId] = useState<Id<"risks"> | null>(null);
 	const [riskErrorMessage, setRiskErrorMessage] = useState<string | null>(null);
+
+	const showRisksSuccessToast = (message: string) => {
+		toast.show({
+			description: message,
+			duration: 3600,
+			label: "Risks updated",
+			variant: "success",
+		});
+	};
+
+	const showRisksErrorToast = (message: string) => {
+		toast.show({
+			description: message,
+			duration: 4200,
+			label: "Risks need attention",
+			variant: "danger",
+		});
+	};
 
 	const updateForm = (key: keyof RiskForm, value: string) => {
 		setRiskErrorMessage(null);
@@ -618,8 +638,11 @@ export default function TripRisksScreen() {
 			setForm(initialRiskForm);
 			setEditingRiskId(null);
 			setIsSheetOpen(false);
+			showRisksSuccessToast(editingRiskId ? "Risk saved." : "Risk added.");
 		} catch {
-			setRiskErrorMessage("Could not save risk.");
+			const message = "Could not save risk.";
+			setRiskErrorMessage(message);
+			showRisksErrorToast(message);
 		} finally {
 			setIsSaving(false);
 		}
@@ -627,14 +650,20 @@ export default function TripRisksScreen() {
 
 	const runRiskAction = async (
 		riskId: Id<"risks">,
-		action: () => Promise<unknown>
+		action: () => Promise<unknown>,
+		successMessage?: string
 	) => {
 		setRiskErrorMessage(null);
 		setPendingRiskId(riskId);
 		try {
 			await action();
+			if (successMessage) {
+				showRisksSuccessToast(successMessage);
+			}
 		} catch {
-			setRiskErrorMessage("Could not update risk.");
+			const message = "Could not update risk.";
+			setRiskErrorMessage(message);
+			showRisksErrorToast(message);
 		} finally {
 			setPendingRiskId(null);
 		}
@@ -751,8 +780,10 @@ export default function TripRisksScreen() {
 							onCreateTopRisk={openCreateSheet}
 							onMitigate={() => {
 								if (activeRisk) {
-									runRiskAction(activeRisk._id, () =>
-										mitigateRisk({ riskId: activeRisk._id })
+									runRiskAction(
+										activeRisk._id,
+										() => mitigateRisk({ riskId: activeRisk._id }),
+										"Risk marked mitigated."
 									).catch(() => undefined);
 								}
 							}}
@@ -784,19 +815,25 @@ export default function TripRisksScreen() {
 									isPending={pendingRiskId === risk._id}
 									key={risk._id}
 									onDelete={() => {
-										runRiskAction(risk._id, () =>
-											deleteRisk({ riskId: risk._id })
+										runRiskAction(
+											risk._id,
+											() => deleteRisk({ riskId: risk._id }),
+											"Risk deleted."
 										).catch(() => undefined);
 									}}
 									onDismiss={() => {
-										runRiskAction(risk._id, () =>
-											dismissRisk({ riskId: risk._id })
+										runRiskAction(
+											risk._id,
+											() => dismissRisk({ riskId: risk._id }),
+											"Risk dismissed."
 										).catch(() => undefined);
 									}}
 									onEdit={() => openEditSheet(risk)}
 									onMitigate={() => {
-										runRiskAction(risk._id, () =>
-											mitigateRisk({ riskId: risk._id })
+										runRiskAction(
+											risk._id,
+											() => mitigateRisk({ riskId: risk._id }),
+											"Risk marked mitigated."
 										).catch(() => undefined);
 									}}
 									relatedEntityHref={getRiskRelatedHref({

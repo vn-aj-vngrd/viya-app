@@ -7,11 +7,37 @@ import {
 import { Button, Spinner, Surface, Text } from "heroui-native";
 import { useCallback, useEffect, useState } from "react";
 import { View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type UpdateStatus = "checking" | "downloading" | "ready" | "error" | "idle";
 
+const updateAccentColor = "#0A84FF";
+
+const getStatusCopy = (status: UpdateStatus) => {
+	switch (status) {
+		case "checking":
+			return {
+				description: "Checking for the latest version.",
+				title: "Checking updates",
+			};
+		case "downloading":
+			return {
+				description: "Downloading in the background.",
+				title: "Updating Viya",
+			};
+		case "ready":
+			return {
+				description: "Restart to apply the latest version.",
+				title: "Update ready",
+			};
+		default:
+			return null;
+	}
+};
+
 export function OTAUpdateBanner() {
 	const [status, setStatus] = useState<UpdateStatus>("idle");
+	const insets = useSafeAreaInsets();
 
 	const checkForUpdate = useCallback(async () => {
 		try {
@@ -38,55 +64,50 @@ export function OTAUpdateBanner() {
 		await reloadAsync();
 	}
 
-	if (status === "idle" || status === "error") {
+	const statusCopy = getStatusCopy(status);
+
+	if (!statusCopy) {
 		return null;
 	}
 
+	const isBusy = status === "checking" || status === "downloading";
+
 	return (
-		<View className="absolute inset-0 z-50 items-center justify-center bg-background/95">
+		<View
+			className="absolute inset-x-0 z-50 px-4"
+			pointerEvents="box-none"
+			style={{ top: Math.max(insets.top, 12) + 8 }}
+		>
 			<Surface
-				className="mx-8 w-full max-w-sm items-center rounded-2xl p-6"
-				variant="secondary"
+				className="flex-row items-center gap-3 rounded-[24px] border border-border bg-surface p-3"
+				style={{
+					shadowColor: "#18181B",
+					shadowOffset: { height: 8, width: 0 },
+					shadowOpacity: 0.08,
+					shadowRadius: 18,
+				}}
 			>
-				<View className="h-14 w-14 items-center justify-center rounded-full bg-[#0A84FF]/10">
-					<Ionicons color="#0A84FF" name="cloud-download" size={28} />
+				<View className="h-10 w-10 items-center justify-center rounded-full bg-accent-soft">
+					<Ionicons
+						color={updateAccentColor}
+						name={status === "ready" ? "cloud-done" : "cloud-download"}
+						size={20}
+					/>
 				</View>
 
-				<Text.Heading
-					align="center"
-					className="mt-4"
-					type="h5"
-					weight="semibold"
-				>
-					Update Available
-				</Text.Heading>
+				<View className="min-w-0 flex-1 gap-0.5">
+					<Text numberOfLines={1} type="body-sm" weight="semibold">
+						{statusCopy.title}
+					</Text>
+					<Text color="muted" numberOfLines={1} type="body-xs">
+						{statusCopy.description}
+					</Text>
+				</View>
 
-				<Text.Paragraph
-					align="center"
-					className="mt-2 leading-5"
-					color="muted"
-					type="body-sm"
-				>
-					{status === "checking" && "Checking for updates..."}
-					{status === "downloading" && "Downloading update..."}
-					{status === "ready" &&
-						"A new version of Viya is ready. Restart to apply the update."}
-				</Text.Paragraph>
-
-				{status === "checking" || status === "downloading" ? (
-					<View className="mt-6">
-						<Spinner />
-					</View>
-				) : null}
-
+				{isBusy ? <Spinner size="sm" /> : null}
 				{status === "ready" ? (
-					<Button
-						className="mt-6 w-full"
-						onPress={handleRestart}
-						size="md"
-						variant="primary"
-					>
-						<Button.Label>Restart Now</Button.Label>
+					<Button onPress={handleRestart} size="sm">
+						<Button.Label>Restart</Button.Label>
 					</Button>
 				) : null}
 			</Surface>

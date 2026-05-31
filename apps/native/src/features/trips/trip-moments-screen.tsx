@@ -17,6 +17,7 @@ import {
 	Text,
 	TextArea,
 	TextField,
+	useToast,
 } from "heroui-native";
 import { useState } from "react";
 import { Linking, Pressable, ScrollView, View } from "react-native";
@@ -380,6 +381,7 @@ export function TripMomentsScreen() {
 	const deleteMoment = useMutation(api.moments.deleteMoment);
 	const toggleMomentHighlight = useMutation(api.moments.toggleMomentHighlight);
 	const updateMoment = useMutation(api.moments.updateMoment);
+	const { toast } = useToast();
 	const [form, setForm] = useState<MomentForm>(initialMomentForm);
 	const [editingMomentId, setEditingMomentId] = useState<Id<"moments"> | null>(
 		null
@@ -389,25 +391,39 @@ export function TripMomentsScreen() {
 	const [pendingMomentId, setPendingMomentId] = useState<Id<"moments"> | null>(
 		null
 	);
-	const [mapErrorMessage, setMapErrorMessage] = useState<string | null>(null);
 	const [momentErrorMessage, setMomentErrorMessage] = useState<string | null>(
 		null
 	);
 
+	const showMomentsSuccessToast = (message: string) => {
+		toast.show({
+			description: message,
+			duration: 3600,
+			label: "Moments updated",
+			variant: "success",
+		});
+	};
+
+	const showMomentsErrorToast = (message: string) => {
+		toast.show({
+			description: message,
+			duration: 4200,
+			label: "Moments need attention",
+			variant: "danger",
+		});
+	};
+
 	const updateForm = (key: keyof MomentForm, value: string) => {
-		setMapErrorMessage(null);
 		setMomentErrorMessage(null);
 		setForm((currentForm) => ({ ...currentForm, [key]: value }));
 	};
 	const openCreateSheet = () => {
-		setMapErrorMessage(null);
 		setMomentErrorMessage(null);
 		setEditingMomentId(null);
 		setForm(initialMomentForm);
 		setIsSheetOpen(true);
 	};
 	const openEditSheet = (moment: Doc<"moments">) => {
-		setMapErrorMessage(null);
 		setMomentErrorMessage(null);
 		setEditingMomentId(moment._id);
 		setForm({
@@ -464,8 +480,13 @@ export function TripMomentsScreen() {
 			setForm(initialMomentForm);
 			setEditingMomentId(null);
 			setIsSheetOpen(false);
+			showMomentsSuccessToast(
+				editingMomentId ? "Moment saved." : "Moment added."
+			);
 		} catch {
-			setMomentErrorMessage("Could not save moment.");
+			const message = "Could not save moment.";
+			setMomentErrorMessage(message);
+			showMomentsErrorToast(message);
 		} finally {
 			setIsSaving(false);
 		}
@@ -478,11 +499,10 @@ export function TripMomentsScreen() {
 				locationName: moment.locationName,
 			})
 		) {
-			setMapErrorMessage("Location is not available yet.");
+			showMomentsErrorToast("Location is not available yet.");
 			return;
 		}
 
-		setMapErrorMessage(null);
 		try {
 			await Linking.openURL(
 				getTripMapSearchUrl({
@@ -491,20 +511,26 @@ export function TripMomentsScreen() {
 				})
 			);
 		} catch {
-			setMapErrorMessage("Could not open Maps for this moment.");
+			showMomentsErrorToast("Could not open Maps for this moment.");
 		}
 	};
 
 	const runMomentAction = async (
 		momentId: Id<"moments">,
-		action: () => Promise<unknown>
+		action: () => Promise<unknown>,
+		successMessage?: string
 	) => {
-		setMapErrorMessage(null);
+		setMomentErrorMessage(null);
 		setPendingMomentId(momentId);
 		try {
 			await action();
+			if (successMessage) {
+				showMomentsSuccessToast(successMessage);
+			}
 		} catch {
-			setMomentErrorMessage("Could not update moment.");
+			const message = "Could not update moment.";
+			setMomentErrorMessage(message);
+			showMomentsErrorToast(message);
 		} finally {
 			setPendingMomentId(null);
 		}
@@ -555,11 +581,6 @@ export function TripMomentsScreen() {
 					{momentErrorMessage ? (
 						<Text className="text-danger" type="body-sm">
 							{momentErrorMessage}
-						</Text>
-					) : null}
-					{mapErrorMessage ? (
-						<Text className="text-danger" type="body-sm">
-							{mapErrorMessage}
 						</Text>
 					) : null}
 
@@ -631,8 +652,10 @@ export function TripMomentsScreen() {
 									key={moment._id}
 									moment={moment}
 									onDelete={() => {
-										runMomentAction(moment._id, () =>
-											deleteMoment({ momentId: moment._id })
+										runMomentAction(
+											moment._id,
+											() => deleteMoment({ momentId: moment._id }),
+											"Moment deleted."
 										).catch(() => undefined);
 									}}
 									onEdit={() => openEditSheet(moment)}
@@ -640,8 +663,12 @@ export function TripMomentsScreen() {
 										handleOpenMaps(moment).catch(() => undefined);
 									}}
 									onToggleHighlight={() => {
-										runMomentAction(moment._id, () =>
-											toggleMomentHighlight({ momentId: moment._id })
+										runMomentAction(
+											moment._id,
+											() => toggleMomentHighlight({ momentId: moment._id }),
+											moment.isHighlight
+												? "Moment removed from highlights."
+												: "Moment marked as a highlight."
 										).catch(() => undefined);
 									}}
 								/>

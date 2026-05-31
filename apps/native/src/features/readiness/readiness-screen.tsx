@@ -25,9 +25,10 @@ import {
 	Text,
 	TextArea,
 	TextField,
+	useToast,
 } from "heroui-native";
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
@@ -527,8 +528,8 @@ function ReadinessOverview({
 					isDisabled={!highestPriorityItem}
 					onPress={onFixTopGap}
 					size="sm"
-					variant="secondary"
 				>
+					<Ionicons color="#FFFFFF" name="construct-outline" size={16} />
 					<Button.Label>Fix highest-priority gap</Button.Label>
 				</Button>
 			)}
@@ -584,48 +585,46 @@ function TopReadinessGapSummary({
 						</ReadinessPill>
 						<ReadinessPill>{assignedToName ?? "Unassigned"}</ReadinessPill>
 					</View>
-					<View className="flex-row flex-wrap gap-2">
-						<Button
-							className="min-w-[140px] flex-1"
-							onPress={onReview}
-							size="sm"
-						>
+					<View className="gap-2">
+						<Button onPress={onReview} size="sm">
 							<Ionicons color="#FFFFFF" name="create-outline" size={16} />
 							<Button.Label>Review top gap</Button.Label>
 						</Button>
-						<Button
-							className="min-w-[132px] flex-1"
-							onPress={onMarkDone}
-							size="sm"
-							variant="secondary"
-						>
-							<Ionicons color="#0A84FF" name="checkmark-outline" size={15} />
-							<Button.Label>Mark top done</Button.Label>
-						</Button>
-						{categoryHref ? (
-							<Link asChild href={categoryHref}>
-								<Button
-									className="min-w-[148px] flex-1"
-									size="sm"
-									variant="secondary"
-								>
-									<Ionicons color="#0A84FF" name="open-outline" size={15} />
-									<Button.Label>Open top category</Button.Label>
-								</Button>
-							</Link>
-						) : null}
-						{ownerHref ? (
-							<Link asChild href={ownerHref}>
-								<Button
-									className="min-w-[132px] flex-1"
-									size="sm"
-									variant="secondary"
-								>
-									<Ionicons color="#0A84FF" name="people-outline" size={15} />
-									<Button.Label>Open top owner</Button.Label>
-								</Button>
-							</Link>
-						) : null}
+						<View className="flex-row flex-wrap gap-2">
+							<Button
+								className="min-w-[132px] flex-1"
+								onPress={onMarkDone}
+								size="sm"
+								variant="secondary"
+							>
+								<Ionicons color="#0A84FF" name="checkmark-outline" size={15} />
+								<Button.Label>Mark top done</Button.Label>
+							</Button>
+							{categoryHref ? (
+								<Link asChild href={categoryHref}>
+									<Button
+										className="min-w-[148px] flex-1"
+										size="sm"
+										variant="secondary"
+									>
+										<Ionicons color="#0A84FF" name="open-outline" size={15} />
+										<Button.Label>Open top category</Button.Label>
+									</Button>
+								</Link>
+							) : null}
+							{ownerHref ? (
+								<Link asChild href={ownerHref}>
+									<Button
+										className="min-w-[132px] flex-1"
+										size="sm"
+										variant="secondary"
+									>
+										<Ionicons color="#0A84FF" name="people-outline" size={15} />
+										<Button.Label>Open top owner</Button.Label>
+									</Button>
+								</Link>
+							) : null}
+						</View>
 					</View>
 				</>
 			) : (
@@ -770,6 +769,7 @@ export function ReadinessScreen() {
 	const updateReadinessItemDetails = useMutation(
 		api.readiness.updateReadinessItemDetails
 	);
+	const { toast } = useToast();
 	const [form, setForm] = useState<ReadinessForm>(initialReadinessForm);
 	const [editingItemId, setEditingItemId] =
 		useState<Id<"readinessItems"> | null>(null);
@@ -780,6 +780,30 @@ export function ReadinessScreen() {
 	const [readinessErrorMessage, setReadinessErrorMessage] = useState<
 		string | null
 	>(null);
+
+	const showReadinessSuccessToast = useCallback(
+		(message: string) => {
+			toast.show({
+				description: message,
+				duration: 3600,
+				label: "Readiness updated",
+				variant: "success",
+			});
+		},
+		[toast]
+	);
+
+	const showReadinessErrorToast = useCallback(
+		(message: string) => {
+			toast.show({
+				description: message,
+				duration: 4200,
+				label: "Readiness needs attention",
+				variant: "danger",
+			});
+		},
+		[toast]
+	);
 
 	useEffect(() => {
 		if (!(tripId && readinessItems)) {
@@ -793,13 +817,16 @@ export function ReadinessScreen() {
 		if (missingCategories.length > 0 && baselineRequestedTripId !== tripId) {
 			setBaselineRequestedTripId(tripId);
 			ensureBaselineReadinessItems({ tripId }).catch(() => {
-				setReadinessErrorMessage("Could not prepare readiness checklist.");
+				const message = "Could not prepare readiness checklist.";
+				setReadinessErrorMessage(message);
+				showReadinessErrorToast(message);
 			});
 		}
 	}, [
 		baselineRequestedTripId,
 		ensureBaselineReadinessItems,
 		readinessItems,
+		showReadinessErrorToast,
 		tripId,
 	]);
 
@@ -881,8 +908,13 @@ export function ReadinessScreen() {
 			setForm(initialReadinessForm);
 			setEditingItemId(null);
 			setIsSheetOpen(false);
+			showReadinessSuccessToast(
+				editingItemId ? "Readiness task saved." : "Readiness task added."
+			);
 		} catch {
-			setReadinessErrorMessage("Could not save readiness task.");
+			const message = "Could not save readiness task.";
+			setReadinessErrorMessage(message);
+			showReadinessErrorToast(message);
 		} finally {
 			setIsSaving(false);
 		}
@@ -892,7 +924,9 @@ export function ReadinessScreen() {
 		try {
 			await action();
 		} catch {
-			setReadinessErrorMessage("Could not update readiness task.");
+			const message = "Could not update readiness task.";
+			setReadinessErrorMessage(message);
+			showReadinessErrorToast(message);
 		}
 	};
 	const sortedReadinessItems = sortReadinessItemsForReview(readinessItems);

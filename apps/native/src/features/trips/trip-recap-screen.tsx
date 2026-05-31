@@ -4,7 +4,7 @@ import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
 import { getBudgetWalletSummary } from "@viya-app/domain";
 import { useMutation, useQuery } from "convex/react";
 import { type Href, Link, useRouter } from "expo-router";
-import { Button, Spinner, Surface, Text } from "heroui-native";
+import { Button, Spinner, Surface, Text, useToast } from "heroui-native";
 import type { ComponentProps } from "react";
 import { useMemo, useState } from "react";
 import { Share, View } from "react-native";
@@ -310,6 +310,7 @@ export function TripRecapScreen() {
 	);
 	const archiveTrip = useMutation(api.trips.archiveTrip);
 	const updateTripLifecycle = useMutation(api.trips.updateTripLifecycle);
+	const { toast } = useToast();
 	const [pendingAction, setPendingAction] = useState<
 		"archive" | "complete" | null
 	>(null);
@@ -317,6 +318,24 @@ export function TripRecapScreen() {
 		string | null
 	>(null);
 	const [isSharingRecap, setIsSharingRecap] = useState(false);
+
+	const showRecapSuccessToast = (message: string) => {
+		toast.show({
+			description: message,
+			duration: 3600,
+			label: "Recap updated",
+			variant: "success",
+		});
+	};
+
+	const showRecapErrorToast = (message: string) => {
+		toast.show({
+			description: message,
+			duration: 4200,
+			label: "Recap needs attention",
+			variant: "danger",
+		});
+	};
 
 	const wallet = useMemo(() => {
 		if (!workspace) {
@@ -414,8 +433,11 @@ export function TripRecapScreen() {
 		setPendingAction("complete");
 		try {
 			await updateTripLifecycle({ status: "completed", tripId });
+			showRecapSuccessToast("Trip marked complete.");
 		} catch {
-			setLifecycleErrorMessage("Could not mark trip complete.");
+			const message = "Could not mark trip complete.";
+			setLifecycleErrorMessage(message);
+			showRecapErrorToast(message);
 		} finally {
 			setPendingAction(null);
 		}
@@ -426,9 +448,12 @@ export function TripRecapScreen() {
 		setPendingAction("archive");
 		try {
 			await archiveTrip({ tripId });
+			showRecapSuccessToast("Trip archived.");
 			router.replace(VIYA_ROUTES.trips);
 		} catch {
-			setLifecycleErrorMessage("Could not archive trip.");
+			const message = "Could not archive trip.";
+			setLifecycleErrorMessage(message);
+			showRecapErrorToast(message);
 		} finally {
 			setPendingAction(null);
 		}
@@ -457,8 +482,11 @@ export function TripRecapScreen() {
 				}),
 				title: workspace.trip.title,
 			});
+			showRecapSuccessToast("Recap share sheet opened.");
 		} catch {
-			setLifecycleErrorMessage("Could not open the share sheet.");
+			const message = "Could not open the share sheet.";
+			setLifecycleErrorMessage(message);
+			showRecapErrorToast(message);
 		} finally {
 			setIsSharingRecap(false);
 		}

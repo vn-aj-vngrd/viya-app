@@ -59,7 +59,8 @@ export function ReadinessCategoryCard({
 			</Text>
 			{categoryHref ? (
 				<Link asChild href={categoryHref}>
-					<Button size="sm" variant="secondary">
+					<Button size="sm">
+						<Ionicons color="#FFFFFF" name="open-outline" size={15} />
 						<Button.Label>Open module</Button.Label>
 					</Button>
 				</Link>

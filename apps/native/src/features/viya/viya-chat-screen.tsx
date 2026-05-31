@@ -14,8 +14,9 @@ import {
 	Surface,
 	Text,
 	useThemeColor,
+	useToast,
 } from "heroui-native";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	KeyboardAvoidingView,
 	type ScrollView as NativeScrollView,
@@ -308,7 +309,6 @@ const createBlueprintTripHandler =
 	async (blueprint: TripBlueprint) => {
 		onCreatingChange(true);
 		onErrorMessageChange(null);
-		onNoticeMessageChange(null);
 
 		try {
 			const result = await createTripFromBlueprint(
@@ -492,7 +492,6 @@ export function ViyaChatScreen() {
 	const [awaitingAssistantMessageCount, setAwaitingAssistantMessageCount] =
 		useState<number | null>(null);
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
-	const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
 	const [pendingVaultReview, setPendingVaultReview] =
 		useState<PendingTripSyncReview | null>(null);
 	const [isConfirmingVaultUpload, setIsConfirmingVaultUpload] = useState(false);
@@ -502,6 +501,33 @@ export function ViyaChatScreen() {
 	const chatSessionIdRef = useRef(0);
 	const hasAppliedRouteThreadResetRef = useRef(false);
 	const mutedColor = useThemeColor("muted");
+	const { toast } = useToast();
+	const showSuccessToast = useCallback(
+		(message: string | null) => {
+			if (!message) {
+				return;
+			}
+
+			toast.show({
+				description: message,
+				duration: 3600,
+				label: "Viya updated",
+				variant: "success",
+			});
+		},
+		[toast]
+	);
+	const showErrorToast = useCallback(
+		(message: string) => {
+			toast.show({
+				description: message,
+				duration: 4200,
+				label: "Viya needs attention",
+				variant: "danger",
+			});
+		},
+		[toast]
+	);
 	const trips = useQuery(api.trips.listTrips);
 	const selectableTripContexts = getSelectableTripContexts(trips);
 	const currentTrip = selectedTripId
@@ -553,11 +579,7 @@ export function ViyaChatScreen() {
 	const applyTripAgentDraft = useMutation(api.ai.tripAgent.applyTripAgentDraft);
 	const sendMessage = useMutation(api.chat.sendMessage);
 	const confirmTripSyncReview = useMutation(api.vault.confirmTripSyncReview);
-	const {
-		errorMessage: vaultUploadErrorMessage,
-		isUploading: isUploadingVaultFile,
-		pickDocument,
-	} = useVaultUpload();
+	const { isUploading: isUploadingVaultFile, pickDocument } = useVaultUpload();
 	const chatHistoryArgs =
 		chatMode === "trip" && currentTripId
 			? ({
@@ -844,7 +866,6 @@ export function ViyaChatScreen() {
 		}
 
 		setErrorMessage(null);
-		setNoticeMessage(null);
 		setIsLoading(true);
 		setAwaitingAssistantMessageCount(messageCount);
 		setPendingPromptMessageIndex(messageCount);
@@ -894,7 +915,6 @@ export function ViyaChatScreen() {
 		setPendingPromptMessageIndex(null);
 		setAwaitingAssistantMessageCount(null);
 		setErrorMessage(null);
-		setNoticeMessage(null);
 
 		if (Object.keys(nextThreadIds).length === 0) {
 			runAsyncTask(removeStoredThreadIdsByContext());
@@ -933,7 +953,6 @@ export function ViyaChatScreen() {
 		setThreadIdsByContext(nextThreadIds);
 		setChatMode(item.mode);
 		setErrorMessage(null);
-		setNoticeMessage(null);
 		setPendingPrompt(null);
 		setPendingPromptMessageIndex(null);
 		setAwaitingAssistantMessageCount(null);
@@ -945,7 +964,6 @@ export function ViyaChatScreen() {
 		setSelectedTripId(tripId);
 		setChatMode("trip");
 		setErrorMessage(null);
-		setNoticeMessage(null);
 		setAwaitingAssistantMessageCount(null);
 		setPendingPromptMessageIndex(null);
 		setIsTripContextSheetOpen(false);
@@ -964,7 +982,6 @@ export function ViyaChatScreen() {
 		setSelectedTripId(null);
 		setChatMode("chat");
 		setErrorMessage(null);
-		setNoticeMessage(null);
 		setAwaitingAssistantMessageCount(null);
 		setPendingPromptMessageIndex(null);
 	};
@@ -976,7 +993,6 @@ export function ViyaChatScreen() {
 	const handleFileUploadPress = async () => {
 		setIsComposerActionsOpen(false);
 		setErrorMessage(null);
-		setNoticeMessage(null);
 
 		try {
 			const review = await pickDocument({
@@ -1010,15 +1026,16 @@ export function ViyaChatScreen() {
 				: `Use this uploaded file context:\n\n${fileContext}`;
 
 			setInput(nextInput);
-			setNoticeMessage(
+			showSuccessToast(
 				"File extracted. Viya can use the text summary in this chat."
 			);
 		} catch (error) {
-			setErrorMessage(
+			const message =
 				error instanceof Error
 					? error.message
-					: "Viya could not upload this file."
-			);
+					: "Viya could not upload this file.";
+			setErrorMessage(message);
+			showErrorToast(message);
 		}
 	};
 
@@ -1033,7 +1050,6 @@ export function ViyaChatScreen() {
 		}
 
 		setErrorMessage(null);
-		setNoticeMessage(null);
 		setIsRunningWorkspaceModuleAction(true);
 
 		try {
@@ -1049,13 +1065,14 @@ export function ViyaChatScreen() {
 			}
 
 			await applyTripAgentDraft({ draftId: draft._id });
-			setNoticeMessage(workspaceModuleAction.successMessage);
+			showSuccessToast(workspaceModuleAction.successMessage);
 		} catch (error) {
-			setErrorMessage(
+			const message =
 				error instanceof Error
 					? error.message
-					: "Viya could not update this workspace module."
-			);
+					: "Viya could not update this workspace module.";
+			setErrorMessage(message);
+			showErrorToast(message);
 		} finally {
 			setIsRunningWorkspaceModuleAction(false);
 		}
@@ -1068,7 +1085,6 @@ export function ViyaChatScreen() {
 
 		setIsConfirmingVaultUpload(true);
 		setErrorMessage(null);
-		setNoticeMessage(null);
 
 		try {
 			await confirmTripSyncReview({
@@ -1081,15 +1097,16 @@ export function ViyaChatScreen() {
 				tripId: currentTripId,
 			});
 			setPendingVaultReview(null);
-			setNoticeMessage(
+			showSuccessToast(
 				"Saved to Vault. Viya extracted the details for trip context."
 			);
 		} catch (error) {
-			setErrorMessage(
+			const message =
 				error instanceof Error
 					? error.message
-					: "Viya could not save this file to Vault."
-			);
+					: "Viya could not save this file to Vault.";
+			setErrorMessage(message);
+			showErrorToast(message);
 		} finally {
 			setIsConfirmingVaultUpload(false);
 		}
@@ -1106,7 +1123,6 @@ export function ViyaChatScreen() {
 
 	const handleCustomQuestionAnswer = (value: string) => {
 		setErrorMessage(null);
-		setNoticeMessage(null);
 		runAsyncTask(handleSubmit(value));
 	};
 
@@ -1117,7 +1133,6 @@ export function ViyaChatScreen() {
 		}
 
 		setErrorMessage(null);
-		setNoticeMessage(null);
 		applySlashCommandSelection({
 			activeSlashCommand,
 			command,
@@ -1139,7 +1154,7 @@ export function ViyaChatScreen() {
 		},
 		onCreatingChange: setIsCreatingTripFromBlueprint,
 		onErrorMessageChange: setErrorMessage,
-		onNoticeMessageChange: setNoticeMessage,
+		onNoticeMessageChange: showSuccessToast,
 		onThreadIdsChange: setThreadIdsByContext,
 		threadContextKey,
 		threadId,
@@ -1227,12 +1242,6 @@ export function ViyaChatScreen() {
 						</Text>
 					) : null}
 
-					{noticeMessage ? (
-						<Text className="mb-3 text-success" type="body-sm">
-							{noticeMessage}
-						</Text>
-					) : null}
-
 					{shouldShowSlashCommandMenu ? (
 						<SlashCommandMenu
 							currentTripId={currentTripId}
@@ -1265,11 +1274,6 @@ export function ViyaChatScreen() {
 					) : null}
 
 					<View className="gap-1" style={{ marginTop: chatComposerGap }}>
-						{vaultUploadErrorMessage ? (
-							<Text className="px-4 text-danger" type="body-xs">
-								{vaultUploadErrorMessage}
-							</Text>
-						) : null}
 						{chatMode === "trip" && currentTrip ? (
 							<TripContextChip
 								currentTrip={currentTrip}

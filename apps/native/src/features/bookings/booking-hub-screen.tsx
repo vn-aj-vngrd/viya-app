@@ -16,6 +16,7 @@ import {
 	Text,
 	TextArea,
 	TextField,
+	useToast,
 } from "heroui-native";
 import { useState } from "react";
 import { Linking, ScrollView, View } from "react-native";
@@ -521,6 +522,7 @@ export function BookingHubScreen() {
 	const deleteBooking = useMutation(api.bookings.deleteBooking);
 	const updateBooking = useMutation(api.bookings.updateBooking);
 	const updateBookingStatus = useMutation(api.bookings.updateBookingStatus);
+	const { toast } = useToast();
 	const [bookingForm, setBookingForm] =
 		useState<BookingForm>(initialBookingForm);
 	const [editingBookingId, setEditingBookingId] =
@@ -533,6 +535,24 @@ export function BookingHubScreen() {
 	const [bookingErrorMessage, setBookingErrorMessage] = useState<string | null>(
 		null
 	);
+
+	const showBookingSuccessToast = (message: string) => {
+		toast.show({
+			description: message,
+			duration: 3600,
+			label: "Bookings updated",
+			variant: "success",
+		});
+	};
+
+	const showBookingErrorToast = (message: string) => {
+		toast.show({
+			description: message,
+			duration: 4200,
+			label: "Bookings need attention",
+			variant: "danger",
+		});
+	};
 
 	if (!tripId) {
 		return (
@@ -625,12 +645,16 @@ export function BookingHubScreen() {
 				})
 			);
 		} catch {
-			setBookingErrorMessage("Could not open Maps for this booking.");
+			const message = "Could not open Maps for this booking.";
+			setBookingErrorMessage(message);
+			showBookingErrorToast(message);
 		}
 	};
 	const openNextBookingProof = async (url?: string | null) => {
 		if (!url) {
-			setBookingErrorMessage("Confirmation file is not available yet.");
+			const message = "Confirmation file is not available yet.";
+			setBookingErrorMessage(message);
+			showBookingErrorToast(message);
 			return;
 		}
 
@@ -638,7 +662,9 @@ export function BookingHubScreen() {
 		try {
 			await Linking.openURL(url);
 		} catch {
-			setBookingErrorMessage("Could not open this confirmation.");
+			const message = "Could not open this confirmation.";
+			setBookingErrorMessage(message);
+			showBookingErrorToast(message);
 		}
 	};
 	const saveTarget = async () => {
@@ -681,8 +707,13 @@ export function BookingHubScreen() {
 			setBookingForm(initialBookingForm);
 			setEditingBookingId(null);
 			setIsBookingSheetOpen(false);
+			showBookingSuccessToast(
+				editingBookingId ? "Booking target saved." : "Booking target added."
+			);
 		} catch {
-			setBookingErrorMessage("Could not save booking target.");
+			const message = "Could not save booking target.";
+			setBookingErrorMessage(message);
+			showBookingErrorToast(message);
 		} finally {
 			setIsCreatingBooking(false);
 		}
@@ -692,21 +723,31 @@ export function BookingHubScreen() {
 		booking: Doc<"bookings">,
 		status: "bookedExternally" | "confirmed"
 	) => {
+		setBookingErrorMessage(null);
 		setUpdatingBookingId(booking._id);
 		try {
 			await updateBookingStatus({ bookingId: booking._id, status });
+			showBookingSuccessToast(
+				status === "confirmed" ? "Booking confirmed." : "Booking marked booked."
+			);
 		} catch {
-			setBookingErrorMessage("Could not update booking status.");
+			const message = "Could not update booking status.";
+			setBookingErrorMessage(message);
+			showBookingErrorToast(message);
 		} finally {
 			setUpdatingBookingId(null);
 		}
 	};
 	const removeBooking = async (bookingId: Id<"bookings">) => {
+		setBookingErrorMessage(null);
 		setUpdatingBookingId(bookingId);
 		try {
 			await deleteBooking({ bookingId });
+			showBookingSuccessToast("Booking target deleted.");
 		} catch {
-			setBookingErrorMessage("Could not delete booking target.");
+			const message = "Could not delete booking target.";
+			setBookingErrorMessage(message);
+			showBookingErrorToast(message);
 		} finally {
 			setUpdatingBookingId(null);
 		}

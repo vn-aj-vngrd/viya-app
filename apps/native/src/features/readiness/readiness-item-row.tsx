@@ -7,7 +7,7 @@ import {
 	type ReadinessCategory,
 } from "@viya-app/domain";
 import { type Href, Link } from "expo-router";
-import { Button, Menu, Text } from "heroui-native";
+import { Button, Menu, Text, useThemeColor } from "heroui-native";
 import { Pressable, View } from "react-native";
 
 const statusLabels: Record<string, string> = {
@@ -65,6 +65,7 @@ export function ReadinessItemRow({
 	const metaLabel = `${categoryLabel} - ${priorityLabel} - ${
 		assignedToName ?? "Unassigned"
 	} - ${dueDateLabel}`;
+	const foregroundColor = useThemeColor("foreground");
 
 	return (
 		<View className="gap-3 rounded-[24px] border border-border bg-surface p-4">
@@ -96,12 +97,16 @@ export function ReadinessItemRow({
 						<Pressable
 							accessibilityLabel="Task options"
 							accessibilityRole="button"
-							className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary"
+							className="h-9 w-9 items-center justify-center rounded-full border border-border bg-surface"
 							style={({ pressed }) => ({
-								transform: [{ scale: pressed ? 0.94 : 1 }],
+								transform: [{ scale: pressed ? 0.97 : 1 }],
 							})}
 						>
-							<Ionicons color="#71717A" name="ellipsis-horizontal" size={17} />
+							<Ionicons
+								color={foregroundColor}
+								name="ellipsis-horizontal"
+								size={17}
+							/>
 						</Pressable>
 					</Menu.Trigger>
 					<Menu.Portal>
@@ -120,7 +125,7 @@ export function ReadinessItemRow({
 								isAnimatedStyleActive={false}
 								onPress={() => onEdit(item)}
 							>
-								<View className="h-8 w-8 items-center justify-center rounded-full bg-surface-secondary">
+								<View className="h-8 w-8 items-center justify-center rounded-full bg-accent-soft">
 									<Ionicons color="#0A84FF" name="create-outline" size={16} />
 								</View>
 								<Menu.ItemTitle className="font-semibold text-sm">
@@ -179,8 +184,8 @@ export function ReadinessItemRow({
 				<View className="flex-row flex-wrap gap-2">
 					{categoryHref ? (
 						<Link asChild href={categoryHref}>
-							<Button className="flex-1" size="sm" variant="secondary">
-								<Ionicons color="#0A84FF" name="open-outline" size={15} />
+							<Button className="flex-1" size="sm">
+								<Ionicons color="#FFFFFF" name="open-outline" size={15} />
 								<Button.Label>Open category</Button.Label>
 							</Button>
 						</Link>

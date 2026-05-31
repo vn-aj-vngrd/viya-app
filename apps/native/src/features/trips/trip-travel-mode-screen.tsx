@@ -14,6 +14,7 @@ import {
 	Text,
 	TextArea,
 	TextField,
+	useToast,
 } from "heroui-native";
 import type { ComponentProps, Dispatch, SetStateAction } from "react";
 import { useMemo, useState } from "react";
@@ -621,7 +622,6 @@ function QuickNotePanel({
 	);
 }
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Travel Mode coordinates itinerary, wallet, documents, risks, quick expense, and notes in one day-of surface.
 export function TripTravelModeScreen() {
 	const tripId = useTripIdParam();
 	const workspace = useQuery(
@@ -631,6 +631,7 @@ export function TripTravelModeScreen() {
 	const addTripExpense = useMutation(api.trips.addTripExpense);
 	const createTripNote = useMutation(api.notes.createTripNote);
 	const updateItineraryItem = useMutation(api.itinerary.updateItineraryItem);
+	const { toast } = useToast();
 	const [expenseForm, setExpenseForm] = useState<QuickExpenseForm>({
 		amount: "",
 		title: "",
@@ -643,12 +644,26 @@ export function TripTravelModeScreen() {
 	const [isSavingNote, setIsSavingNote] = useState(false);
 	const [isUpdatingCurrentItem, setIsUpdatingCurrentItem] = useState(false);
 	const [currentItemError, setCurrentItemError] = useState<string | null>(null);
-	const [documentOpenError, setDocumentOpenError] = useState<string | null>(
-		null
-	);
 	const [expenseError, setExpenseError] = useState<string | null>(null);
-	const [mapError, setMapError] = useState<string | null>(null);
 	const [noteError, setNoteError] = useState<string | null>(null);
+
+	const showTravelModeSuccessToast = (message: string) => {
+		toast.show({
+			description: message,
+			duration: 3600,
+			label: "Travel Mode updated",
+			variant: "success",
+		});
+	};
+
+	const showTravelModeErrorToast = (message: string) => {
+		toast.show({
+			description: message,
+			duration: 4200,
+			label: "Travel Mode needs attention",
+			variant: "danger",
+		});
+	};
 
 	const wallet = useMemo(() => {
 		if (!workspace) {
@@ -778,10 +793,12 @@ export function TripTravelModeScreen() {
 				tripId,
 			});
 			setExpenseForm({ amount: "", title: "" });
+			showTravelModeSuccessToast("Expense logged.");
 		} catch (error) {
-			setExpenseError(
-				error instanceof Error ? error.message : "Could not log expense."
-			);
+			const message =
+				error instanceof Error ? error.message : "Could not log expense.";
+			setExpenseError(message);
+			showTravelModeErrorToast(message);
 		} finally {
 			setIsSavingExpense(false);
 		}
@@ -808,10 +825,12 @@ export function TripTravelModeScreen() {
 				tripId,
 			});
 			setNoteForm({ body: "", title: "" });
+			showTravelModeSuccessToast("Travel note saved.");
 		} catch (error) {
-			setNoteError(
-				error instanceof Error ? error.message : "Could not save note."
-			);
+			const message =
+				error instanceof Error ? error.message : "Could not save note.";
+			setNoteError(message);
+			showTravelModeErrorToast(message);
 		} finally {
 			setIsSavingNote(false);
 		}
@@ -829,18 +848,23 @@ export function TripTravelModeScreen() {
 				itemId: now.item._id,
 				status: now.item.status === "completed" ? "planned" : "completed",
 			});
+			showTravelModeSuccessToast(
+				now.item.status === "completed"
+					? "Current item reopened."
+					: "Current item completed."
+			);
 		} catch (error) {
-			setCurrentItemError(
+			const message =
 				error instanceof Error
 					? error.message
-					: "Could not update the current item."
-			);
+					: "Could not update the current item.";
+			setCurrentItemError(message);
+			showTravelModeErrorToast(message);
 		} finally {
 			setIsUpdatingCurrentItem(false);
 		}
 	};
 	const handleOpenMaps = async (item: Doc<"itineraryItems">) => {
-		setMapError(null);
 		try {
 			await Linking.openURL(
 				getTripMapSearchUrl({
@@ -852,15 +876,14 @@ export function TripTravelModeScreen() {
 				})
 			);
 		} catch {
-			setMapError("Could not open Maps for this stop.");
+			showTravelModeErrorToast("Could not open Maps for this stop.");
 		}
 	};
 	const handleOpenTravelDocument = async (url: string) => {
-		setDocumentOpenError(null);
 		try {
 			await Linking.openURL(url);
 		} catch {
-			setDocumentOpenError("Could not open this document.");
+			showTravelModeErrorToast("Could not open this document.");
 		}
 	};
 	const currentItemActionLabel = (() => {
@@ -895,16 +918,6 @@ export function TripTravelModeScreen() {
 					{currentItemError ? (
 						<Text className="px-1 text-danger" type="body-sm">
 							{currentItemError}
-						</Text>
-					) : null}
-					{mapError ? (
-						<Text className="px-1 text-danger" type="body-sm">
-							{mapError}
-						</Text>
-					) : null}
-					{documentOpenError ? (
-						<Text className="px-1 text-danger" type="body-sm">
-							{documentOpenError}
 						</Text>
 					) : null}
 

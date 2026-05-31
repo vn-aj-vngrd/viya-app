@@ -14,6 +14,7 @@ import {
 	Spinner,
 	Text,
 	TextField,
+	useToast,
 } from "heroui-native";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
@@ -266,10 +267,17 @@ function BudgetOverviewCard({
 				/>
 			</View>
 
-			<Button onPress={onOpenBudgetEditor} size="sm" variant="secondary">
-				<Ionicons color={budgetAccentColor} name="create-outline" size={15} />
-				<Button.Label>{budgetActionLabel}</Button.Label>
-			</Button>
+			<View className="items-start pt-1">
+				<Button
+					className="-ml-2"
+					onPress={onOpenBudgetEditor}
+					size="sm"
+					variant="ghost"
+				>
+					<Ionicons color={budgetAccentColor} name="create-outline" size={15} />
+					<Button.Label>{budgetActionLabel}</Button.Label>
+				</Button>
+			</View>
 		</View>
 	);
 }
@@ -783,6 +791,7 @@ export function TripBudgetScreen() {
 	const addTripExpense = useMutation(api.trips.addTripExpense);
 	const deleteTripExpense = useMutation(api.trips.deleteTripExpense);
 	const updateTripExpense = useMutation(api.trips.updateTripExpense);
+	const { toast } = useToast();
 	const [budgetDraft, setBudgetDraft] = useState("");
 	const [expenseForm, setExpenseForm] =
 		useState<ExpenseFormState>(initialExpenseForm);
@@ -794,9 +803,6 @@ export function TripBudgetScreen() {
 	const [expenseErrorMessage, setExpenseErrorMessage] = useState<string | null>(
 		null
 	);
-	const [receiptOpenErrorMessage, setReceiptOpenErrorMessage] = useState<
-		string | null
-	>(null);
 	const [isSavingBudget, setIsSavingBudget] = useState(false);
 	const [isAddingExpense, setIsAddingExpense] = useState(false);
 	const [deletingExpenseId, setDeletingExpenseId] =
@@ -821,6 +827,24 @@ export function TripBudgetScreen() {
 			),
 		});
 	}, [budget]);
+
+	const showBudgetSuccessToast = (message: string) => {
+		toast.show({
+			description: message,
+			duration: 3600,
+			label: "Budget updated",
+			variant: "success",
+		});
+	};
+
+	const showBudgetErrorToast = (message: string) => {
+		toast.show({
+			description: message,
+			duration: 4200,
+			label: "Budget needs attention",
+			variant: "danger",
+		});
+	};
 
 	if (!tripId) {
 		return (
@@ -923,10 +947,12 @@ export function TripBudgetScreen() {
 				tripId,
 			});
 			closeBudgetEditor();
+			showBudgetSuccessToast("Trip budget saved.");
 		} catch (error) {
-			setBudgetErrorMessage(
-				error instanceof Error ? error.message : "Could not update budget."
-			);
+			const message =
+				error instanceof Error ? error.message : "Could not update budget.";
+			setBudgetErrorMessage(message);
+			showBudgetErrorToast(message);
 		} finally {
 			setIsSavingBudget(false);
 		}
@@ -974,10 +1000,14 @@ export function TripBudgetScreen() {
 			setExpenseForm(initialExpenseForm());
 			setEditingExpenseId(null);
 			setIsExpenseFormOpen(false);
-		} catch (error) {
-			setExpenseErrorMessage(
-				error instanceof Error ? error.message : "Could not save expense."
+			showBudgetSuccessToast(
+				editingExpenseId ? "Expense updated." : "Expense added."
 			);
+		} catch (error) {
+			const message =
+				error instanceof Error ? error.message : "Could not save expense.";
+			setExpenseErrorMessage(message);
+			showBudgetErrorToast(message);
 		} finally {
 			setIsAddingExpense(false);
 		}
@@ -993,10 +1023,12 @@ export function TripBudgetScreen() {
 				setExpenseForm(initialExpenseForm());
 				setIsExpenseFormOpen(false);
 			}
+			showBudgetSuccessToast("Expense deleted.");
 		} catch (error) {
-			setExpenseErrorMessage(
-				error instanceof Error ? error.message : "Could not delete expense."
-			);
+			const message =
+				error instanceof Error ? error.message : "Could not delete expense.";
+			setExpenseErrorMessage(message);
+			showBudgetErrorToast(message);
 		} finally {
 			setDeletingExpenseId(null);
 		}
@@ -1017,11 +1049,10 @@ export function TripBudgetScreen() {
 	};
 
 	const handleOpenReceipt = async (url: string) => {
-		setReceiptOpenErrorMessage(null);
 		try {
 			await Linking.openURL(url);
 		} catch {
-			setReceiptOpenErrorMessage("Could not open this receipt.");
+			showBudgetErrorToast("Could not open this receipt.");
 		}
 	};
 
@@ -1076,11 +1107,6 @@ export function TripBudgetScreen() {
 						>
 							ALL EXPENSES
 						</Text>
-						{receiptOpenErrorMessage ? (
-							<Text className="px-1 text-danger" type="body-sm">
-								{receiptOpenErrorMessage}
-							</Text>
-						) : null}
 						<View>
 							{budget.expenses.length === 0 ? (
 								<View className="items-center gap-3 p-6">
@@ -1090,16 +1116,8 @@ export function TripBudgetScreen() {
 									<Text align="center" color="muted" type="body-sm">
 										Manual expenses will appear here.
 									</Text>
-									<Button
-										onPress={openNewExpenseForm}
-										size="sm"
-										variant="secondary"
-									>
-										<Ionicons
-											color={budgetAccentColor}
-											name="add-outline"
-											size={15}
-										/>
+									<Button onPress={openNewExpenseForm} size="sm">
+										<Ionicons color="#FFFFFF" name="add-outline" size={15} />
 										<Button.Label>Add first expense</Button.Label>
 									</Button>
 								</View>

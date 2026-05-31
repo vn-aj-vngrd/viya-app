@@ -15,6 +15,7 @@ import {
 	Text,
 	TextArea,
 	TextField,
+	useToast,
 } from "heroui-native";
 import type { ComponentProps } from "react";
 import { useState } from "react";
@@ -273,6 +274,7 @@ export function TripCompanionsScreen() {
 	const createCompanion = useMutation(api.companions.createTripCompanion);
 	const updateCompanion = useMutation(api.companions.updateTripCompanion);
 	const deleteCompanion = useMutation(api.companions.deleteTripCompanion);
+	const { toast } = useToast();
 	const [form, setForm] = useState<CompanionForm>(initialCompanionForm);
 	const [editingCompanionId, setEditingCompanionId] =
 		useState<Id<"tripCompanions"> | null>(null);
@@ -283,9 +285,24 @@ export function TripCompanionsScreen() {
 	const [companionErrorMessage, setCompanionErrorMessage] = useState<
 		string | null
 	>(null);
-	const [contactErrorMessage, setContactErrorMessage] = useState<string | null>(
-		null
-	);
+
+	const showCompanionsSuccessToast = (message: string) => {
+		toast.show({
+			description: message,
+			duration: 3600,
+			label: "Companions updated",
+			variant: "success",
+		});
+	};
+
+	const showCompanionsErrorToast = (message: string) => {
+		toast.show({
+			description: message,
+			duration: 4200,
+			label: "Companions need attention",
+			variant: "danger",
+		});
+	};
 
 	const updateForm = (key: keyof CompanionForm, value: string) => {
 		setCompanionErrorMessage(null);
@@ -293,7 +310,6 @@ export function TripCompanionsScreen() {
 	};
 	const openCompanionSheet = (nextForm: CompanionForm) => {
 		setCompanionErrorMessage(null);
-		setContactErrorMessage(null);
 		setEditingCompanionId(null);
 		setForm(nextForm);
 		setIsSheetOpen(true);
@@ -306,7 +322,6 @@ export function TripCompanionsScreen() {
 	};
 	const openEditSheet = (companion: Doc<"tripCompanions">) => {
 		setCompanionErrorMessage(null);
-		setContactErrorMessage(null);
 		setEditingCompanionId(companion._id);
 		setForm({
 			email: companion.email ?? "",
@@ -363,28 +378,36 @@ export function TripCompanionsScreen() {
 			setEditingCompanionId(null);
 			setForm(initialCompanionForm);
 			setIsSheetOpen(false);
+			showCompanionsSuccessToast(
+				editingCompanionId ? "Companion saved." : "Companion added."
+			);
 		} catch {
-			setCompanionErrorMessage("Could not save companion.");
+			const message = "Could not save companion.";
+			setCompanionErrorMessage(message);
+			showCompanionsErrorToast(message);
 		} finally {
 			setIsSaving(false);
 		}
 	};
 
 	const handleOpenContact = async (url: string) => {
-		setContactErrorMessage(null);
 		try {
 			await Linking.openURL(url);
 		} catch {
-			setContactErrorMessage("Could not open this contact action.");
+			showCompanionsErrorToast("Could not open this contact action.");
 		}
 	};
 
 	const handleDeleteCompanion = async (companionId: Id<"tripCompanions">) => {
+		setCompanionErrorMessage(null);
 		setPendingCompanionId(companionId);
 		try {
 			await deleteCompanion({ companionId });
+			showCompanionsSuccessToast("Companion deleted.");
 		} catch {
-			setCompanionErrorMessage("Could not delete companion.");
+			const message = "Could not delete companion.";
+			setCompanionErrorMessage(message);
+			showCompanionsErrorToast(message);
 		} finally {
 			setPendingCompanionId(null);
 		}
@@ -429,11 +452,6 @@ export function TripCompanionsScreen() {
 						primaryActionIcon="people-outline"
 						primaryActionLabel="Add companion"
 					/>
-					{contactErrorMessage ? (
-						<Text className="px-1 text-danger" type="body-sm">
-							{contactErrorMessage}
-						</Text>
-					) : null}
 
 					<View className="gap-4 rounded-[30px] bg-surface-secondary p-4">
 						<View className="flex-row items-start justify-between gap-3">
