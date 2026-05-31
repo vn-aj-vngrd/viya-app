@@ -3,7 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
 import { getPreferenceSuggestions } from "@viya-app/domain";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
@@ -174,6 +174,97 @@ const getChatInputError = ({
 
 	if (chatMode === "trip" && !currentTripId) {
 		return "Create a trip first to use Trip mode.";
+	}
+
+	return null;
+};
+
+interface WorkspaceAgentModuleActionConfig {
+	action: "audit" | "generate";
+	actionLabel: string;
+	description: string;
+	kind: "agent";
+	module: "budget" | "itinerary" | "readiness";
+	prompt: string;
+	successMessage: string;
+}
+
+interface WorkspaceUploadModuleActionConfig {
+	actionLabel: string;
+	description: string;
+	kind: "upload";
+}
+
+type WorkspaceModuleActionConfig =
+	| WorkspaceAgentModuleActionConfig
+	| WorkspaceUploadModuleActionConfig;
+
+const getNormalizedRouteWorkspaceTab = (workspaceTab?: string | null) => {
+	if (workspaceTab === "documents") {
+		return "vault";
+	}
+
+	if (workspaceTab === "checklist") {
+		return "readiness";
+	}
+
+	return workspaceTab ?? null;
+};
+
+const getWorkspaceModuleActionConfig = (
+	workspaceTab?: string | null
+): WorkspaceModuleActionConfig | null => {
+	const normalizedWorkspaceTab = getNormalizedRouteWorkspaceTab(workspaceTab);
+
+	if (normalizedWorkspaceTab === "itinerary") {
+		return {
+			actionLabel: "Generate itinerary",
+			action: "generate",
+			description:
+				"Viya will create itinerary days and stops from this trip context.",
+			kind: "agent",
+			module: "itinerary",
+			prompt:
+				"Generate a detailed multi-day itinerary from this trip workspace. Create one natural whole-day plan for every trip date, with 5 to 6 timed stops on full days and at least 4 on arrival or departure days. Include places or areas, meals, transfers, buffers, estimated costs, duration, priority, and practical notes. Use the destination, budget, traveler context, bookings, Vault evidence, and readiness notes. Keep the plan paced realistically and stage it as structured itinerary days and stops.",
+			successMessage: "Viya generated the itinerary in this workspace.",
+		};
+	}
+
+	if (normalizedWorkspaceTab === "budget") {
+		return {
+			actionLabel: "Sync budget",
+			action: "audit",
+			description:
+				"Viya will review budget evidence from bookings, receipts, and Vault.",
+			kind: "agent",
+			module: "budget",
+			prompt:
+				"Review this trip budget against the planning ceiling. Use confirmed bookings, uploaded receipts, Vault evidence, manual expenses, remaining spend, and daily safe spend. Do not invent confirmed costs.",
+			successMessage: "Viya synced the budget from workspace evidence.",
+		};
+	}
+
+	if (normalizedWorkspaceTab === "readiness") {
+		return {
+			actionLabel: "Complete readiness",
+			action: "audit",
+			description:
+				"Viya will audit checklist items against uploaded trip evidence.",
+			kind: "agent",
+			module: "readiness",
+			prompt:
+				"Audit this trip for travel preparedness. Use itinerary, budget, bookings, Vault files, uploaded documents, receipt evidence, risks, and open checklist items. Mark only evidence-backed readiness items as complete and create only missing reviewable actions.",
+			successMessage: "Viya updated readiness from workspace evidence.",
+		};
+	}
+
+	if (normalizedWorkspaceTab === "vault") {
+		return {
+			actionLabel: "Upload files",
+			description:
+				"Add confirmations, passes, receipts, and notes so Viya can sync the workspace.",
+			kind: "upload",
+		};
 	}
 
 	return null;
@@ -405,6 +496,8 @@ export function ViyaChatScreen() {
 	const [pendingVaultReview, setPendingVaultReview] =
 		useState<PendingTripSyncReview | null>(null);
 	const [isConfirmingVaultUpload, setIsConfirmingVaultUpload] = useState(false);
+	const [isRunningWorkspaceModuleAction, setIsRunningWorkspaceModuleAction] =
+		useState(false);
 	const scrollViewRef = useRef<NativeScrollView>(null);
 	const chatSessionIdRef = useRef(0);
 	const hasAppliedRouteThreadResetRef = useRef(false);
@@ -453,7 +546,11 @@ export function ViyaChatScreen() {
 		api.trips.createTripFromBlueprint
 	);
 	const dismissPendingQuestion = useMutation(api.chat.dismissPendingQuestion);
+	const generateTripAgentDraft = useAction(
+		api.ai.tripAgent.generateTripAgentDraft
+	);
 	const linkThreadToTrip = useMutation(api.chat.linkThreadToTrip);
+	const applyTripAgentDraft = useMutation(api.ai.tripAgent.applyTripAgentDraft);
 	const sendMessage = useMutation(api.chat.sendMessage);
 	const confirmTripSyncReview = useMutation(api.vault.confirmTripSyncReview);
 	const {
@@ -541,6 +638,41 @@ export function ViyaChatScreen() {
 	const shouldShowInputLimit = input.length >= chatInputWarningThreshold;
 	const messageCount = displayedMessages.length;
 	const canSendMessage = Boolean(input.trim() && !isAwaitingViya);
+	const workspaceModuleAction =
+		chatMode === "trip" && currentTripId
+			? getWorkspaceModuleActionConfig(routeWorkspaceTab)
+			: null;
+	const isWorkspaceModuleActionDisabled = Boolean(
+		isRunningWorkspaceModuleAction ||
+			isAwaitingViya ||
+			isUploadingVaultFile ||
+			isConfirmingVaultUpload
+	);
+	const workspaceActionSuggestion = workspaceModuleAction
+		? {
+				accent: workspaceModuleAction.kind === "upload" ? "#FF9F0A" : "#0A84FF",
+				icon:
+					workspaceModuleAction.kind === "upload"
+						? ("cloud-upload-outline" as const)
+						: ("sparkles-outline" as const),
+				isDisabled: isWorkspaceModuleActionDisabled,
+				isLoading: isRunningWorkspaceModuleAction,
+				onPress: () => {
+					runAsyncTask(handleWorkspaceModuleActionPress());
+				},
+				soft:
+					workspaceModuleAction.kind === "upload"
+						? "rgba(255, 159, 10, 0.14)"
+						: "rgba(10, 132, 255, 0.12)",
+				summary: workspaceModuleAction.description,
+				title: workspaceModuleAction.actionLabel,
+			}
+		: undefined;
+	const displayedPromptSuggestions = workspaceModuleAction
+		? promptSuggestions.filter(
+				(suggestion) => suggestion.title !== workspaceModuleAction.actionLabel
+			)
+		: promptSuggestions;
 
 	useEffect(() => {
 		let isMounted = true;
@@ -890,6 +1022,45 @@ export function ViyaChatScreen() {
 		}
 	};
 
+	const handleWorkspaceModuleActionPress = async () => {
+		if (!(workspaceModuleAction && currentTripId)) {
+			return;
+		}
+
+		if (workspaceModuleAction.kind === "upload") {
+			await handleFileUploadPress();
+			return;
+		}
+
+		setErrorMessage(null);
+		setNoticeMessage(null);
+		setIsRunningWorkspaceModuleAction(true);
+
+		try {
+			const draft = await generateTripAgentDraft({
+				action: workspaceModuleAction.action,
+				module: workspaceModuleAction.module,
+				prompt: workspaceModuleAction.prompt,
+				tripId: currentTripId,
+			});
+
+			if (!draft) {
+				throw new Error("Viya could not generate this workspace update.");
+			}
+
+			await applyTripAgentDraft({ draftId: draft._id });
+			setNoticeMessage(workspaceModuleAction.successMessage);
+		} catch (error) {
+			setErrorMessage(
+				error instanceof Error
+					? error.message
+					: "Viya could not update this workspace module."
+			);
+		} finally {
+			setIsRunningWorkspaceModuleAction(false);
+		}
+	};
+
 	const handleConfirmVaultUpload = async () => {
 		if (!(pendingVaultReview && currentTripId)) {
 			return;
@@ -1073,8 +1244,9 @@ export function ViyaChatScreen() {
 					{shouldShowEmptySuggestions ? (
 						<View>
 							<ViyaPromptSuggestionsCard
+								actionSuggestion={workspaceActionSuggestion}
 								onSubmitSuggestion={handleSubmit}
-								promptSuggestions={promptSuggestions}
+								promptSuggestions={displayedPromptSuggestions}
 							/>
 						</View>
 					) : null}

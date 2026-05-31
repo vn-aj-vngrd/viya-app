@@ -1,13 +1,26 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { calculateReadinessScore, type ReadinessItem } from "@viya-app/domain";
 
+import { getSingaporeDemoVaultExtraction } from "../src/ai/singapore-demo-fixtures";
 import {
+	buildFallbackItineraryDraft,
 	buildItineraryDayRecords,
 	buildItineraryItemRecords,
 	buildSimpleDraftRecords,
+	ensureDetailedItineraryDraft,
+	getReadinessCompletionPatch,
 	type TripAgentDraftPayload,
 	tripAgentDraftPayloadSchema,
 } from "../src/ai/trip-agent-draft-apply";
+
+const singaporeFixtureFiles = [
+	"singapore-flight-confirmation.txt",
+	"singapore-hotel-voucher.txt",
+	"singapore-tech-week-pass.txt",
+	"singapore-expense-receipt.txt",
+	"singapore-readiness-note.txt",
+] as const;
 
 const createPayload = (
 	overrides: Partial<TripAgentDraftPayload> = {}
@@ -19,6 +32,7 @@ const createPayload = (
 	places: [],
 	rationale: "Test rationale",
 	readinessItems: [],
+	readinessUpdates: [],
 	risks: [],
 	title: "Test draft",
 	...overrides,
@@ -79,6 +93,151 @@ describe("trip agent draft apply helpers", () => {
 		assert.equal(item?.title, "Draft itinerary item");
 	});
 
+	it("renumbers generic day titles when appending itinerary days", () => {
+		const payload = createPayload({
+			days: [
+				{
+					date: "2026-06-03",
+					estimatedCost: 1000,
+					items: [],
+					pace: "balanced",
+					summary: "Arrival and orientation",
+					theme: "Arrival",
+					title: "Day 1",
+					weatherNote: "",
+				},
+			],
+		});
+
+		const [day] = buildItineraryDayRecords({
+			existingDayCount: 2,
+			payload,
+			tripId: "trip-1",
+		});
+
+		assert.equal(day?.dayNumber, 3);
+		assert.equal(day?.title, "Day 3");
+	});
+
+	it("builds complete fallback itinerary details for every trip date", () => {
+		const payload = buildFallbackItineraryDraft({
+			budgetAmount: 90_000,
+			destination: "Singapore",
+			endDate: "2026-10-01",
+			startDate: "2026-09-28",
+			title: "Singapore Tech Week",
+		});
+
+		assert.equal(payload.days.length, 4);
+		assert.deepEqual(
+			payload.days.map((day) => day.date),
+			["2026-09-28", "2026-09-29", "2026-09-30", "2026-10-01"]
+		);
+		for (const day of payload.days) {
+			assert.ok(day.summary.length > 0);
+			assert.ok(day.theme.length > 0);
+			assert.ok(day.estimatedCost > 0);
+			assert.ok(day.items.length >= 3);
+			for (const item of day.items) {
+				assert.ok(item.title.length > 0);
+				assert.ok(item.description.length > 0);
+				assert.ok(item.startTime.length > 0);
+				assert.ok(item.endTime.length > 0);
+				assert.ok(item.durationMinutes > 0);
+				assert.ok(item.locationName.length > 0);
+				assert.ok(item.aiReason.length > 0);
+			}
+		}
+	});
+
+	it("expands sparse AI itinerary drafts into natural full-day plans", () => {
+		const payload = ensureDetailedItineraryDraft(
+			createPayload({
+				days: [
+					{
+						date: "2026-09-29",
+						estimatedCost: 7000,
+						items: [
+							{
+								aiReason: "AI anchor",
+								category: "activity",
+								description: "Attend the main conference block.",
+								durationMinutes: 180,
+								endTime: "12:00",
+								estimatedCost: 0,
+								locationName: "Conference venue",
+								priority: "high",
+								startTime: "09:00",
+								title: "Tech Week keynote",
+							},
+							{
+								aiReason: "AI meal",
+								category: "meal",
+								description: "Keep lunch close to the venue.",
+								durationMinutes: 75,
+								endTime: "13:30",
+								estimatedCost: 1500,
+								locationName: "Conference district",
+								priority: "medium",
+								startTime: "12:15",
+								title: "Nearby conference lunch",
+							},
+						],
+						pace: "moderate",
+						summary: "Conference anchor.",
+						theme: "Conference day",
+						title: "Conference day",
+						weatherNote: "",
+					},
+				],
+				rationale: "Sparse AI draft",
+				title: "Sparse itinerary",
+			}),
+			{
+				budgetAmount: 90_000,
+				destination: "Singapore",
+				endDate: "2026-10-01",
+				startDate: "2026-09-28",
+				title: "Singapore Tech Week",
+			}
+		);
+
+		assert.equal(payload.days.length, 4);
+		assert.deepEqual(
+			payload.days.map((day) => day.date),
+			["2026-09-28", "2026-09-29", "2026-09-30", "2026-10-01"]
+		);
+		assert.ok(payload.days[0]?.items.length >= 5);
+		assert.ok(payload.days[1]?.items.length >= 5);
+		assert.ok(payload.days[2]?.items.length >= 5);
+		assert.ok(payload.days[3]?.items.length >= 4);
+		assert.equal(payload.days[1]?.items[0]?.title, "Tech Week keynote");
+		assert.ok(
+			payload.changes.some(
+				(change) => change.title === "Full-day itinerary detail"
+			)
+		);
+	});
+
+	it("builds a complete flexible-length fallback itinerary when dates are unset", () => {
+		const payload = buildFallbackItineraryDraft({
+			budgetAmount: 90_000,
+			destination: "Singapore",
+			endDate: "",
+			startDate: "",
+			summary:
+				"Mode: Guided trip setup. Destination: Singapore. Trip length: 3-4 days. Pace: Balanced.",
+			title: "Singapore Trip",
+		});
+
+		assert.equal(payload.days.length, 4);
+		assert.deepEqual(
+			payload.days.map((day) => day.title),
+			["Day 1", "Day 2", "Day 3", "Day 4"]
+		);
+		assert.ok(payload.days.every((day) => day.items.length >= 3));
+	});
+
 	it("limits generated records and keeps only positive budget amounts", () => {
 		const payload = createPayload({
 			bookingTargets: Array.from({ length: 8 }, (_, index) => ({
@@ -119,5 +278,108 @@ describe("trip agent draft apply helpers", () => {
 		assert.deepEqual(payload.bookingTargets, []);
 		assert.deepEqual(payload.days, []);
 		assert.deepEqual(payload.readinessItems, []);
+		assert.deepEqual(payload.readinessUpdates, []);
+	});
+
+	it("marks matching readiness items done from explicit AI updates", () => {
+		const patch = getReadinessCompletionPatch({
+			evidenceText: "",
+			item: {
+				category: "documents",
+				description: "Confirm SG Arrival Card before departure.",
+				status: "todo",
+				title: "Submit SG Arrival Card",
+			},
+			readinessUpdates: [
+				{
+					category: "documents",
+					reason: "SG Arrival Card confirmation was uploaded to Vault.",
+					status: "done",
+					title: "Submit SG Arrival Card",
+				},
+			],
+		});
+
+		assert.deepEqual(patch, {
+			aiReason: "SG Arrival Card confirmation was uploaded to Vault.",
+			status: "done",
+		});
+	});
+
+	it("marks matching readiness items done from workspace evidence", () => {
+		const patch = getReadinessCompletionPatch({
+			evidenceText:
+				"Vault document singapore-tech-week-pass.txt confirms Tech Week event badge pickup. Receipt paid in SGD.",
+			item: {
+				category: "documents",
+				description:
+					"Keep Tech Week event pass and badge pickup details ready.",
+				status: "todo",
+				title: "Prepare event badge",
+			},
+			readinessUpdates: [],
+		});
+
+		assert.deepEqual(patch, {
+			aiReason: "Completed by Viya from uploaded workspace evidence.",
+			status: "done",
+		});
+	});
+
+	it("can complete all Singapore readiness categories from fixture evidence", () => {
+		const suggestions = singaporeFixtureFiles.flatMap(
+			(fileName) =>
+				getSingaporeDemoVaultExtraction(fileName)?.readinessSuggestions ?? []
+		);
+		const evidenceText = JSON.stringify(
+			singaporeFixtureFiles.map((fileName) =>
+				getSingaporeDemoVaultExtraction(fileName)
+			)
+		);
+		const completedItems = suggestions.map((suggestion, index) => {
+			const item = {
+				aiReason: suggestion.reason,
+				assignedToMemberId: null,
+				category: suggestion.category,
+				description: suggestion.reason,
+				dueDate: "2026-09-28",
+				id: `readiness-${index}`,
+				priority: suggestion.priority,
+				source: "ai",
+				status: "todo",
+				title: suggestion.title,
+				tripId: "trip-singapore",
+			} satisfies ReadinessItem;
+			const patch = getReadinessCompletionPatch({
+				evidenceText,
+				item,
+				readinessUpdates: [],
+			});
+
+			assert.equal(patch?.status, "done", suggestion.title);
+
+			return {
+				...item,
+				...patch,
+			} satisfies ReadinessItem;
+		});
+		const readiness = calculateReadinessScore(completedItems);
+
+		assert.equal(readiness.overallScore, 100);
+	});
+
+	it("keeps readiness items open when evidence is missing", () => {
+		const patch = getReadinessCompletionPatch({
+			evidenceText: "Vault has a restaurant note only.",
+			item: {
+				category: "documents",
+				description: "Confirm hotel voucher.",
+				status: "todo",
+				title: "Save hotel voucher",
+			},
+			readinessUpdates: [],
+		});
+
+		assert.equal(patch, null);
 	});
 });

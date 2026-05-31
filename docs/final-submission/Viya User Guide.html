@@ -1,16 +1,23 @@
 <!doctype html>
 <html>
-<head>
-	<meta charset="utf-8">
-	<title>Viya User Guide</title>
-	<style>
-		@page { margin: 0; size: A4; }
-		* { box-sizing: border-box; }
-		body {
-			background: #e8edf3;
-			color: #121417;
-			font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	<head>
+		<meta charset="utf-8">
+		<title>Viya User Guide</title>
+		<style>
+		@page {
 			margin: 0;
+			size: A4;
+		}
+		* {
+			box-sizing: border-box;
+		}
+		body {
+			margin: 0;
+			font-family:
+				Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+				"Segoe UI", sans-serif;
+			color: #121417;
+			background: #e8edf3;
 		}
 		.page {
 			background: #f7f8fa;
@@ -25,13 +32,17 @@
 			width: 210mm;
 		}
 		.cover {
-			align-items: center;
-			background:
-				radial-gradient(circle at 82% 12%, rgba(10, 132, 255, 0.16), transparent 28%),
-				linear-gradient(145deg, #ffffff 0%, #f3f7fb 50%, #eef3f8 100%);
 			display: grid;
 			grid-template-columns: 1.05fr 0.95fr;
 			gap: 20px;
+			align-items: center;
+			background:
+				radial-gradient(
+					circle at 82% 12%,
+					rgba(10, 132, 255, 0.16),
+					transparent 28%
+				),
+				linear-gradient(145deg, #ffffff 0%, #f3f7fb 50%, #eef3f8 100%);
 		}
 		.cover-copy {
 			display: flex;
@@ -39,48 +50,56 @@
 			gap: 16px;
 		}
 		.eyebrow {
-			color: #0a84ff;
+			margin: 0;
 			font-size: 11px;
 			font-weight: 800;
-			letter-spacing: 0.08em;
-			margin: 0;
+			color: #0a84ff;
 			text-transform: uppercase;
+			letter-spacing: 0.08em;
 		}
-		h1, h2, h3, p { margin: 0; }
+		h1,
+		h2,
+		h3,
+		p {
+			margin: 0;
+		}
 		h1 {
 			font-size: 76px;
-			letter-spacing: 0;
 			line-height: 0.92;
+			letter-spacing: 0;
 		}
 		h2 {
-			font-size: 38px;
-			letter-spacing: 0;
-			line-height: 1.02;
 			max-width: 560px;
+			font-size: 38px;
+			line-height: 1.02;
+			letter-spacing: 0;
 		}
 		h3 {
+			margin-bottom: 10px;
 			font-size: 18px;
 			line-height: 1.18;
-			margin-bottom: 10px;
 		}
 		p {
-			color: #626873;
 			font-size: 15px;
 			line-height: 1.55;
+			color: #626873;
 		}
 		.dek {
-			color: #31363d;
+			max-width: 430px;
 			font-size: 23px;
 			font-weight: 650;
 			line-height: 1.22;
-			max-width: 430px;
+			color: #31363d;
 		}
-		.cover-card, .callout, .tip-band, .footer-note {
+		.cover-card,
+		.callout,
+		.tip-band,
+		.footer-note {
+			padding: 16px;
 			background: #ffffff;
 			border: 1px solid #dde3ea;
 			border-radius: 18px;
 			box-shadow: 0 12px 32px rgba(24, 37, 56, 0.07);
-			padding: 16px;
 		}
 		.cover-card {
 			display: flex;
@@ -88,109 +107,118 @@
 			gap: 8px;
 			max-width: 430px;
 		}
-		.cover-card span, .callout, .tip-band, .footer-note {
-			color: #4c535d;
+		.cover-card span,
+		.callout,
+		.tip-band,
+		.footer-note {
 			font-size: 14px;
 			line-height: 1.45;
+			color: #4c535d;
 		}
 		.meta-grid {
 			display: grid;
-			gap: 10px;
 			grid-template-columns: repeat(3, 1fr);
+			gap: 10px;
 			margin-top: 8px;
 		}
 		.meta-grid div {
+			padding: 12px;
 			background: rgba(255, 255, 255, 0.72);
 			border: 1px solid #e0e5eb;
 			border-radius: 14px;
-			padding: 12px;
 		}
 		.meta-grid span {
-			color: #7b828d;
 			display: block;
 			font-size: 9px;
 			font-weight: 800;
-			letter-spacing: 0.08em;
+			color: #7b828d;
 			text-transform: uppercase;
+			letter-spacing: 0.08em;
 		}
 		.meta-grid strong {
 			display: block;
+			margin-top: 5px;
 			font-size: 12px;
 			line-height: 1.25;
-			margin-top: 5px;
 		}
 		.phone {
 			align-self: center;
+			width: 245px;
+			padding: 8px;
+			margin: 0;
+			overflow: hidden;
 			background: #101114;
 			border-radius: 35px;
 			box-shadow: 0 20px 54px rgba(21, 31, 46, 0.24);
-			margin: 0;
-			overflow: hidden;
-			padding: 8px;
-			width: 245px;
 		}
 		.phone img {
-			border-radius: 28px;
 			display: block;
-			height: auto;
 			width: 100%;
+			height: auto;
+			border-radius: 28px;
 		}
 		.phone figcaption {
-			background: #101114;
-			color: #d8dde5;
+			padding: 9px 7px 5px;
 			font-size: 10px;
 			line-height: 1.35;
-			padding: 9px 7px 5px;
+			color: #d8dde5;
+			background: #101114;
 		}
-		.cover .phone { width: 255px; }
+		.cover .phone {
+			width: 255px;
+		}
 		.header-row {
-			align-items: end;
 			display: grid;
-			gap: 18px;
 			grid-template-columns: 1fr 235px;
+			gap: 18px;
+			align-items: end;
 		}
 		.split {
 			display: grid;
-			gap: 24px;
 			grid-template-columns: 1fr 300px;
+			gap: 24px;
 		}
 		.split.visual {
-			align-items: center;
 			grid-template-columns: 300px 1fr;
+			align-items: center;
 		}
-		.pattern-panel, .checklist {
+		.pattern-panel,
+		.checklist {
+			padding: 20px;
+			color: #fff;
 			background: #101114;
 			border-radius: 22px;
-			color: #fff;
-			padding: 20px;
 		}
 		.pattern-panel p {
-			color: #dce1e7;
-			font-size: 12px;
 			margin-top: 12px;
+			font-size: 12px;
+			color: #dce1e7;
 		}
 		.steps {
-			counter-reset: item;
 			display: grid;
 			gap: 10px;
-			list-style: none;
-			margin: 20px 0 0;
 			padding: 0;
+			margin: 20px 0 0;
+			list-style: none;
+			counter-reset: item;
 		}
 		.steps li {
+			padding: 13px 14px;
+			font-size: 13px;
+			line-height: 1.42;
+			color: #565d67;
 			background: #ffffff;
 			border: 1px solid #dfe5eb;
 			border-radius: 15px;
-			color: #565d67;
-			font-size: 13px;
-			line-height: 1.42;
-			padding: 13px 14px;
 		}
-		.steps strong, .bullets strong { color: #16191d; }
+		.steps strong,
+		.bullets strong {
+			color: #16191d;
+		}
 		.phone-grid {
-			align-items: start;
 			display: grid;
 			gap: 24px;
+			align-items: start;
 			justify-content: center;
 		}
 		.phone-grid.two {
@@ -202,15 +230,15 @@
 			gap: 9px;
 		}
 		.checklist strong {
-			font-size: 15px;
 			margin-bottom: 3px;
+			font-size: 15px;
 		}
 		.checklist span {
-			border-top: 1px solid rgba(255, 255, 255, 0.14);
-			color: #dce1e7;
+			padding-top: 9px;
 			font-size: 12px;
 			line-height: 1.3;
-			padding-top: 9px;
+			color: #dce1e7;
+			border-top: 1px solid rgba(255, 255, 255, 0.14);
 		}
 		.tip-band {
 			background: #eef7ff;
@@ -220,49 +248,49 @@
 		.bullets {
 			display: grid;
 			gap: 9px;
-			list-style: none;
-			margin: 0 0 24px;
 			padding: 0;
+			margin: 0 0 24px;
+			list-style: none;
 		}
 		.bullets li {
+			padding: 11px 13px;
+			font-size: 13px;
+			line-height: 1.4;
+			color: #4e5560;
 			background: #ffffff;
 			border: 1px solid #e0e5eb;
 			border-radius: 13px;
-			color: #4e5560;
-			font-size: 13px;
-			line-height: 1.4;
-			padding: 11px 13px;
 		}
 		.flow {
 			display: grid;
-			gap: 14px;
 			grid-template-columns: repeat(3, 1fr);
+			gap: 14px;
 			margin-top: 16px;
 		}
 		.flow div {
+			min-height: 142px;
+			padding: 16px;
 			background: #ffffff;
 			border: 1px solid #dfe5eb;
 			border-radius: 18px;
-			min-height: 142px;
-			padding: 16px;
 		}
 		.flow span {
-			align-items: center;
-			background: #0a84ff;
-			border-radius: 999px;
-			color: #fff;
 			display: flex;
+			align-items: center;
+			justify-content: center;
+			width: 30px;
+			height: 30px;
+			margin-bottom: 18px;
 			font-size: 13px;
 			font-weight: 800;
-			height: 30px;
-			justify-content: center;
-			margin-bottom: 18px;
-			width: 30px;
+			color: #fff;
+			background: #0a84ff;
+			border-radius: 999px;
 		}
 		.flow strong {
 			display: block;
-			font-size: 17px;
 			margin-bottom: 8px;
+			font-size: 17px;
 		}
 		.flow p {
 			font-size: 12px;
@@ -274,323 +302,456 @@
 		.footer-note {
 			margin-top: 14px;
 		}
-	</style>
-</head>
-<body>
-	<section class="page cover">
-		<div class="cover-copy">
-			<p class="eyebrow">User guide</p>
-			<h1>Viya</h1>
-			<p class="dek">From getting started and Google login to a ready AI travel workspace.</p>
-			<div class="cover-card">
-				<strong>Guide scope</strong>
-				<span>Start on the getting-started screen, sign in with Google, choose the demo account, then use Home, Ask Viya, Workspace, Itinerary, Budget, Vault, and Readiness.</span>
+		</style>
+	</head>
+	<body>
+		<section class="page cover">
+			<div class="cover-copy">
+				<p class="eyebrow">User guide</p>
+				<h1>Viya</h1>
+				<p class="dek">
+					From getting started and Google login to a ready AI travel workspace.
+				</p>
+				<div class="cover-card">
+					<strong>Guide scope</strong>
+					<span
+						>Start on the getting-started screen, sign in with Google, choose
+						the demo account, then use Home, Ask Viya, Workspace, Itinerary,
+						Budget, Vault, and Readiness.</span
+					>
+				</div>
+				<div class="meta-grid">
+					<div><span>Audience</span><strong>Travelers and judges</strong></div>
+					<div>
+						<span>Scenario shown</span><strong>Singapore Tech Week demo</strong>
+					</div>
+					<div><span>Source</span><strong>Live iOS Simulator</strong></div>
+				</div>
 			</div>
-			<div class="meta-grid">
-				<div><span>Audience</span><strong>Travelers and judges</strong></div>
-				<div><span>Scenario shown</span><strong>Singapore Tech Week demo</strong></div>
-				<div><span>Source</span><strong>Live iOS Simulator</strong></div>
+
+			<figure class="phone">
+				<img
+					alt="Start here: tap Get started from the Viya intro carousel."
+					src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/gettingStarted.jpg"
+				>
+				<figcaption>
+					Start here: tap Get started from the Viya intro carousel.
+				</figcaption>
+			</figure>
+		</section>
+
+		<section class="page">
+			<div class="split">
+				<div>
+					<p class="eyebrow">1. Get started</p>
+					<h2>Begin from the intro, then open sign-in.</h2>
+					<p>
+						Viya starts with a short carousel that explains the full trip
+						lifecycle: dream it, get ready, and remember it. Tap
+						<strong>Get started</strong>
+						to open authentication.
+					</p>
+					<ol class="steps">
+						<li>
+							<strong>Review the intro.</strong>
+							The carousel shows planning, preparation, and recap.
+						</li>
+						<li>
+							<strong>Tap Get started.</strong>
+							The sign-in sheet opens without leaving the app context.
+						</li>
+						<li>
+							<strong>Choose Google.</strong>
+							For this demo, use Continue with Google.
+						</li>
+						<li>
+							<strong>Return to Home.</strong>
+							After login, Viya loads the personalized dashboard.
+						</li>
+					</ol>
+				</div>
+
+				<figure class="phone">
+					<img
+						alt="Getting-started carousel with Get started action."
+						src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/gettingStarted.jpg"
+					>
+					<figcaption>
+						Getting-started carousel with Get started action.
+					</figcaption>
+				</figure>
 			</div>
-		</div>
-		
-	<figure class="phone">
-		<img alt="Start here: tap Get started from the Viya intro carousel." src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/gettingStarted.jpg">
-		<figcaption>Start here: tap Get started from the Viya intro carousel.</figcaption>
-	</figure>
+		</section>
 
-	</section>
-	
-
-	<section class="page">
-		<div class="split">
-			<div>
-				<p class="eyebrow">1. Get started</p>
-				<h2>Begin from the intro, then open sign-in.</h2>
-				<p>Viya starts with a short carousel that explains the full trip lifecycle: dream it, get ready, and remember it. Tap <strong>Get started</strong> to open authentication.</p>
-				<ol class="steps">
-					<li><strong>Review the intro.</strong> The carousel shows planning, preparation, and recap.</li>
-					<li><strong>Tap Get started.</strong> The sign-in sheet opens without leaving the app context.</li>
-					<li><strong>Choose Google.</strong> For this demo, use Continue with Google.</li>
-					<li><strong>Return to Home.</strong> After login, Viya loads the personalized dashboard.</li>
-				</ol>
+		<section class="page">
+			<div class="header-row">
+				<div>
+					<p class="eyebrow">2. Sign in</p>
+					<h2>Use Google and choose the saved account.</h2>
+					<p>
+						Tap <strong>Continue with Google</strong>. iOS may ask permission
+						for Expo to use google.com for sign-in. Continue, then choose
+						<strong>vanajvanguardia@gmail.com</strong>
+						from the Google account picker.
+					</p>
+				</div>
+				<div class="callout">
+					This guide uses the already signed-in Google account on the simulator:
+					vanajvanguardia@gmail.com.
+				</div>
 			</div>
-			
-	<figure class="phone">
-		<img alt="Getting-started carousel with Get started action." src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/gettingStarted.jpg">
-		<figcaption>Getting-started carousel with Get started action.</figcaption>
-	</figure>
+			<div class="phone-grid two">
+				<figure class="phone">
+					<img
+						alt="Sign-in sheet with Continue with Google."
+						src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/signIn.jpg"
+					>
+					<figcaption>Sign-in sheet with Continue with Google.</figcaption>
+				</figure>
 
-		</div>
-	</section>
-	
-
-	<section class="page">
-		<div class="header-row">
-			<div>
-				<p class="eyebrow">2. Sign in</p>
-				<h2>Use Google and choose the saved account.</h2>
-				<p>Tap <strong>Continue with Google</strong>. iOS may ask permission for Expo to use google.com for sign-in. Continue, then choose <strong>vanajvanguardia@gmail.com</strong> from the Google account picker.</p>
+				<figure class="phone">
+					<img
+						alt="Choose the saved Google account."
+						src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/googlePicker.jpg"
+					>
+					<figcaption>Choose the saved Google account.</figcaption>
+				</figure>
 			</div>
-			<div class="callout">This guide uses the already signed-in Google account on the simulator: vanajvanguardia@gmail.com.</div>
-		</div>
-		<div class="phone-grid two">
-			
-	<figure class="phone">
-		<img alt="Sign-in sheet with Continue with Google." src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/signIn.jpg">
-		<figcaption>Sign-in sheet with Continue with Google.</figcaption>
-	</figure>
+		</section>
 
-			
-	<figure class="phone">
-		<img alt="Choose the saved Google account." src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/googlePicker.jpg">
-		<figcaption>Choose the saved Google account.</figcaption>
-	</figure>
-
-		</div>
-	</section>
-	
-
-	<section class="page">
-		<div class="header-row">
-			<div>
-				<p class="eyebrow">3. Confirm access</p>
-				<h2>Finish Google login and land on Home.</h2>
-				<p>Accept the iOS sign-in permission if shown, then tap <strong>Continue</strong> on Google's confirmation screen. Viya returns to Home after authentication completes.</p>
+		<section class="page">
+			<div class="header-row">
+				<div>
+					<p class="eyebrow">3. Confirm access</p>
+					<h2>Finish Google login and land on Home.</h2>
+					<p>
+						Accept the iOS sign-in permission if shown, then tap
+						<strong>Continue</strong>
+						on Google's confirmation screen. Viya returns to Home after
+						authentication completes.
+					</p>
+				</div>
+				<div class="checklist">
+					<strong>Login screens captured</strong>
+					<span>Viya sign-in sheet</span>
+					<span>iOS Google permission</span>
+					<span>Google account picker</span>
+					<span>Google confirmation</span>
+					<span>Post-login Home</span>
+				</div>
 			</div>
-			<div class="checklist">
-				<strong>Login screens captured</strong>
-				<span>Viya sign-in sheet</span>
-				<span>iOS Google permission</span>
-				<span>Google account picker</span>
-				<span>Google confirmation</span>
-				<span>Post-login Home</span>
+			<div class="phone-grid two">
+				<figure class="phone">
+					<img
+						alt="iOS permission prompt for Google sign-in."
+						src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/googlePermission.jpg"
+					>
+					<figcaption>iOS permission prompt for Google sign-in.</figcaption>
+				</figure>
+
+				<figure class="phone">
+					<img
+						alt="Google confirmation before returning to Viya."
+						src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/googleContinue.jpg"
+					>
+					<figcaption>Google confirmation before returning to Viya.</figcaption>
+				</figure>
 			</div>
-		</div>
-		<div class="phone-grid two">
-			
-	<figure class="phone">
-		<img alt="iOS permission prompt for Google sign-in." src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/googlePermission.jpg">
-		<figcaption>iOS permission prompt for Google sign-in.</figcaption>
-	</figure>
+		</section>
 
-			
-	<figure class="phone">
-		<img alt="Google confirmation before returning to Viya." src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/googleContinue.jpg">
-		<figcaption>Google confirmation before returning to Viya.</figcaption>
-	</figure>
-
-		</div>
-	</section>
-	
-
-	<section class="page">
-		<div class="header-row">
-			<div>
-				<p class="eyebrow">4. Home</p>
-				<h2>Start with context, not a blank form.</h2>
-				<p>Home shows active trips, suggested prompts, and destination ideas. Use it to continue an existing trip or start a new one from inspiration.</p>
+		<section class="page">
+			<div class="header-row">
+				<div>
+					<p class="eyebrow">4. Home</p>
+					<h2>Start with context, not a blank form.</h2>
+					<p>
+						Home shows active trips, suggested prompts, and destination ideas.
+						Use it to continue an existing trip or start a new one from
+						inspiration.
+					</p>
+				</div>
+				<div class="callout">
+					Best first action: open the active trip if one exists. Otherwise,
+					start a trip from the create flow or ask Viya.
+				</div>
 			</div>
-			<div class="callout">Best first action: open the active trip if one exists. Otherwise, start a trip from the create flow or ask Viya.</div>
-		</div>
-		<div class="phone-grid two">
-			
-	<figure class="phone">
-		<img alt="Home immediately after sign-in." src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/loginHome.jpg">
-		<figcaption>Home immediately after sign-in.</figcaption>
-	</figure>
+			<div class="phone-grid two">
+				<figure class="phone">
+					<img
+						alt="Home immediately after sign-in."
+						src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/loginHome.jpg"
+					>
+					<figcaption>Home immediately after sign-in.</figcaption>
+				</figure>
 
-			
-	<figure class="phone">
-		<img alt="Create flow asking for destination first." src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/create.jpg">
-		<figcaption>Create flow asking for destination first.</figcaption>
-	</figure>
-
-		</div>
-	</section>
-	
-
-	<section class="page">
-		<div class="header-row">
-			<div>
-				<p class="eyebrow">5. Create a trip</p>
-				<h2>Give Viya the basics, then let the workspace take over.</h2>
-				<p>The trip setup flow collects the destination, travel window, budget comfort, traveler context, pace, and preferences. Keep answers practical; Viya can refine details later.</p>
+				<figure class="phone">
+					<img
+						alt="Create flow asking for destination first."
+						src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/create.jpg"
+					>
+					<figcaption>Create flow asking for destination first.</figcaption>
+				</figure>
 			</div>
-			<div class="checklist">
-				<strong>Helpful inputs</strong>
-				<span>Destination or region</span>
-				<span>Dates or rough timing</span>
-				<span>Budget ceiling</span>
-				<span>Trip purpose</span>
-				<span>Pace and must-haves</span>
+		</section>
+
+		<section class="page">
+			<div class="header-row">
+				<div>
+					<p class="eyebrow">5. Create a trip</p>
+					<h2>Give Viya the basics, then let the workspace take over.</h2>
+					<p>
+						The trip setup flow collects the destination, travel window, budget
+						comfort, traveler context, pace, and preferences. Keep answers
+						practical; Viya can refine details later.
+					</p>
+				</div>
+				<div class="checklist">
+					<strong>Helpful inputs</strong>
+					<span>Destination or region</span>
+					<span>Dates or rough timing</span>
+					<span>Budget ceiling</span>
+					<span>Trip purpose</span>
+					<span>Pace and must-haves</span>
+				</div>
 			</div>
-		</div>
-		<div class="tip-band">
-			<strong>Demo example:</strong> "Plan my Singapore group business-conference reward trip for Tech Week. Keep it polished but not exhausting, and handle flights, hotel, event pass, budget, itinerary, readiness, and one victory-lap moment."
-		</div>
-		<div class="phone-grid two">
-			
-	<figure class="phone">
-		<img alt="Destination setup starts the structured trip workspace." src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/create.jpg">
-		<figcaption>Destination setup starts the structured trip workspace.</figcaption>
-	</figure>
-
-			
-	<figure class="phone">
-		<img alt="After creation, the trip becomes an overview with modules." src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/overview.jpg">
-		<figcaption>After creation, the trip becomes an overview with modules.</figcaption>
-	</figure>
-
-		</div>
-	</section>
-	
-
-	<section class="page">
-		<div class="header-row">
-			<div>
-				<p class="eyebrow">6. Ask Viya</p>
-				<h2>Use AI as an operator for the trip.</h2>
-				<p>Ask Viya from the global chat or inside a trip. Inside a trip, Viya uses the current workspace as context, so prompts can be short and specific.</p>
+			<div class="tip-band">
+				<strong>Demo example:</strong>
+				"Plan my Singapore group business-conference reward trip for Tech Week.
+				Keep it polished but not exhausting, and handle flights, hotel, event
+				pass, budget, itinerary, readiness, and one victory-lap moment."
 			</div>
-			<div class="callout">Viya should not silently overwrite trip data. Review suggested changes before applying them.</div>
-		</div>
-		<div class="split visual">
-			
-	<figure class="phone">
-		<img alt="Trip-scoped Ask Viya screen with module prompts." src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/ask.jpg">
-		<figcaption>Trip-scoped Ask Viya screen with module prompts.</figcaption>
-	</figure>
+			<div class="phone-grid two">
+				<figure class="phone">
+					<img
+						alt="Destination setup starts the structured trip workspace."
+						src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/create.jpg"
+					>
+					<figcaption>
+						Destination setup starts the structured trip workspace.
+					</figcaption>
+				</figure>
 
-			<div>
-				<h3>Useful prompts</h3>
-				<ul class="bullets">
-					<li>Build a realistic itinerary from this trip profile.</li>
-					<li>Review this budget against my planning ceiling.</li>
-					<li>Organize Vault and identify missing proof.</li>
-					<li>Audit readiness before departure.</li>
-					<li>What is the smartest next thing to check?</li>
-				</ul>
-				<h3>Good AI behavior</h3>
-				<ul class="bullets">
-					<li>Asks only for missing context.</li>
-					<li>Explains the evidence used.</li>
-					<li>Creates reviewable drafts.</li>
-					<li>Connects changes across modules.</li>
-				</ul>
+				<figure class="phone">
+					<img
+						alt="After creation, the trip becomes an overview with modules."
+						src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/overview.jpg"
+					>
+					<figcaption>
+						After creation, the trip becomes an overview with modules.
+					</figcaption>
+				</figure>
 			</div>
-		</div>
-	</section>
-	
+		</section>
 
-	<section class="page">
-		<div class="header-row">
-			<div>
-				<p class="eyebrow">7. Workspace</p>
-				<h2>Move between modules without losing the trip story.</h2>
-				<p>The overview is the command center. It surfaces readiness, remaining budget, module counts, and the next best action. The switcher lets users jump to itinerary, budget, Vault, and readiness quickly.</p>
+		<section class="page">
+			<div class="header-row">
+				<div>
+					<p class="eyebrow">6. Ask Viya</p>
+					<h2>Use AI as an operator for the trip.</h2>
+					<p>
+						Ask Viya from the global chat or inside a trip. Inside a trip, Viya
+						uses the current workspace as context, so prompts can be short and
+						specific.
+					</p>
+				</div>
+				<div class="callout">
+					Viya should not silently overwrite trip data. Review suggested changes
+					before applying them.
+				</div>
 			</div>
-			<div class="callout">Use Overview when deciding what to do next. Use the switcher when you already know which module needs work.</div>
-		</div>
-		<div class="phone-grid two">
-			
-	<figure class="phone">
-		<img alt="Overview shows the trip status in one glance." src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/overview.jpg">
-		<figcaption>Overview shows the trip status in one glance.</figcaption>
-	</figure>
+			<div class="split visual">
+				<figure class="phone">
+					<img
+						alt="Trip-scoped Ask Viya screen with module prompts."
+						src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/ask.jpg"
+					>
+					<figcaption>
+						Trip-scoped Ask Viya screen with module prompts.
+					</figcaption>
+				</figure>
 
-			
-	<figure class="phone">
-		<img alt="Workspace switcher exposes every trip module." src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/switcher.jpg">
-		<figcaption>Workspace switcher exposes every trip module.</figcaption>
-	</figure>
-
-		</div>
-	</section>
-	
-
-	<section class="page">
-		<div class="header-row">
-			<div>
-				<p class="eyebrow">8. Itinerary and budget</p>
-				<h2>Turn the plan into days and numbers.</h2>
-				<p>Itinerary gives the traveler a day-by-day route with stops and pace. Budget keeps the trip grounded in confirmed spend, daily room, and receipts.</p>
+				<div>
+					<h3>Useful prompts</h3>
+					<ul class="bullets">
+						<li>Build a realistic itinerary from this trip profile.</li>
+						<li>Review this budget against my planning ceiling.</li>
+						<li>Organize Vault and identify missing proof.</li>
+						<li>Audit readiness before departure.</li>
+						<li>What is the smartest next thing to check?</li>
+					</ul>
+					<h3>Good AI behavior</h3>
+					<ul class="bullets">
+						<li>Asks only for missing context.</li>
+						<li>Explains the evidence used.</li>
+						<li>Creates reviewable drafts.</li>
+						<li>Connects changes across modules.</li>
+					</ul>
+				</div>
 			</div>
-			<div class="checklist">
-				<strong>Review before travel</strong>
-				<span>Arrival and departure buffers</span>
-				<span>Conference or event anchors</span>
-				<span>Hotel and transport proof</span>
-				<span>Daily safe spend</span>
-				<span>Receipt links</span>
+		</section>
+
+		<section class="page">
+			<div class="header-row">
+				<div>
+					<p class="eyebrow">7. Workspace</p>
+					<h2>Move between modules without losing the trip story.</h2>
+					<p>
+						The overview is the command center. It surfaces readiness, remaining
+						budget, module counts, and the next best action. The switcher lets
+						users jump to itinerary, budget, Vault, and readiness quickly.
+					</p>
+				</div>
+				<div class="callout">
+					Use Overview when deciding what to do next. Use the switcher when you
+					already know which module needs work.
+				</div>
 			</div>
-		</div>
-		<div class="phone-grid two">
-			
-	<figure class="phone">
-		<img alt="Itinerary organizes four days with planned stops." src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/itinerary.jpg">
-		<figcaption>Itinerary organizes four days with planned stops.</figcaption>
-	</figure>
+			<div class="phone-grid two">
+				<figure class="phone">
+					<img
+						alt="Overview shows the trip status in one glance."
+						src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/overview.jpg"
+					>
+					<figcaption>Overview shows the trip status in one glance.</figcaption>
+				</figure>
 
-			
-	<figure class="phone">
-		<img alt="Budget shows remaining PHP room and tracked receipts." src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/budget.jpg">
-		<figcaption>Budget shows remaining PHP room and tracked receipts.</figcaption>
-	</figure>
-
-		</div>
-	</section>
-	
-
-	<section class="page">
-		<div class="header-row">
-			<div>
-				<p class="eyebrow">9. Vault and readiness</p>
-				<h2>Finish when the trip is actually prepared.</h2>
-				<p>Vault stores confirmations, receipts, passes, and notes. Readiness turns those files and decisions into concrete tasks so the user knows what is done and what is missing.</p>
+				<figure class="phone">
+					<img
+						alt="Workspace switcher exposes every trip module."
+						src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/switcher.jpg"
+					>
+					<figcaption>Workspace switcher exposes every trip module.</figcaption>
+				</figure>
 			</div>
-			<div class="callout">Readiness is the user-friendly finish line: when blockers are resolved, the trip is ready to travel.</div>
-		</div>
-		<div class="split visual">
-			
-	<figure class="phone">
-		<img alt="Readiness board with 100% score and no open gap." src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/readiness.jpg">
-		<figcaption>Readiness board with 100% score and no open gap.</figcaption>
-	</figure>
+		</section>
 
-			<div>
-				<h3>What to add to Vault</h3>
-				<ul class="bullets">
-					<li>Flight, hotel, transfer, and activity confirmations.</li>
-					<li>Event passes, tickets, IDs, visas, and insurance notes.</li>
-					<li>Receipts and expenses for budget tracking.</li>
-					<li>Readiness notes such as packing, arrival cards, or emergency details.</li>
-				</ul>
-				<h3>What readiness checks</h3>
-				<ul class="bullets">
-					<li>Documents and booking proof.</li>
-					<li>Budget buffer and receipt evidence.</li>
-					<li>Schedule risks and transfer gaps.</li>
-					<li>Assigned preparation tasks.</li>
-				</ul>
+		<section class="page">
+			<div class="header-row">
+				<div>
+					<p class="eyebrow">8. Itinerary and budget</p>
+					<h2>Turn the plan into days and numbers.</h2>
+					<p>
+						Itinerary gives the traveler a day-by-day route with stops and pace.
+						Budget keeps the trip grounded in confirmed spend, daily room, and
+						receipts.
+					</p>
+				</div>
+				<div class="checklist">
+					<strong>Review before travel</strong>
+					<span>Arrival and departure buffers</span>
+					<span>Conference or event anchors</span>
+					<span>Hotel and transport proof</span>
+					<span>Daily safe spend</span>
+					<span>Receipt links</span>
+				</div>
 			</div>
-		</div>
-	</section>
-	
+			<div class="phone-grid two">
+				<figure class="phone">
+					<img
+						alt="Itinerary organizes four days with planned stops."
+						src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/itinerary.jpg"
+					>
+					<figcaption>
+						Itinerary organizes four days with planned stops.
+					</figcaption>
+				</figure>
 
-	<section class="page final">
-		<p class="eyebrow">Quick reference</p>
-		<h2>Recommended user flow</h2>
-		<div class="flow">
-			<div><span>1</span><strong>Open Home</strong><p>Check the active trip or start a new one.</p></div>
-			<div><span>2</span><strong>Create trip</strong><p>Enter destination, dates, budget, purpose, and pace.</p></div>
-			<div><span>3</span><strong>Ask Viya</strong><p>Generate or audit the modules that need help.</p></div>
-			<div><span>4</span><strong>Sync Vault</strong><p>Add confirmations, receipts, tickets, and notes.</p></div>
-			<div><span>5</span><strong>Review modules</strong><p>Check itinerary, budget, bookings, risks, and places.</p></div>
-			<div><span>6</span><strong>Finish readiness</strong><p>Resolve blockers until Viya says the trip is ready.</p></div>
-		</div>
-		<div class="footer-note">
-			<strong>Demo note:</strong> Singapore Tech Week data and fixture documents are fictional demo material. The product flow is trip-agnostic and should work for any destination, dates, traveler type, and budget profile.
-		</div>
-	</section>
+				<figure class="phone">
+					<img
+						alt="Budget shows remaining PHP room and tracked receipts."
+						src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/budget.jpg"
+					>
+					<figcaption>
+						Budget shows remaining PHP room and tracked receipts.
+					</figcaption>
+				</figure>
+			</div>
+		</section>
+
+		<section class="page">
+			<div class="header-row">
+				<div>
+					<p class="eyebrow">9. Vault and readiness</p>
+					<h2>Finish when the trip is actually prepared.</h2>
+					<p>
+						Vault stores confirmations, receipts, passes, and notes. Readiness
+						turns those files and decisions into concrete tasks so the user
+						knows what is done and what is missing.
+					</p>
+				</div>
+				<div class="callout">
+					Readiness is the user-friendly finish line: when blockers are
+					resolved, the trip is ready to travel.
+				</div>
+			</div>
+			<div class="split visual">
+				<figure class="phone">
+					<img
+						alt="Readiness board with 100% score and no open gap."
+						src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/final-submission/assets/guide-screens/readiness.jpg"
+					>
+					<figcaption>
+						Readiness board with 100% score and no open gap.
+					</figcaption>
+				</figure>
+
+				<div>
+					<h3>What to add to Vault</h3>
+					<ul class="bullets">
+						<li>Flight, hotel, transfer, and activity confirmations.</li>
+						<li>Event passes, tickets, IDs, visas, and insurance notes.</li>
+						<li>Receipts and expenses for budget tracking.</li>
+						<li>
+							Readiness notes such as packing, arrival cards, or emergency
+							details.
+						</li>
+					</ul>
+					<h3>What readiness checks</h3>
+					<ul class="bullets">
+						<li>Documents and booking proof.</li>
+						<li>Budget buffer and receipt evidence.</li>
+						<li>Schedule risks and transfer gaps.</li>
+						<li>Assigned preparation tasks.</li>
+					</ul>
+				</div>
+			</div>
+		</section>
+
+		<section class="page final">
+			<p class="eyebrow">Quick reference</p>
+			<h2>Recommended user flow</h2>
+			<div class="flow">
+				<div>
+					<span>1</span><strong>Open Home</strong>
+					<p>Check the active trip or start a new one.</p>
+				</div>
+				<div>
+					<span>2</span><strong>Create trip</strong>
+					<p>Enter destination, dates, budget, purpose, and pace.</p>
+				</div>
+				<div>
+					<span>3</span><strong>Ask Viya</strong>
+					<p>Generate or audit the modules that need help.</p>
+				</div>
+				<div>
+					<span>4</span><strong>Sync Vault</strong>
+					<p>Add confirmations, receipts, tickets, and notes.</p>
+				</div>
+				<div>
+					<span>5</span><strong>Review modules</strong>
+					<p>Check itinerary, budget, bookings, risks, and places.</p>
+				</div>
+				<div>
+					<span>6</span><strong>Finish readiness</strong>
+					<p>Resolve blockers until Viya says the trip is ready.</p>
+				</div>
+			</div>
+			<div class="footer-note">
+				<strong>Demo note:</strong>
+				Singapore Tech Week data and fixture documents are fictional demo
+				material. The product flow is trip-agnostic and should work for any
+				destination, dates, traveler type, and budget profile.
+			</div>
+		</section>
 	</body>
 </html>

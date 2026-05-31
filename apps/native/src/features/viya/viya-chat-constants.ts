@@ -160,6 +160,15 @@ export const planPromptSuggestions = [
 
 export const tripPromptSuggestions = [
 	{
+		accent: "#0A84FF",
+		icon: "calendar-outline",
+		prompt:
+			"Generate a detailed multi-day itinerary for this trip. Create one natural whole-day plan for each trip date, with timed stops, places, meals, transfers, buffers, estimated costs, and practical notes.",
+		soft: "rgba(10, 132, 255, 0.12)",
+		summary: "Create full days and timed stops.",
+		title: "Generate itinerary",
+	},
+	{
 		accent: "#FF9F0A",
 		icon: "folder-open-outline",
 		prompt:
@@ -169,22 +178,13 @@ export const tripPromptSuggestions = [
 		title: "Organize vault",
 	},
 	{
-		accent: "#0A84FF",
-		icon: "calendar-outline",
-		prompt:
-			"Generate a simple Wanderlog-style itinerary draft for this trip with days, time blocks, places, meals, transfers, and realistic pacing.",
-		soft: "rgba(10, 132, 255, 0.12)",
-		summary: "Draft days and stops.",
-		title: "Build itinerary",
-	},
-	{
 		accent: "#30D158",
 		icon: "wallet-outline",
 		prompt:
 			"Centralize the budget for this trip. Show booked costs, manual expenses, remaining spend, daily safe spend, and what needs a receipt or confirmation.",
 		soft: "rgba(48, 209, 88, 0.12)",
 		summary: "Review spend in one place.",
-		title: "Budget center",
+		title: "Sync budget",
 	},
 	{
 		accent: "#BF5AF2",
@@ -193,7 +193,7 @@ export const tripPromptSuggestions = [
 			"Based on the current trip status, what is the readiness state and what should Viya fix first?",
 		soft: "rgba(191, 90, 242, 0.12)",
 		summary: "Use current status to pick the next action.",
-		title: "Check readiness",
+		title: "Complete readiness",
 	},
 ] as const satisfies readonly PromptSuggestion[];
 

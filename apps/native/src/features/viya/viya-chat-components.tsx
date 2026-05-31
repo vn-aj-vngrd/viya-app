@@ -1239,9 +1239,20 @@ export function ViyaChatEmptyContent({
 }
 
 export function ViyaPromptSuggestionsCard({
+	actionSuggestion,
 	onSubmitSuggestion,
 	promptSuggestions,
 }: {
+	actionSuggestion?: {
+		accent: string;
+		icon: SuggestionIconName;
+		isDisabled?: boolean;
+		isLoading?: boolean;
+		onPress: () => void;
+		soft: string;
+		summary: string;
+		title: string;
+	};
 	onSubmitSuggestion: (prompt: string) => void;
 	promptSuggestions: readonly PromptSuggestion[];
 }) {
@@ -1251,6 +1262,41 @@ export function ViyaPromptSuggestionsCard({
 				TRY ASKING
 			</Text>
 			<Surface className="gap-1 rounded-[28px] border border-border bg-surface p-1">
+				{actionSuggestion ? (
+					<Pressable
+						accessibilityLabel={`Try asking: ${actionSuggestion.title}`}
+						accessibilityRole="button"
+						accessibilityState={{ disabled: actionSuggestion.isDisabled }}
+						className="min-h-12 flex-row items-center gap-2 rounded-3xl px-3 py-1.5"
+						disabled={actionSuggestion.isDisabled}
+						onPress={actionSuggestion.onPress}
+						style={{ opacity: actionSuggestion.isDisabled ? 0.6 : 1 }}
+					>
+						<View
+							className="h-8 w-8 items-center justify-center rounded-full"
+							style={{ backgroundColor: actionSuggestion.soft }}
+						>
+							{actionSuggestion.isLoading ? (
+								<Spinner size="sm" />
+							) : (
+								<Ionicons
+									color={actionSuggestion.accent}
+									name={actionSuggestion.icon}
+									size={17}
+								/>
+							)}
+						</View>
+						<View className="flex-1 gap-0.5">
+							<Text type="body-sm" weight="semibold">
+								{actionSuggestion.title}
+							</Text>
+							<Text.Paragraph color="muted" type="body-xs">
+								{actionSuggestion.summary}
+							</Text.Paragraph>
+						</View>
+						<Ionicons color="#A1A1AA" name="arrow-forward" size={15} />
+					</Pressable>
+				) : null}
 				{promptSuggestions.map((suggestion) => (
 					<Pressable
 						accessibilityLabel={`Try asking: ${suggestion.title}`}

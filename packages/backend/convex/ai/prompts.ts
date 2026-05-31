@@ -106,6 +106,7 @@ export const buildItineraryPrompt = (
 		buildCurrentDateInstructions(runtimeContext),
 		"Mode: Planner.",
 		"Generate a realistic, route-aware itinerary as strict structured data.",
+		"Create one natural whole-day plan for every trip date. Full days should include 5 to 6 timed stops, and arrival or departure days should include at least 4 timed stops covering places or areas, meals, transfers, buffers, estimated costs, duration, priority, and practical notes.",
 		"Respect arrival and departure timing, budget, group type, pace, and rest.",
 		tripContext,
 	].join("\n\n");

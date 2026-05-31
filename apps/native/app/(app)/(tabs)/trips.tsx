@@ -343,6 +343,10 @@ function StatusFilterSheet({
 	const insets = useSafeAreaInsets();
 	const mutedColor = useThemeColor("muted");
 
+	if (!isOpen) {
+		return null;
+	}
+
 	return (
 		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
 			<BottomSheet.Portal>

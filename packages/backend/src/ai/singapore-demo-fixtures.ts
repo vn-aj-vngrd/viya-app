@@ -80,6 +80,13 @@ const fixtureExtractions: Record<string, VaultExtraction> = {
 		extractedTitle: "Manila to Singapore flight confirmation",
 		readinessSuggestions: [
 			{
+				category: "bookings",
+				priority: "high",
+				reason:
+					"Flight confirmation VIYA-SIN-2026 proves the Manila to Singapore booking is confirmed.",
+				title: "Confirm flight booking coverage",
+			},
+			{
 				category: "transport",
 				priority: "high",
 				reason:
@@ -106,6 +113,13 @@ const fixtureExtractions: Record<string, VaultExtraction> = {
 		documentType: "voucher",
 		extractedTitle: "Singapore conference hotel voucher",
 		readinessSuggestions: [
+			{
+				category: "bookings",
+				priority: "high",
+				reason:
+					"Hotel voucher HOTEL-SIN-WIN proves the Marina Bay / City Hall stay is confirmed.",
+				title: "Confirm hotel booking coverage",
+			},
 			{
 				category: "schedule",
 				priority: "medium",
@@ -144,9 +158,30 @@ const fixtureExtractions: Record<string, VaultExtraction> = {
 					"Keep one light backup block so jet lag does not turn networking into a boss fight.",
 				title: "Add jet lag backup block",
 			},
+			{
+				category: "weather",
+				priority: "medium",
+				reason:
+					"Check Singapore weather and keep an indoor backup so rain does not disrupt conference-adjacent plans.",
+				title: "Confirm weather and indoor backup",
+			},
+			{
+				category: "safety",
+				priority: "medium",
+				reason:
+					"Save emergency contacts, passport safety details, and SG Arrival Card proof before departure.",
+				title: "Save emergency contacts and passport safety note",
+			},
+			{
+				category: "group",
+				priority: "medium",
+				reason:
+					"Confirm team roles, contact handoff, and who owns badge pickup on conference days.",
+				title: "Confirm team roles and contact handoff",
+			},
 		],
 		summary:
-			"Readiness note for passport validity, SG Arrival Card, event badge pickup, smart casual outfit, and not accidentally pitching while jet-lagged.",
+			"Readiness note for passport validity, SG Arrival Card, event badge pickup, smart casual outfit, Singapore weather backup, emergency contacts, team roles, contact handoff, and not accidentally pitching while jet-lagged.",
 	},
 	"singapore-tech-week-pass.txt": {
 		booking: {
@@ -177,6 +212,13 @@ const fixtureExtractions: Record<string, VaultExtraction> = {
 				reason:
 					"Conference days need protected blocks with recovery time after networking.",
 				title: "Protect conference focus blocks",
+			},
+			{
+				category: "group",
+				priority: "medium",
+				reason:
+					"Team members need the Tech Week badge pickup plan and event-floor handoff before arrival.",
+				title: "Share conference badge pickup plan",
 			},
 		],
 		summary:

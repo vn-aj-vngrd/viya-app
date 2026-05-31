@@ -1,11 +1,15 @@
 // biome-ignore-all lint/style/useFilenamingConvention: Convex module names are public API paths.
 
+import { calculateReadinessScore, type ReadinessItem } from "@viya-app/domain";
 import { ConvexError, v } from "convex/values";
 import {
+	buildFallbackItineraryDraft,
 	buildItineraryDayRecords,
 	buildItineraryItemRecords,
 	buildSimpleDraftRecords,
 	cleanString,
+	ensureDetailedItineraryDraft,
+	getReadinessCompletionPatch,
 	type TripAgentDraftPayload,
 	tripAgentDraftPayloadSchema,
 } from "../../src/ai/trip-agent-draft-apply";
@@ -51,6 +55,7 @@ interface TripAgentContext {
 		budgetCurrency?: string;
 		destination: string;
 		endDate: string;
+		summary?: string;
 		startDate: string;
 		title: string;
 	};
@@ -67,6 +72,20 @@ const modulePurpose = {
 	risks: "risk",
 	travel: "travelMode",
 } as const satisfies Record<string, AiModelPurpose>;
+const tripAgentGenerationTimeoutMs = 12_000;
+
+const withTripAgentGenerationTimeout = async <Payload>(
+	generation: Promise<Payload>
+) =>
+	await Promise.race([
+		generation,
+		new Promise<Payload>((_, reject) => {
+			setTimeout(
+				() => reject(new Error("TRIP_AGENT_GENERATION_TIMEOUT")),
+				tripAgentGenerationTimeoutMs
+			);
+		}),
+	]);
 
 const createFallbackDraft = ({
 	module,
@@ -78,6 +97,7 @@ const createFallbackDraft = ({
 		budgetCurrency?: string;
 		destination: string;
 		endDate: string;
+		summary?: string;
 		startDate: string;
 		title: string;
 	};
@@ -89,42 +109,7 @@ const createFallbackDraft = ({
 	};
 
 	if (module === "itinerary") {
-		return {
-			bookingTargets: [],
-			changes: [commonChange],
-			days: [
-				{
-					date: trip.startDate,
-					estimatedCost: 2500,
-					items: [
-						{
-							aiReason:
-								"Start with a light anchor activity so the day stays flexible.",
-							category: "activity",
-							description: "Add a first activity near the main destination.",
-							durationMinutes: 120,
-							endTime: "12:00",
-							estimatedCost: 1500,
-							locationName: trip.destination,
-							priority: "high",
-							startTime: "10:00",
-							title: `Explore ${trip.destination}`,
-						},
-					],
-					pace: "balanced",
-					summary: "A simple first day that can be refined later.",
-					theme: "Arrival and orientation",
-					title: "Day 1",
-					weatherNote: "Check local weather before locking outdoor plans.",
-				},
-			],
-			moments: [],
-			places: [],
-			rationale: "Viya created a conservative starter itinerary.",
-			readinessItems: [],
-			risks: [],
-			title: "Starter itinerary draft",
-		};
+		return buildFallbackItineraryDraft(trip);
 	}
 
 	if (module === "bookings") {
@@ -145,6 +130,7 @@ const createFallbackDraft = ({
 			places: [],
 			rationale: "Viya suggested the most common booking gap first.",
 			readinessItems: [],
+			readinessUpdates: [],
 			risks: [],
 			title: "Booking targets draft",
 		};
@@ -159,6 +145,7 @@ const createFallbackDraft = ({
 			places: [],
 			rationale: "Viya checked for planning gaps that can become travel risks.",
 			readinessItems: [],
+			readinessUpdates: [],
 			risks: [
 				{
 					message:
@@ -183,6 +170,7 @@ const createFallbackDraft = ({
 			places: [],
 			rationale: "Viya estimated a starting budget from the trip profile.",
 			readinessItems: [],
+			readinessUpdates: [],
 			risks: [],
 			title: "Budget estimate draft",
 		};
@@ -204,6 +192,7 @@ const createFallbackDraft = ({
 			],
 			rationale: "Viya created a map anchor from the trip destination.",
 			readinessItems: [],
+			readinessUpdates: [],
 			risks: [],
 			title: "Places draft",
 		};
@@ -225,6 +214,7 @@ const createFallbackDraft = ({
 			places: [],
 			rationale: "Viya started a recap moment that the traveler can refine.",
 			readinessItems: [],
+			readinessUpdates: [],
 			risks: [],
 			title: "Recap draft",
 		};
@@ -253,6 +243,7 @@ const createFallbackDraft = ({
 						: "Create travel-day backup plan",
 			},
 		],
+		readinessUpdates: [],
 		risks: [],
 		title: module === "documents" ? "Document checklist draft" : "Travel draft",
 	};
@@ -273,12 +264,14 @@ const buildTripAgentPrompt = ({
 		"You are Viya, a travel workspace agent.",
 		"Generate reviewable structured draft changes for exactly one trip module.",
 		"Keep the workspace model simple: Itinerary, centralized Budget, Vault for Bookings and Documents, and Readiness based on current status.",
-		"For itinerary drafts, use a simple Wanderlog-style day plan with timed stops, places, meals, transfers, and concise notes.",
+		"For itinerary drafts, create one natural whole-day plan for every trip date in the workspace. Full days need 5 to 6 timed items, and arrival or departure days need at least 4 timed items, with concrete titles, places or areas, meals, transfers, buffers, estimated costs, duration, priority, and practical notes.",
+		"If the itinerary module has no saved days yet, do not return a one-day preview. Generate the complete multi-day draft across the full date range.",
 		"For budget drafts, centralize budget amount, booked costs, itinerary estimates, manual expenses, receipts, remaining spend, and daily safe spend.",
 		"For vault or documents work, classify files as bookings or documents and create readiness gaps for missing passport, ID, ticket, confirmation, receipt, permit, or insurance coverage.",
 		"For readiness work, prioritize by current trip status, dates, open checklist items, booking coverage, vault coverage, budget state, and risks.",
+		"For readiness updates, include readinessUpdates only when uploaded Vault, booking, document, or expense evidence supports marking an existing checklist item done.",
 		"Never invent confirmed bookings, uploaded documents, live availability, weather, traffic, or paid reservations.",
-		"Keep output concise. Return no more than six items per list.",
+		"Keep non-itinerary output concise. Return no more than six items per non-itinerary list.",
 		"For documents, create readiness items only; the user must upload real files.",
 		`Module: ${module}.`,
 		`Action: ${action}.`,
@@ -367,20 +360,32 @@ export const generateTripAgentDraft = action({
 			trip: context.trip,
 		});
 		const shouldUseFallback = args.useFallback || !hasConfiguredAiProvider();
-		const payload: TripAgentDraftPayload = shouldUseFallback
-			? fallback
-			: await generateStructuredObject({
-					fallback,
-					model: getLanguageModel(modulePurpose[args.module]),
-					prompt: buildTripAgentPrompt({
-						action: args.action,
-						contextJson: context.contextJson,
-						module: args.module,
-						prompt: args.prompt,
-					}),
-					schema: tripAgentDraftPayloadSchema,
-					schemaName: "TripAgentDraftPayload",
-				});
+		let payload = fallback;
+
+		if (!shouldUseFallback) {
+			try {
+				payload = await withTripAgentGenerationTimeout(
+					generateStructuredObject({
+						fallback,
+						model: getLanguageModel(modulePurpose[args.module]),
+						prompt: buildTripAgentPrompt({
+							action: args.action,
+							contextJson: context.contextJson,
+							module: args.module,
+							prompt: args.prompt,
+						}),
+						schema: tripAgentDraftPayloadSchema,
+						schemaName: "TripAgentDraftPayload",
+					})
+				);
+			} catch {
+				payload = fallback;
+			}
+		}
+
+		if (args.module === "itinerary") {
+			payload = ensureDetailedItineraryDraft(payload, context.trip);
+		}
 
 		return await ctx.runMutation(
 			internal.ai.tripAgentInternals.saveGeneratedTripAgentDraft,
@@ -426,8 +431,30 @@ const parseDraftPayload = (payloadJson: string): TripAgentDraftPayload => {
 const applyItineraryDraft = async (
 	ctx: MutationCtx,
 	tripId: Id<"trips">,
-	payload: TripAgentDraftPayload
+	payload: TripAgentDraftPayload,
+	options: { replaceExisting: boolean }
 ) => {
+	if (options.replaceExisting) {
+		const [existingItems, existingDays] = await Promise.all([
+			ctx.db
+				.query("itineraryItems")
+				.withIndex("by_trip", (q) => q.eq("tripId", tripId))
+				.collect(),
+			ctx.db
+				.query("itineraryDays")
+				.withIndex("by_trip", (q) => q.eq("tripId", tripId))
+				.collect(),
+		]);
+
+		for (const item of existingItems) {
+			await ctx.db.delete(item._id);
+		}
+
+		for (const day of existingDays) {
+			await ctx.db.delete(day._id);
+		}
+	}
+
 	const existingDayCount = (
 		await ctx.db
 			.query("itineraryDays")
@@ -463,6 +490,7 @@ const applySimpleModuleDraft = async (
 	tripId: Id<"trips">,
 	payload: TripAgentDraftPayload
 ) => {
+	const trip = await ctx.db.get(tripId);
 	const records = buildSimpleDraftRecords({
 		now: Date.now(),
 		payload,
@@ -489,11 +517,103 @@ const applySimpleModuleDraft = async (
 		await ctx.db.insert("moments", moment);
 	}
 
-	if (records.budgetAmount) {
+	if (records.budgetAmount && !trip?.budgetAmount) {
 		await ctx.db.patch(tripId, {
 			budgetAmount: records.budgetAmount,
 			updatedAt: Date.now(),
 		});
+	}
+};
+
+const buildWorkspaceEvidenceText = async (
+	ctx: MutationCtx,
+	tripId: Id<"trips">
+) => {
+	const [bookings, expenses, documents, vaultItems] = await Promise.all([
+		ctx.db
+			.query("bookings")
+			.withIndex("by_trip", (q) => q.eq("tripId", tripId))
+			.collect(),
+		ctx.db
+			.query("expenses")
+			.withIndex("by_trip", (q) => q.eq("tripId", tripId))
+			.collect(),
+		ctx.db
+			.query("travelDocuments")
+			.withIndex("by_trip", (q) => q.eq("tripId", tripId))
+			.collect(),
+		ctx.db
+			.query("vaultItems")
+			.withIndex("by_trip", (q) => q.eq("tripId", tripId))
+			.collect(),
+	]);
+
+	return JSON.stringify({
+		bookings,
+		documents,
+		expenses,
+		vaultItems,
+	});
+};
+
+const toDomainReadinessItem = (item: Doc<"readinessItems">): ReadinessItem => ({
+	assignedToMemberId: item.assignedToMemberId ?? null,
+	aiReason: item.aiReason,
+	category: item.category as ReadinessItem["category"],
+	description: item.description,
+	dueDate: item.dueDate,
+	id: item._id,
+	priority: item.priority as ReadinessItem["priority"],
+	source: item.source as ReadinessItem["source"],
+	status: item.status as ReadinessItem["status"],
+	title: item.title,
+	tripId: item.tripId,
+});
+
+const recalculateTripReadiness = async (
+	ctx: MutationCtx,
+	tripId: Id<"trips">
+) => {
+	const readinessItems = await ctx.db
+		.query("readinessItems")
+		.withIndex("by_trip", (q) => q.eq("tripId", tripId))
+		.collect();
+	const readiness = calculateReadinessScore(
+		readinessItems.map(toDomainReadinessItem)
+	);
+
+	await ctx.db.patch(tripId, {
+		readinessScore: readiness.overallScore,
+		updatedAt: Date.now(),
+	});
+};
+
+const applyEvidenceBackedReadinessUpdates = async (
+	ctx: MutationCtx,
+	tripId: Id<"trips">,
+	payload: TripAgentDraftPayload
+) => {
+	const readinessItems = await ctx.db
+		.query("readinessItems")
+		.withIndex("by_trip", (q) => q.eq("tripId", tripId))
+		.collect();
+
+	if (readinessItems.length === 0) {
+		return;
+	}
+
+	const evidenceText = await buildWorkspaceEvidenceText(ctx, tripId);
+
+	for (const item of readinessItems) {
+		const patch = getReadinessCompletionPatch({
+			evidenceText,
+			item,
+			readinessUpdates: payload.readinessUpdates,
+		});
+
+		if (patch) {
+			await ctx.db.patch(item._id, patch);
+		}
 	}
 };
 
@@ -517,10 +637,16 @@ export const applyTripAgentDraft = mutation({
 		const payload = parseDraftPayload(draft.payloadJson);
 
 		if (draft.module === "itinerary") {
-			await applyItineraryDraft(ctx, draft.tripId, payload);
+			await applyItineraryDraft(ctx, draft.tripId, payload, {
+				replaceExisting: draft.action === "generate",
+			});
 		}
 
 		await applySimpleModuleDraft(ctx, draft.tripId, payload);
+		if (draft.module === "readiness") {
+			await applyEvidenceBackedReadinessUpdates(ctx, draft.tripId, payload);
+			await recalculateTripReadiness(ctx, draft.tripId);
+		}
 		await ctx.db.patch(args.draftId, {
 			status: "applied",
 			updatedAt: Date.now(),

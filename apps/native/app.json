@@ -25,13 +25,21 @@
       },
       "package": "com.vnajvngrd.viya"
     },
+    "androidNavigationBar": {
+      "backgroundColor": "#F5F5F5",
+      "barStyle": "dark-content",
+      "enforceContrast": false
+    },
     "ios": {
       "infoPlist": {
         "CFBundleDisplayName": "Viya"
       },
       "bundleIdentifier": "com.vnajvngrd.viya"
     },
-    "plugins": ["expo-font"],
+    "updates": {
+      "url": "https://u.expo.dev/a886cc8e-2ed1-4bff-b4ca-652939f4b2cf"
+    },
+    "plugins": ["expo-font", "expo-updates"],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true

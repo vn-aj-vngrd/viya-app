@@ -6,21 +6,32 @@ import {
 	isSingaporeDemoFixtureFile,
 } from "../src/ai/singapore-demo-fixtures";
 
+const readinessCategories = [
+	"documents",
+	"bookings",
+	"packing",
+	"budget",
+	"schedule",
+	"transport",
+	"weather",
+	"safety",
+	"group",
+	"backupPlan",
+] as const;
 const marinaBaySandsPattern = /Marina Bay Sands/;
 const singaporeDollarReceiptPattern = /SGD 82/;
 const sgArrivalCardPattern = /SG Arrival Card/;
+const singaporeFixtureFiles = [
+	"singapore-flight-confirmation.txt",
+	"singapore-hotel-voucher.txt",
+	"singapore-tech-week-pass.txt",
+	"singapore-expense-receipt.txt",
+	"singapore-readiness-note.txt",
+] as const;
 
 describe("Singapore demo fixture extraction", () => {
 	it("recognizes all local Singapore demo fixture files", () => {
-		const fixtureFiles = [
-			"singapore-flight-confirmation.txt",
-			"singapore-hotel-voucher.txt",
-			"singapore-tech-week-pass.txt",
-			"singapore-expense-receipt.txt",
-			"singapore-readiness-note.txt",
-		];
-
-		for (const fileName of fixtureFiles) {
+		for (const fileName of singaporeFixtureFiles) {
 			assert.equal(isSingaporeDemoFixtureFile(fileName), true, fileName);
 		}
 	});
@@ -56,5 +67,20 @@ describe("Singapore demo fixture extraction", () => {
 		assert.match(receipt?.summary ?? "", singaporeDollarReceiptPattern);
 		assert.equal(note?.booking, null);
 		assert.match(note?.summary ?? "", sgArrivalCardPattern);
+	});
+
+	it("covers every readiness category for the 100 percent demo sync", () => {
+		const coveredCategories = new Set(
+			singaporeFixtureFiles.flatMap(
+				(fileName) =>
+					getSingaporeDemoVaultExtraction(fileName)?.readinessSuggestions.map(
+						(suggestion) => suggestion.category
+					) ?? []
+			)
+		);
+
+		for (const category of readinessCategories) {
+			assert.equal(coveredCategories.has(category), true, category);
+		}
 	});
 });

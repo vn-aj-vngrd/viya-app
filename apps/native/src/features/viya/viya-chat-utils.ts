@@ -543,16 +543,16 @@ const tripWorkspaceSuggestionByTab = {
 			prompt: `Centralize the budget for ${tripLabel}. Show booked costs, manual expenses, remaining spend, daily safe spend, and what needs a receipt or confirmation.`,
 			soft: "rgba(10, 165, 181, 0.12)",
 			summary: "Use this trip's spend, bookings, and receipts.",
-			title: "Review this budget",
+			title: "Sync budget",
 		}) satisfies PromptSuggestion,
 	itinerary: ({ tripLabel }: { tripLabel: string }) =>
 		({
 			accent: "#0A84FF",
 			icon: "calendar-outline",
-			prompt: `Generate or refine the Wanderlog-style itinerary for ${tripLabel}. Use the current trip days, places, meals, transfers, and realistic pacing.`,
+			prompt: `Generate a detailed multi-day itinerary for ${tripLabel}. Create one natural whole-day plan for each trip date with timed stops, places, meals, transfers, buffers, estimated costs, and practical notes.`,
 			soft: "rgba(10, 132, 255, 0.12)",
-			summary: "Work from this trip's current route.",
-			title: "Refine this itinerary",
+			summary: "Create full days and timed stops.",
+			title: "Generate itinerary",
 		}) satisfies PromptSuggestion,
 	overview: ({ tripLabel }: { tripLabel: string }) =>
 		({
@@ -570,7 +570,7 @@ const tripWorkspaceSuggestionByTab = {
 			prompt: `Check readiness for ${tripLabel}. Use the current trip status, itinerary, budget, bookings, vault coverage, and open checklist items to pick what Viya should fix first.`,
 			soft: "rgba(52, 199, 89, 0.12)",
 			summary: "Use this trip's live readiness state.",
-			title: "Check this readiness",
+			title: "Complete readiness",
 		}) satisfies PromptSuggestion,
 	vault: ({ tripLabel }: { tripLabel: string }) =>
 		({

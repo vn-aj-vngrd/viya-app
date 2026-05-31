@@ -1,6 +1,6 @@
 import { BottomSheet, Button, Spinner, Surface, Text } from "heroui-native";
 import type { ReactNode } from "react";
-import { View } from "react-native";
+import { ScrollView, View } from "react-native";
 
 import type { PendingTripSyncReview } from "./tripsync-types";
 
@@ -50,7 +50,8 @@ export function TripSyncReviewSheet({
 				<BottomSheet.Overlay />
 				<BottomSheet.Content
 					className="rounded-t-[34px] border border-border bg-surface px-5 pt-4 pb-8"
-					enableDynamicSizing={true}
+					enablePanDownToClose={true}
+					snapPoints={["88%"]}
 				>
 					<View className="gap-4">
 						<View className="gap-1">
@@ -61,7 +62,11 @@ export function TripSyncReviewSheet({
 						</View>
 
 						{extraction ? (
-							<View className="gap-3">
+							<ScrollView
+								contentContainerStyle={{ gap: 12, paddingBottom: 4 }}
+								showsVerticalScrollIndicator={false}
+								style={{ maxHeight: 560 }}
+							>
 								<Surface className="gap-2 rounded-[24px] bg-surface-secondary p-4">
 									<View className="flex-row flex-wrap gap-2">
 										<ReviewPill>{review.upload.kind}</ReviewPill>
@@ -143,7 +148,7 @@ export function TripSyncReviewSheet({
 										))}
 									</Surface>
 								) : null}
-							</View>
+							</ScrollView>
 						) : null}
 
 						<View className="gap-2">

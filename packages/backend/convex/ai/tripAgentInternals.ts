@@ -104,6 +104,7 @@ export const getTripAgentContext = internalQuery({
 				budgetCurrency: trip.budgetCurrency,
 				destination: trip.destination,
 				endDate: trip.endDate,
+				summary: trip.summary,
 				startDate: trip.startDate,
 				title: trip.title,
 			},

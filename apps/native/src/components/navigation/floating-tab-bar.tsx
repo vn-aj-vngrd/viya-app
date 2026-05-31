@@ -7,6 +7,9 @@ const INACTIVE_TAB_COLOR = "#71717A";
 const AI_TAB_NAME = "viya";
 const TAB_SLOT_WIDTH = 52;
 const TAB_BAR_HORIZONTAL_PADDING = 16;
+const TAB_BAR_RADIUS = 28;
+const TAB_BAR_SIZE = 56;
+const ACTIVE_TAB_SIZE = 40;
 const HIDDEN_TAB_NAMES = new Set(["moments", "vault"]);
 
 function emitTabPress({
@@ -81,6 +84,7 @@ export function FloatingTabBar({
 			<Surface
 				className="flex-row items-center rounded-full border border-border bg-surface px-2 py-2"
 				style={{
+					borderRadius: TAB_BAR_RADIUS,
 					width: floatingTabWidth,
 				}}
 			>
@@ -111,9 +115,13 @@ export function FloatingTabBar({
 							testID={options.tabBarButtonTestID}
 						>
 							<View
-								className="h-10 w-10 items-center justify-center rounded-full"
+								className="items-center justify-center rounded-full"
 								style={{
 									backgroundColor: isFocused ? ACTIVE_TAB_COLOR : "transparent",
+									borderRadius: ACTIVE_TAB_SIZE / 2,
+									height: ACTIVE_TAB_SIZE,
+									overflow: "hidden",
+									width: ACTIVE_TAB_SIZE,
 								}}
 							>
 								{tabBarIcon?.({ color, focused: isFocused, size: 20 })}
@@ -123,7 +131,14 @@ export function FloatingTabBar({
 				})}
 			</Surface>
 			{aiRoute && aiDescriptor ? (
-				<Surface className="h-14 w-14 items-center justify-center rounded-full border border-border bg-surface">
+				<Surface
+					className="items-center justify-center rounded-full border border-border bg-surface"
+					style={{
+						borderRadius: TAB_BAR_SIZE / 2,
+						height: TAB_BAR_SIZE,
+						width: TAB_BAR_SIZE,
+					}}
+				>
 					<Pressable
 						accessibilityLabel={aiDescriptor.options.tabBarAccessibilityLabel}
 						accessibilityRole="button"
@@ -141,9 +156,13 @@ export function FloatingTabBar({
 						testID={aiDescriptor.options.tabBarButtonTestID}
 					>
 						<View
-							className="h-12 w-12 items-center justify-center rounded-full"
+							className="items-center justify-center rounded-full"
 							style={{
 								backgroundColor: isAiFocused ? ACTIVE_TAB_COLOR : "transparent",
+								borderRadius: (TAB_BAR_SIZE - 8) / 2,
+								height: TAB_BAR_SIZE - 8,
+								overflow: "hidden",
+								width: TAB_BAR_SIZE - 8,
 							}}
 						>
 							{aiDescriptor.options.tabBarIcon?.({

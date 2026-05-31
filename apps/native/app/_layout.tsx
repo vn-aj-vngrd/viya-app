@@ -10,8 +10,8 @@ import { HeroUINativeProvider, useThemeColor } from "heroui-native";
 import { View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
-
 import { AppThemeProvider } from "@/contexts/app-theme-context";
+import { OTAUpdateBanner } from "@/shared/components/common/ota-update-banner";
 
 export const unstable_settings = {
 	initialRouteName: "(app)",
@@ -35,6 +35,7 @@ function StackLayout() {
 			>
 				<Stack.Screen name="(app)" options={{ headerShown: false }} />
 				<Stack.Screen name="(auth)" options={{ headerShown: false }} />
+				<Stack.Screen name="sso-callback" options={{ headerShown: false }} />
 				<Stack.Screen
 					name="modal"
 					options={{ title: "Modal", presentation: "modal" }}
@@ -58,6 +59,7 @@ export default function Layout() {
 						<AppThemeProvider>
 							<HeroUINativeProvider>
 								<StackLayout />
+								<OTAUpdateBanner />
 							</HeroUINativeProvider>
 						</AppThemeProvider>
 					</KeyboardProvider>

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { getComposerInputLayout } from "./viya-chat-composer";
 import {
 	CHAT_MODE_OPTIONS,
@@ -12,6 +13,9 @@ import {
 	getTripBlueprintCreateInput,
 	getVisibleSlashCommands,
 } from "./viya-chat-utils";
+
+const readFeatureFile = (path: string) =>
+	readFileSync(new URL(path, import.meta.url), "utf8");
 
 describe("getComposerInputLayout", () => {
 	test("clamps input height and enables scrolling when content overflows", () => {
@@ -93,9 +97,25 @@ describe("Viya chat modes", () => {
 			workspaceTab: "budget",
 		});
 
-		expect(suggestions[0]?.title).toBe("Review this budget");
+		expect(suggestions[0]?.title).toBe("Sync budget");
 		expect(suggestions[0]?.prompt).toContain("Japan Trip");
 		expect(suggestions[0]?.prompt).toContain("booked costs");
+	});
+
+	test("puts Generate itinerary first for itinerary workspace suggestions", () => {
+		const suggestions = getPromptSuggestions("trip", [], {
+			destination: "Japan",
+			title: "Japan Trip",
+			workspaceTab: "itinerary",
+		});
+
+		expect(suggestions[0]?.title).toBe("Generate itinerary");
+		expect(suggestions[0]?.prompt).toContain(
+			"one natural whole-day plan for each trip date"
+		);
+		expect(suggestions.map((suggestion) => suggestion.title)).not.toContain(
+			"Build itinerary"
+		);
 	});
 
 	test("maps readiness workspace suggestions from the legacy checklist tab", () => {
@@ -105,9 +125,23 @@ describe("Viya chat modes", () => {
 			workspaceTab: "checklist",
 		});
 
-		expect(suggestions[0]?.title).toBe("Check this readiness");
+		expect(suggestions[0]?.title).toBe("Complete readiness");
 		expect(suggestions[0]?.prompt).toContain("Japan Trip");
 		expect(suggestions[0]?.prompt).toContain("open checklist items");
+	});
+
+	test("keeps module AI generation in trip chat actions", () => {
+		const source = readFeatureFile("./viya-chat-screen.tsx");
+
+		expect(source).toContain("generateTripAgentDraft");
+		expect(source).toContain("applyTripAgentDraft");
+		expect(source).toContain("Generate itinerary");
+		expect(source).toContain("5 to 6 timed stops on full days");
+		expect(source).toContain("Sync budget");
+		expect(source).toContain("Complete readiness");
+		expect(source).toContain("Upload files");
+		expect(source).toContain("actionSuggestion");
+		expect(source).not.toContain("Create trip");
 	});
 });
 

@@ -1438,7 +1438,11 @@ export function TripItineraryScreen() {
 		trip.startDate && trip.endDate
 			? (getDateRangeDurationDays(trip.startDate, trip.endDate) ?? 1)
 			: 1;
-	const calendarDayCount = Math.max(1, tripDayCountFromDates);
+	const calendarDayCount = Math.max(
+		1,
+		tripDayCountFromDates,
+		itineraryDays.length
+	);
 	const itineraryItemsByDayId = new Map<
 		Id<"itineraryDays">,
 		Doc<"itineraryItems">[]
@@ -1709,7 +1713,11 @@ export function TripItineraryDayScreen() {
 		trip.startDate && trip.endDate
 			? (getDateRangeDurationDays(trip.startDate, trip.endDate) ?? 1)
 			: 1;
-	const calendarDayCount = Math.max(1, tripDayCountFromDates);
+	const calendarDayCount = Math.max(
+		1,
+		tripDayCountFromDates,
+		itineraryDays.length
+	);
 	const itineraryDayByNumber = new Map<number, Doc<"itineraryDays">>();
 	const itineraryDayByDate = new Map<string, Doc<"itineraryDays">>();
 	for (const day of itineraryDays) {
