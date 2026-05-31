@@ -59,6 +59,8 @@ const priorityValidator = v.union(
 
 const bookingDraftValidator = v.object({
 	confirmationCode: v.union(v.string(), v.null()),
+	cost: v.optional(v.union(v.number(), v.null())),
+	currency: v.optional(v.union(v.string(), v.null())),
 	endDateTime: v.union(v.string(), v.null()),
 	locationName: v.union(v.string(), v.null()),
 	provider: v.union(v.string(), v.null()),
@@ -75,7 +77,181 @@ const bookingDraftValidator = v.object({
 	),
 });
 
+const receiptExpenseValidator = v.object({
+	amount: v.number(),
+	category: v.union(
+		v.literal("activity"),
+		v.literal("food"),
+		v.literal("hotel"),
+		v.literal("shopping"),
+		v.literal("transport"),
+		v.literal("documents"),
+		v.literal("other")
+	),
+	currency: v.string(),
+	notes: v.optional(v.string()),
+	spentAt: v.string(),
+	title: v.string(),
+});
+
 const toOptional = <T>(value: T | null): T | undefined => value ?? undefined;
+
+interface ExtractedBookingLike {
+	endDateTime?: string;
+	locationName?: string;
+	provider?: string;
+	startDateTime?: string;
+	title: string;
+	type: string;
+}
+
+const tokenStopWords = new Set([
+	"and",
+	"booking",
+	"confirmation",
+	"day",
+	"near",
+	"pass",
+	"the",
+	"ticket",
+	"to",
+	"trip",
+]);
+
+const isoDatePattern = /^\d{4}-\d{2}-\d{2}/;
+const isoTimePattern = /T(\d{2}:\d{2})/;
+const searchTokenPattern = /[^a-z0-9]+/;
+
+const getIsoDate = (value?: string): string | null => {
+	const match = value?.match(isoDatePattern);
+
+	return match?.[0] ?? null;
+};
+
+const getIsoTime = (value?: string): string | null => {
+	const match = value?.match(isoTimePattern);
+
+	return match?.[1] ?? null;
+};
+
+const getSearchTokens = (parts: Array<string | undefined>) =>
+	new Set(
+		parts
+			.join(" ")
+			.toLowerCase()
+			.split(searchTokenPattern)
+			.filter((token) => token.length > 2 && !tokenStopWords.has(token))
+	);
+
+const hasDateInBookingWindow = ({
+	dayDate,
+	endDate,
+	startDate,
+}: {
+	dayDate?: string;
+	endDate: string | null;
+	startDate: string | null;
+}) => {
+	if (!(dayDate && startDate)) {
+		return false;
+	}
+
+	if (!endDate) {
+		return dayDate === startDate;
+	}
+
+	return dayDate >= startDate && dayDate <= endDate;
+};
+
+const getBookingItineraryMatchScore = ({
+	booking,
+	day,
+	item,
+}: {
+	booking: ExtractedBookingLike;
+	day?: Doc<"itineraryDays">;
+	item: Doc<"itineraryItems">;
+}) => {
+	const startDate = getIsoDate(booking.startDateTime);
+	const endDate = getIsoDate(booking.endDateTime);
+	const startTime = getIsoTime(booking.startDateTime);
+	const endTime = getIsoTime(booking.endDateTime);
+	let score = item.category === booking.type ? 3 : 0;
+
+	if (
+		hasDateInBookingWindow({
+			dayDate: day?.date,
+			endDate,
+			startDate,
+		})
+	) {
+		score += 2;
+	}
+
+	if (item.startTime === startTime || item.startTime === endTime) {
+		score += 3;
+	}
+
+	const bookingTokens = getSearchTokens([
+		booking.title,
+		booking.provider,
+		booking.locationName,
+	]);
+	const itemTokens = getSearchTokens([
+		item.title,
+		item.description,
+		item.locationName,
+		item.address,
+	]);
+	let overlappingTokenCount = 0;
+	for (const token of bookingTokens) {
+		if (itemTokens.has(token)) {
+			overlappingTokenCount += 1;
+		}
+	}
+
+	return score + Math.min(overlappingTokenCount, 3);
+};
+
+const linkMatchingItineraryItemsToBooking = async ({
+	booking,
+	bookingId,
+	ctx,
+	tripId,
+}: {
+	booking: ExtractedBookingLike;
+	bookingId: Id<"bookings">;
+	ctx: MutationCtx;
+	tripId: Id<"trips">;
+}) => {
+	const [days, items] = await Promise.all([
+		ctx.db
+			.query("itineraryDays")
+			.withIndex("by_trip", (q) => q.eq("tripId", tripId))
+			.collect(),
+		ctx.db
+			.query("itineraryItems")
+			.withIndex("by_trip", (q) => q.eq("tripId", tripId))
+			.collect(),
+	]);
+	const dayById = new Map(days.map((day) => [day._id, day]));
+
+	for (const item of items) {
+		if (item.bookingId) {
+			continue;
+		}
+
+		const score = getBookingItineraryMatchScore({
+			booking,
+			day: dayById.get(item.dayId),
+			item,
+		});
+
+		if (score >= 6) {
+			await ctx.db.patch(item._id, { bookingId });
+		}
+	}
+};
 
 const toDomainReadinessItem = (item: Doc<"readinessItems">): ReadinessItem => ({
 	aiReason: item.aiReason,
@@ -516,8 +692,10 @@ export const confirmTripSyncReview = mutation({
 				v.literal("voucher"),
 				v.literal("qr"),
 				v.literal("permit"),
+				v.literal("receipt"),
 				v.literal("other")
 			),
+			expense: v.optional(receiptExpenseValidator),
 			extractedTitle: v.string(),
 			readinessSuggestions: v.array(
 				v.object({
@@ -569,6 +747,8 @@ export const confirmTripSyncReview = mutation({
 			);
 			const bookingPatch = {
 				confirmationCode: toOptional(booking.confirmationCode),
+				cost: booking.cost ?? undefined,
+				currency: toOptional(booking.currency),
 				endDateTime: toOptional(booking.endDateTime),
 				extractedFrom: "tripSync",
 				locationName: toOptional(booking.locationName),
@@ -583,6 +763,12 @@ export const confirmTripSyncReview = mutation({
 
 			if (matchingBooking) {
 				await ctx.db.patch(matchingBooking._id, bookingPatch);
+				await linkMatchingItineraryItemsToBooking({
+					booking: bookingPatch,
+					bookingId: matchingBooking._id,
+					ctx,
+					tripId: args.tripId,
+				});
 				vaultLinkedEntityPatch = {
 					linkedEntityId: matchingBooking._id,
 					linkedEntityType: "booking",
@@ -593,11 +779,39 @@ export const confirmTripSyncReview = mutation({
 					createdAt: now,
 					tripId: args.tripId,
 				});
+				await linkMatchingItineraryItemsToBooking({
+					booking: bookingPatch,
+					bookingId,
+					ctx,
+					tripId: args.tripId,
+				});
 				vaultLinkedEntityPatch = {
 					linkedEntityId: bookingId,
 					linkedEntityType: "booking",
 				};
 			}
+		}
+
+		if (args.extraction.expense) {
+			const expense = args.extraction.expense;
+			const expenseId = await ctx.db.insert("expenses", {
+				amount: Math.max(0, expense.amount),
+				category: expense.category,
+				createdAt: now,
+				currency: expense.currency,
+				notes: expense.notes,
+				source: "tripSync",
+				spentAt: expense.spentAt,
+				title: expense.title,
+				tripId: args.tripId,
+				updatedAt: now,
+				vaultItemId,
+			});
+
+			vaultLinkedEntityPatch ??= {
+				linkedEntityId: expenseId,
+				linkedEntityType: "expense",
+			};
 		}
 
 		if (args.kind === "document" || args.extraction.documentType !== "other") {

@@ -244,7 +244,7 @@ export const getVisibleSlashCommands = (
 		? getSlashCommandMatches(activeSlashCommand.query)
 				.filter(
 					(command) =>
-						!(lockedMode && command.mode) || command.mode === lockedMode
+						!("mode" in command && lockedMode) || command.mode === lockedMode
 				)
 				.slice(0, 7)
 		: [];

@@ -9,6 +9,7 @@ import {
 import { palawanDemoTrip } from "@viya-app/domain/demo/palawan";
 import { generateObject } from "ai";
 import { v } from "convex/values";
+import { getSingaporeDemoVaultExtraction } from "../../src/ai/singapore-demo-fixtures";
 import { action } from "../_generated/server";
 import {
 	fallbackItinerary,
@@ -202,6 +203,12 @@ export const extractVaultItemDraft = action({
 		useFallback: v.optional(v.boolean()),
 	},
 	handler: async (_ctx, args) => {
+		const fixtureExtraction = getSingaporeDemoVaultExtraction(args.fileName);
+
+		if (fixtureExtraction) {
+			return fixtureExtraction;
+		}
+
 		if (args.useFallback) {
 			return fallbackVaultExtraction;
 		}

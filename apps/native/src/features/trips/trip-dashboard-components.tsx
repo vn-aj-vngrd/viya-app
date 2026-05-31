@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
-import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
-import { useMutation } from "convex/react";
+import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
+import { useAction, useMutation } from "convex/react";
 import { type Href, Link, useRouter } from "expo-router";
 import {
 	BottomSheet,
@@ -1644,6 +1644,340 @@ function WorkspaceModuleTile({ item }: { item: TripWorkspaceModule }) {
 	);
 }
 
+const buildWorkspaceAutopilotPrompt = (model: TripDashboardModel) => {
+	const { workspace } = model;
+	const trip = workspace.trip;
+	const tripLabel = trip.title.trim() || "this trip";
+	const destination = trip.destination.trim() || "the destination";
+	const budget = trip.budgetAmount
+		? `${formatMoney(trip.budgetAmount, model.currency)} budget`
+		: "no confirmed budget yet";
+	const vaultCoverageCount = Math.max(
+		workspace.vaultItems.length,
+		workspace.documents.length
+	);
+	const coverage = [
+		`${workspace.itineraryDays.length} itinerary days`,
+		`${workspace.itineraryItems.length} itinerary stops`,
+		`${vaultCoverageCount} Vault files`,
+		`${workspace.bookings.length} bookings`,
+		`${workspace.expenses.length} expenses`,
+		`${workspace.risks.length} risks`,
+		`${model.readiness.score}% readiness`,
+	].join(", ");
+
+	return [
+		`Complete the workspace for ${tripLabel}.`,
+		`Trip context: destination ${destination}; dates ${model.tripWindow}; traveler context ${model.travelerLabel}; ${budget}.`,
+		`Current workspace coverage: ${coverage}.`,
+		"Use the trip profile, Vault, bookings, budget, itinerary, risks, notes, companions, travel mode, and readiness together.",
+		"Stage the work as reviewable changes: prepare Vault, identify booking or document gaps, generate or refine a realistic itinerary, track budget evidence, add risks and backups, then run a readiness audit.",
+		"Ask only for missing decisions that block the next useful workspace action. Do not invent confirmed bookings, uploaded documents, live availability, weather, traffic, or paid reservations.",
+	].join(" ");
+};
+
+const workspaceAutopilotDraftModules = [
+	{ action: "generate", module: "itinerary" },
+	{ action: "audit", module: "bookings" },
+	{ action: "audit", module: "documents" },
+	{ action: "audit", module: "budget" },
+	{ action: "audit", module: "readiness" },
+	{ action: "audit", module: "risks" },
+] as const;
+
+const tripAgentModuleLabels = {
+	bookings: "Bookings",
+	budget: "Budget",
+	documents: "Vault",
+	itinerary: "Itinerary",
+	places: "Places",
+	readiness: "Readiness",
+	recap: "Recap",
+	risks: "Risks",
+	travel: "Travel Mode",
+} as const satisfies Record<Doc<"tripAgentDrafts">["module"], string>;
+
+function TripAgentDraftRow({
+	draft,
+	isPending,
+	onApply,
+	onDismiss,
+}: {
+	draft: Doc<"tripAgentDrafts">;
+	isPending: boolean;
+	onApply: (draftId: Id<"tripAgentDrafts">) => void;
+	onDismiss: (draftId: Id<"tripAgentDrafts">) => void;
+}) {
+	return (
+		<View className="gap-2 border-border border-t pt-3">
+			<View className="flex-row items-start gap-3">
+				<View className="h-8 w-8 items-center justify-center rounded-full bg-accent-soft">
+					<Ionicons color={accentColor} name="sparkles-outline" size={15} />
+				</View>
+				<View className="min-w-0 flex-1 gap-0.5">
+					<Text color="muted" type="body-xs" weight="semibold">
+						{tripAgentModuleLabels[draft.module].toUpperCase()} DRAFT
+					</Text>
+					<Text numberOfLines={1} type="body-sm" weight="bold">
+						{draft.title}
+					</Text>
+					<Text color="muted" numberOfLines={2} type="body-xs">
+						{draft.rationale}
+					</Text>
+				</View>
+			</View>
+			<View className="flex-row gap-2">
+				<Button
+					className="min-w-0 flex-1"
+					isDisabled={isPending}
+					onPress={() => onApply(draft._id)}
+					size="sm"
+				>
+					{isPending ? <Spinner size="sm" /> : null}
+					<Button.Label>Apply</Button.Label>
+				</Button>
+				<Button
+					className="min-w-0 flex-1"
+					isDisabled={isPending}
+					onPress={() => onDismiss(draft._id)}
+					size="sm"
+					variant="secondary"
+				>
+					<Button.Label>Dismiss</Button.Label>
+				</Button>
+			</View>
+		</View>
+	);
+}
+
+function WorkspaceAutopilotCard({ model }: { model: TripDashboardModel }) {
+	const router = useRouter();
+	const { workspace } = model;
+	const generateTripAgentDraft = useAction(
+		api.ai.tripAgent.generateTripAgentDraft
+	);
+	const applyTripAgentDraft = useMutation(api.ai.tripAgent.applyTripAgentDraft);
+	const dismissTripAgentDraft = useMutation(
+		api.ai.tripAgent.dismissTripAgentDraft
+	);
+	const [isGeneratingDrafts, setIsGeneratingDrafts] = useState(false);
+	const [pendingDraftId, setPendingDraftId] =
+		useState<Id<"tripAgentDrafts"> | null>(null);
+	const [agentMessage, setAgentMessage] = useState<string | null>(null);
+	const [agentErrorMessage, setAgentErrorMessage] = useState<string | null>(
+		null
+	);
+	const readinessDisplay = getReadinessDisplay({
+		itemCount: workspace.readinessItems.length,
+		score: model.readiness.score,
+	});
+	const pendingDrafts = workspace.agentDrafts;
+	const pendingDraftModules = new Set(
+		pendingDrafts.map((draft) => draft.module)
+	);
+	const missingDraftModules = workspaceAutopilotDraftModules.filter(
+		(config) => !pendingDraftModules.has(config.module)
+	);
+	const completedStageCount = [
+		workspace.itineraryItems.length > 0,
+		workspace.vaultItems.length + workspace.documents.length > 0,
+		workspace.bookings.length > 0,
+		workspace.trip.budgetAmount !== undefined || workspace.expenses.length > 0,
+		model.readiness.score >= 80,
+	].filter(Boolean).length;
+	const isWorkspaceReady =
+		completedStageCount === 5 && model.readiness.score >= 100;
+	const visibleDrafts = isWorkspaceReady ? [] : pendingDrafts;
+	const autopilotTitle = isWorkspaceReady
+		? "Trip is ready"
+		: "Complete this trip";
+	const autopilotDescription = isWorkspaceReady
+		? "This workspace has itinerary, Vault, bookings, budget, risks, and readiness connected for travel."
+		: "Turn this workspace into a complete trip plan: itinerary, Vault, bookings, budget, risks, and readiness.";
+	const primaryActionLabel = isWorkspaceReady
+		? "Ask Viya"
+		: "Complete this trip";
+	const openTripChat = () => {
+		router.push({
+			params: {
+				mode: "trip",
+				newThread: "1",
+				prompt: buildWorkspaceAutopilotPrompt(model),
+				returnTo: `/(app)/trips/${model.tripId}`,
+				tripId: String(model.tripId),
+				workspaceTab: "overview",
+			},
+			pathname: VIYA_ROUTES.ai,
+		});
+	};
+	const handleGenerateDrafts = async () => {
+		setAgentErrorMessage(null);
+		setAgentMessage(null);
+
+		if (isWorkspaceReady) {
+			openTripChat();
+			return;
+		}
+
+		if (missingDraftModules.length === 0) {
+			setAgentMessage("Viya already staged drafts for the core modules.");
+			return;
+		}
+
+		setIsGeneratingDrafts(true);
+
+		try {
+			const prompt = buildWorkspaceAutopilotPrompt(model);
+
+			await Promise.all(
+				missingDraftModules.map((config) =>
+					generateTripAgentDraft({
+						action: config.action,
+						module: config.module,
+						prompt,
+						tripId: model.tripId,
+						useFallback: true,
+					})
+				)
+			);
+			setAgentMessage("Viya staged reviewable drafts for this workspace.");
+		} catch (error) {
+			setAgentErrorMessage(
+				error instanceof Error
+					? error.message
+					: "Viya could not stage workspace drafts."
+			);
+		} finally {
+			setIsGeneratingDrafts(false);
+		}
+	};
+	const handleApplyDraft = async (draftId: Id<"tripAgentDrafts">) => {
+		setAgentErrorMessage(null);
+		setPendingDraftId(draftId);
+
+		try {
+			await applyTripAgentDraft({ draftId });
+			setAgentMessage("Draft applied to the trip workspace.");
+		} catch (error) {
+			setAgentErrorMessage(
+				error instanceof Error ? error.message : "Viya could not apply draft."
+			);
+		} finally {
+			setPendingDraftId(null);
+		}
+	};
+	const handleDismissDraft = async (draftId: Id<"tripAgentDrafts">) => {
+		setAgentErrorMessage(null);
+		setPendingDraftId(draftId);
+
+		try {
+			await dismissTripAgentDraft({ draftId });
+			setAgentMessage("Draft dismissed.");
+		} catch (error) {
+			setAgentErrorMessage(
+				error instanceof Error ? error.message : "Viya could not dismiss draft."
+			);
+		} finally {
+			setPendingDraftId(null);
+		}
+	};
+
+	return (
+		<Surface
+			className="gap-4 rounded-[28px] border bg-surface p-4"
+			style={{ borderColor }}
+		>
+			<View className="flex-row items-start gap-3">
+				<View className="h-11 w-11 items-center justify-center rounded-[20px] bg-accent-soft">
+					<Ionicons color={accentColor} name="sparkles-outline" size={20} />
+				</View>
+				<View className="min-w-0 flex-1 gap-1">
+					<Text color="muted" type="body-xs" weight="semibold">
+						VIYA AUTOPILOT
+					</Text>
+					<Text type="body" weight="bold">
+						{autopilotTitle}
+					</Text>
+					<Text.Paragraph color="muted" type="body-sm">
+						{autopilotDescription}
+					</Text.Paragraph>
+				</View>
+			</View>
+			<View className="flex-row flex-wrap gap-2">
+				<View className="rounded-full bg-surface-secondary px-3 py-1.5">
+					<Text color="muted" type="body-xs" weight="semibold">
+						{completedStageCount}/5 stages
+					</Text>
+				</View>
+				<View className="rounded-full bg-surface-secondary px-3 py-1.5">
+					<Text color="muted" type="body-xs" weight="semibold">
+						{readinessDisplay.value} readiness
+					</Text>
+				</View>
+			</View>
+			{agentMessage ? (
+				<Text color="muted" type="body-xs">
+					{agentMessage}
+				</Text>
+			) : null}
+			{agentErrorMessage ? (
+				<Text className="text-danger" type="body-xs">
+					{agentErrorMessage}
+				</Text>
+			) : null}
+			{visibleDrafts.length > 0 ? (
+				<View className="gap-3">
+					<Text color="muted" type="body-xs" weight="semibold">
+						REVIEWABLE CHANGES
+					</Text>
+					{visibleDrafts.map((draft) => (
+						<TripAgentDraftRow
+							draft={draft}
+							isPending={pendingDraftId === draft._id}
+							key={draft._id}
+							onApply={handleApplyDraft}
+							onDismiss={handleDismissDraft}
+						/>
+					))}
+				</View>
+			) : null}
+			<View className="flex-row flex-wrap gap-2">
+				<Button
+					accessibilityLabel={
+						isWorkspaceReady
+							? "Ask Viya about this ready trip"
+							: "Complete this trip with Viya"
+					}
+					className="min-w-[47%] flex-1"
+					isDisabled={isGeneratingDrafts}
+					onPress={handleGenerateDrafts}
+					size="md"
+				>
+					{isGeneratingDrafts ? (
+						<Spinner size="sm" />
+					) : (
+						<Ionicons color="#FFFFFF" name="sparkles-outline" size={16} />
+					)}
+					<Button.Label>{primaryActionLabel}</Button.Label>
+				</Button>
+				{isWorkspaceReady ? null : (
+					<Button
+						accessibilityLabel="Ask Viya about this trip"
+						className="min-w-[47%] flex-1"
+						isDisabled={isGeneratingDrafts}
+						onPress={openTripChat}
+						size="md"
+						variant="secondary"
+					>
+						<Ionicons color={accentColor} name="chatbubble-outline" size={16} />
+						<Button.Label>Ask Viya</Button.Label>
+					</Button>
+				)}
+			</View>
+		</Surface>
+	);
+}
+
 export function MainModules({ model }: { model: TripDashboardModel }) {
 	const [activeWorkspaceGroup, setActiveWorkspaceGroup] =
 		useState<WorkspaceModuleGroupKey>("core");
@@ -1652,6 +1986,7 @@ export function MainModules({ model }: { model: TripDashboardModel }) {
 
 	return (
 		<View className="gap-7">
+			<WorkspaceAutopilotCard model={model} />
 			<View className="gap-3">
 				<View className="gap-1 px-1">
 					<Text.Heading type="h5" weight="bold">

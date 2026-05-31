@@ -103,12 +103,22 @@ const quickExpenseCategoryByItineraryCategory: Partial<
 
 const todayIsoDate = () => new Date().toISOString().slice(0, 10);
 
-const getRemainingTripDays = (endDate: string) => {
+const getTripBudgetDayCount = (startDate: string, endDate: string) => {
+	const start = new Date(`${startDate}T00:00:00.000Z`);
 	const end = new Date(`${endDate}T00:00:00.000Z`);
 	const today = new Date(`${todayIsoDate()}T00:00:00.000Z`);
 
-	if (Number.isNaN(end.getTime())) {
+	if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
 		return 1;
+	}
+
+	const tripDayCount = Math.max(
+		1,
+		Math.ceil((end.getTime() - start.getTime()) / dateMs) + 1
+	);
+
+	if (today.getTime() < start.getTime()) {
+		return tripDayCount;
 	}
 
 	return Math.max(1, Math.ceil((end.getTime() - today.getTime()) / dateMs) + 1);
@@ -611,6 +621,7 @@ function QuickNotePanel({
 	);
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Travel Mode coordinates itinerary, wallet, documents, risks, quick expense, and notes in one day-of surface.
 export function TripTravelModeScreen() {
 	const tripId = useTripIdParam();
 	const workspace = useQuery(
@@ -650,7 +661,10 @@ export function TripTravelModeScreen() {
 			budgetCurrency: workspace.trip.budgetCurrency,
 			expenses: workspace.expenses,
 			itineraryItems: workspace.itineraryItems,
-			remainingTripDays: getRemainingTripDays(workspace.trip.endDate),
+			remainingTripDays: getTripBudgetDayCount(
+				workspace.trip.startDate,
+				workspace.trip.endDate
+			),
 		});
 	}, [workspace]);
 
@@ -659,6 +673,18 @@ export function TripTravelModeScreen() {
 			<Container className="px-4 pb-28">
 				<EmptyState
 					description="Open a saved trip before using Travel Mode."
+					icon="navigate-outline"
+					title="Trip not found"
+				/>
+			</Container>
+		);
+	}
+
+	if (workspace === null) {
+		return (
+			<Container className="px-4 pb-28">
+				<EmptyState
+					description="This trip was deleted or is no longer available."
 					icon="navigate-outline"
 					title="Trip not found"
 				/>

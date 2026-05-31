@@ -4,6 +4,8 @@ export const vaultExtractionSchema = z.object({
 	booking: z
 		.object({
 			confirmationCode: z.string().nullable(),
+			cost: z.number().positive().nullable().optional(),
+			currency: z.string().min(1).nullable().optional(),
 			endDateTime: z.string().nullable(),
 			locationName: z.string().nullable(),
 			provider: z.string().nullable(),
@@ -30,8 +32,27 @@ export const vaultExtractionSchema = z.object({
 		"voucher",
 		"qr",
 		"permit",
+		"receipt",
 		"other",
 	]),
+	expense: z
+		.object({
+			amount: z.number().positive(),
+			category: z.enum([
+				"activity",
+				"food",
+				"hotel",
+				"shopping",
+				"transport",
+				"documents",
+				"other",
+			]),
+			currency: z.string().min(1),
+			notes: z.string().optional(),
+			spentAt: z.string().min(1),
+			title: z.string().min(1),
+		})
+		.optional(),
 	extractedTitle: z.string().min(1),
 	readinessSuggestions: z.array(
 		z.object({

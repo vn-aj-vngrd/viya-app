@@ -15,7 +15,7 @@ import {
 	Text,
 	TextField,
 } from "heroui-native";
-import type { ComponentProps, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { Linking, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -82,12 +82,22 @@ const getExpenseLinkPatch = (form: ExpenseFormState): ExpenseLinkPatch => ({
 	vaultItemId: form.vaultItemId || undefined,
 });
 
-const getRemainingTripDays = (endDate: string) => {
+const getTripBudgetDayCount = (startDate: string, endDate: string) => {
+	const start = new Date(`${startDate}T00:00:00.000Z`);
 	const end = new Date(`${endDate}T00:00:00.000Z`);
 	const today = new Date(`${todayIsoDate()}T00:00:00.000Z`);
 
-	if (Number.isNaN(end.getTime())) {
+	if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
 		return 1;
+	}
+
+	const tripDayCount = Math.max(
+		1,
+		Math.ceil((end.getTime() - start.getTime()) / dateMs) + 1
+	);
+
+	if (today.getTime() < start.getTime()) {
+		return tripDayCount;
 	}
 
 	return Math.max(1, Math.ceil((end.getTime() - today.getTime()) / dateMs) + 1);
@@ -174,16 +184,20 @@ function ProgressBar({ progress }: { progress: number }) {
 }
 
 function BudgetOverviewCard({
+	budgetActionLabel,
 	budgetStatus,
 	dailySafeSpendLabel,
+	foreignSpendLabel,
 	onOpenBudgetEditor,
 	plannedBudgetLabel,
 	progress,
 	remainingAmountLabel,
 	totalTrackedSpendLabel,
 }: {
+	budgetActionLabel: string;
 	budgetStatus: string;
 	dailySafeSpendLabel: string;
+	foreignSpendLabel?: string;
 	onOpenBudgetEditor: () => void;
 	plannedBudgetLabel: string;
 	progress: number;
@@ -206,6 +220,11 @@ function BudgetOverviewCard({
 					<Text color="muted" numberOfLines={1} type="body-xs">
 						{dailySafeSpendLabel} safe daily spend
 					</Text>
+					{foreignSpendLabel ? (
+						<Text color="muted" numberOfLines={1} type="body-xs">
+							{foreignSpendLabel} tracked separately
+						</Text>
+					) : null}
 				</View>
 				<View className="rounded-full border border-border bg-white px-3 py-1.5">
 					<Text
@@ -249,28 +268,18 @@ function BudgetOverviewCard({
 
 			<Button onPress={onOpenBudgetEditor} size="sm" variant="secondary">
 				<Ionicons color={budgetAccentColor} name="create-outline" size={15} />
-				<Button.Label>Edit budget</Button.Label>
+				<Button.Label>{budgetActionLabel}</Button.Label>
 			</Button>
 		</View>
 	);
 }
 
-function SectionTitle({
-	icon,
-	title,
-}: {
-	icon: ComponentProps<typeof Ionicons>["name"];
-	title: string;
-}) {
-	return (
-		<View className="flex-row items-center gap-2">
-			<Ionicons color="#71717A" name={icon} size={18} />
-			<Text.Heading type="h5" weight="semibold">
-				{title}
-			</Text.Heading>
-		</View>
-	);
-}
+const formatForeignCurrencyTotals = (
+	totals: Array<{ amount: number; currency: string }>
+) =>
+	totals
+		.map(({ amount, currency }) => formatMoney(amount, currency))
+		.join(" · ");
 
 function CategoryPicker({
 	onChange,
@@ -359,65 +368,82 @@ function LinkPicker<TId extends string>({
 	);
 }
 
-function BudgetEditorCard({
+function BudgetEditorSheet({
+	actionLabel,
 	budgetAmount,
 	budgetDraft,
 	budgetErrorMessage,
+	isOpen,
 	isSavingBudget,
-	onCancel,
+	onOpenChange,
 	onSave,
 	onUpdateBudgetDraft,
 }: {
+	actionLabel: string;
 	budgetAmount?: number;
 	budgetDraft: string;
 	budgetErrorMessage: string | null;
+	isOpen: boolean;
 	isSavingBudget: boolean;
-	onCancel: () => void;
+	onOpenChange: (isOpen: boolean) => void;
 	onSave: () => void;
 	onUpdateBudgetDraft: (value: string) => void;
 }) {
+	const insets = useSafeAreaInsets();
+
 	return (
-		<View className="gap-4">
-			<SectionTitle icon="create-outline" title="Trip budget" />
-			<TextField className="gap-2">
-				<Label>
-					<Label.Text>Total budget</Label.Text>
-				</Label>
-				<Input
-					className="h-12 rounded-[18px] border-0 bg-surface-secondary px-4"
-					keyboardType="numeric"
-					onChangeText={onUpdateBudgetDraft}
-					placeholder={budgetAmount?.toString() ?? "25000"}
-					value={budgetDraft}
-					variant="secondary"
-				/>
-			</TextField>
-			{budgetErrorMessage ? (
-				<Text className="text-danger" type="body-sm">
-					{budgetErrorMessage}
-				</Text>
-			) : null}
-			<View className="flex-row flex-wrap gap-2">
-				<Button
-					className="min-w-[132px] flex-1"
-					isDisabled={isSavingBudget}
-					onPress={onSave}
+		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
+			<BottomSheet.Portal>
+				<BottomSheet.Overlay />
+				<BottomSheet.Content
+					backgroundClassName="rounded-t-[36px] bg-background"
+					enablePanDownToClose={true}
+					snapPoints={["48%"]}
 				>
-					{isSavingBudget ? <Spinner size="sm" /> : null}
-					<Button.Label>Save budget</Button.Label>
-				</Button>
-				{budgetAmount ? (
-					<Button
-						className="min-w-[132px] flex-1"
-						isDisabled={isSavingBudget}
-						onPress={onCancel}
-						variant="secondary"
+					<View
+						className="gap-4 px-5 pt-2"
+						style={{ paddingBottom: Math.max(insets.bottom, 18) }}
 					>
-						<Button.Label>Cancel</Button.Label>
-					</Button>
-				) : null}
-			</View>
-		</View>
+						<View className="flex-row items-start justify-between gap-4">
+							<View className="flex-1 gap-1">
+								<BottomSheet.Title>{actionLabel}</BottomSheet.Title>
+								<BottomSheet.Description>
+									Set the total amount you want to spend on this trip.
+								</BottomSheet.Description>
+							</View>
+							<CloseButton
+								accessibilityLabel="Close budget form"
+								className="h-10 w-10 rounded-full bg-surface"
+								onPress={() => onOpenChange(false)}
+							/>
+						</View>
+						<SheetField label="Total budget">
+							{({ onBlur, onFocus }) => (
+								<Input
+									className="h-12 border border-border bg-surface px-4"
+									keyboardType="numeric"
+									onBlur={onBlur}
+									onChangeText={onUpdateBudgetDraft}
+									onFocus={onFocus}
+									placeholder={budgetAmount?.toString() ?? "25000"}
+									value={budgetDraft}
+									variant="secondary"
+								/>
+							)}
+						</SheetField>
+						{budgetErrorMessage ? (
+							<Text className="text-danger" type="body-sm">
+								{budgetErrorMessage}
+							</Text>
+						) : null}
+						<Button isDisabled={isSavingBudget} onPress={onSave} size="lg">
+							{isSavingBudget ? <Spinner size="sm" /> : null}
+							<Button.Label>Save budget</Button.Label>
+						</Button>
+					</View>
+				</BottomSheet.Content>
+			</BottomSheet.Portal>
+		</BottomSheet>
 	);
 }
 
@@ -789,7 +815,10 @@ export function TripBudgetScreen() {
 			budgetCurrency: budget.trip.budgetCurrency,
 			expenses: budget.expenses,
 			itineraryItems: budget.itineraryItems,
-			remainingTripDays: getRemainingTripDays(budget.trip.endDate),
+			remainingTripDays: getTripBudgetDayCount(
+				budget.trip.startDate,
+				budget.trip.endDate
+			),
 		});
 	}, [budget]);
 
@@ -820,9 +849,14 @@ export function TripBudgetScreen() {
 		budgetAmount,
 		totalTrackedSpend: summary.totalTrackedSpend,
 	});
+	const budgetActionLabel = budgetAmount ? "Edit budget" : "Set budget";
 	const plannedBudgetLabel = budgetAmount
 		? formatMoney(budgetAmount, currency)
 		: "Not set";
+	const foreignSpendLabel =
+		summary.foreignCurrencyTotals.length > 0
+			? formatForeignCurrencyTotals(summary.foreignCurrencyTotals)
+			: undefined;
 	const receiptVaultItems =
 		workspace?.vaultItems.filter(
 			(item) => item.kind === "receipt" || item.kind === "booking"
@@ -846,7 +880,18 @@ export function TripBudgetScreen() {
 	const receiptUrlById = new Map(
 		receiptVaultItems.map((item) => [item._id, item.url])
 	);
-	const budgetEditorIsVisible = isBudgetEditorOpen || !budgetAmount;
+
+	const openBudgetEditor = () => {
+		setBudgetErrorMessage(null);
+		setBudgetDraft(budgetAmount?.toString() ?? "");
+		setIsBudgetEditorOpen(true);
+	};
+
+	const closeBudgetEditor = () => {
+		setBudgetErrorMessage(null);
+		setBudgetDraft("");
+		setIsBudgetEditorOpen(false);
+	};
 
 	const openNewExpenseForm = () => {
 		setEditingExpenseId(null);
@@ -877,8 +922,7 @@ export function TripBudgetScreen() {
 				budgetCurrency: currency,
 				tripId,
 			});
-			setBudgetDraft("");
-			setIsBudgetEditorOpen(false);
+			closeBudgetEditor();
 		} catch (error) {
 			setBudgetErrorMessage(
 				error instanceof Error ? error.message : "Could not update budget."
@@ -1006,12 +1050,11 @@ export function TripBudgetScreen() {
 					showsVerticalScrollIndicator={false}
 				>
 					<BudgetOverviewCard
+						budgetActionLabel={budgetActionLabel}
 						budgetStatus={budgetStatus}
 						dailySafeSpendLabel={formatMoney(summary.dailySafeSpend, currency)}
-						onOpenBudgetEditor={() => {
-							setBudgetErrorMessage(null);
-							setIsBudgetEditorOpen(true);
-						}}
+						foreignSpendLabel={foreignSpendLabel}
+						onOpenBudgetEditor={openBudgetEditor}
 						plannedBudgetLabel={plannedBudgetLabel}
 						progress={budgetProgress}
 						remainingAmountLabel={formatMoney(
@@ -1023,24 +1066,6 @@ export function TripBudgetScreen() {
 							currency
 						)}
 					/>
-
-					{budgetEditorIsVisible ? (
-						<BudgetEditorCard
-							budgetAmount={budgetAmount}
-							budgetDraft={budgetDraft}
-							budgetErrorMessage={budgetErrorMessage}
-							isSavingBudget={isSavingBudget}
-							onCancel={() => {
-								setBudgetErrorMessage(null);
-								setBudgetDraft("");
-								setIsBudgetEditorOpen(false);
-							}}
-							onSave={() => {
-								handleSaveBudget().catch(() => undefined);
-							}}
-							onUpdateBudgetDraft={setBudgetDraft}
-						/>
-					) : null}
 
 					<View className="gap-3">
 						<Text
@@ -1115,6 +1140,26 @@ export function TripBudgetScreen() {
 						</View>
 					</View>
 				</ScrollView>
+				<BudgetEditorSheet
+					actionLabel={budgetActionLabel}
+					budgetAmount={budgetAmount}
+					budgetDraft={budgetDraft}
+					budgetErrorMessage={budgetErrorMessage}
+					isOpen={isBudgetEditorOpen}
+					isSavingBudget={isSavingBudget}
+					onOpenChange={(isOpen) => {
+						if (isOpen) {
+							setIsBudgetEditorOpen(true);
+							return;
+						}
+
+						closeBudgetEditor();
+					}}
+					onSave={() => {
+						handleSaveBudget().catch(() => undefined);
+					}}
+					onUpdateBudgetDraft={setBudgetDraft}
+				/>
 				<ExpenseFormSheet
 					bookingOptions={bookingOptions}
 					editingExpenseId={editingExpenseId}

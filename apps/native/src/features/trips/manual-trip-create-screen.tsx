@@ -12,6 +12,7 @@ import {
 	Surface,
 	Text,
 	TextField,
+	useThemeColor,
 } from "heroui-native";
 import type { ComponentProps, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -1029,6 +1030,7 @@ function StarterPreviewScreen({
 	state: TripCreateFlowState;
 }) {
 	const insets = useSafeAreaInsets();
+	const accentForeground = useThemeColor("accent-foreground");
 	const budgetAmount = parseBudgetAmount(state.budgetAmount);
 	const travelerCount = parseTravelerCount(state.travelerCount) ?? 1;
 	const destination = state.destination || "your trip";
@@ -1048,15 +1050,6 @@ function StarterPreviewScreen({
 					<StarterSuccessBadge />
 					<Reveal delayMs={120}>
 						<View className="gap-2.5">
-							<View className="flex-row items-center gap-2">
-								<View
-									className="h-1.5 w-1.5 rounded-full"
-									style={{ backgroundColor: "#059669" }}
-								/>
-								<Text style={{ color: "#059669" }} type="body-xs" weight="bold">
-									READY TO EXPLORE
-								</Text>
-							</View>
 							<Text.Heading className="text-5xl leading-14" type="h1">
 								Your starter trip is ready
 							</Text.Heading>
@@ -1129,12 +1122,16 @@ function StarterPreviewScreen({
 				</ScrollView>
 				<Reveal delayMs={520}>
 					<View
-						className="absolute right-0 bottom-0 left-0 bg-background px-5"
-						style={{ paddingBottom: Math.max(insets.bottom + 8, 18) }}
+						className="absolute right-0 bottom-0 left-0 bg-background px-6"
+						style={{ paddingBottom: 8 }}
 					>
-						<Button className="gap-2" onPress={onOpen} size="lg">
-							<Button.Label>Open trip</Button.Label>
-							<Ionicons color="#FFFFFF" name="arrow-forward" size={18} />
+						<Button className="h-[54px] gap-2 rounded-full" onPress={onOpen}>
+							<Button.Label className="text-[17px]">Open trip</Button.Label>
+							<Ionicons
+								color={accentForeground}
+								name="arrow-forward"
+								size={18}
+							/>
 						</Button>
 					</View>
 				</Reveal>

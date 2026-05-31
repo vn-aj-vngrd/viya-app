@@ -29,6 +29,45 @@ describe("budget wallet selectors", () => {
 		});
 	});
 
+	it("keeps foreign-currency expenses out of the base budget totals", () => {
+		const summary = getBudgetWalletSummary({
+			bookings: [
+				{
+					cost: 21_800,
+					currency: "PHP",
+					status: "confirmed",
+					type: "flight",
+				},
+				{
+					cost: 32_400,
+					currency: "PHP",
+					status: "confirmed",
+					type: "hotel",
+				},
+			],
+			budgetAmount: 90_000,
+			budgetCurrency: "PHP",
+			expenses: [{ amount: 82, category: "transport", currency: "SGD" }],
+			itineraryItems: [],
+			remainingTripDays: 4,
+		});
+
+		expect(summary).toMatchObject({
+			confirmedBookingCosts: 54_200,
+			dailySafeSpend: 8950,
+			manualExpenses: 0,
+			remainingAmount: 35_800,
+			totalTrackedSpend: 54_200,
+		});
+		expect(summary.foreignCurrencyTotals).toEqual([
+			{ amount: 82, currency: "SGD" },
+		]);
+		expect(summary.categoryBreakdown).toEqual([
+			{ amount: 32_400, category: "hotel" },
+			{ amount: 21_800, category: "flight" },
+		]);
+	});
+
 	it("groups spending by category across bookings and expenses", () => {
 		const summary = getBudgetWalletSummary({
 			bookings: [

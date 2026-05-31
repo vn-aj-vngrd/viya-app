@@ -1417,6 +1417,18 @@ export function TripItineraryScreen() {
 		);
 	}
 
+	if (workspace === null) {
+		return (
+			<Container className="px-4 pb-28">
+				<EmptyState
+					description="This trip was deleted or is no longer available."
+					icon="calendar-outline"
+					title="Trip not found"
+				/>
+			</Container>
+		);
+	}
+
 	if (workspace === undefined) {
 		return <ScreenLoadingState />;
 	}
@@ -1647,6 +1659,18 @@ export function TripItineraryDayScreen() {
 			<Container className="px-4 pb-28">
 				<EmptyState
 					description="Open a saved trip before viewing its itinerary."
+					icon="calendar-outline"
+					title="Trip not found"
+				/>
+			</Container>
+		);
+	}
+
+	if (workspace === null) {
+		return (
+			<Container className="px-4 pb-28">
+				<EmptyState
+					description="This trip was deleted or is no longer available."
 					icon="calendar-outline"
 					title="Trip not found"
 				/>

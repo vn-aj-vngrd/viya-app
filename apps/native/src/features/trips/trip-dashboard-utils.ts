@@ -219,11 +219,18 @@ export const getTripCountdown = ({
 	};
 };
 
-const getRemainingTripDays = (endDate: string) => {
+const getBudgetDayCount = (startDate: string, endDate: string) => {
 	const today = new Date().toISOString().slice(0, 10);
-	const remainingDays = getDateRangeDurationDays(today, endDate);
+	const tripDayCount = getDateRangeDurationDays(startDate, endDate) ?? 1;
+	const startOffset = getCalendarDayOffset(startDate);
 
-	return remainingDays ?? 1;
+	if (startOffset === null || startOffset > 0) {
+		return tripDayCount;
+	}
+
+	const remainingDays = getDateRangeDurationDays(today, endDate) ?? 1;
+
+	return Math.max(1, Math.min(tripDayCount, remainingDays));
 };
 
 const getBudgetStatus = ({
@@ -522,7 +529,10 @@ export const createTripDashboardModel = ({
 		budgetCurrency: workspace.trip.budgetCurrency,
 		expenses: workspace.expenses,
 		itineraryItems: workspace.itineraryItems,
-		remainingTripDays: getRemainingTripDays(workspace.trip.endDate),
+		remainingTripDays: getBudgetDayCount(
+			workspace.trip.startDate,
+			workspace.trip.endDate
+		),
 	});
 	const budgetStatus = getBudgetStatus({
 		budgetAmount: workspace.trip.budgetAmount,

@@ -1,0 +1,9 @@
+Hotel Voucher
+Hotel: City Hall Business Hotel
+Guest: Solo builder
+Check-in: September 28, 2026, 15:00
+Check-out: October 1, 2026, 11:00
+Area: Marina Bay / City Hall, Singapore
+Confirmation code: HOTEL-SIN-WIN
+Total paid: PHP 32,400
+Notes: Close enough to Marina Bay Sands for conference days.

@@ -386,16 +386,18 @@ function ComposerTextInput({
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Chat screen coordinates streaming, modes, question docks, and blueprint creation until the flow is split into containers.
 export function ViyaChatScreen() {
 	const router = useRouter();
-	const { fromTab, mode, prompt, returnTo, tripId, workspaceTab } =
+	const { fromTab, mode, newThread, prompt, returnTo, tripId, workspaceTab } =
 		useLocalSearchParams<{
 			fromTab?: string | string[];
 			mode?: string | string[];
+			newThread?: string | string[];
 			prompt?: string | string[];
 			returnTo?: string | string[];
 			tripId?: string | string[];
 			workspaceTab?: string | string[];
 		}>();
 	const requestedMode = getSearchParamValue(mode);
+	const shouldStartNewThread = getSearchParamValue(newThread) === "1";
 	const routePrompt = getSearchParamValue(prompt) ?? "";
 	const routeTripId = getSearchParamValue(tripId) as Id<"trips"> | undefined;
 	const routeWorkspaceTab = getSearchParamValue(workspaceTab);
@@ -437,6 +439,7 @@ export function ViyaChatScreen() {
 	const [isConfirmingVaultUpload, setIsConfirmingVaultUpload] = useState(false);
 	const scrollViewRef = useRef<NativeScrollView>(null);
 	const chatSessionIdRef = useRef(0);
+	const hasAppliedRouteThreadResetRef = useRef(false);
 	const mutedColor = useThemeColor("muted");
 	const trips = useQuery(api.trips.listTrips);
 	const selectableTripContexts = getSelectableTripContexts(trips);
@@ -569,9 +572,14 @@ export function ViyaChatScreen() {
 
 		const loadStoredThreadIds = async () => {
 			const storedThreadIds = await getStoredThreadIdsByContext();
+			const nextThreadIds = { ...storedThreadIds };
+
+			if (shouldStartNewThread) {
+				delete nextThreadIds[threadContextKey];
+			}
 
 			if (isMounted) {
-				setThreadIdsByContext(storedThreadIds);
+				setThreadIdsByContext(nextThreadIds);
 			}
 		};
 
@@ -580,7 +588,25 @@ export function ViyaChatScreen() {
 		return () => {
 			isMounted = false;
 		};
-	}, []);
+	}, [shouldStartNewThread, threadContextKey]);
+
+	useEffect(() => {
+		if (!(shouldStartNewThread && !hasAppliedRouteThreadResetRef.current)) {
+			return;
+		}
+
+		hasAppliedRouteThreadResetRef.current = true;
+		const nextThreadIds = { ...threadIdsByContext };
+		delete nextThreadIds[threadContextKey];
+		setThreadIdsByContext(nextThreadIds);
+
+		if (Object.keys(nextThreadIds).length === 0) {
+			runAsyncTask(removeStoredThreadIdsByContext());
+			return;
+		}
+
+		runAsyncTask(persistStoredThreadIdsByContext(nextThreadIds));
+	}, [shouldStartNewThread, threadContextKey, threadIdsByContext]);
 
 	useEffect(() => {
 		if (isTripModeLocked) {

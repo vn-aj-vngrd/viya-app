@@ -1,0 +1,8 @@
+Singapore Airlines Booking Confirmation
+Passenger: Solo builder
+Route: Manila (MNL) to Singapore (SIN)
+Outbound: September 28, 2026, 09:10 - 12:55
+Return: October 1, 2026, 18:35 - 22:20
+Confirmation code: VIYA-SIN-2026
+Total paid: PHP 21,800
+Notes: Keep airport transfer buffer and passport handy.

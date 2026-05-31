@@ -23,6 +23,11 @@ function ReviewPill({ children }: { children: ReactNode }) {
 	);
 }
 
+const formatExtractedAmount = (
+	amount?: number | null,
+	currency?: string | null
+) => (amount ? `${currency ?? "PHP"} ${amount.toLocaleString()}` : null);
+
 export function TripSyncReviewSheet({
 	isConfirming,
 	isOpen,
@@ -32,6 +37,12 @@ export function TripSyncReviewSheet({
 	review,
 }: TripSyncReviewSheetProps) {
 	const extraction = review?.extraction;
+	const bookingAmountLabel = extraction?.booking
+		? formatExtractedAmount(
+				extraction.booking.cost,
+				extraction.booking.currency
+			)
+		: null;
 
 	return (
 		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
@@ -80,6 +91,28 @@ export function TripSyncReviewSheet({
 										<Text color="muted" type="body-xs">
 											{extraction.booking.confirmationCode ??
 												"Confirmation code not detected"}
+										</Text>
+										{bookingAmountLabel ? (
+											<Text color="muted" type="body-xs">
+												{bookingAmountLabel}
+											</Text>
+										) : null}
+									</Surface>
+								) : null}
+
+								{extraction.expense ? (
+									<Surface className="gap-1 rounded-[24px] bg-surface-secondary p-4">
+										<Text color="muted" type="body-xs" weight="semibold">
+											BUDGET
+										</Text>
+										<Text type="body-sm" weight="bold">
+											{extraction.expense.title}
+										</Text>
+										<Text color="muted" type="body-xs">
+											{extraction.expense.currency} {extraction.expense.amount}
+										</Text>
+										<Text color="muted" type="body-xs">
+											{extraction.expense.category}
 										</Text>
 									</Surface>
 								) : null}

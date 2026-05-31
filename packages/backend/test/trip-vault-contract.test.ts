@@ -20,6 +20,20 @@ const linkReverseLinkSyncPattern =
 const sortedVaultItemsPattern =
 	/sortedItems\s*=\s*\[\.\.\.items\]\.sort\([\s\S]*secondItem\.createdAt\s*-\s*firstItem\.createdAt/;
 const returnedSortedVaultItemsPattern = /sortedItems\.map/;
+const receiptExpenseValidatorPattern =
+	/const receiptExpenseValidator = v\.object/;
+const extractionExpensePattern =
+	/expense: v\.optional\(receiptExpenseValidator\)/;
+const insertExpensePattern = /ctx\.db\.insert\("expenses"/;
+const linkedExpensePattern = /linkedEntityType: "expense"/;
+const bookingCostPatchPattern = /cost: booking\.cost \?\? undefined/;
+const bookingCurrencyPatchPattern = /currency: toOptional\(booking\.currency\)/;
+const bookingItineraryLinkHelperPattern =
+	/linkMatchingItineraryItemsToBooking = async/;
+const bookingItineraryScorePattern =
+	/getBookingItineraryMatchScore\(\{\s*booking,/;
+const bookingItineraryLinkPatchPattern =
+	/ctx\.db\.patch\(item\._id, \{ bookingId \}\)/;
 
 const readWorkspaceFile = (path: string) =>
 	readFileSync(resolve(rootPath, path), "utf8");
@@ -88,6 +102,66 @@ describe("trip vault contract", () => {
 			vaultSource,
 			returnedSortedVaultItemsPattern,
 			"listTripVaultItems should hydrate URLs from the sorted file list"
+		);
+	});
+
+	it("can turn extracted receipt expenses into linked budget records", () => {
+		const vaultSource = readWorkspaceFile("packages/backend/convex/vault.ts");
+
+		assert.match(
+			vaultSource,
+			receiptExpenseValidatorPattern,
+			"TripSync review should validate receipt expense details"
+		);
+		assert.match(
+			vaultSource,
+			extractionExpensePattern,
+			"TripSync review should accept optional extracted expense details"
+		);
+		assert.match(
+			vaultSource,
+			insertExpensePattern,
+			"TripSync review should create a budget expense from extracted receipt details"
+		);
+		assert.match(
+			vaultSource,
+			linkedExpensePattern,
+			"TripSync review should link the Vault item to the created expense"
+		);
+	});
+
+	it("syncs extracted booking amounts into booking records", () => {
+		const vaultSource = readWorkspaceFile("packages/backend/convex/vault.ts");
+
+		assert.match(
+			vaultSource,
+			bookingCostPatchPattern,
+			"TripSync review should preserve detected booking costs"
+		);
+		assert.match(
+			vaultSource,
+			bookingCurrencyPatchPattern,
+			"TripSync review should preserve detected booking currencies"
+		);
+	});
+
+	it("links extracted bookings to matching itinerary items", () => {
+		const vaultSource = readWorkspaceFile("packages/backend/convex/vault.ts");
+
+		assert.match(
+			vaultSource,
+			bookingItineraryLinkHelperPattern,
+			"TripSync review should link matched itinerary items to extracted bookings"
+		);
+		assert.match(
+			vaultSource,
+			bookingItineraryScorePattern,
+			"TripSync review should score booking-to-itinerary matches"
+		);
+		assert.match(
+			vaultSource,
+			bookingItineraryLinkPatchPattern,
+			"TripSync review should write bookingId onto matched itinerary items"
 		);
 	});
 });

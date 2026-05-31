@@ -1,5 +1,5 @@
+import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
 
 const readWorkspaceFile = (path: string) =>
 	readFileSync(new URL(`../../../../../${path}`, import.meta.url), "utf8");

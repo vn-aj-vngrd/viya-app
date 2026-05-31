@@ -6,6 +6,12 @@ import { createTripDashboardModel } from "./trip-dashboard-utils";
 
 const tripId = "trip_123" as Id<"trips">;
 const dayId = "day_123" as Id<"itineraryDays">;
+const toIsoDate = (date: Date) => date.toISOString().slice(0, 10);
+const addDays = (date: Date, days: number) => {
+	const nextDate = new Date(date);
+	nextDate.setUTCDate(nextDate.getUTCDate() + days);
+	return nextDate;
+};
 
 const createWorkspace = (): TripWorkspace => ({
 	agentDrafts: [],
@@ -221,6 +227,58 @@ describe("trip dashboard model module coverage", () => {
 			risks: 1,
 			travel: 2,
 		});
+	});
+
+	test("uses trip days, not pre-trip lead time, for safe daily budget", () => {
+		const workspace = createWorkspace();
+		const today = new Date();
+		workspace.trip.startDate = toIsoDate(addDays(today, 10));
+		workspace.trip.endDate = toIsoDate(addDays(today, 13));
+		workspace.trip.budgetAmount = 90_000;
+		workspace.bookings = [
+			{
+				_id: "flight_booking",
+				_creationTime: 1,
+				cost: 21_800,
+				currency: "PHP",
+				status: "confirmed",
+				title: "Flight",
+				tripId,
+				type: "flight",
+				updatedAt: 1,
+			} as unknown as TripWorkspace["bookings"][number],
+			{
+				_id: "hotel_booking",
+				_creationTime: 1,
+				cost: 32_400,
+				currency: "PHP",
+				status: "confirmed",
+				title: "Hotel",
+				tripId,
+				type: "hotel",
+				updatedAt: 1,
+			} as unknown as TripWorkspace["bookings"][number],
+		];
+		workspace.expenses = [
+			{
+				_id: "foreign_receipt",
+				_creationTime: 1,
+				amount: 82,
+				category: "transport",
+				createdAt: 1,
+				currency: "SGD",
+				spentAt: workspace.trip.startDate,
+				title: "MRT and SIM",
+				tripId,
+				updatedAt: 1,
+			} as unknown as TripWorkspace["expenses"][number],
+		];
+
+		const model = createTripDashboardModel({ tripId, workspace });
+
+		expect(model.budget.remaining).toBe(35_800);
+		expect(model.budget.totalTrackedSpend).toBe(54_200);
+		expect(model.budget.dailySafeSpend).toBe(8950);
 	});
 
 	test("routes recent dashboard activity back to source modules", () => {

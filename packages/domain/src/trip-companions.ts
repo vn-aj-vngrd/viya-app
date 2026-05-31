@@ -13,9 +13,10 @@ const companionRolePriority: Record<string, number> = {
 	child: 6,
 	other: 7,
 };
+const fallbackCompanionRolePriority = 7;
 
 const getCompanionRolePriority = (role: string) =>
-	companionRolePriority[role] ?? companionRolePriority.other;
+	companionRolePriority[role] ?? fallbackCompanionRolePriority;
 
 export const sortTripCompanionsForCoordination = <
 	Companion extends TripCompanionCoordinationSortInput,

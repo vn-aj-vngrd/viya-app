@@ -580,6 +580,18 @@ export function TripNotesScreen() {
 		}
 	};
 
+	if (workspace === null) {
+		return (
+			<Container className="px-4 pb-28">
+				<EmptyState
+					description="This trip was deleted or is no longer available."
+					icon="document-text-outline"
+					title="Trip not found"
+				/>
+			</Container>
+		);
+	}
+
 	if (workspace === undefined) {
 		return <ScreenLoadingState />;
 	}
