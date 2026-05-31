@@ -48,10 +48,6 @@ import { Image, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Container } from "@/components/container";
-import {
-	type ThemePreference,
-	useAppTheme,
-} from "@/contexts/app-theme-context";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 
 interface AccountRowProps {
@@ -101,32 +97,6 @@ interface TravelPreferenceGroup {
 	options: readonly TravelPreferenceOption[];
 	title: string;
 }
-
-const themeOptions = [
-	{
-		description: "Match this device",
-		icon: "monitor",
-		title: "System",
-		value: "system",
-	},
-	{
-		description: "Use the light interface",
-		icon: "sun",
-		title: "Light",
-		value: "light",
-	},
-	{
-		description: "Use the dark interface",
-		icon: "moon",
-		title: "Dark",
-		value: "dark",
-	},
-] as const satisfies readonly {
-	description: string;
-	icon: FeatherIconName;
-	title: string;
-	value: ThemePreference;
-}[];
 
 const optionSeparatorClassName = "mx-4";
 const photoPickerSheetDismissDelayMs = 320;
@@ -266,20 +236,6 @@ const getAvatarActionOpacity = ({
 	}
 
 	return pressed ? 0.7 : 1;
-};
-
-const getAppearanceDescription = ({
-	currentTheme,
-	themePreference,
-}: {
-	currentTheme: string;
-	themePreference: ThemePreference;
-}) => {
-	if (themePreference === "system") {
-		return `System (${currentTheme})`;
-	}
-
-	return themeOptions.find((option) => option.value === themePreference)?.title;
 };
 
 function getInitials(name?: string | null) {
@@ -639,46 +595,6 @@ function AvatarUpdateRow({
 	);
 }
 
-function ThemeOptionRow({
-	isSelected,
-	onPress,
-	option,
-}: {
-	isSelected: boolean;
-	onPress: () => void;
-	option: (typeof themeOptions)[number];
-}) {
-	const [foregroundColor, mutedColor] = useThemeColor(["foreground", "muted"]);
-
-	return (
-		<ListGroup.Item
-			accessibilityRole="button"
-			accessibilityState={{ selected: isSelected }}
-			className="px-4 py-3"
-			onPress={onPress}
-		>
-			<ListGroup.ItemPrefix>
-				<View className="h-8 w-8 items-center justify-center">
-					<Feather color={foregroundColor} name={option.icon} size={19} />
-				</View>
-			</ListGroup.ItemPrefix>
-			<ListGroup.ItemContent>
-				<ListGroup.ItemTitle>{option.title}</ListGroup.ItemTitle>
-				<ListGroup.ItemDescription>
-					{option.description}
-				</ListGroup.ItemDescription>
-			</ListGroup.ItemContent>
-			<ListGroup.ItemSuffix>
-				<Feather
-					color={isSelected ? "#0A84FF" : mutedColor}
-					name={isSelected ? "check-circle" : "circle"}
-					size={19}
-				/>
-			</ListGroup.ItemSuffix>
-		</ListGroup.Item>
-	);
-}
-
 function TravelPreferenceOptionRow({
 	isSaving,
 	isSelected,
@@ -951,11 +867,9 @@ export default function ProfileScreen() {
 	const currentPreferences = useQuery(api.preferences.getCurrentPreferences);
 	const ensureCurrentUser = useMutation(api.users.ensureCurrentUser);
 	const savePreferences = useMutation(api.preferences.upsertCurrentPreferences);
-	const { currentTheme, setTheme, themePreference } = useAppTheme();
 	const foregroundColor = useThemeColor("foreground");
 	const [activeTravelPreferenceKey, setActiveTravelPreferenceKey] =
 		useState<TravelPreferenceKey | null>(null);
-	const [isAppearanceSheetOpen, setIsAppearanceSheetOpen] = useState(false);
 	const [isPersonalInfoSheetOpen, setIsPersonalInfoSheetOpen] = useState(false);
 	const [isSignOutSheetOpen, setIsSignOutSheetOpen] = useState(false);
 	const [isTravelSheetOpen, setIsTravelSheetOpen] = useState(false);
@@ -994,10 +908,6 @@ export default function ProfileScreen() {
 	const resolvedTravelPreferences =
 		travelPreferences ?? getTravelPreferenceState(currentPreferences);
 	const preferenceSummary = getPreferenceSummary(resolvedTravelPreferences);
-	const appearanceDescription = getAppearanceDescription({
-		currentTheme,
-		themePreference,
-	});
 	const activeTravelPreferenceGroup =
 		travelPreferenceGroups.find(
 			(group) => group.key === activeTravelPreferenceKey
@@ -1199,13 +1109,6 @@ export default function ProfileScreen() {
 
 					<AccountSection title="Preferences">
 						<AccountRow
-							description={appearanceDescription}
-							icon="moon"
-							onPress={() => setIsAppearanceSheetOpen(true)}
-							title="Appearance"
-						/>
-						<Separator className={optionSeparatorClassName} />
-						<AccountRow
 							description={preferenceSummary}
 							icon="map"
 							onPress={() => setIsTravelSheetOpen(true)}
@@ -1226,55 +1129,6 @@ export default function ProfileScreen() {
 					</ListGroup>
 				</View>
 			</ScrollView>
-			<BottomSheet
-				isOpen={isAppearanceSheetOpen}
-				onOpenChange={setIsAppearanceSheetOpen}
-			>
-				<BottomSheet.Portal>
-					<BottomSheet.Overlay />
-					<BottomSheet.Content
-						backgroundClassName="rounded-t-[36px] bg-background"
-						enablePanDownToClose={true}
-					>
-						<View
-							className="gap-5 px-5 pt-2"
-							style={{ paddingBottom: Math.max(insets.bottom, 18) }}
-						>
-							<View className="flex-row items-start justify-between gap-4">
-								<View className="flex-1 gap-1">
-									<BottomSheet.Title>Appearance</BottomSheet.Title>
-									<BottomSheet.Description>
-										Choose how Viya should look on this device.
-									</BottomSheet.Description>
-								</View>
-								<CloseButton
-									accessibilityLabel="Close appearance"
-									className="h-10 w-10 rounded-full bg-surface"
-									iconProps={{ color: foregroundColor, size: 22 }}
-									onPress={() => setIsAppearanceSheetOpen(false)}
-								/>
-							</View>
-
-							<AccountSection title="Theme">
-								{themeOptions.map((option, index) => (
-									<View key={option.value}>
-										<ThemeOptionRow
-											isSelected={themePreference === option.value}
-											onPress={() => {
-												setTheme(option.value).catch(() => undefined);
-											}}
-											option={option}
-										/>
-										{index < themeOptions.length - 1 ? (
-											<Separator className={optionSeparatorClassName} />
-										) : null}
-									</View>
-								))}
-							</AccountSection>
-						</View>
-					</BottomSheet.Content>
-				</BottomSheet.Portal>
-			</BottomSheet>
 			<BottomSheet
 				isOpen={isTravelSheetOpen}
 				onOpenChange={handleTravelSheetOpenChange}

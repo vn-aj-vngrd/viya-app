@@ -6,8 +6,14 @@ Research references used:
 - Sequoia Capital, "Writing a Business Plan": company purpose, problem, solution, why now, market potential, competition, business model, team, financials, vision.
 - Y Combinator, "How to Pitch Your Company": get to what the company does quickly, lead with the strongest proof, and keep the pitch clear.
 - Airbnb original deck analyses: early travel pitch decks work when the problem, solution, market validation, and product proof are simple and concrete.
-- Philippine Statistics Authority, 2024 tourism satellite account: tourism contributed 8.9% to Philippine GDP in 2024.
+- Philippine Statistics Authority, 2024 Tourism Satellite Account: tourism contributed 8.9% to Philippine GDP in 2024.
+  Source: https://psa.gov.ph/content/tourism-contributes-89-percent-philippine-economy-2024
 - Philippine News Agency / Bureau of Immigration, 2024 traveler records: 19M inbound and outbound travelers, including 6.7M foreign departures.
+  Source: https://www.pna.gov.ph/articles/1240859
+- McKinsey Digital, 2023 generative-AI developer productivity research: used only as a general support reference that AI can accelerate software-development tasks. The pitch does not claim a specific Viya productivity percentage.
+  Source: https://www.mckinsey.com/capabilities/mckinsey-digital/our-insights/unleashing-developer-productivity-with-generative-ai
+- Booking.com 2025 travel predictions: used as a general support reference for consumer interest in AI-assisted trip discovery and planning. The pitch does not claim a proprietary Viya adoption metric.
+  Source: https://news.booking.com/defying-convention-to-deepen-connections-bookingcoms-nine-predictions-for-travel-in-2025/
 
 Challenge requirements mapped:
 - Product Name & Tagline: slide 1.

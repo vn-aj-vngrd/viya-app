@@ -292,7 +292,7 @@ def build_slides() -> list[Path]:
     img = slide_bg()
     d = ImageDraw.Draw(img)
     title_block(d, "The Solution", "Readiness becomes the product, not a side checklist.", "Viya is a focused travel agent that asks, generates, adjusts, audits, and stages actions across the workspace.", w=770)
-    iphone(img, SCREENSHOTS / "singapore-workspace-switcher.png", (1140, 90), 850)
+    iphone(img, SCREENSHOTS / "current-simulator-slide3.png", (1140, 90), 850)
     bullet_column(d, 120, 500, [
         ("Ask Mode", "Collaborate freely: ask what is missing, refine the plan, or check if the trip is ready.", BLUE, "chat"),
         ("Agent Mode", "Generate, adjust, audit, and stage changes the user can apply or dismiss.", GREEN, "spark"),
@@ -313,7 +313,7 @@ def build_slides() -> list[Path]:
 
     img = slide_bg()
     d = ImageDraw.Draw(img)
-    title_block(d, "AI Tools Used", "AI acceleration is visible in the artifacts.", "AI was used for implementation, critique, verification, product reasoning, screenshots, docs, and this deck. The evidence is in the submitted files.", w=1120, title_size=54)
+    title_block(d, "AI Tools Used", "AI accelerated the full build loop.", "It supported planning, execution, documentation, and submission. The evidence is in the working app state, simulator captures, docs, and final deck.", w=1120, title_size=54)
     tools = [
         ("code", BLUE, "Codex + Agent Skills", "Built app fixes, docs, simulator captures, validation checks, and the final PPTX pipeline."),
         ("review", PURPLE, "Claude Code + OpenCode", "Used coding-agent loops to critique implementation choices and catch bugs before polish."),
@@ -336,6 +336,7 @@ def build_slides() -> list[Path]:
         icon_badge(d, (x + 34, y + 52), color, kind, size=64)
         text(d, (x + 124, y + 34), name, 29, fill=BLUE if i in (0, 2) else INK, bold=True)
         text(d, (x + 124, y + 86), wrap(d, body, 560, 21), 21, fill=MUTED, spacing=6)
+    text(d, (120, 985), "Reference: McKinsey Digital 2023 generative-AI developer productivity research; project evidence is in submitted app state, docs, and screenshots.", 18, fill="#8A8A93")
     slides.append(save_slide(5, img))
 
     img = slide_bg()
@@ -375,7 +376,7 @@ def build_slides() -> list[Path]:
     shadow_box(img, (1430, 408, 1780, 825), 42)
     text(d, (1468, 452), "Adoption path", 34, fill=BLUE, bold=True)
     text(d, (1468, 520), wrap(d, "Adopt: one free trip readiness workspace. Pay: unlimited trips, reusable templates, Vault history, and groups. Spread: shared workspace before travel day.", 275, 24), 24, fill=INK, spacing=9)
-    text(d, (120, 990), "Adoption thesis: start with personal trip readiness, then expand through shared group workspaces and reusable trip templates.", 18, fill="#8A8A93")
+    text(d, (120, 990), "Research basis: PSA 2024 Tourism Satellite Account; BI/PNA 2024 traveler records; Booking.com 2025 travel-predictions survey.", 18, fill="#8A8A93")
     slides.append(save_slide(6, img))
     slides[5], slides[6] = slides[6], slides[5]
 
