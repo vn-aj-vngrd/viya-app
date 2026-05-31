@@ -33,7 +33,7 @@ Recording format: screen plus voiceover. Keep the pointer visible and move delib
 Before recording:
 
 1. Open the app at the getting started page.
-2. Have the demo account ready. Do not narrate credentials.
+2. Have a test account ready through Google, GitHub, or email. Do not narrate credentials.
 3. Keep this file open off-camera for the script.
 4. Keep `docs/demo/fixtures/` ready for Vault uploads.
 5. Copy the prompts in the Clipboard Bank section into a notes file so you can paste them quickly.
@@ -114,12 +114,12 @@ Operator action:
 
 1. Start on the getting started page.
 2. Tap the primary continue/get started action.
-3. Log in with the demo account.
+3. Log in with Google, GitHub, or email using a test account.
 4. Move through onboarding using the answers above.
 
 Voiceover:
 
-> Viya starts like a normal travel app, but the setup is doing something important. I am not just creating an account. I am giving Viya the defaults it needs to plan around pace, budget, travel style, and how much help I want from AI.
+> Viya starts like a normal travel app, but the setup is doing something important. The user can continue with Google, GitHub, or email, then give Viya the defaults it needs to plan around pace, budget, travel style, and how much help they want from AI.
 >
 > For this demo, I am setting up a polished but realistic work trip profile: useful for a small team, not a packed vacation itinerary, and not a blank chat window.
 

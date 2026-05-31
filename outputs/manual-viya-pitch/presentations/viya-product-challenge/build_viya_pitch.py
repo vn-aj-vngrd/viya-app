@@ -170,10 +170,74 @@ def metric_card(draw: ImageDraw.ImageDraw, xy: tuple[int, int, int, int], value:
     text(draw, (xy[0] + 28, xy[1] + 86), label, 24, fill=MUTED)
 
 
-def tool_badge(draw: ImageDraw.ImageDraw, xy: tuple[int, int], label: str, color: str) -> None:
+def stat_tile(draw: ImageDraw.ImageDraw, xy: tuple[int, int, int, int], value: str, label: str, color: str) -> None:
+    x1, y1, x2, y2 = xy
+    rounded(draw, xy, 24, CARD, outline="#E7E7EC", width=2)
+    draw.rounded_rectangle((x1 + 22, y1 + 20, x1 + 30, y2 - 20), radius=4, fill=color)
+    text(draw, (x1 + 52, y1 + 18), value, 30, fill=INK, bold=True)
+    text(draw, (x1 + 52, y1 + 62), wrap(draw, label, x2 - x1 - 82, 17), 17, fill=MUTED, spacing=4)
+
+
+def bento_card(base: Image.Image, draw: ImageDraw.ImageDraw, xy: tuple[int, int, int, int], label: str, status: str, color: str, kind: str) -> None:
+    x1, y1, x2, _ = xy
+    shadow_box(base, xy, 34)
+    draw.rounded_rectangle((x1 + 26, y1 + 26, x1 + 34, y1 + 82), radius=4, fill=color)
+    text(draw, (x1 + 54, y1 + 30), label, 34, fill=INK, bold=True)
+
+
+def icon_badge(draw: ImageDraw.ImageDraw, xy: tuple[int, int], color: str, kind: str, size: int = 58) -> None:
     x, y = xy
-    rounded(draw, (x, y, x + 64, y + 64), 20, f"{color}1F", outline=f"{color}55", width=2)
-    text(draw, (x + 32, y + 32), label, 21, fill=color, bold=True, anchor="mm")
+    rounded(draw, (x, y, x + size, y + size), 18, color, outline=None)
+    cx = x + size // 2
+    cy = y + size // 2
+    white = "#FFFFFF"
+    line_width = max(3, size // 18)
+
+    if kind == "document":
+        draw.rounded_rectangle((x + 18, y + 13, x + 39, y + 45), radius=4, outline=white, width=line_width)
+        draw.line((x + 23, y + 24, x + 34, y + 24), fill=white, width=line_width)
+        draw.line((x + 23, y + 33, x + 34, y + 33), fill=white, width=line_width)
+        return
+    if kind == "route":
+        draw.line((x + 16, y + 39, x + 29, y + 23, x + 43, y + 34), fill=white, width=line_width)
+        draw.ellipse((x + 11, y + 34, x + 21, y + 44), outline=white, width=line_width)
+        draw.ellipse((x + 24, y + 18, x + 34, y + 28), outline=white, width=line_width)
+        draw.ellipse((x + 38, y + 29, x + 48, y + 39), outline=white, width=line_width)
+        return
+    if kind == "alert":
+        draw.polygon([(cx, y + 13), (x + 44, y + 43), (x + 14, y + 43)], outline=white)
+        draw.line((cx, y + 24, cx, y + 33), fill=white, width=line_width)
+        draw.ellipse((cx - 2, y + 38, cx + 2, y + 42), fill=white)
+        return
+    if kind == "chat":
+        draw.rounded_rectangle((x + 12, y + 14, x + 45, y + 37), radius=10, outline=white, width=line_width)
+        draw.line((x + 24, y + 37, x + 18, y + 45), fill=white, width=line_width)
+        draw.line((x + 21, y + 26, x + 36, y + 26), fill=white, width=line_width)
+        return
+    if kind == "spark":
+        draw.line((cx, y + 12, cx, y + 24), fill=white, width=line_width)
+        draw.line((cx, y + 34, cx, y + 46), fill=white, width=line_width)
+        draw.line((x + 12, cy, x + 24, cy), fill=white, width=line_width)
+        draw.line((x + 34, cy, x + 46, cy), fill=white, width=line_width)
+        draw.line((x + 20, y + 20, x + 27, y + 27), fill=white, width=line_width)
+        draw.line((x + 31, y + 31, x + 38, y + 38), fill=white, width=line_width)
+        draw.line((x + 38, y + 20, x + 31, y + 27), fill=white, width=line_width)
+        draw.line((x + 27, y + 31, x + 20, y + 38), fill=white, width=line_width)
+        return
+    if kind == "shield":
+        draw.line((cx, y + 12, x + 42, y + 19, x + 38, y + 38, cx, y + 47, x + 20, y + 38, x + 16, y + 19, cx, y + 12), fill=white, width=line_width)
+        draw.line((x + 24, y + 30, x + 29, y + 36, x + 38, y + 24), fill=white, width=line_width)
+        return
+    if kind == "code":
+        draw.line((x + 26, y + 19, x + 17, cy, x + 26, y + 39), fill=white, width=line_width)
+        draw.line((x + 32, y + 19, x + 41, cy, x + 32, y + 39), fill=white, width=line_width)
+        draw.line((x + 31, y + 17, x + 27, y + 41), fill=white, width=line_width)
+        return
+    if kind == "review":
+        draw.rounded_rectangle((x + 14, y + 15, x + 44, y + 43), radius=7, outline=white, width=line_width)
+        draw.line((x + 22, y + 30, x + 28, y + 36, x + 38, y + 24), fill=white, width=line_width)
+        return
+    text(draw, (cx, cy), "AI", 19, fill=white, bold=True, anchor="mm")
 
 
 def save_slide(index: int, img: Image.Image) -> Path:
@@ -183,11 +247,10 @@ def save_slide(index: int, img: Image.Image) -> Path:
     return path
 
 
-def bullet_column(draw: ImageDraw.ImageDraw, x: int, y: int, items: Iterable[tuple[str, str, str]], max_width: int = 610) -> None:
+def bullet_column(draw: ImageDraw.ImageDraw, x: int, y: int, items: Iterable[tuple[str, str, str, str]], max_width: int = 610) -> None:
     yy = y
-    for label, body, color in items:
-        rounded(draw, (x, yy, x + 58, yy + 58), 20, f"{color}22", outline=None)
-        text(draw, (x + 20, yy + 12), "✓", 30, fill=color, bold=True)
+    for label, body, color, kind in items:
+        icon_badge(draw, (x, yy), color, kind)
         text(draw, (x + 82, yy - 2), label, 30, fill=INK, bold=True)
         text(draw, (x + 82, yy + 43), wrap(draw, body, max_width, 24), 24, fill=MUTED, spacing=8)
         yy += 160
@@ -199,7 +262,7 @@ def build_slides() -> list[Path]:
     img = slide_bg()
     d = ImageDraw.Draw(img)
     title_block(d, "Product Name & Tagline", "Viya turns trip chaos into 100% travel readiness.", "Most travel apps help you plan. Viya helps you finish: itinerary, budget, Vault, and readiness in one workspace.", w=900)
-    text(d, (120, 555), wrap(d, "For travelers who want confidence before departure, not another scattered checklist.", 760, 31), 31, fill=INK, bold=True, spacing=8)
+    text(d, (120, 555), wrap(d, "A travel workspace people can trust, recommend, and pay for because it answers the real question: am I actually ready to go?", 820, 31), 31, fill=INK, bold=True, spacing=8)
     pill(d, (120, 760, 420, 828), "AI asks")
     pill(d, (450, 760, 760, 828), "Workspace acts", GREEN, "#F0FFF5")
     pill(d, (790, 760, 1080, 828), "Readiness proves", TEAL, "#EEFEFF")
@@ -208,28 +271,32 @@ def build_slides() -> list[Path]:
 
     img = slide_bg()
     d = ImageDraw.Draw(img)
-    title_block(d, "The Problem", "Travel apps help you book. They do not prove you are ready.", "The hard part starts after the confirmation email: connecting proof, plans, money, timing, and risk into one dependable travel view.", w=820)
+    title_block(d, "The Problem", "Travel apps help you book. They do not prove you are ready.", "The painful moment is after booking: can the traveler trust the documents, budget, schedule, and requirements before departure?", w=820)
     bullet_column(d, 120, 520, [
-        ("Proof is scattered", "Flights, hotels, passes, receipts, notes, reminders, and screenshots live in different places.", BLUE),
-        ("Itinerary is disconnected", "A plan is useless if it does not know which file, budget item, or readiness task supports it.", ORANGE),
-        ("Travel anxiety persists", "Before departure, the traveler still asks: what is confirmed, what is missing, and what happens next?", PURPLE),
+        ("Proof is scattered", "Flights, hotels, passes, receipts, notes, reminders, and screenshots live in different places.", BLUE, "document"),
+        ("Plans do not act", "A static itinerary cannot tell which booking, receipt, budget item, or prep task supports it.", ORANGE, "route"),
+        ("Mistakes are expensive", "A missed document, budget surprise, or bad timing decision can ruin a trip at the worst moment.", PURPLE, "alert"),
     ])
-    for i, (label, color) in enumerate([("Email", BLUE), ("PDF", ORANGE), ("Receipt", TEAL), ("Calendar", GREEN), ("Notes", PURPLE)]):
-        x = 1080 + (i % 2) * 330
-        y = 190 + (i // 2) * 210
-        shadow_box(img, (x, y, x + 260, y + 140), 34)
-        text(d, (x + 34, y + 34), label, 34, fill=INK, bold=True)
-        text(d, (x + 34, y + 86), "unlinked", 24, fill=color, bold=True)
+    text(d, (1035, 130), "Unlinked Stuff", 26, fill=MUTED, bold=True)
+    proof_cards = [
+        ("Email", "unlinked", BLUE, "chat", (1035, 178, 1328, 338)),
+        ("PDF", "unlinked", ORANGE, "document", (1360, 178, 1653, 338)),
+        ("Receipt", "unlinked", TEAL, "review", (1035, 380, 1328, 540)),
+        ("Calendar", "unlinked", GREEN, "route", (1360, 380, 1653, 540)),
+        ("Notes", "unlinked", PURPLE, "alert", (1035, 582, 1653, 750)),
+    ]
+    for label, status, color, kind, xy in proof_cards:
+        bento_card(img, d, xy, label, status, color, kind)
     slides.append(save_slide(2, img))
 
     img = slide_bg()
     d = ImageDraw.Draw(img)
-    title_block(d, "The Solution", "A trip-only AI chief-of-staff inside a structured workspace.", "Viya does not stop at chat. It asks only for missing decisions, then stages reviewable actions across modules.", w=770)
+    title_block(d, "The Solution", "Readiness becomes the product, not a side checklist.", "Viya is a focused travel agent that asks, generates, adjusts, audits, and stages actions across the workspace.", w=770)
     iphone(img, SCREENSHOTS / "singapore-workspace-switcher.png", (1140, 90), 850)
     bullet_column(d, 120, 500, [
-        ("Ask Mode", "Collaborate freely: ask what is missing, refine the plan, or check if the trip is ready.", BLUE),
-        ("Agent Mode", "Generate, adjust, audit, and stage workspace changes the user can apply or dismiss.", GREEN),
-        ("Guardrails", "Viya must not invent uploaded proof, live availability, traffic, or weather.", ORANGE),
+        ("Ask Mode", "Collaborate freely: ask what is missing, refine the plan, or check if the trip is ready.", BLUE, "chat"),
+        ("Agent Mode", "Generate, adjust, audit, and stage changes the user can apply or dismiss.", GREEN, "spark"),
+        ("Proof-linked readiness", "Itinerary, budget, Vault, and readiness move together instead of living as separate lists.", ORANGE, "shield"),
     ])
     slides.append(save_slide(3, img))
 
@@ -246,18 +313,27 @@ def build_slides() -> list[Path]:
 
     img = slide_bg()
     d = ImageDraw.Draw(img)
-    title_block(d, "AI Tools Used", "AI was used to build faster and make the product smarter.", "The pitch is not claiming AI magic. It shows the specific AI products used to create, critique, verify, and package the working product.", w=1040, title_size=54)
+    title_block(d, "AI Tools Used", "AI acceleration is visible in the artifacts.", "AI was used for implementation, critique, verification, product reasoning, screenshots, docs, and this deck. The evidence is in the submitted files.", w=1120, title_size=54)
     tools = [
-        ("Cx", BLUE, "Codex + Agent Skills", "Implemented the app fixes, fixture docs, simulator checks, and final pitch assets."),
-        ("CC", PURPLE, "Claude Code + OpenCode", "Used coding-agent loops for critique, implementation review, and bug fixing."),
-        ("GPT", GREEN, "ChatGPT", "Refined the product story, agent behavior, and written pitch language."),
-        ("Cl", ORANGE, "Claude", "Used as a critique partner for tighter positioning, UX review, and specificity checks."),
+        ("code", BLUE, "Codex + Agent Skills", "Built app fixes, docs, simulator captures, validation checks, and the final PPTX pipeline."),
+        ("review", PURPLE, "Claude Code + OpenCode", "Used coding-agent loops to critique implementation choices and catch bugs before polish."),
+        ("chat", GREEN, "ChatGPT", "Refined the product story, trip-agent behavior, user flow, and written pitch language."),
+        ("spark", ORANGE, "Claude", "Used as a critique partner for sharper positioning, UX review, and specificity checks."),
     ]
-    for i, (badge, color, name, body) in enumerate(tools):
+    stats = [
+        ("Planning", "criteria, flow, and story", BLUE),
+        ("Execution", "app fixes and QA", TEAL),
+        ("Docs", "audit, guide, README", PURPLE),
+        ("Submission", "deck and evidence pack", ORANGE),
+    ]
+    for i, (value, label, color) in enumerate(stats):
+        x = 120 + i * 420
+        stat_tile(d, (x, 360, x + 380, 460), value, label, color)
+    for i, (kind, color, name, body) in enumerate(tools):
         x = 120 + (i % 2) * 835
-        y = 430 + (i // 2) * 235
-        shadow_box(img, (x, y, x + 750, y + 170), 32)
-        tool_badge(d, (x + 34, y + 52), badge, color)
+        y = 520 + (i // 2) * 205
+        shadow_box(img, (x, y, x + 750, y + 155), 32)
+        icon_badge(d, (x + 34, y + 52), color, kind, size=64)
         text(d, (x + 124, y + 34), name, 29, fill=BLUE if i in (0, 2) else INK, bold=True)
         text(d, (x + 124, y + 86), wrap(d, body, 560, 21), 21, fill=MUTED, spacing=6)
     slides.append(save_slide(5, img))
@@ -283,7 +359,7 @@ def build_slides() -> list[Path]:
 
     img = slide_bg()
     d = ImageDraw.Draw(img)
-    title_block(d, "Target User / Market", "Travelers who need confidence, not just inspiration.", "The beachhead is practical leisure and local/international trips where budget, documents, companions, and day-of logistics can break the trip.", w=960, title_size=56)
+    title_block(d, "Target User / Market", "A beachhead with clear reasons to adopt and pay.", "Start with travelers already doing manual work to avoid mistakes: budgets, documents, companions, requirements, receipts, and day-of decisions.", w=1050, title_size=56)
     segments = [
         ("Budget-conscious travelers", "Users who want a clear spend cap, safe daily budget, receipt tracking, and fewer surprise costs."),
         ("First-time travelers", "Users who need help with passports, visas, airport requirements, documents, packing, and what to bring."),
@@ -297,9 +373,9 @@ def build_slides() -> list[Path]:
         text(d, (x + 34, y + 28), wrap(d, label, 520, 29, bold=True), 29, fill=INK, bold=True)
         text(d, (x + 34, y + 96), wrap(d, body, 510, 21), 21, fill=MUTED, spacing=5)
     shadow_box(img, (1430, 408, 1780, 825), 42)
-    text(d, (1468, 452), "Market signal", 34, fill=BLUE, bold=True)
-    text(d, (1468, 520), wrap(d, "Philippine tourism was 8.9% of GDP in 2024. Immigration also logged 19M travelers, including 6.7M foreign departures. Start with proof-heavy mobile travelers, then expand by templates.", 275, 24), 24, fill=INK, spacing=9)
-    text(d, (120, 990), "Sources: Philippine Statistics Authority 2024 tourism satellite account; Bureau of Immigration 2024 traveler records via PNA.", 18, fill="#8A8A93")
+    text(d, (1468, 452), "Adoption path", 34, fill=BLUE, bold=True)
+    text(d, (1468, 520), wrap(d, "Adopt: one free trip readiness workspace. Pay: unlimited trips, reusable templates, Vault history, and groups. Spread: shared workspace before travel day.", 275, 24), 24, fill=INK, spacing=9)
+    text(d, (120, 990), "Adoption thesis: start with personal trip readiness, then expand through shared group workspaces and reusable trip templates.", 18, fill="#8A8A93")
     slides.append(save_slide(6, img))
     slides[5], slides[6] = slides[6], slides[5]
 

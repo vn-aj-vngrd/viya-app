@@ -35,7 +35,7 @@ Viya, plan my Singapore group business-conference reward trip. I'm going for Tec
 ## Presenter Script
 
 1. Open Viya.
-2. Log in with the demo account.
+2. Log in with Google, GitHub, or email using a test account.
 3. Answer onboarding questions with travel preferences:
    - Home base: Manila.
    - Travel style: polished, efficient, not exhausting.

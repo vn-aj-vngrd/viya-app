@@ -29,7 +29,7 @@ bun x ultracite check --max-diagnostics 50
 Use the iOS Simulator for the full demo path. If the simulator is already authenticated, validate the workspace path first, then run a fresh-account pass when auth reset is available.
 
 1. Open Viya.
-2. Log in with the demo account.
+2. Log in with Google, GitHub, or email using a test account.
 3. Answer onboarding questions using the demo profile:
    - Home base: Manila.
    - Travel style: polished, efficient, not exhausting.
