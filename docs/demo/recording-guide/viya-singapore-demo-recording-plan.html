@@ -1,0 +1,465 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>Viya Singapore Demo Keynotes</title>
+		<style>
+		@page {
+			margin: 0;
+			size: A4;
+		}
+		* {
+			box-sizing: border-box;
+		}
+		body {
+			margin: 0;
+			font-family:
+				Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+				"Segoe UI", sans-serif;
+			color: #121417;
+			background: #e8edf3;
+		}
+		.page {
+			position: relative;
+			display: flex;
+			flex-direction: column;
+			gap: 24px;
+			width: 210mm;
+			height: 297mm;
+			padding: 19mm 18mm;
+			overflow: hidden;
+			background: #f7f8fa;
+			page-break-after: always;
+		}
+		.cover {
+			display: grid;
+			grid-template-columns: 1.05fr 0.95fr;
+			gap: 20px;
+			align-items: center;
+			background:
+				radial-gradient(
+					circle at 82% 12%,
+					rgba(10, 132, 255, 0.16),
+					transparent 28%
+				),
+				linear-gradient(145deg, #ffffff 0%, #f3f7fb 50%, #eef3f8 100%);
+		}
+		.cover-copy,
+		.stack {
+			display: flex;
+			flex-direction: column;
+			gap: 16px;
+		}
+		.eyebrow {
+			margin: 0;
+			font-size: 11px;
+			font-weight: 800;
+			color: #0a84ff;
+			text-transform: uppercase;
+			letter-spacing: 0.08em;
+		}
+		h1,
+		h2,
+		h3,
+		p {
+			margin: 0;
+		}
+		h1 {
+			font-size: 68px;
+			line-height: 0.94;
+			letter-spacing: 0;
+		}
+		h2 {
+			max-width: 560px;
+			font-size: 38px;
+			line-height: 1.04;
+			letter-spacing: 0;
+		}
+		h3 {
+			margin-bottom: 8px;
+			font-size: 18px;
+			line-height: 1.18;
+		}
+		p {
+			font-size: 15px;
+			line-height: 1.55;
+			color: #626873;
+		}
+		.dek {
+			max-width: 440px;
+			font-size: 23px;
+			font-weight: 650;
+			line-height: 1.22;
+			color: #31363d;
+		}
+		.card,
+		.callout,
+		.tip-band,
+		.footer-note,
+		.stat,
+		.flow-card {
+			padding: 16px;
+			background: #ffffff;
+			border: 1px solid #dde3ea;
+			border-radius: 18px;
+			box-shadow: 0 12px 32px rgba(24, 37, 56, 0.07);
+		}
+		.card span,
+		.callout,
+		.tip-band,
+		.footer-note {
+			font-size: 14px;
+			line-height: 1.45;
+			color: #4c535d;
+		}
+		.meta-grid {
+			display: grid;
+			grid-template-columns: repeat(3, 1fr);
+			gap: 10px;
+			margin-top: 8px;
+		}
+		.meta-grid div {
+			padding: 12px;
+			background: rgba(255, 255, 255, 0.72);
+			border: 1px solid #e0e5eb;
+			border-radius: 14px;
+		}
+		.meta-grid span {
+			display: block;
+			font-size: 9px;
+			font-weight: 800;
+			color: #7b828d;
+			text-transform: uppercase;
+			letter-spacing: 0.08em;
+		}
+		.meta-grid strong {
+			display: block;
+			margin-top: 5px;
+			font-size: 12px;
+			line-height: 1.25;
+		}
+		.phone {
+			align-self: center;
+			width: 245px;
+			padding: 8px;
+			margin: 0;
+			overflow: hidden;
+			background: #101114;
+			border-radius: 35px;
+			box-shadow: 0 20px 54px rgba(21, 31, 46, 0.24);
+		}
+		.phone img {
+			display: block;
+			width: 100%;
+			height: auto;
+			border-radius: 28px;
+		}
+		.phone figcaption {
+			padding: 9px 7px 5px;
+			font-size: 10px;
+			line-height: 1.35;
+			color: #d8dde5;
+			background: #101114;
+		}
+		.cover .phone {
+			width: 258px;
+		}
+		.header-row {
+			display: grid;
+			grid-template-columns: 1fr 245px;
+			gap: 18px;
+			align-items: end;
+		}
+		.split {
+			display: grid;
+			grid-template-columns: 1fr 300px;
+			gap: 24px;
+			align-items: start;
+		}
+		.split.visual {
+			grid-template-columns: 300px 1fr;
+			align-items: center;
+		}
+		.phone-grid {
+			display: grid;
+			gap: 24px;
+			align-items: start;
+			justify-content: center;
+		}
+		.phone-grid.two {
+			grid-template-columns: repeat(2, 245px);
+		}
+		.phone-grid.three {
+			grid-template-columns: repeat(3, 188px);
+			gap: 16px;
+		}
+		.phone-grid.three .phone {
+			width: 188px;
+			border-radius: 28px;
+		}
+		.phone-grid.three .phone img {
+			border-radius: 22px;
+		}
+		.bullets {
+			display: grid;
+			gap: 9px;
+			padding: 0;
+			margin: 0;
+			list-style: none;
+		}
+		.bullets li,
+		.steps li {
+			padding: 11px 13px;
+			font-size: 13px;
+			line-height: 1.4;
+			color: #4e5560;
+			background: #ffffff;
+			border: 1px solid #e0e5eb;
+			border-radius: 13px;
+		}
+		.bullets strong,
+		.steps strong {
+			color: #16191d;
+		}
+		.steps {
+			display: grid;
+			grid-template-columns: repeat(2, 1fr);
+			gap: 10px;
+			padding: 0;
+			margin: 18px 0 0;
+			list-style: none;
+			counter-reset: item;
+		}
+		.flow {
+			display: grid;
+			grid-template-columns: repeat(3, 1fr);
+			gap: 14px;
+			margin-top: 16px;
+		}
+		.flow-card {
+			min-height: 142px;
+			box-shadow: none;
+		}
+		.flow-card span {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			width: 30px;
+			height: 30px;
+			margin-bottom: 18px;
+			font-size: 13px;
+			font-weight: 800;
+			color: #fff;
+			background: #0a84ff;
+			border-radius: 999px;
+		}
+		.flow-card strong {
+			display: block;
+			margin-bottom: 8px;
+			font-size: 17px;
+		}
+		.flow-card p {
+			font-size: 12px;
+			line-height: 1.4;
+		}
+		.stat-grid {
+			display: grid;
+			grid-template-columns: repeat(4, 1fr);
+			gap: 10px;
+		}
+		.stat {
+			position: relative;
+			min-height: 86px;
+			padding-left: 18px;
+			box-shadow: none;
+		}
+		.stat::before {
+			position: absolute;
+			top: 16px;
+			bottom: 16px;
+			left: 10px;
+			width: 5px;
+			content: "";
+			background: #0a84ff;
+			border-radius: 999px;
+		}
+		.stat strong {
+			display: block;
+			font-size: 22px;
+			line-height: 1.1;
+		}
+		.stat span {
+			display: block;
+			margin-top: 5px;
+			font-size: 11px;
+			line-height: 1.25;
+			color: #626873;
+		}
+		.tip-band {
+			background: #eef7ff;
+			border-color: #cfe6ff;
+			box-shadow: none;
+		}
+		.final {
+			justify-content: center;
+		}
+		</style>
+	</head>
+	<body>
+		<section class="page cover">
+			<div class="cover-copy">
+				<p class="eyebrow">Demo keynotes</p>
+				<h1>Viya Singapore Demo</h1>
+				<p class="dek">Audience notes for the recorded walkthrough: from Home to a 100% ready travel workspace.</p>
+				<div class="card">
+					<strong>What this proves</strong>
+					<span>Viya is not only an itinerary generator. It uses AI to ask, generate, adjust, and connect itinerary, budget, Vault, and readiness into one travel-ready workspace.</span>
+				</div>
+				<div class="meta-grid">
+					<div><span>Scenario</span><strong>Singapore group reward trip</strong></div>
+					<div><span>Outcome</span><strong>100% readiness</strong></div>
+					<div><span>Source</span><strong>Live iOS Simulator</strong></div>
+				</div>
+			</div>
+			
+	<figure class="phone">
+		<img alt="Final overview: Trip is ready with connected modules." src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/demo/screenshots/current-simulator-slide8-last.png">
+		<figcaption>Final overview: Trip is ready with connected modules.</figcaption>
+	</figure>
+
+		</section>
+
+		<section class="page">
+			<div class="header-row">
+				<div>
+					<p class="eyebrow">Why the demo matters</p>
+					<h2>The problem is not planning. It is proving the trip is ready.</h2>
+					<p>Travelers already juggle emails, PDFs, receipts, notes, calendars, and screenshots. Viya turns that scattered proof into connected workspace state.</p>
+				</div>
+				<div class="callout">
+					Research signal: Expedia Group describes the traveler path to purchase as often complex and reports 303 minutes plus 141 pages of travel content before booking.
+				</div>
+			</div>
+			<div class="flow">
+				<div class="flow-card"><span>1</span><strong>Scattered proof</strong><p>Flights, hotels, receipts, passes, reminders, and notes live apart.</p></div>
+				<div class="flow-card"><span>2</span><strong>Disconnected plans</strong><p>Itinerary tools usually do not know what documents or budget items support the plan.</p></div>
+				<div class="flow-card"><span>3</span><strong>Readiness gap</strong><p>The traveler still asks what is confirmed, what is missing, and what to do next.</p></div>
+			</div>
+			<div class="tip-band"><strong>Audience takeaway:</strong> The demo is judged by whether Viya turns loose travel context into visible readiness, not by whether it can write a generic day-by-day list.</div>
+		</section>
+
+		<section class="page">
+			<div class="header-row">
+				<div>
+					<p class="eyebrow">Recorded demo path</p>
+					<h2>Watch the workspace form from the latest trip content.</h2>
+					<p>The recording starts from Home, creates the trip, uses Ask Viya, fills the core modules, and ends at Readiness.</p>
+				</div>
+				<div class="callout">
+					The Singapore details are demo data. The product behavior should remain trip-agnostic for any destination, date range, group, and budget.
+				</div>
+			</div>
+			<div class="phone-grid three">
+				
+	<figure class="phone">
+		<img alt="Home: context and suggestions before planning." src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/demo/screenshots/home-dashboard.png">
+		<figcaption>Home: context and suggestions before planning.</figcaption>
+	</figure>
+
+				
+	<figure class="phone">
+		<img alt="Create trip: structured questions start the workspace." src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/demo/screenshots/create-trip-question-destination.png">
+		<figcaption>Create trip: structured questions start the workspace.</figcaption>
+	</figure>
+
+				
+	<figure class="phone">
+		<img alt="Ask Viya: trip-scoped AI asks, generates, and audits." src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/demo/screenshots/current-simulator-slide3.png">
+		<figcaption>Ask Viya: trip-scoped AI asks, generates, and audits.</figcaption>
+	</figure>
+
+			</div>
+			<ol class="steps">
+				<li><strong>Home.</strong> Start with dashboard context and trip suggestions.</li>
+				<li><strong>Create Trip.</strong> Enter destination, dates, travelers, budget, and pace.</li>
+				<li><strong>Ask Viya.</strong> Let the agent review, organize, build, and sync modules.</li>
+				<li><strong>Workspace.</strong> Show itinerary, budget, Vault, and readiness moving together.</li>
+			</ol>
+		</section>
+
+		<section class="page">
+			<div class="header-row">
+				<div>
+					<p class="eyebrow">Module proof</p>
+					<h2>Every module has a role in readiness.</h2>
+					<p>The recording should show that Viya connects the travel plan to files, money, and departure checks instead of leaving the answer in chat.</p>
+				</div>
+				<div class="callout">
+					Key phrase: "The Vault is the grounding layer. Readiness is the finish line."
+				</div>
+			</div>
+			<div class="phone-grid three">
+				
+	<figure class="phone">
+		<img alt="Itinerary: four days with realistic buffers." src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/demo/screenshots/singapore-itinerary.png">
+		<figcaption>Itinerary: four days with realistic buffers.</figcaption>
+	</figure>
+
+				
+	<figure class="phone">
+		<img alt="Budget: PHP ceiling, remaining room, and receipt evidence." src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/demo/screenshots/singapore-budget.png">
+		<figcaption>Budget: PHP ceiling, remaining room, and receipt evidence.</figcaption>
+	</figure>
+
+				
+	<figure class="phone">
+		<img alt="Readiness: 100% ready with no open gap." src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/demo/screenshots/current-simulator-slide6.png">
+		<figcaption>Readiness: 100% ready with no open gap.</figcaption>
+	</figure>
+
+			</div>
+			<div class="stat-grid">
+				<div class="stat"><strong>4 days</strong><span>Arrival, conference blocks, buffers, and departure.</span></div>
+				<div class="stat"><strong>5 files</strong><span>Flight, hotel, event pass, receipt, readiness note.</span></div>
+				<div class="stat"><strong>₱90k</strong><span>Planning ceiling with tracked confirmed costs.</span></div>
+				<div class="stat"><strong>100%</strong><span>Readiness after reviewable checks are resolved.</span></div>
+			</div>
+		</section>
+
+		<section class="page">
+			<div class="split visual">
+				
+	<figure class="phone">
+		<img alt="Final proof: Trip is ready and modules are populated." src="file:///Users/vanajvanguardia/Documents/viya/viya-app/docs/demo/screenshots/current-simulator-slide8-last.png">
+		<figcaption>Final proof: Trip is ready and modules are populated.</figcaption>
+	</figure>
+
+				<div class="stack">
+					<p class="eyebrow">Final audience notes</p>
+					<h2>What to remember after the recording.</h2>
+					<ul class="bullets">
+						<li><strong>AI is focused.</strong> Viya acts as a trip-only agent, not a generic chat screen.</li>
+						<li><strong>Changes are reviewable.</strong> The user stays in control while AI stages workspace updates.</li>
+						<li><strong>Proof matters.</strong> Vault uploads ground bookings, receipts, and readiness checks.</li>
+						<li><strong>Readiness is the product.</strong> The final state is a prepared trip, not just a pretty itinerary.</li>
+					</ul>
+					<div class="tip-band"><strong>Closing line:</strong> Viya helps travelers stop asking, "Did I miss anything?" and start traveling with a workspace that proves what is ready.</div>
+				</div>
+			</div>
+		</section>
+
+		<section class="page final">
+			<p class="eyebrow">Judge-facing checklist</p>
+			<h2>The demo maps to the challenge criteria.</h2>
+			<div class="flow">
+				<div class="flow-card"><span>1</span><strong>AI use</strong><p>Planning, execution, documentation, and submission are supported by AI tooling and submitted evidence.</p></div>
+				<div class="flow-card"><span>2</span><strong>Product</strong><p>The workspace solves a real travel-preparedness problem across modules.</p></div>
+				<div class="flow-card"><span>3</span><strong>Innovation</strong><p>Viya shifts the goal from itinerary generation to proof-linked readiness.</p></div>
+				<div class="flow-card"><span>4</span><strong>Pitch clarity</strong><p>The recording follows one scenario from Home to 100% ready.</p></div>
+				<div class="flow-card"><span>5</span><strong>Adoption</strong><p>Start with one free readiness workspace; expand to reusable templates, Vault history, and groups.</p></div>
+				<div class="flow-card"><span>6</span><strong>Evidence</strong><p>All screenshots come from the iOS Simulator; fixture bookings are clearly synthetic demo data.</p></div>
+			</div>
+			<div class="footer-note"><strong>Research references:</strong> Expedia Group Path to Purchase research, PSA 2024 Tourism Satellite Account, BI/PNA 2024 traveler records, McKinsey Digital 2023 generative-AI developer productivity research, and Booking.com 2025 travel predictions.</div>
+		</section>
+	</body>
+</html>
