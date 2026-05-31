@@ -7,6 +7,10 @@ export const env = createEnv({
 		EXPO_PUBLIC_CONVEX_URL: z.url(),
 		EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().min(1),
 	},
-	runtimeEnv: process.env,
+	runtimeEnv: {
+		EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY:
+			process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY,
+		EXPO_PUBLIC_CONVEX_URL: process.env.EXPO_PUBLIC_CONVEX_URL,
+	},
 	emptyStringAsUndefined: true,
 });
