@@ -8,7 +8,9 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_MONOREPO_ROOT": "../.."
+        "EXPO_MONOREPO_ROOT": "../..",
+        "EXPO_PUBLIC_CONVEX_URL": "https://pastel-caterpillar-63.convex.cloud",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_bGFyZ2UtbWFydGVuLTEyLmNsZXJrLmFjY291bnRzLmRldiQ"
       }
     },
     "preview": {
@@ -17,13 +19,17 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_MONOREPO_ROOT": "../.."
+        "EXPO_MONOREPO_ROOT": "../..",
+        "EXPO_PUBLIC_CONVEX_URL": "https://pastel-caterpillar-63.convex.cloud",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_bGFyZ2UtbWFydGVuLTEyLmNsZXJrLmFjY291bnRzLmRldiQ"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_MONOREPO_ROOT": "../.."
+        "EXPO_MONOREPO_ROOT": "../..",
+        "EXPO_PUBLIC_CONVEX_URL": "https://pastel-caterpillar-63.convex.cloud",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_bGFyZ2UtbWFydGVuLTEyLmNsZXJrLmFjY291bnRzLmRldiQ"
       }
     }
   },
