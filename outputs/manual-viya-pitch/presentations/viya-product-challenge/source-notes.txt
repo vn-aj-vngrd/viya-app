@@ -14,6 +14,8 @@ Research references used:
   Source: https://www.mckinsey.com/capabilities/mckinsey-digital/our-insights/unleashing-developer-productivity-with-generative-ai
 - Booking.com 2025 travel predictions: used as a general support reference for consumer interest in AI-assisted trip discovery and planning. The pitch does not claim a proprietary Viya adoption metric.
   Source: https://news.booking.com/defying-convention-to-deepen-connections-bookingcoms-nine-predictions-for-travel-in-2025/
+- Expedia Group Path to Purchase research, based on Luth Research digital data: used on the problem slide to support that travel planning is fragmented and research-heavy. The slide uses a short attributed quote and the reported average of 303 minutes and 141 pages of travel content before booking.
+  Source: https://www.expedia.com/newsroom/eg-path-to-purchase-research/
 
 Challenge requirements mapped:
 - Product Name & Tagline: slide 1.

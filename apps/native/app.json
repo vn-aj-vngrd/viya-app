@@ -20,7 +20,7 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/viya-android-foreground.png",
         "backgroundImage": "./assets/images/viya-android-background.png",
-        "backgroundColor": "#00000000",
+        "backgroundColor": "#FFFFFF",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "package": "com.vnajvngrd.viya"

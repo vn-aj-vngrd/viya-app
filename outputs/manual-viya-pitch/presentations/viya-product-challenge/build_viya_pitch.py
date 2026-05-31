@@ -287,6 +287,10 @@ def build_slides() -> list[Path]:
     ]
     for label, status, color, kind, xy in proof_cards:
         bento_card(img, d, xy, label, status, color, kind)
+    shadow_box(img, (1035, 790, 1653, 965), 34)
+    text(d, (1070, 828), "Research signal", 25, fill=BLUE, bold=True)
+    text(d, (1070, 868), "\"The traveler path to purchase is often complex.\"", 26, fill=INK, bold=True)
+    text(d, (1070, 912), "Expedia Group: 303 minutes + 141 pages before booking.", 19, fill=MUTED)
     slides.append(save_slide(2, img))
 
     img = slide_bg()
