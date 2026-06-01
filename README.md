@@ -1,17 +1,53 @@
-# viya-app
+# Viya
 
-This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines React Native, Expo, Convex, and more.
+Viya is an AI-powered travel workspace that helps a traveler move from a loose trip idea to a prepared trip. It combines trip creation, itinerary planning, Vault documents, budget tracking, readiness checks, and a trip-aware AI assistant in one mobile app.
 
-## Features
+The core product shift is simple: Viya is not only an itinerary generator. It keeps the plan, proof, spend, and readiness connected so the traveler can see what is ready and what still needs attention.
 
-- **TypeScript** - For type safety and improved developer experience
-- **React Native** - Build mobile apps using React
-- **Expo** - Tools for React Native development
-- **TailwindCSS** - Utility-first CSS for rapid UI development
-- **Convex** - Reactive backend-as-a-service platform
-- **Authentication** - Clerk
-- **Biome** - Linting and formatting
-- **Turborepo** - Optimized monorepo build system
+## Product Highlights
+
+- **Guided onboarding** - captures travel vibe, pace, budget comfort, interests, food style, travel group, suggestion style, and needs.
+- **Manual trip creation** - creates a structured trip workspace from destination, dates, travelers, style, pace, and budget.
+- **Trip workspace** - connects the main travel modules: Itinerary, Budget, Vault, and Readiness.
+- **Ask Viya** - trip-scoped AI that can answer questions, generate itinerary drafts, organize Vault work, sync budget context, and audit readiness.
+- **Vault + TripSync** - stores confirmations, receipts, documents, and notes so AI can ground planning in reviewed evidence.
+- **Budget tracking** - keeps the trip budget visible and ties spend back to uploaded receipts or confirmed costs.
+- **Readiness** - turns scattered travel prep into a checklist and score so the trip can end in a prepared state.
+
+## Demo Flow
+
+The current demo walks through:
+
+1. Get Started
+2. Google login
+3. Onboarding questions
+4. Home dashboard
+5. Trip tab to New Trip
+6. Singapore trip creation
+7. Trip workspace tour
+8. Itinerary, Vault, Budget, and Readiness modules
+9. Ask Viya inside the trip
+
+## Submission Artifacts
+
+- [Viya User Guide PDF](docs/final-submission/Viya%20User%20Guide.pdf)
+- [Features PDF](docs/demo/recording-guide/features.pdf)
+- [Demo PDF](docs/demo/recording-guide/demo.pdf)
+- [Source Code Link](docs/final-submission/source_code.md)
+- [Final Submission README](docs/final-submission/README.md)
+- [AI Integration README](docs/final-submission/readme/AI_INTEGRATION_README.md)
+- [Architecture README](docs/final-submission/readme/ARCHITECTURE_README.md)
+- [Setup and Testing README](docs/final-submission/readme/SETUP_AND_TESTING_README.md)
+
+## Tech Stack
+
+- **Mobile:** Expo + React Native
+- **Backend:** Convex
+- **Authentication:** Clerk
+- **Language:** TypeScript
+- **Monorepo:** Turborepo
+- **Formatting/linting:** Ultracite / Biome
+- **Runtime:** Bun
 
 ## Getting Started
 
@@ -72,3 +108,17 @@ viya-app/
 - `bun run check-types`: Check TypeScript types across all apps
 - `bun run dev:native`: Start the React Native/Expo development server
 - `bun run check`: Run Biome formatting and linting
+
+## Validation
+
+Run from the repository root:
+
+```bash
+bun x ultracite check
+bun x tsc -p apps/native/tsconfig.json --noEmit
+bun x tsc -p packages/backend/convex/tsconfig.json --noEmit
+```
+
+## Source Code
+
+[https://github.com/vn-aj-vngrd/viya-app](https://github.com/vn-aj-vngrd/viya-app)
