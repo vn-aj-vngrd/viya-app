@@ -9,21 +9,13 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Container } from "@/components/container";
+import { metrics, radius, spacing, useUITheme } from "@/src/components/ui";
 
-// iOS system-fill style neutral that reads on both white cards and the grey
-// page background without needing per-theme variants.
-const skeletonFillColor = "rgba(120, 120, 128, 0.16)";
 const pulseDurationMs = 900;
 const restingOpacity = 0.55;
 
-function SkeletonBlock({
-	className,
-	style,
-}: {
-	className?: string;
-	style?: StyleProp<ViewStyle>;
-}) {
+function SkeletonBlock({ style }: { style?: StyleProp<ViewStyle> }) {
+	const { palette } = useUITheme();
 	const opacity = useSharedValue(restingOpacity);
 
 	useEffect(() => {
@@ -41,21 +33,32 @@ function SkeletonBlock({
 
 	return (
 		<Animated.View
-			className={className}
-			style={[{ backgroundColor: skeletonFillColor }, style, animatedStyle]}
+			style={[
+				{ backgroundColor: palette.fill, borderRadius: radius.pill },
+				style,
+				animatedStyle,
+			]}
 		/>
 	);
 }
 
 function CarouselCardSkeleton() {
+	const { palette } = useUITheme();
+
 	return (
-		<View className="w-56 overflow-hidden rounded-3xl border border-border bg-surface">
-			<SkeletonBlock className="h-32 w-full" />
-			<View className="gap-2 p-4">
-				<SkeletonBlock className="h-4 w-24 rounded-full" />
-				<SkeletonBlock className="h-3 w-40 rounded-full" />
-				<SkeletonBlock className="h-3 w-28 rounded-full" />
-				<SkeletonBlock className="mt-1 h-5 w-16 rounded-full" />
+		<View
+			style={{
+				backgroundColor: palette.surface,
+				borderRadius: radius.card,
+				overflow: "hidden",
+				width: 224,
+			}}
+		>
+			<SkeletonBlock style={{ borderRadius: 0, height: 128, width: "100%" }} />
+			<View style={{ gap: spacing.sm, padding: spacing.lg }}>
+				<SkeletonBlock style={{ height: 16, width: 96 }} />
+				<SkeletonBlock style={{ height: 12, width: 160 }} />
+				<SkeletonBlock style={{ height: 12, width: 112 }} />
 			</View>
 		</View>
 	);
@@ -63,48 +66,65 @@ function CarouselCardSkeleton() {
 
 export function HomeLoadingState() {
 	const insets = useSafeAreaInsets();
+	const { palette } = useUITheme();
 
 	return (
-		<Container includeBottomInset={false} isScrollable={false}>
+		<View
+			accessibilityLabel="Loading home"
+			accessibilityRole="progressbar"
+			style={{ backgroundColor: palette.canvas, flex: 1 }}
+		>
 			<View
-				className="flex-row items-center gap-4 px-4 pb-3"
-				style={{ paddingTop: Math.max(insets.top, 12) }}
+				style={{
+					alignItems: "center",
+					flexDirection: "row",
+					gap: spacing.lg,
+					minHeight: metrics.navBarHeight,
+					paddingHorizontal: spacing.screen,
+					paddingTop: insets.top,
+				}}
 			>
-				<View className="flex-1 gap-2">
-					<SkeletonBlock className="h-7 w-40 rounded-full" />
-					<SkeletonBlock className="h-4 w-28 rounded-full" />
-				</View>
-				<SkeletonBlock className="h-11 w-11 rounded-full" />
+				<View style={{ flex: 1 }} />
+				<SkeletonBlock style={{ height: 44, width: 44 }} />
 			</View>
 
-			<View className="gap-5 px-4 pt-1">
-				<View className="overflow-hidden rounded-[30px] border border-border bg-surface">
-					<SkeletonBlock className="h-40 w-full" />
-					<View className="gap-5 p-5">
-						<View className="flex-row gap-5">
-							<View className="flex-1 gap-2">
-								<SkeletonBlock className="h-3 w-20 rounded-full" />
-								<SkeletonBlock className="h-4 w-24 rounded-full" />
-								<SkeletonBlock className="mt-1 h-1.5 w-full rounded-full" />
-							</View>
-							<View className="flex-1 gap-2">
-								<SkeletonBlock className="h-3 w-16 rounded-full" />
-								<SkeletonBlock className="h-4 w-20 rounded-full" />
-							</View>
+			<View style={{ gap: spacing.section, padding: spacing.screen }}>
+				<View style={{ gap: spacing.sm }}>
+					<SkeletonBlock style={{ height: 32, width: 200 }} />
+					<SkeletonBlock style={{ height: 16, width: 128 }} />
+				</View>
+
+				<View
+					style={{
+						backgroundColor: palette.surface,
+						borderRadius: radius.card,
+						gap: spacing.lg,
+						padding: spacing.screen,
+					}}
+				>
+					<View style={{ flexDirection: "row", gap: spacing.lg }}>
+						<SkeletonBlock
+							style={{ borderRadius: radius.field, height: 72, width: 72 }}
+						/>
+						<View
+							style={{ flex: 1, gap: spacing.sm, justifyContent: "center" }}
+						>
+							<SkeletonBlock style={{ height: 12, width: 80 }} />
+							<SkeletonBlock style={{ height: 18, width: 150 }} />
 						</View>
-						<SkeletonBlock className="h-11 w-full rounded-full" />
 					</View>
+					<SkeletonBlock style={{ height: 6, width: "100%" }} />
+					<SkeletonBlock style={{ height: 50, width: "100%" }} />
 				</View>
 
-				<View className="gap-3 pt-1">
-					<SkeletonBlock className="h-5 w-44 rounded-full" />
-					<SkeletonBlock className="h-4 w-64 rounded-full" />
-					<View className="flex-row gap-3 pt-1">
+				<View style={{ gap: spacing.md }}>
+					<SkeletonBlock style={{ height: 22, width: 176 }} />
+					<View style={{ flexDirection: "row", gap: spacing.md }}>
 						<CarouselCardSkeleton />
 						<CarouselCardSkeleton />
 					</View>
 				</View>
 			</View>
-		</Container>
+		</View>
 	);
 }

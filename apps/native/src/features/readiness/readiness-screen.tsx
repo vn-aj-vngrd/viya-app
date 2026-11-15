@@ -15,28 +15,39 @@ import {
 import { useMutation, useQuery } from "convex/react";
 import type { Href } from "expo-router";
 import { Link } from "expo-router";
-import {
-	BottomSheet,
-	Button,
-	CloseButton,
-	Input,
-	Label,
-	Spinner,
-	Text,
-	TextArea,
-	TextField,
-} from "heroui-native";
-import type { ReactNode } from "react";
+import { BottomSheet, Input, Label, TextArea, TextField } from "heroui-native";
 import { useEffect, useState } from "react";
 import { ScrollView, View } from "react-native";
+import Animated, {
+	FadeIn,
+	FadeInDown,
+	useAnimatedStyle,
+	useSharedValue,
+	withSpring,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
 import { Container } from "@/components/container";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
-import { EmptyState } from "@/src/components/empty-state";
 import { NavigationIconButton } from "@/src/components/navigation/navigation-icon-button";
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
+import {
+	AppText,
+	Card,
+	Chip,
+	EmptyState,
+	GlassIconButton,
+	ListGroup,
+	motion,
+	type Palette,
+	PrimaryButton,
+	radius,
+	SecondaryButton,
+	spacing,
+	useUITheme,
+} from "@/src/components/ui";
 import { VIYA_ROUTES } from "@/src/constants/routes";
+import { PillAction } from "@/src/features/bookings/pill-action";
 import { TripModuleScreenFrame } from "@/src/features/trips/trip-module-floating-bar";
 import { useTripIdParam } from "@/src/features/trips/use-trip-id-param";
 
@@ -111,8 +122,7 @@ const readinessCategoryOptions = [
 const priorityOptions = ["low", "medium", "high", "critical"] as const;
 const readinessCategories = new Set<string>(readinessCategoryOptions);
 const priorities = new Set<string>(priorityOptions);
-const readinessAccent = "#0A84FF";
-const readinessTrackStyle = { backgroundColor: "rgba(10, 132, 255, 0.12)" };
+
 const readinessRingSize = 48;
 const readinessRingStroke = 4;
 const readinessRingRadius = (readinessRingSize - readinessRingStroke) / 2;
@@ -121,38 +131,30 @@ const readinessRingCenter = readinessRingSize / 2;
 
 const workspaceModuleGroups = [
 	{
-		accentBackgroundColor: "rgba(191, 90, 242, 0.12)",
-		accentColor: "#BF5AF2",
 		categories: ["schedule", "transport", "weather"] as const,
 		detail: "Schedule, transfers, and weather",
-		icon: "calendar-outline",
+		icon: "calendar-outline" as const,
 		label: "Itinerary",
 		route: VIYA_ROUTES.tripItinerary,
 	},
 	{
-		accentBackgroundColor: "rgba(10, 165, 181, 0.12)",
-		accentColor: "#0AA5B5",
 		categories: ["budget"] as const,
 		detail: "Spend, receipts, and daily pace",
-		icon: "wallet-outline",
+		icon: "wallet-outline" as const,
 		label: "Budget",
 		route: VIYA_ROUTES.tripBudget,
 	},
 	{
-		accentBackgroundColor: "rgba(255, 159, 10, 0.12)",
-		accentColor: "#FF9F0A",
 		categories: ["documents", "bookings", "packing"] as const,
 		detail: "Bookings, passports, tickets, and documents",
-		icon: "folder-open-outline",
+		icon: "folder-open-outline" as const,
 		label: "Vault",
 		route: VIYA_ROUTES.tripVault,
 	},
 	{
-		accentBackgroundColor: "rgba(52, 199, 89, 0.12)",
-		accentColor: "#34C759",
 		categories: ["safety", "group", "backupPlan"] as const,
 		detail: "Safety, group coverage, and backups",
-		icon: "shield-checkmark-outline",
+		icon: "shield-checkmark-outline" as const,
 		label: "Readiness",
 		route: VIYA_ROUTES.tripReadiness,
 	},
@@ -220,7 +222,7 @@ function SheetField({
 				<Label.Text>{label}</Label.Text>
 			</Label>
 			<Input
-				className="h-12 border border-border bg-surface px-4"
+				className="h-12 border-0 bg-surface px-4"
 				onBlur={onBlur}
 				onChangeText={onChangeText}
 				onFocus={onFocus}
@@ -251,7 +253,7 @@ function SheetTextArea({
 				<Label.Text>{label}</Label.Text>
 			</Label>
 			<TextArea
-				className="min-h-20 rounded-[18px] border border-border bg-surface px-4 py-3"
+				className="min-h-20 rounded-[16px] border-0 bg-surface px-4 py-3"
 				onBlur={onBlur}
 				onChangeText={onChangeText}
 				onFocus={onFocus}
@@ -275,24 +277,22 @@ function ReadinessChoiceGroup({
 	value: string;
 }) {
 	return (
-		<View className="gap-2">
-			<Text color="muted" type="body-xs" weight="semibold">
-				{label.toUpperCase()}
-			</Text>
-			<View className="flex-row flex-wrap gap-2">
+		<View style={{ gap: spacing.sm }}>
+			<AppText tone="secondary" variant="eyebrow">
+				{label}
+			</AppText>
+			<View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
 				{options.map((option) => (
-					<Button
+					<Chip
 						key={option}
+						label={
+							READINESS_CATEGORY_LABELS[option as ReadinessCategory] ??
+							PRIORITY_LABELS[option as Priority] ??
+							option
+						}
 						onPress={() => onChange(option)}
-						size="sm"
-						variant={value === option ? "primary" : "secondary"}
-					>
-						<Button.Label>
-							{READINESS_CATEGORY_LABELS[option as ReadinessCategory] ??
-								PRIORITY_LABELS[option as Priority] ??
-								option}
-						</Button.Label>
-					</Button>
+						selected={value === option}
+					/>
 				))}
 			</View>
 		</View>
@@ -309,86 +309,96 @@ function ReadinessAssigneePicker({
 	value: string;
 }) {
 	return (
-		<View className="gap-2">
-			<Text color="muted" type="body-xs" weight="semibold">
+		<View style={{ gap: spacing.sm }}>
+			<AppText tone="secondary" variant="eyebrow">
 				OWNER
-			</Text>
-			<View className="flex-row flex-wrap gap-2">
-				<Button
+			</AppText>
+			<View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
+				<Chip
+					label="Unassigned"
 					onPress={() => onChange("")}
-					size="sm"
-					variant={value ? "secondary" : "primary"}
-				>
-					<Button.Label>Unassigned</Button.Label>
-				</Button>
+					selected={!value}
+				/>
 				{companions.map((companion) => (
-					<Button
+					<Chip
 						key={companion._id}
+						label={companion.name}
 						onPress={() => onChange(companion._id)}
-						size="sm"
-						variant={value === companion._id ? "primary" : "secondary"}
-					>
-						<Button.Label>{companion.name}</Button.Label>
-					</Button>
+						selected={value === companion._id}
+					/>
 				))}
 			</View>
 		</View>
 	);
 }
 
-function ReadinessPill({ children }: { children: ReactNode }) {
-	return (
-		<View className="rounded-full bg-surface-secondary px-3 py-1.5">
-			<Text color="muted" type="body-xs" weight="semibold">
-				{children}
-			</Text>
-		</View>
-	);
-}
-
 function ReadinessMetric({ label, value }: { label: string; value: string }) {
 	return (
-		<View className="min-w-[45%] flex-1 gap-0.5">
-			<Text color="muted" numberOfLines={1} type="body-xs">
+		<View style={{ flexBasis: "45%", flexGrow: 1, gap: 2 }}>
+			<AppText numberOfLines={1} tone="secondary" variant="footnote">
 				{label}
-			</Text>
-			<Text numberOfLines={1} type="body-sm" weight="semibold">
+			</AppText>
+			<AppText bold={true} numberOfLines={1} variant="subhead">
 				{value}
-			</Text>
+			</AppText>
 		</View>
 	);
 }
 
-function ReadinessProgressBar({ score }: { score: number }) {
+function ReadinessProgressBar({
+	color,
+	score,
+}: {
+	color: string;
+	score: number;
+}) {
+	const { palette } = useUITheme();
 	const clampedScore = Math.max(0, Math.min(100, score));
+	const width = useSharedValue(0);
+
+	useEffect(() => {
+		width.value = withSpring(clampedScore, motion.spring.selection);
+	}, [clampedScore, width]);
+
+	const fillStyle = useAnimatedStyle(() => ({ width: `${width.value}%` }));
 
 	return (
 		<View
-			className="h-2 overflow-hidden rounded-full"
-			style={readinessTrackStyle}
+			style={{
+				backgroundColor: palette.fill,
+				borderRadius: radius.pill,
+				height: 8,
+				overflow: "hidden",
+			}}
 		>
-			<View
-				className="h-full rounded-full"
-				style={{ backgroundColor: readinessAccent, width: `${clampedScore}%` }}
+			<Animated.View
+				style={[
+					{ backgroundColor: color, borderRadius: radius.pill, height: "100%" },
+					fillStyle,
+				]}
 			/>
 		</View>
 	);
 }
 
-const getReadinessTone = (progress: number, hasCoverage: boolean) => {
+const getReadinessTone = (
+	progress: number,
+	hasCoverage: boolean,
+	palette: Palette
+) => {
 	if (!hasCoverage) {
-		return "#A1A1AA";
+		return palette.inkTertiary;
 	}
 
 	if (progress >= 70) {
-		return "#1CCB68";
+		return palette.success;
 	}
 
 	if (progress >= 40) {
-		return "#FF9F0A";
+		return palette.warning;
 	}
 
-	return "#FF3B30";
+	return palette.danger;
 };
 
 function ReadinessRing({
@@ -398,14 +408,20 @@ function ReadinessRing({
 	hasCoverage: boolean;
 	progress: number;
 }) {
-	const tone = getReadinessTone(progress, hasCoverage);
+	const { palette } = useUITheme();
+	const tone = getReadinessTone(progress, hasCoverage, palette);
 	const boundedProgress = Math.min(100, Math.max(0, Math.round(progress)));
 	const dashOffset = readinessRingCircumference * (1 - boundedProgress / 100);
 
 	return (
 		<View
-			className="items-center justify-center rounded-full bg-surface"
-			style={{ height: readinessRingSize, width: readinessRingSize }}
+			accessibilityLabel={`${boundedProgress} percent ready`}
+			style={{
+				alignItems: "center",
+				height: readinessRingSize,
+				justifyContent: "center",
+				width: readinessRingSize,
+			}}
 		>
 			<Svg
 				height={readinessRingSize}
@@ -417,7 +433,7 @@ function ReadinessRing({
 					cy={readinessRingCenter}
 					fill="none"
 					r={readinessRingRadius}
-					stroke="rgba(24, 24, 27, 0.08)"
+					stroke={palette.fill}
 					strokeWidth={readinessRingStroke}
 				/>
 				{hasCoverage ? (
@@ -438,9 +454,9 @@ function ReadinessRing({
 				<Ionicons color={tone} name="checkmark" size={22} />
 			) : null}
 			{hasCoverage && boundedProgress < 100 ? (
-				<Text style={{ color: tone, fontSize: 13 }} weight="bold">
+				<AppText bold={true} style={{ color: tone }} variant="footnote">
 					{boundedProgress}
-				</Text>
+				</AppText>
 			) : null}
 			{hasCoverage ? null : (
 				<Ionicons color={tone} name="sparkles-outline" size={16} />
@@ -476,63 +492,81 @@ function ReadinessOverview({
 	urgentOpenCount: number;
 	weakestCategoryLabel: string;
 }) {
+	const { palette } = useUITheme();
 	const isTravelReady = score.overallScore >= 90;
 	const hasReadinessCoverage = domainItemCount > 0;
+	const tone = getReadinessTone(
+		score.overallScore,
+		hasReadinessCoverage,
+		palette
+	);
 
 	return (
-		<View className="gap-4 rounded-[30px] border border-border bg-surface p-5">
-			<View className="flex-row items-start justify-between gap-4">
-				<View className="min-w-0 flex-1 gap-1">
-					<Text color="muted" type="body-xs" weight="semibold">
-						READINESS
-					</Text>
-					<Text.Heading type="h4" weight="semibold">
-						{score.overallScore}% ready
-					</Text.Heading>
-					<Text color="muted" numberOfLines={2} type="body-sm">
-						{score.summary}
-					</Text>
-				</View>
-				<View className="items-end gap-2">
+		<Animated.View entering={FadeInDown.springify().damping(20)}>
+			<Card padding="lg" style={{ gap: spacing.lg }}>
+				<View
+					style={{
+						alignItems: "flex-start",
+						flexDirection: "row",
+						gap: spacing.lg,
+					}}
+				>
+					<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+						<AppText tone="secondary" variant="eyebrow">
+							READINESS
+						</AppText>
+						<AppText variant="title">{score.overallScore}% ready</AppText>
+						<AppText numberOfLines={2} tone="secondary" variant="subhead">
+							{score.summary}
+						</AppText>
+					</View>
 					<ReadinessRing
 						hasCoverage={hasReadinessCoverage}
 						progress={score.overallScore}
 					/>
-					<Button onPress={onCreateTask} size="sm" variant="secondary">
-						<Ionicons color="#0A84FF" name="add-circle-outline" size={16} />
-						<Button.Label>Add task</Button.Label>
-					</Button>
 				</View>
-			</View>
-			<ReadinessProgressBar score={score.overallScore} />
-			<View className="flex-row flex-wrap gap-x-4 gap-y-3">
-				<ReadinessMetric
-					label="Done"
-					value={`${completedCount}/${domainItemCount}`}
-				/>
-				<ReadinessMetric label="Open" value={`${openCount} tasks`} />
-				<ReadinessMetric label="Urgent" value={`${urgentOpenCount}`} />
-				<ReadinessMetric label="Assigned" value={`${assignedOpenCount}`} />
-				<ReadinessMetric label="Weakest" value={weakestCategoryLabel} />
-				<ReadinessMetric label="Priority" value={highestPriorityLabel} />
-			</View>
-			{isTravelReady ? (
-				<Link asChild href={VIYA_ROUTES.tripTravelMode(tripId)}>
-					<Button size="sm">
-						<Button.Label>Open travel mode</Button.Label>
-					</Button>
-				</Link>
-			) : (
-				<Button
-					isDisabled={!highestPriorityItem}
-					onPress={onFixTopGap}
-					size="sm"
-					variant="secondary"
+				<ReadinessProgressBar color={tone} score={score.overallScore} />
+				<View
+					style={{
+						columnGap: spacing.lg,
+						flexDirection: "row",
+						flexWrap: "wrap",
+						rowGap: spacing.md,
+					}}
 				>
-					<Button.Label>Fix highest-priority gap</Button.Label>
-				</Button>
-			)}
-		</View>
+					<ReadinessMetric
+						label="Done"
+						value={`${completedCount}/${domainItemCount}`}
+					/>
+					<ReadinessMetric label="Open" value={`${openCount} tasks`} />
+					<ReadinessMetric label="Urgent" value={`${urgentOpenCount}`} />
+					<ReadinessMetric label="Assigned" value={`${assignedOpenCount}`} />
+					<ReadinessMetric label="Weakest" value={weakestCategoryLabel} />
+					<ReadinessMetric label="Priority" value={highestPriorityLabel} />
+				</View>
+				<View style={{ gap: spacing.sm }}>
+					{isTravelReady ? (
+						<Link asChild href={VIYA_ROUTES.tripTravelMode(tripId)}>
+							<PrimaryButton
+								label="Open travel mode"
+								onPress={() => undefined}
+							/>
+						</Link>
+					) : (
+						<PrimaryButton
+							disabled={!highestPriorityItem}
+							label="Fix highest-priority gap"
+							onPress={onFixTopGap}
+						/>
+					)}
+					<SecondaryButton
+						icon="add-circle-outline"
+						label="Add task"
+						onPress={onCreateTask}
+					/>
+				</View>
+			</Card>
+		</Animated.View>
 	);
 }
 
@@ -553,88 +587,81 @@ function TopReadinessGapSummary({
 	onReview: () => void;
 	ownerHref: Href | null;
 }) {
+	const { palette } = useUITheme();
+
 	return (
-		<View className="gap-3 rounded-[28px] border border-border bg-surface p-4">
-			<View className="flex-row items-center gap-3">
-				<View className="h-9 w-9 items-center justify-center rounded-full bg-primary/10">
-					<Ionicons color="#0A84FF" name="alert-outline" size={18} />
-				</View>
-				<View className="min-w-0 flex-1 gap-1">
-					<Text color="muted" type="body-xs" weight="semibold">
+		<Card padding="lg" style={{ gap: spacing.md }}>
+			<View
+				style={{ alignItems: "center", flexDirection: "row", gap: spacing.md }}
+			>
+				<Ionicons
+					color={palette.accent}
+					name="alert-circle-outline"
+					size={22}
+				/>
+				<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+					<AppText tone="secondary" variant="eyebrow">
 						NEXT GAP
-					</Text>
-					<Text numberOfLines={1} type="body" weight="semibold">
+					</AppText>
+					<AppText numberOfLines={1} variant="headline">
 						{item?.title ?? "No open gap"}
-					</Text>
+					</AppText>
 				</View>
 			</View>
-			<Text.Paragraph color="muted" numberOfLines={2} type="body-sm">
+			<AppText numberOfLines={2} tone="secondary" variant="subhead">
 				{item
 					? item.description
 					: "All required readiness tasks are resolved or ignored."}
-			</Text.Paragraph>
+			</AppText>
 			{item ? (
 				<>
-					<View className="flex-row flex-wrap gap-2">
-						<ReadinessPill>
-							{READINESS_CATEGORY_LABELS[item.category as ReadinessCategory]}
-						</ReadinessPill>
-						<ReadinessPill>
-							{PRIORITY_LABELS[item.priority as Priority]}
-						</ReadinessPill>
-						<ReadinessPill>{assignedToName ?? "Unassigned"}</ReadinessPill>
+					<View
+						style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}
+					>
+						<Chip
+							label={
+								READINESS_CATEGORY_LABELS[item.category as ReadinessCategory]
+							}
+						/>
+						<Chip label={PRIORITY_LABELS[item.priority as Priority]} />
+						<Chip label={assignedToName ?? "Unassigned"} />
 					</View>
-					<View className="flex-row flex-wrap gap-2">
-						<Button
-							className="min-w-[140px] flex-1"
+					<View
+						style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}
+					>
+						<PillAction
+							icon="create-outline"
+							label="Review top gap"
 							onPress={onReview}
-							size="sm"
-						>
-							<Ionicons color="#FFFFFF" name="create-outline" size={16} />
-							<Button.Label>Review top gap</Button.Label>
-						</Button>
-						<Button
-							className="min-w-[132px] flex-1"
+							tone="primary"
+						/>
+						<PillAction
+							icon="checkmark-outline"
+							label="Mark top done"
 							onPress={onMarkDone}
-							size="sm"
-							variant="secondary"
-						>
-							<Ionicons color="#0A84FF" name="checkmark-outline" size={15} />
-							<Button.Label>Mark top done</Button.Label>
-						</Button>
+						/>
 						{categoryHref ? (
 							<Link asChild href={categoryHref}>
-								<Button
-									className="min-w-[148px] flex-1"
-									size="sm"
-									variant="secondary"
-								>
-									<Ionicons color="#0A84FF" name="open-outline" size={15} />
-									<Button.Label>Open top category</Button.Label>
-								</Button>
+								<PillAction icon="open-outline" label="Open top category" />
 							</Link>
 						) : null}
 						{ownerHref ? (
 							<Link asChild href={ownerHref}>
-								<Button
-									className="min-w-[132px] flex-1"
-									size="sm"
-									variant="secondary"
-								>
-									<Ionicons color="#0A84FF" name="people-outline" size={15} />
-									<Button.Label>Open top owner</Button.Label>
-								</Button>
+								<PillAction icon="people-outline" label="Open top owner" />
 							</Link>
 						) : null}
 					</View>
 				</>
 			) : (
-				<Button onPress={onCreateTopGap} size="sm" variant="secondary">
-					<Ionicons color="#0A84FF" name="add-circle-outline" size={16} />
-					<Button.Label>Add readiness task</Button.Label>
-				</Button>
+				<View style={{ alignItems: "flex-start" }}>
+					<PillAction
+						icon="add-circle-outline"
+						label="Add readiness task"
+						onPress={onCreateTopGap}
+					/>
+				</View>
 			)}
-		</View>
+		</Card>
 	);
 }
 
@@ -660,22 +687,37 @@ function ReadinessTaskSheet({
 	onUpdateForm: (key: keyof ReadinessForm, value: string) => void;
 }) {
 	const insets = useSafeAreaInsets();
+	const { palette } = useUITheme();
 
 	return (
 		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
 			<BottomSheet.Portal>
 				<BottomSheet.Overlay />
 				<BottomSheet.Content
-					backgroundClassName="rounded-t-[36px] bg-background"
+					backgroundClassName="bg-background"
+					backgroundStyle={{
+						backgroundColor: palette.canvas,
+						borderTopLeftRadius: radius.sheet,
+						borderTopRightRadius: radius.sheet,
+					}}
 					enablePanDownToClose={true}
 					snapPoints={["82%"]}
 				>
 					<View
-						className="gap-4 px-5 pt-2"
-						style={{ paddingBottom: Math.max(insets.bottom, 18) }}
+						style={{
+							gap: spacing.lg,
+							paddingBottom: Math.max(insets.bottom, spacing.lg),
+							paddingHorizontal: spacing.screen,
+						}}
 					>
-						<View className="flex-row items-start justify-between gap-4">
-							<View className="flex-1 gap-1">
+						<View
+							style={{
+								alignItems: "flex-start",
+								flexDirection: "row",
+								gap: spacing.lg,
+							}}
+						>
+							<View style={{ flex: 1, gap: 2 }}>
 								<BottomSheet.Title>
 									{mode === "edit"
 										? "Edit checklist task"
@@ -685,14 +727,17 @@ function ReadinessTaskSheet({
 									Add a concrete requirement before travel.
 								</BottomSheet.Description>
 							</View>
-							<CloseButton
+							<GlassIconButton
 								accessibilityLabel="Close readiness task form"
-								className="h-10 w-10 rounded-full bg-surface"
+								icon="close"
 								onPress={() => onOpenChange(false)}
 							/>
 						</View>
 						<ScrollView
-							contentContainerStyle={{ gap: 14, paddingBottom: 8 }}
+							contentContainerStyle={{
+								gap: spacing.lg,
+								paddingBottom: spacing.sm,
+							}}
 							keyboardShouldPersistTaps="handled"
 							showsVerticalScrollIndicator={false}
 							style={{ maxHeight: 480 }}
@@ -734,16 +779,22 @@ function ReadinessTaskSheet({
 							/>
 						</ScrollView>
 						{errorMessage ? (
-							<Text className="text-danger" type="body-sm">
-								{errorMessage}
-							</Text>
+							<Animated.View entering={FadeIn}>
+								<AppText
+									accessibilityRole="alert"
+									tone="danger"
+									variant="subhead"
+								>
+									{errorMessage}
+								</AppText>
+							</Animated.View>
 						) : null}
-						<Button isDisabled={isSaving} onPress={onSubmit} size="lg">
-							{isSaving ? <Spinner size="sm" /> : null}
-							<Button.Label>
-								{mode === "edit" ? "Save task" : "Add task"}
-							</Button.Label>
-						</Button>
+						<PrimaryButton
+							disabled={isSaving}
+							isPending={isSaving}
+							label={mode === "edit" ? "Save task" : "Add task"}
+							onPress={onSubmit}
+						/>
 					</View>
 				</BottomSheet.Content>
 			</BottomSheet.Portal>
@@ -805,7 +856,7 @@ export function ReadinessScreen() {
 
 	if (!tripId) {
 		return (
-			<Container className="px-4 pb-28">
+			<Container className="pb-28">
 				<EmptyState
 					description="Open a saved trip before checking readiness."
 					icon="shield-checkmark-outline"
@@ -982,18 +1033,24 @@ export function ReadinessScreen() {
 				<ScrollView
 					contentContainerStyle={{
 						flexGrow: 1,
-						gap: 14,
+						gap: spacing.section,
 						paddingBottom: 112,
-						paddingHorizontal: 16,
+						paddingHorizontal: spacing.screen,
 					}}
 					contentInsetAdjustmentBehavior="automatic"
 					keyboardShouldPersistTaps="handled"
 					showsVerticalScrollIndicator={false}
 				>
 					{readinessErrorMessage ? (
-						<Text className="text-danger" type="body-sm">
-							{readinessErrorMessage}
-						</Text>
+						<Animated.View entering={FadeIn}>
+							<AppText
+								accessibilityRole="alert"
+								tone="danger"
+								variant="subhead"
+							>
+								{readinessErrorMessage}
+							</AppText>
+						</Animated.View>
 					) : null}
 
 					<ReadinessOverview
@@ -1042,22 +1099,24 @@ export function ReadinessScreen() {
 						ownerHref={highestPriorityOwnerHref}
 					/>
 
-					<View className="gap-3">
-						<View className="flex-row items-end justify-between gap-4">
-							<View className="min-w-0 flex-1">
-								<Text.Heading type="h5" weight="semibold">
-									Workspace
-								</Text.Heading>
-								<Text color="muted" type="body-sm">
-									Open the module that owns each gap.
-								</Text>
-							</View>
+					<View style={{ gap: spacing.md }}>
+						<View style={{ gap: 2, paddingHorizontal: spacing.xs }}>
+							<AppText accessibilityRole="header" variant="heading">
+								Workspace
+							</AppText>
+							<AppText tone="secondary" variant="subhead">
+								Open the module that owns each gap.
+							</AppText>
 						</View>
-						<View className="flex-row flex-wrap gap-3">
+						<View
+							style={{
+								flexDirection: "row",
+								flexWrap: "wrap",
+								gap: spacing.md,
+							}}
+						>
 							{workspaceModules.map((module) => (
 								<ReadinessCategoryCard
-									accentBackgroundColor={module.accentBackgroundColor}
-									accentColor={module.accentColor}
 									categoryHref={module.categoryHref}
 									detail={module.detail}
 									highestPriority={module.highestPriority}
@@ -1071,37 +1130,57 @@ export function ReadinessScreen() {
 						</View>
 					</View>
 
-					<View className="gap-3">
-						<Text.Heading type="h5" weight="semibold">
+					<View style={{ gap: spacing.md }}>
+						<AppText
+							accessibilityRole="header"
+							style={{ paddingHorizontal: spacing.xs }}
+							variant="heading"
+						>
 							Checklist
-						</Text.Heading>
-						{sortedReadinessItems.map((item) => (
-							<ReadinessItemRow
-								assignedToName={getAssignedToName(item.assignedToMemberId)}
-								categoryHref={getReadinessCategoryHref({
-									category: item.category,
-									tripId,
-								})}
-								item={item}
-								key={item._id}
-								onDelete={(readinessItemId) => {
-									runReadinessAction(() =>
-										deleteReadinessItem({ readinessItemId })
-									).catch(() => undefined);
-								}}
-								onEdit={openEditSheet}
-								onStatusChange={(readinessItemId, status) => {
-									runReadinessAction(() =>
-										updateReadinessItem({ readinessItemId, status })
-									).catch(() => undefined);
-								}}
-								ownerHref={
-									item.assignedToMemberId
-										? VIYA_ROUTES.tripCompanions(tripId)
-										: null
-								}
-							/>
-						))}
+						</AppText>
+						{sortedReadinessItems.length === 0 ? (
+							<Card padding="none">
+								<EmptyState
+									action={{
+										label: "Add readiness task",
+										onPress: openCreateSheet,
+									}}
+									description="Add a concrete requirement to start tracking travel readiness."
+									icon="checkbox-outline"
+									title="No checklist tasks"
+								/>
+							</Card>
+						) : (
+							<ListGroup>
+								{sortedReadinessItems.map((item) => (
+									<ReadinessItemRow
+										assignedToName={getAssignedToName(item.assignedToMemberId)}
+										categoryHref={getReadinessCategoryHref({
+											category: item.category,
+											tripId,
+										})}
+										item={item}
+										key={item._id}
+										onDelete={(readinessItemId) => {
+											runReadinessAction(() =>
+												deleteReadinessItem({ readinessItemId })
+											).catch(() => undefined);
+										}}
+										onEdit={openEditSheet}
+										onStatusChange={(readinessItemId, status) => {
+											runReadinessAction(() =>
+												updateReadinessItem({ readinessItemId, status })
+											).catch(() => undefined);
+										}}
+										ownerHref={
+											item.assignedToMemberId
+												? VIYA_ROUTES.tripCompanions(tripId)
+												: null
+										}
+									/>
+								))}
+							</ListGroup>
+						)}
 					</View>
 				</ScrollView>
 				<ReadinessTaskSheet

@@ -1,31 +1,40 @@
-import { Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
-import {
-	BottomSheet,
-	Button,
-	Chip,
-	CloseButton,
-	Input,
-	Label,
-	Menu,
-	Spinner,
-	Surface,
-	Text,
-	TextArea,
-	TextField,
-} from "heroui-native";
-import type { ComponentProps } from "react";
+import { Menu } from "heroui-native";
 import { useState } from "react";
-import { Linking, Pressable, ScrollView, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Linking, View } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { Container } from "@/components/container";
-import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
-import { EmptyState } from "@/src/components/empty-state";
 import { NavigationIconButton } from "@/src/components/navigation/navigation-icon-button";
-import { ScreenLoadingState } from "@/src/components/screen-loading-state";
+import {
+	AppText,
+	Card,
+	Chip,
+	EmptyState,
+	LoadingState,
+	PrimaryButton,
+	radius,
+	SecondaryButton,
+	SectionHeader,
+	spacing,
+	useFeedback,
+	useUITheme,
+} from "@/src/components/ui";
 import { TripModuleScreenFrame } from "./trip-module-floating-bar";
+import {
+	ChoiceChips,
+	FormSheet,
+	InlineMessage,
+	MenuDivider,
+	MenuIcon,
+	MenuTrigger,
+	menuContentClassName,
+	menuItemClassName,
+	SheetField,
+	SheetTextArea,
+	TagRow,
+} from "./trip-module-form-kit";
 import { TripModuleManualEntryCard } from "./trip-module-manual-entry-card";
 import { useTripIdParam } from "./use-trip-id-param";
 
@@ -77,37 +86,6 @@ const getPhoneContactUrl = (scheme: "sms" | "tel", phone: string) =>
 
 const getEmailContactUrl = (email: string) => `mailto:${email.trim()}`;
 
-function SheetField({
-	label,
-	onChangeText,
-	placeholder,
-	value,
-}: {
-	label: string;
-	onChangeText: (value: string) => void;
-	placeholder: string;
-	value: string;
-}) {
-	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
-
-	return (
-		<TextField className="gap-2">
-			<Label>
-				<Label.Text>{label}</Label.Text>
-			</Label>
-			<Input
-				className="h-12 border border-border bg-surface px-4"
-				onBlur={onBlur}
-				onChangeText={onChangeText}
-				onFocus={onFocus}
-				placeholder={placeholder}
-				value={value}
-				variant="secondary"
-			/>
-		</TextField>
-	);
-}
-
 function CompanionRolePicker({
 	onChange,
 	value,
@@ -116,23 +94,16 @@ function CompanionRolePicker({
 	value: string;
 }) {
 	return (
-		<View className="gap-2">
-			<Text color="muted" type="body-xs" weight="semibold">
-				ROLE
-			</Text>
-			<View className="flex-row flex-wrap gap-2">
-				{companionRoleOptions.map((role) => (
-					<Button
-						key={role}
-						onPress={() => onChange(role)}
-						size="sm"
-						variant={value === role ? "primary" : "secondary"}
-					>
-						<Button.Label>{formatCompanionRoleLabel(role)}</Button.Label>
-					</Button>
-				))}
-			</View>
-		</View>
+		<ChoiceChips label="Role">
+			{companionRoleOptions.map((role) => (
+				<Chip
+					key={role}
+					label={formatCompanionRoleLabel(role)}
+					onPress={() => onChange(role)}
+					selected={value === role}
+				/>
+			))}
+		</ChoiceChips>
 	);
 }
 
@@ -155,112 +126,284 @@ function CompanionSheet({
 	onSubmit: () => void;
 	onUpdateForm: (key: keyof CompanionForm, value: string) => void;
 }) {
-	const insets = useSafeAreaInsets();
-	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
-
 	return (
-		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
-			<BottomSheet.Portal>
-				<BottomSheet.Overlay />
-				<BottomSheet.Content
-					backgroundClassName="rounded-t-[36px] bg-background"
-					enablePanDownToClose={true}
-					snapPoints={["82%"]}
-				>
-					<View
-						className="gap-4 px-5 pt-2"
-						style={{ paddingBottom: Math.max(insets.bottom, 18) }}
-					>
-						<View className="flex-row items-start justify-between gap-4">
-							<View className="flex-1 gap-1">
-								<BottomSheet.Title>
-									{mode === "edit" ? "Edit companion" : "Add companion"}
-								</BottomSheet.Title>
-								<BottomSheet.Description>
-									Save traveler, emergency contact, or coordinator details.
-								</BottomSheet.Description>
-							</View>
-							<CloseButton
-								accessibilityLabel="Close companion form"
-								className="h-10 w-10 rounded-full bg-surface"
-								onPress={() => onOpenChange(false)}
-							/>
-						</View>
-						<ScrollView
-							contentContainerStyle={{ gap: 14, paddingBottom: 8 }}
-							keyboardShouldPersistTaps="handled"
-							showsVerticalScrollIndicator={false}
-							style={{ maxHeight: 500 }}
-						>
-							<SheetField
-								label="Name"
-								onChangeText={(value) => onUpdateForm("name", value)}
-								placeholder="Alex Reyes"
-								value={form.name}
-							/>
-							<CompanionRolePicker
-								onChange={(value) => onUpdateForm("role", value)}
-								value={form.role}
-							/>
-							<SheetField
-								label="Email"
-								onChangeText={(value) => onUpdateForm("email", value)}
-								placeholder="name@example.com"
-								value={form.email}
-							/>
-							<SheetField
-								label="Phone"
-								onChangeText={(value) => onUpdateForm("phone", value)}
-								placeholder="+63..."
-								value={form.phone}
-							/>
-							<TextField className="gap-2">
-								<Label>
-									<Label.Text>Notes</Label.Text>
-								</Label>
-								<TextArea
-									className="min-h-20 rounded-[18px] border border-border bg-surface px-4 py-3"
-									onBlur={onBlur}
-									onChangeText={(value) => onUpdateForm("notes", value)}
-									onFocus={onFocus}
-									placeholder="Dietary needs, emergency instructions, assigned tasks"
-									value={form.notes}
-									variant="secondary"
-								/>
-							</TextField>
-						</ScrollView>
-						{errorMessage ? (
-							<Text className="text-danger" type="body-sm">
-								{errorMessage}
-							</Text>
-						) : null}
-						<Button isDisabled={isSaving} onPress={onSubmit} size="lg">
-							{isSaving ? <Spinner size="sm" /> : null}
-							<Button.Label>
-								{mode === "edit" ? "Save companion" : "Add companion"}
-							</Button.Label>
-						</Button>
-					</View>
-				</BottomSheet.Content>
-			</BottomSheet.Portal>
-		</BottomSheet>
+		<FormSheet
+			description="Save traveler, emergency contact, or coordinator details."
+			errorMessage={errorMessage}
+			isOpen={isOpen}
+			isSaving={isSaving}
+			onOpenChange={onOpenChange}
+			onSubmit={onSubmit}
+			saveLabel={mode === "edit" ? "Save companion" : "Add companion"}
+			title={mode === "edit" ? "Edit companion" : "Add companion"}
+		>
+			<SheetField
+				label="Name"
+				onChangeText={(value) => onUpdateForm("name", value)}
+				placeholder="Alex Reyes"
+				value={form.name}
+			/>
+			<CompanionRolePicker
+				onChange={(value) => onUpdateForm("role", value)}
+				value={form.role}
+			/>
+			<SheetField
+				autoCapitalize="none"
+				keyboardType="email-address"
+				label="Email"
+				onChangeText={(value) => onUpdateForm("email", value)}
+				placeholder="name@example.com"
+				value={form.email}
+			/>
+			<SheetField
+				keyboardType="phone-pad"
+				label="Phone"
+				onChangeText={(value) => onUpdateForm("phone", value)}
+				placeholder="+63..."
+				value={form.phone}
+			/>
+			<SheetTextArea
+				label="Notes"
+				onChangeText={(value) => onUpdateForm("notes", value)}
+				placeholder="Dietary needs, emergency instructions, assigned tasks"
+				value={form.notes}
+			/>
+		</FormSheet>
 	);
 }
 
-function CompanionContactButton({
-	icon,
-	label,
-	onPress,
+function ContactActions({
+	email,
+	labels,
+	onOpen,
+	phone,
 }: {
-	icon: ComponentProps<typeof Ionicons>["name"];
-	label: string;
-	onPress: () => void;
+	email?: string;
+	labels: { call: string; email: string; message: string };
+	onOpen: (url: string) => void;
+	phone?: string;
 }) {
+	if (!(phone || email)) {
+		return null;
+	}
+
 	return (
-		<Button className="min-w-[30%] flex-1" onPress={onPress} size="sm">
-			<Ionicons color="#FFFFFF" name={icon} size={15} />
-			<Button.Label>{label}</Button.Label>
-		</Button>
+		<View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
+			{phone ? (
+				<>
+					<SecondaryButton
+						fullWidth={false}
+						icon="call-outline"
+						label={labels.call}
+						onPress={() => onOpen(getPhoneContactUrl("tel", phone))}
+					/>
+					<SecondaryButton
+						fullWidth={false}
+						icon="chatbubble-outline"
+						label={labels.message}
+						onPress={() => onOpen(getPhoneContactUrl("sms", phone))}
+					/>
+				</>
+			) : null}
+			{email ? (
+				<SecondaryButton
+					fullWidth={false}
+					icon="mail-outline"
+					label={labels.email}
+					onPress={() => onOpen(getEmailContactUrl(email))}
+				/>
+			) : null}
+		</View>
+	);
+}
+
+function LeadContactSummary({
+	leadCompanion,
+	onAddLead,
+	onOpenContact,
+	onReview,
+}: {
+	leadCompanion: Doc<"tripCompanions"> | null;
+	onAddLead: () => void;
+	onOpenContact: (url: string) => void;
+	onReview: () => void;
+}) {
+	const { palette } = useUITheme();
+
+	return (
+		<View
+			style={{
+				backgroundColor: palette.fill,
+				borderRadius: radius.group,
+				gap: spacing.md,
+				padding: spacing.lg,
+			}}
+		>
+			<View style={{ gap: 2 }}>
+				<AppText tone="secondary" variant="eyebrow">
+					Lead contact
+				</AppText>
+				<AppText numberOfLines={1} variant="headline">
+					{leadCompanion?.name ?? "No lead contact yet"}
+				</AppText>
+			</View>
+			<AppText numberOfLines={2} tone="secondary" variant="subhead">
+				{leadCompanion
+					? `${formatCompanionRoleLabel(leadCompanion.role)} · ${
+							[leadCompanion.email, leadCompanion.phone]
+								.filter(Boolean)
+								.join(" · ") || "No contact detail saved"
+						}`
+					: "Add a traveler or organizer so the group has a clear coordination anchor."}
+			</AppText>
+			{leadCompanion?.notes ? (
+				<AppText tone="secondary" variant="subhead">
+					{leadCompanion.notes}
+				</AppText>
+			) : null}
+			{leadCompanion ? (
+				<View style={{ gap: spacing.sm }}>
+					<SecondaryButton
+						icon="create-outline"
+						label="Review lead"
+						onPress={onReview}
+					/>
+					<ContactActions
+						email={leadCompanion.email}
+						labels={{
+							call: "Call lead",
+							email: "Email lead",
+							message: "Message lead",
+						}}
+						onOpen={onOpenContact}
+						phone={leadCompanion.phone}
+					/>
+				</View>
+			) : (
+				<PrimaryButton
+					fullWidth={false}
+					icon="person-add-outline"
+					label="Add lead contact"
+					onPress={onAddLead}
+				/>
+			)}
+		</View>
+	);
+}
+
+function CompanionCard({
+	companion,
+	isPending,
+	onDelete,
+	onEdit,
+	onOpenContact,
+}: {
+	companion: Doc<"tripCompanions">;
+	isPending: boolean;
+	onDelete: () => void;
+	onEdit: () => void;
+	onOpenContact: (url: string) => void;
+}) {
+	const { palette } = useUITheme();
+	const contactLine = [companion.email, companion.phone]
+		.filter(Boolean)
+		.join(" · ");
+
+	return (
+		<Animated.View
+			entering={FadeInDown.duration(220)}
+			style={{ opacity: isPending ? 0.6 : 1 }}
+		>
+			<Card padding="md">
+				<View
+					style={{
+						alignItems: "flex-start",
+						flexDirection: "row",
+						gap: spacing.md,
+					}}
+				>
+					<View
+						style={{
+							alignItems: "center",
+							backgroundColor: palette.fill,
+							borderRadius: radius.pill,
+							height: 44,
+							justifyContent: "center",
+							width: 44,
+						}}
+					>
+						<AppText bold={true} tone="secondary" variant="headline">
+							{companion.name.trim().charAt(0).toUpperCase()}
+						</AppText>
+					</View>
+					<View style={{ flex: 1, gap: spacing.sm, minWidth: 0 }}>
+						<View style={{ gap: 2 }}>
+							<AppText variant="headline">{companion.name}</AppText>
+							<AppText tone="secondary" variant="footnote">
+								{formatCompanionRoleLabel(companion.role)}
+							</AppText>
+						</View>
+						{contactLine ? (
+							<AppText tone="secondary" variant="subhead">
+								{contactLine}
+							</AppText>
+						) : null}
+						{companion.notes ? (
+							<AppText tone="secondary" variant="subhead">
+								{companion.notes}
+							</AppText>
+						) : null}
+						<ContactActions
+							email={companion.email}
+							labels={{ call: "Call", email: "Email", message: "Message" }}
+							onOpen={onOpenContact}
+							phone={companion.phone}
+						/>
+					</View>
+					<Menu>
+						<Menu.Trigger asChild={true}>
+							<MenuTrigger label="Companion options" />
+						</Menu.Trigger>
+						<Menu.Portal>
+							<Menu.Overlay />
+							<Menu.Content
+								align="end"
+								className={menuContentClassName}
+								offset={8}
+								placement="bottom"
+								presentation="popover"
+								width={200}
+							>
+								<Menu.Item
+									accessibilityLabel="Edit companion"
+									className={menuItemClassName}
+									isAnimatedStyleActive={false}
+									onPress={onEdit}
+								>
+									<MenuIcon name="create-outline" />
+									<Menu.ItemTitle className="text-base">
+										Edit companion
+									</Menu.ItemTitle>
+								</Menu.Item>
+								<MenuDivider />
+								<Menu.Item
+									accessibilityLabel="Delete companion"
+									className={menuItemClassName}
+									isAnimatedStyleActive={false}
+									isDisabled={isPending}
+									onPress={onDelete}
+								>
+									<MenuIcon destructive={true} name="trash-outline" />
+									<Menu.ItemTitle className="text-base text-danger">
+										Delete companion
+									</Menu.ItemTitle>
+								</Menu.Item>
+							</Menu.Content>
+						</Menu.Portal>
+					</Menu>
+				</View>
+			</Card>
+		</Animated.View>
 	);
 }
 
@@ -273,6 +416,7 @@ export function TripCompanionsScreen() {
 	const createCompanion = useMutation(api.companions.createTripCompanion);
 	const updateCompanion = useMutation(api.companions.updateTripCompanion);
 	const deleteCompanion = useMutation(api.companions.deleteTripCompanion);
+	const { confirm } = useFeedback();
 	const [form, setForm] = useState<CompanionForm>(initialCompanionForm);
 	const [editingCompanionId, setEditingCompanionId] =
 		useState<Id<"tripCompanions"> | null>(null);
@@ -391,7 +535,7 @@ export function TripCompanionsScreen() {
 	};
 
 	if (companions === undefined) {
-		return <ScreenLoadingState />;
+		return <LoadingState title="Loading companions" />;
 	}
 
 	const contactReadyCount = companions.filter(
@@ -404,6 +548,21 @@ export function TripCompanionsScreen() {
 		companions.find((companion) => companion.role === "organizer") ??
 		companions.at(0) ??
 		null;
+
+	const confirmDeleteCompanion = async (companion: Doc<"tripCompanions">) => {
+		const confirmed = await confirm({
+			confirmLabel: "Delete",
+			destructive: true,
+			message: "This person will be removed from the trip.",
+			title: `Delete ${companion.name}?`,
+		});
+		if (confirmed) {
+			await handleDeleteCompanion(companion._id);
+		}
+	};
+	const openContact = (url: string) => {
+		handleOpenContact(url).catch(() => undefined);
+	};
 
 	return (
 		<TripModuleScreenFrame
@@ -421,7 +580,7 @@ export function TripCompanionsScreen() {
 				className="px-4 pb-28"
 				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
 			>
-				<View className="gap-4 pb-4">
+				<View style={{ gap: spacing.lg, paddingBottom: spacing.lg }}>
 					<TripModuleManualEntryCard
 						description="Save traveler roles, contact details, emergency contacts, and coordination notes."
 						moduleLabel="companions"
@@ -429,128 +588,34 @@ export function TripCompanionsScreen() {
 						primaryActionIcon="people-outline"
 						primaryActionLabel="Add companion"
 					/>
-					{contactErrorMessage ? (
-						<Text className="px-1 text-danger" type="body-sm">
-							{contactErrorMessage}
-						</Text>
-					) : null}
+					<InlineMessage message={contactErrorMessage} />
+					<InlineMessage message={companionErrorMessage} />
 
-					<View className="gap-4 rounded-[30px] bg-surface-secondary p-4">
-						<View className="flex-row items-start justify-between gap-3">
-							<View className="min-w-0 flex-1 gap-1">
-								<Text.Heading type="h5" weight="semibold">
-									Group coordination
-								</Text.Heading>
-								<Text color="muted" type="body-sm">
-									Keep travelers, contacts, and responsibilities easy to scan.
-								</Text>
-							</View>
-							<View className="h-11 w-11 items-center justify-center rounded-full bg-surface-secondary">
-								<Ionicons color="#FF2D55" name="people-outline" size={20} />
-							</View>
+					<Card>
+						<View style={{ gap: spacing.lg }}>
+							<SectionHeader eyebrow="Group coordination" title="Travelers" />
+							<AppText tone="secondary" variant="subhead">
+								Keep travelers, contacts, and responsibilities easy to scan.
+							</AppText>
+							<TagRow
+								labels={[
+									`${companions.length} people`,
+									`${contactReadyCount} reachable`,
+									`${emergencyContactCount} emergency contacts`,
+								]}
+							/>
+							<LeadContactSummary
+								leadCompanion={leadCompanion}
+								onAddLead={openLeadContactSheet}
+								onOpenContact={openContact}
+								onReview={() => {
+									if (leadCompanion) {
+										openEditSheet(leadCompanion);
+									}
+								}}
+							/>
 						</View>
-						<View className="flex-row flex-wrap gap-2">
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>{companions.length} people</Chip.Label>
-							</Chip>
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>{contactReadyCount} reachable</Chip.Label>
-							</Chip>
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>
-									{emergencyContactCount} emergency contacts
-								</Chip.Label>
-							</Chip>
-						</View>
-						<View className="gap-3 rounded-[24px] bg-surface p-4">
-							<View className="flex-row items-center gap-3">
-								<View className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary">
-									<Ionicons color="#FF2D55" name="person-outline" size={18} />
-								</View>
-								<View className="min-w-0 flex-1 gap-1">
-									<Text color="muted" type="body-xs" weight="semibold">
-										LEAD CONTACT
-									</Text>
-									<Text numberOfLines={1} type="body-sm" weight="bold">
-										{leadCompanion?.name ?? "No lead contact yet"}
-									</Text>
-								</View>
-							</View>
-							<Text color="muted" numberOfLines={2} type="body-sm">
-								{leadCompanion
-									? `${formatCompanionRoleLabel(leadCompanion.role)} · ${
-											[leadCompanion.email, leadCompanion.phone]
-												.filter(Boolean)
-												.join(" · ") || "No contact detail saved"
-										}`
-									: "Add a traveler or organizer so the group has a clear coordination anchor."}
-							</Text>
-							{leadCompanion?.notes ? (
-								<Text.Paragraph color="muted" type="body-sm">
-									{leadCompanion.notes}
-								</Text.Paragraph>
-							) : null}
-							{leadCompanion ? (
-								<View className="flex-row flex-wrap gap-2">
-									<Button
-										className="min-w-[30%] flex-1"
-										onPress={() => openEditSheet(leadCompanion)}
-										size="sm"
-										variant="secondary"
-									>
-										<Ionicons color="#0A84FF" name="create-outline" size={15} />
-										<Button.Label>Review lead</Button.Label>
-									</Button>
-									{leadCompanion.phone ? (
-										<>
-											<CompanionContactButton
-												icon="call-outline"
-												label="Call lead"
-												onPress={() => {
-													handleOpenContact(
-														getPhoneContactUrl("tel", leadCompanion.phone ?? "")
-													).catch(() => undefined);
-												}}
-											/>
-											<CompanionContactButton
-												icon="chatbubble-outline"
-												label="Message lead"
-												onPress={() => {
-													handleOpenContact(
-														getPhoneContactUrl("sms", leadCompanion.phone ?? "")
-													).catch(() => undefined);
-												}}
-											/>
-										</>
-									) : null}
-									{leadCompanion.email ? (
-										<CompanionContactButton
-											icon="mail-outline"
-											label="Email lead"
-											onPress={() => {
-												handleOpenContact(
-													getEmailContactUrl(leadCompanion.email ?? "")
-												).catch(() => undefined);
-											}}
-										/>
-									) : null}
-								</View>
-							) : (
-								<Button
-									onPress={openLeadContactSheet}
-									size="sm"
-									variant="secondary"
-								>
-									<Ionicons
-										color="#0A84FF"
-										name="person-add-outline"
-										size={16}
-									/>
-									<Button.Label>Add lead contact</Button.Label>
-								</Button>
-							)}
-						</View>
-					</View>
+					</Card>
 
 					{companions.length === 0 ? (
 						<EmptyState
@@ -563,150 +628,18 @@ export function TripCompanionsScreen() {
 							title="No companions yet"
 						/>
 					) : (
-						<View className="gap-3">
+						<View style={{ gap: spacing.md }}>
 							{companions.map((companion) => (
-								<Surface
-									className="gap-3 rounded-[28px] border border-border bg-surface p-5"
+								<CompanionCard
+									companion={companion}
+									isPending={pendingCompanionId === companion._id}
 									key={companion._id}
-								>
-									<View className="flex-row items-start gap-3">
-										<View className="min-w-0 flex-1 gap-3">
-											<View className="flex-row flex-wrap gap-2">
-												<Chip size="sm" variant="secondary">
-													<Chip.Label>{companion.role}</Chip.Label>
-												</Chip>
-											</View>
-											<Text type="body" weight="bold">
-												{companion.name}
-											</Text>
-											{companion.email || companion.phone ? (
-												<Text color="muted" type="body-sm">
-													{[companion.email, companion.phone]
-														.filter(Boolean)
-														.join(" · ")}
-												</Text>
-											) : null}
-											{companion.notes ? (
-												<Text.Paragraph color="muted" type="body-sm">
-													{companion.notes}
-												</Text.Paragraph>
-											) : null}
-											{companion.phone || companion.email ? (
-												<View className="flex-row flex-wrap gap-2">
-													{companion.phone ? (
-														<>
-															<CompanionContactButton
-																icon="call-outline"
-																label="Call"
-																onPress={() => {
-																	handleOpenContact(
-																		getPhoneContactUrl(
-																			"tel",
-																			companion.phone ?? ""
-																		)
-																	).catch(() => undefined);
-																}}
-															/>
-															<CompanionContactButton
-																icon="chatbubble-outline"
-																label="Message"
-																onPress={() => {
-																	handleOpenContact(
-																		getPhoneContactUrl(
-																			"sms",
-																			companion.phone ?? ""
-																		)
-																	).catch(() => undefined);
-																}}
-															/>
-														</>
-													) : null}
-													{companion.email ? (
-														<CompanionContactButton
-															icon="mail-outline"
-															label="Email"
-															onPress={() => {
-																handleOpenContact(
-																	getEmailContactUrl(companion.email ?? "")
-																).catch(() => undefined);
-															}}
-														/>
-													) : null}
-												</View>
-											) : null}
-										</View>
-										<Menu>
-											<Menu.Trigger asChild={true}>
-												<Pressable
-													accessibilityLabel="Companion options"
-													accessibilityRole="button"
-													className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary"
-													style={({ pressed }) => ({
-														transform: [{ scale: pressed ? 0.94 : 1 }],
-													})}
-												>
-													<Ionicons
-														color="#71717A"
-														name="ellipsis-horizontal"
-														size={17}
-													/>
-												</Pressable>
-											</Menu.Trigger>
-											<Menu.Portal>
-												<Menu.Overlay />
-												<Menu.Content
-													align="end"
-													className="rounded-[24px] border border-border bg-surface p-2"
-													offset={8}
-													placement="bottom"
-													presentation="popover"
-													width={200}
-												>
-													<Menu.Item
-														accessibilityLabel="Edit companion"
-														className="flex-row items-center gap-3 rounded-[18px] p-2.5"
-														isAnimatedStyleActive={false}
-														onPress={() => openEditSheet(companion)}
-													>
-														<View className="h-8 w-8 items-center justify-center rounded-full bg-surface-secondary">
-															<Ionicons
-																color="#0A84FF"
-																name="create-outline"
-																size={16}
-															/>
-														</View>
-														<Menu.ItemTitle className="font-semibold text-sm">
-															Edit companion
-														</Menu.ItemTitle>
-													</Menu.Item>
-													<View className="mx-2 my-1 h-px bg-border" />
-													<Menu.Item
-														accessibilityLabel="Delete companion"
-														className="flex-row items-center gap-3 rounded-[18px] p-2.5"
-														isAnimatedStyleActive={false}
-														isDisabled={pendingCompanionId === companion._id}
-														onPress={() => {
-															handleDeleteCompanion(companion._id).catch(
-																() => undefined
-															);
-														}}
-													>
-														<View className="h-8 w-8 items-center justify-center rounded-full bg-danger/10">
-															<Ionicons
-																color="#FF3B30"
-																name="trash-outline"
-																size={16}
-															/>
-														</View>
-														<Menu.ItemTitle className="font-semibold text-danger text-sm">
-															Delete companion
-														</Menu.ItemTitle>
-													</Menu.Item>
-												</Menu.Content>
-											</Menu.Portal>
-										</Menu>
-									</View>
-								</Surface>
+									onDelete={() => {
+										confirmDeleteCompanion(companion).catch(() => undefined);
+									}}
+									onEdit={() => openEditSheet(companion)}
+									onOpenContact={openContact}
+								/>
 							))}
 						</View>
 					)}

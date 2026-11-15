@@ -7,8 +7,18 @@ import {
 	type ReadinessCategory,
 } from "@viya-app/domain";
 import { type Href, Link } from "expo-router";
-import { Button, Menu, Text } from "heroui-native";
-import { Pressable, View } from "react-native";
+import { Menu } from "heroui-native";
+import { View } from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
+
+import {
+	AppText,
+	PressableScale,
+	radius,
+	spacing,
+	useUITheme,
+} from "@/src/components/ui";
+import { PillAction } from "@/src/features/bookings/pill-action";
 
 const statusLabels: Record<string, string> = {
 	blocked: "Blocked",
@@ -27,11 +37,20 @@ const statusOptions = [
 ] as const;
 
 function RowPill({ label }: { label: string }) {
+	const { palette } = useUITheme();
+
 	return (
-		<View className="rounded-full bg-surface-secondary px-2.5 py-1">
-			<Text color="muted" type="body-xs" weight="semibold">
+		<View
+			style={{
+				backgroundColor: palette.fill,
+				borderRadius: radius.pill,
+				paddingHorizontal: 10,
+				paddingVertical: 4,
+			}}
+		>
+			<AppText bold={true} tone="secondary" variant="footnote">
 				{label}
-			</Text>
+			</AppText>
 		</View>
 	);
 }
@@ -58,57 +77,78 @@ export function ReadinessItemRow({
 	ownerHref,
 	onStatusChange,
 }: ReadinessItemRowProps) {
+	const { palette } = useUITheme();
 	const categoryLabel =
 		READINESS_CATEGORY_LABELS[item.category as ReadinessCategory];
 	const priorityLabel = PRIORITY_LABELS[item.priority as Priority];
 	const dueDateLabel = item.dueDate ? `Due ${item.dueDate}` : "No due date";
-	const metaLabel = `${categoryLabel} - ${priorityLabel} - ${
+	const metaLabel = `${categoryLabel} · ${priorityLabel} · ${
 		assignedToName ?? "Unassigned"
-	} - ${dueDateLabel}`;
+	} · ${dueDateLabel}`;
+	const isDone = item.status === "done";
 
 	return (
-		<View className="gap-3 rounded-[24px] border border-border bg-surface p-4">
-			<View className="flex-row items-start gap-3">
-				<View className="mt-0.5 h-8 w-8 items-center justify-center rounded-full bg-surface-secondary">
-					<Ionicons
-						color={item.status === "done" ? "#34C759" : "#5E5CE6"}
-						name={
-							item.status === "done"
-								? "checkmark-circle"
-								: "checkmark-circle-outline"
-						}
-						size={17}
-					/>
-				</View>
-				<View className="min-w-0 flex-1 gap-1">
-					<Text numberOfLines={2} type="body-sm" weight="semibold">
+		<Animated.View
+			entering={FadeIn}
+			style={{ gap: spacing.md, padding: spacing.lg }}
+		>
+			<View
+				style={{
+					alignItems: "flex-start",
+					flexDirection: "row",
+					gap: spacing.md,
+				}}
+			>
+				<Ionicons
+					color={isDone ? palette.success : palette.inkTertiary}
+					name={isDone ? "checkmark-circle" : "ellipse-outline"}
+					size={24}
+					style={{ marginTop: 1 }}
+				/>
+				<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+					<AppText
+						bold={true}
+						numberOfLines={2}
+						style={isDone ? { textDecorationLine: "line-through" } : undefined}
+						tone={isDone ? "secondary" : "ink"}
+					>
 						{item.title}
-					</Text>
-					<Text.Paragraph color="muted" numberOfLines={2} type="body-sm">
+					</AppText>
+					<AppText numberOfLines={2} tone="secondary" variant="subhead">
 						{item.description}
-					</Text.Paragraph>
-					<Text color="muted" numberOfLines={1} type="body-xs">
+					</AppText>
+					<AppText numberOfLines={2} tone="tertiary" variant="footnote">
 						{metaLabel}
-					</Text>
+					</AppText>
 				</View>
 				<Menu>
 					<Menu.Trigger asChild={true}>
-						<Pressable
+						<PressableScale
 							accessibilityLabel="Task options"
 							accessibilityRole="button"
-							className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary"
-							style={({ pressed }) => ({
-								transform: [{ scale: pressed ? 0.94 : 1 }],
-							})}
+							haptic="selection"
+							hitSlop={8}
+							scaleTo={0.92}
+							style={{
+								alignItems: "center",
+								height: 32,
+								justifyContent: "center",
+								marginRight: -6,
+								width: 32,
+							}}
 						>
-							<Ionicons color="#71717A" name="ellipsis-horizontal" size={17} />
-						</Pressable>
+							<Ionicons
+								color={palette.inkTertiary}
+								name="ellipsis-horizontal"
+								size={18}
+							/>
+						</PressableScale>
 					</Menu.Trigger>
 					<Menu.Portal>
 						<Menu.Overlay />
 						<Menu.Content
 							align="end"
-							className="rounded-[24px] border border-border bg-surface p-2"
+							className="rounded-[20px] bg-surface p-2"
 							offset={8}
 							placement="bottom"
 							presentation="popover"
@@ -116,27 +156,30 @@ export function ReadinessItemRow({
 						>
 							<Menu.Item
 								accessibilityLabel="Edit task"
-								className="flex-row items-center gap-3 rounded-[18px] p-2.5"
+								className="min-h-11 flex-row items-center gap-3 rounded-[14px] p-2.5"
 								isAnimatedStyleActive={false}
 								onPress={() => onEdit(item)}
 							>
-								<View className="h-8 w-8 items-center justify-center rounded-full bg-surface-secondary">
-									<Ionicons color="#0A84FF" name="create-outline" size={16} />
-								</View>
+								<Ionicons
+									color={palette.accent}
+									name="create-outline"
+									size={18}
+								/>
 								<Menu.ItemTitle className="font-semibold text-sm">
 									Edit task
 								</Menu.ItemTitle>
 							</Menu.Item>
-							<View className="mx-2 my-1 h-px bg-border" />
 							<Menu.Item
 								accessibilityLabel="Delete task"
-								className="flex-row items-center gap-3 rounded-[18px] p-2.5"
+								className="min-h-11 flex-row items-center gap-3 rounded-[14px] p-2.5"
 								isAnimatedStyleActive={false}
 								onPress={() => onDelete(item._id)}
 							>
-								<View className="h-8 w-8 items-center justify-center rounded-full bg-danger/10">
-									<Ionicons color="#FF3B30" name="trash-outline" size={16} />
-								</View>
+								<Ionicons
+									color={palette.danger}
+									name="trash-outline"
+									size={18}
+								/>
 								<Menu.ItemTitle className="font-semibold text-danger text-sm">
 									Delete task
 								</Menu.ItemTitle>
@@ -145,56 +188,51 @@ export function ReadinessItemRow({
 					</Menu.Portal>
 				</Menu>
 			</View>
-			<View className="flex-row flex-wrap items-center gap-2">
+			<View
+				style={{
+					alignItems: "center",
+					flexDirection: "row",
+					flexWrap: "wrap",
+					gap: spacing.sm,
+				}}
+			>
 				<RowPill label={statusLabels[item.status] ?? item.status} />
 				{item.status === "inProgress" ? null : (
-					<Button
+					<PillAction
+						label="Start"
 						onPress={() => onStatusChange(item._id, "inProgress")}
-						size="sm"
-						variant="secondary"
-					>
-						<Button.Label>Start</Button.Label>
-					</Button>
+					/>
 				)}
 				{item.status === "done" ? null : (
-					<Button
+					<PillAction
+						label="Done"
 						onPress={() => onStatusChange(item._id, "done")}
-						size="sm"
-						variant="secondary"
-					>
-						<Button.Label>Done</Button.Label>
-					</Button>
+					/>
 				)}
 				{item.status === "ignored" ? null : (
-					<Button
+					<PillAction
+						label="Ignore"
 						onPress={() => onStatusChange(item._id, "ignored")}
-						size="sm"
-						variant="tertiary"
-					>
-						<Button.Label>Ignore</Button.Label>
-					</Button>
+						tone="danger"
+					/>
 				)}
 			</View>
 			{categoryHref || ownerHref ? (
-				<View className="flex-row flex-wrap gap-2">
+				<View
+					style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}
+				>
 					{categoryHref ? (
 						<Link asChild href={categoryHref}>
-							<Button className="flex-1" size="sm" variant="secondary">
-								<Ionicons color="#0A84FF" name="open-outline" size={15} />
-								<Button.Label>Open category</Button.Label>
-							</Button>
+							<PillAction icon="open-outline" label="Open category" />
 						</Link>
 					) : null}
 					{ownerHref ? (
 						<Link asChild href={ownerHref}>
-							<Button className="flex-1" size="sm" variant="secondary">
-								<Ionicons color="#0A84FF" name="people-outline" size={15} />
-								<Button.Label>Open owner</Button.Label>
-							</Button>
+							<PillAction icon="people-outline" label="Open owner" />
 						</Link>
 					) : null}
 				</View>
 			) : null}
-		</View>
+		</Animated.View>
 	);
 }

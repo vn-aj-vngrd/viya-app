@@ -1,9 +1,16 @@
 import { useRouter } from "expo-router";
-import { Surface, Text } from "heroui-native";
 import type { PropsWithChildren } from "react";
-import { Pressable, View } from "react-native";
+import { ScrollView } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Container } from "@/components/container";
+import {
+	AppText,
+	Card,
+	SecondaryButton,
+	spacing,
+	useUITheme,
+} from "@/src/components/ui";
 import { AuthBrand } from "@/src/features/auth/auth-brand";
 import { resetCompletedOnboarding } from "@/src/features/auth/onboarding-storage";
 
@@ -21,6 +28,8 @@ export function AuthScreenShell({
 	subtitle,
 }: AuthScreenShellProps) {
 	const router = useRouter();
+	const insets = useSafeAreaInsets();
+	const { palette } = useUITheme();
 
 	const handleGettingStartedPress = async () => {
 		await resetCompletedOnboarding();
@@ -28,38 +37,42 @@ export function AuthScreenShell({
 	};
 
 	return (
-		<Container className="px-5">
-			<View className="min-h-full justify-center gap-8 py-10">
-				<AuthBrand align="center" subtitle={eyebrow} />
+		<ScrollView
+			contentContainerStyle={{
+				flexGrow: 1,
+				gap: spacing["2xl"],
+				justifyContent: "center",
+				paddingBottom: insets.bottom + spacing.section,
+				paddingHorizontal: spacing.screen,
+				paddingTop: insets.top + spacing.section,
+			}}
+			contentInsetAdjustmentBehavior="automatic"
+			keyboardShouldPersistTaps="handled"
+			style={{ backgroundColor: palette.canvas }}
+		>
+			<AuthBrand align="center" subtitle={eyebrow} />
 
-				<Surface className="gap-5 rounded-[28px] border border-border bg-surface p-5">
-					<View className="gap-2">
-						<Text.Heading type="h3" weight="semibold">
+			<Animated.View entering={FadeInDown.duration(320)}>
+				<Card style={{ gap: spacing.lg }}>
+					<Animated.View style={{ gap: spacing.sm }}>
+						<AppText accessibilityRole="header" variant="heading">
 							{title}
-						</Text.Heading>
+						</AppText>
 						{subtitle ? (
-							<Text.Paragraph
-								className="leading-5"
-								color="muted"
-								type="body-sm"
-							>
+							<AppText tone="secondary" variant="subhead">
 								{subtitle}
-							</Text.Paragraph>
+							</AppText>
 						) : null}
-					</View>
+					</Animated.View>
 					{children}
-				</Surface>
-				<Pressable
-					accessibilityLabel="View getting started"
-					accessibilityRole="button"
-					className="self-center rounded-full px-4 py-2"
-					onPress={handleGettingStartedPress}
-				>
-					<Text align="center" color="muted" type="body-sm" weight="semibold">
-						View getting started
-					</Text>
-				</Pressable>
-			</View>
-		</Container>
+				</Card>
+			</Animated.View>
+			<SecondaryButton
+				accessibilityLabel="View getting started"
+				label="View getting started"
+				onPress={handleGettingStartedPress}
+				variant="plain"
+			/>
+		</ScrollView>
 	);
 }

@@ -4,33 +4,33 @@ import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
 import { getPreferenceSuggestions } from "@viya-app/domain";
 import { useMutation, useQuery } from "convex/react";
-import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { BottomSheet } from "heroui-native";
+import { type ComponentProps, useEffect, useRef, useState } from "react";
 import {
-	BottomSheet,
-	Button,
-	ScrollShadow,
-	Spinner,
-	Surface,
-	Text,
-	useThemeColor,
-} from "heroui-native";
-import { useEffect, useRef, useState } from "react";
-import {
+	ActivityIndicator,
 	KeyboardAvoidingView,
 	type ScrollView as NativeScrollView,
 	Text as NativeText,
 	Platform,
-	Pressable,
 	TextInput,
 	useWindowDimensions,
 	View,
 } from "react-native";
-import Animated from "react-native-reanimated";
+import Animated, { FadeIn, FadeOut, ZoomIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Container } from "@/components/container";
 import { NavigationBackButton } from "@/src/components/navigation/navigation-back-button";
+import {
+	AppText,
+	GlassSurface,
+	PressableScale,
+	PrimaryButton,
+	radius,
+	spacing,
+	useUITheme,
+} from "@/src/components/ui";
 import { TripSyncReviewSheet } from "@/src/features/vault/tripsync-review-sheet";
 import type { PendingTripSyncReview } from "@/src/features/vault/tripsync-types";
 import { useVaultUpload } from "@/src/features/vault/use-vault-upload";
@@ -54,7 +54,6 @@ import {
 	chatInputWarningThreshold,
 	composerInputMaxHeight,
 	composerInputMinHeight,
-	composerStyle,
 	expandedComposerInputMinHeight,
 } from "./viya-chat-constants";
 import type {
@@ -124,7 +123,6 @@ const composerControlSize = 52;
 const expandedComposerChromeReserve = 260;
 const chatScrollContentBottomPadding = 24;
 const chatComposerGap = 12;
-const chatScrollShadowTopBleed = 20;
 
 const getSearchParamValue = (value?: string | string[]) =>
 	Array.isArray(value) ? value[0] : value;
@@ -253,6 +251,71 @@ const createBlueprintTripHandler =
 		}
 	};
 
+function ActionRow({
+	accessibilityLabel,
+	detail,
+	disabled,
+	icon,
+	iconColor,
+	isPending,
+	onPress,
+	title,
+}: {
+	accessibilityLabel: string;
+	detail: string;
+	disabled?: boolean;
+	icon: ComponentProps<typeof Ionicons>["name"];
+	iconColor: string;
+	isPending?: boolean;
+	onPress: () => void;
+	title: string;
+}) {
+	const { palette } = useUITheme();
+
+	return (
+		<PressableScale
+			accessibilityLabel={accessibilityLabel}
+			disabled={disabled}
+			onPress={onPress}
+			scaleTo={0.98}
+			style={{
+				alignItems: "center",
+				backgroundColor: palette.surface,
+				borderRadius: radius.card,
+				flexDirection: "row",
+				gap: spacing.md,
+				minHeight: 64,
+				opacity: disabled ? 0.55 : 1,
+				padding: spacing.md,
+			}}
+		>
+			<View
+				style={{
+					alignItems: "center",
+					backgroundColor: palette.fill,
+					borderRadius: radius.pill,
+					height: 40,
+					justifyContent: "center",
+					width: 40,
+				}}
+			>
+				{isPending ? (
+					<ActivityIndicator color={palette.ink} size="small" />
+				) : (
+					<Ionicons color={iconColor} name={icon} size={20} />
+				)}
+			</View>
+			<View className="min-w-0 flex-1" style={{ gap: 2 }}>
+				<AppText variant="headline">{title}</AppText>
+				<AppText numberOfLines={2} tone="secondary" variant="footnote">
+					{detail}
+				</AppText>
+			</View>
+			<Ionicons color={palette.inkTertiary} name="chevron-forward" size={18} />
+		</PressableScale>
+	);
+}
+
 function ComposerTextInput({
 	height,
 	isEditable,
@@ -265,7 +328,7 @@ function ComposerTextInput({
 	placeholder,
 	placeholderTextColor,
 	rightPadding = 0,
-	textColor = "#18181B",
+	textColor,
 	value,
 }: {
 	height: number;
@@ -279,7 +342,7 @@ function ComposerTextInput({
 	placeholder: string;
 	placeholderTextColor: string;
 	rightPadding?: number;
-	textColor?: string;
+	textColor: string;
 	value: string;
 }) {
 	const isSingleLineHeight = height <= minHeight;
@@ -289,8 +352,8 @@ function ComposerTextInput({
 	const textInputStyle = {
 		backgroundColor: "transparent",
 		color: textColor,
-		fontSize: 15,
-		fontWeight: "500" as const,
+		fontSize: 17,
+		fontWeight: "400" as const,
 		height: visibleInputHeight,
 		lineHeight: composerInputLineHeight,
 		maxHeight: isSingleLineHeight ? visibleInputHeight : maxHeight,
@@ -408,7 +471,8 @@ export function ViyaChatScreen() {
 	const scrollViewRef = useRef<NativeScrollView>(null);
 	const chatSessionIdRef = useRef(0);
 	const hasAppliedRouteThreadResetRef = useRef(false);
-	const mutedColor = useThemeColor("muted");
+	const { palette } = useUITheme();
+	const mutedColor = palette.inkSecondary;
 	const trips = useQuery(api.trips.listTrips);
 	const selectableTripContexts = getSelectableTripContexts(trips);
 	const currentTrip = selectedTripId
@@ -446,7 +510,7 @@ export function ViyaChatScreen() {
 		activeSlashCommand,
 		isTripModeLocked ? "trip" : undefined
 	);
-	const backgroundColor = useThemeColor("background");
+	const backgroundColor = palette.canvas;
 
 	const createThread = useMutation(api.chat.createNewThread);
 	const createTripFromBlueprint = useMutation(
@@ -1007,11 +1071,11 @@ export function ViyaChatScreen() {
 								accessibilityLabel="Back to previous tab"
 								onPress={handleBackPress}
 							/>
-							<View className="h-12 flex-row items-center gap-2 rounded-full border border-border bg-surface px-4">
-								<Ionicons color="#0A84FF" name="sparkles-outline" size={17} />
-								<Text style={{ color: "#0A84FF" }} type="body-sm" weight="bold">
+							<View className="flex-row items-center gap-2">
+								<Ionicons color={palette.accent} name="sparkles" size={18} />
+								<AppText tone="ink" variant="headline">
 									Chat
-								</Text>
+								</AppText>
 							</View>
 						</View>
 						<HeaderActionGroup
@@ -1020,23 +1084,14 @@ export function ViyaChatScreen() {
 						/>
 					</View>
 
-					<ScrollShadow
-						className="flex-1"
-						color={backgroundColor}
-						LinearGradientComponent={LinearGradient}
-						size={36}
-						style={{
-							marginBottom: 0,
-							marginTop: -chatScrollShadowTopBleed,
-						}}
-					>
+					<View className="flex-1" style={{ marginBottom: 0 }}>
 						<Animated.ScrollView
 							className="flex-1"
 							contentContainerStyle={{
 								flexGrow: 1,
 								justifyContent: shouldShowMessages ? undefined : "center",
 								paddingBottom: chatScrollContentBottomPadding,
-								paddingTop: chatScrollShadowTopBleed,
+								paddingTop: spacing.sm,
 							}}
 							key={`${threadContextKey}:${threadId ?? "new"}`}
 							keyboardShouldPersistTaps="handled"
@@ -1058,18 +1113,32 @@ export function ViyaChatScreen() {
 								<ViyaChatEmptyContent selectedModeOption={selectedModeOption} />
 							)}
 						</Animated.ScrollView>
-					</ScrollShadow>
+					</View>
 
 					{errorMessage ? (
-						<Text className="mb-3 text-danger" type="body-sm">
-							{errorMessage}
-						</Text>
+						<Animated.View entering={FadeIn} exiting={FadeOut}>
+							<AppText
+								accessibilityLiveRegion="polite"
+								style={{ marginBottom: spacing.sm }}
+								tone="danger"
+								variant="subhead"
+							>
+								{errorMessage}
+							</AppText>
+						</Animated.View>
 					) : null}
 
 					{noticeMessage ? (
-						<Text className="mb-3 text-success" type="body-sm">
-							{noticeMessage}
-						</Text>
+						<Animated.View entering={FadeIn} exiting={FadeOut}>
+							<AppText
+								accessibilityLiveRegion="polite"
+								style={{ marginBottom: spacing.sm }}
+								tone="success"
+								variant="subhead"
+							>
+								{noticeMessage}
+							</AppText>
+						</Animated.View>
 					) : null}
 
 					{shouldShowSlashCommandMenu ? (
@@ -1104,9 +1173,13 @@ export function ViyaChatScreen() {
 
 					<View className="gap-1" style={{ marginTop: chatComposerGap }}>
 						{vaultUploadErrorMessage ? (
-							<Text className="px-4 text-danger" type="body-xs">
+							<AppText
+								style={{ paddingHorizontal: spacing.lg }}
+								tone="danger"
+								variant="footnote"
+							>
 								{vaultUploadErrorMessage}
-							</Text>
+							</AppText>
 						) : null}
 						{chatMode === "trip" && currentTrip ? (
 							<TripContextChip
@@ -1117,38 +1190,48 @@ export function ViyaChatScreen() {
 							/>
 						) : null}
 						<View className="flex-row items-end gap-2">
-							<Pressable
+							<PressableScale
 								accessibilityLabel={
 									chatMode === "trip"
 										? "Upload a file to this trip Vault"
 										: "Upload a file for Viya"
 								}
-								accessibilityRole="button"
 								accessibilityState={{
 									disabled: Boolean(
 										isUploadingVaultFile || isConfirmingVaultUpload
 									),
 								}}
-								className="items-center justify-center rounded-full bg-surface"
 								disabled={isUploadingVaultFile || isConfirmingVaultUpload}
 								onPress={() => setIsComposerActionsOpen(true)}
-								style={{
-									...composerStyle,
-									height: composerControlSize,
-									width: composerControlSize,
-								}}
 							>
-								{isUploadingVaultFile ? (
-									<Spinner size="sm" />
-								) : (
-									<Ionicons color="#18181B" name="add" size={22} />
-								)}
-							</Pressable>
-							<Surface
-								className="relative min-w-0 flex-1 flex-row items-center gap-2 rounded-[28px] bg-surface py-2 pr-2 pl-5"
+								<GlassSurface
+									shape="circle"
+									style={{
+										alignItems: "center",
+										height: composerControlSize,
+										justifyContent: "center",
+										width: composerControlSize,
+									}}
+								>
+									{isUploadingVaultFile ? (
+										<ActivityIndicator color={palette.ink} size="small" />
+									) : (
+										<Ionicons color={palette.ink} name="add" size={24} />
+									)}
+								</GlassSurface>
+							</PressableScale>
+							<GlassSurface
+								radius={composerControlSize / 2}
 								style={{
-									...composerStyle,
+									alignItems: "center",
+									flex: 1,
+									flexDirection: "row",
+									gap: spacing.sm,
 									minHeight: composerControlSize,
+									minWidth: 0,
+									paddingLeft: spacing.screen,
+									paddingRight: spacing.sm,
+									paddingVertical: spacing.sm,
 								}}
 							>
 								<View
@@ -1169,6 +1252,7 @@ export function ViyaChatScreen() {
 										placeholder={selectedModeOption.placeholder}
 										placeholderTextColor={mutedColor}
 										rightPadding={4}
+										textColor={palette.ink}
 										value={input}
 									/>
 								</View>
@@ -1177,60 +1261,86 @@ export function ViyaChatScreen() {
 									style={{
 										height: Math.max(
 											composerInputLayout.height,
-											composerControlSize - 8
+											composerControlSize - 16
 										),
 										width: 44,
 									}}
 								>
 									{composerInputLayout.shouldShowExpand ? (
-										<Pressable
+										<PressableScale
 											accessibilityLabel="Expand message editor"
-											accessibilityRole="button"
-											className="absolute top-0 h-9 w-9 items-center justify-center rounded-full bg-surface"
 											onPress={() => setIsComposerSheetOpen(true)}
+											style={{
+												alignItems: "center",
+												height: 44,
+												justifyContent: "center",
+												position: "absolute",
+												top: -6,
+												width: 44,
+											}}
 										>
 											<Ionicons
 												color={mutedColor}
 												name="expand-outline"
 												size={18}
 											/>
-										</Pressable>
+										</PressableScale>
 									) : null}
 									{canSendMessage ? (
-										<Button
-											isIconOnly={true}
-											onPress={() => handleSubmit()}
-											size="sm"
-											style={{
-												height: 44,
-												width: 44,
-											}}
-											variant="primary"
-										>
-											<Ionicons color="#FFFFFF" name="arrow-up" size={18} />
-										</Button>
+										<Animated.View entering={ZoomIn.springify().damping(20)}>
+											<PressableScale
+												accessibilityLabel="Send message"
+												haptic="medium"
+												onPress={() => handleSubmit()}
+												style={{
+													alignItems: "center",
+													backgroundColor: palette.ink,
+													borderRadius: radius.pill,
+													height: 36,
+													justifyContent: "center",
+													width: 36,
+												}}
+											>
+												<Ionicons
+													color={palette.onPrimary}
+													name="arrow-up"
+													size={20}
+												/>
+											</PressableScale>
+										</Animated.View>
 									) : (
-										<Pressable
+										<View
 											accessibilityLabel="Send message"
 											accessibilityRole="button"
 											accessibilityState={{ disabled: true }}
-											className="h-11 w-11 items-center justify-center rounded-full"
-											disabled={true}
 											style={{
-												backgroundColor: "rgba(24, 24, 27, 0.06)",
+												alignItems: "center",
+												backgroundColor: palette.fill,
+												borderRadius: radius.pill,
+												height: 36,
+												justifyContent: "center",
+												width: 36,
 											}}
 										>
-											<Ionicons color="#A1A1AA" name="arrow-up" size={18} />
-										</Pressable>
+											<Ionicons
+												color={palette.inkTertiary}
+												name="arrow-up"
+												size={20}
+											/>
+										</View>
 									)}
 								</View>
-							</Surface>
+							</GlassSurface>
 						</View>
 					</View>
 					{shouldShowInputLimit ? (
-						<Text className="mt-1 px-4" color="muted" type="body-xs">
+						<AppText
+							style={{ marginTop: spacing.xs, paddingHorizontal: spacing.lg }}
+							tone="secondary"
+							variant="footnote"
+						>
 							{remainingInputCharacters.toLocaleString()} characters left
-						</Text>
+						</AppText>
 					) : null}
 				</View>
 			</KeyboardAvoidingView>
@@ -1241,7 +1351,7 @@ export function ViyaChatScreen() {
 				<BottomSheet.Portal>
 					<BottomSheet.Overlay />
 					<BottomSheet.Content
-						backgroundClassName="rounded-t-[36px] bg-background"
+						backgroundClassName="rounded-t-[32px] bg-background"
 						enablePanDownToClose={true}
 					>
 						<View
@@ -1261,61 +1371,28 @@ export function ViyaChatScreen() {
 									onPress={handleTripContextPickerPress}
 								/>
 							)}
-							<Pressable
+							<ActionRow
 								accessibilityLabel="Create a trip with Viya"
-								accessibilityRole="button"
-								className="min-h-16 flex-row items-center gap-3 rounded-[22px] bg-surface px-3 py-3"
+								detail="Viya asks the setup questions and drafts the trip."
+								icon="map-outline"
+								iconColor={palette.accent}
 								onPress={handleCreateTripWithAiPress}
-							>
-								<View className="h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-									<Ionicons color="#0A84FF" name="map-outline" size={19} />
-								</View>
-								<View className="min-w-0 flex-1 gap-0.5">
-									<Text type="body-sm" weight="bold">
-										Create trip
-									</Text>
-									<Text color="muted" numberOfLines={2} type="body-xs">
-										Viya asks the setup questions and drafts the trip.
-									</Text>
-								</View>
-								<Ionicons color={mutedColor} name="chevron-forward" size={18} />
-							</Pressable>
-							<Pressable
+								title="Create trip"
+							/>
+							<ActionRow
 								accessibilityLabel="Add files for Viya"
-								accessibilityRole="button"
-								accessibilityState={{
-									disabled: Boolean(
-										isUploadingVaultFile || isConfirmingVaultUpload
-									),
-								}}
-								className="min-h-16 flex-row items-center gap-3 rounded-[22px] bg-surface px-3 py-3"
-								disabled={isUploadingVaultFile || isConfirmingVaultUpload}
+								detail="Upload documents, bookings, receipts, or notes."
+								disabled={Boolean(
+									isUploadingVaultFile || isConfirmingVaultUpload
+								)}
+								icon="document-attach-outline"
+								iconColor={palette.ink}
+								isPending={Boolean(isUploadingVaultFile)}
 								onPress={() => {
 									runAsyncTask(handleFileUploadPress());
 								}}
-								style={{ opacity: isUploadingVaultFile ? 0.55 : 1 }}
-							>
-								<View className="h-10 w-10 items-center justify-center rounded-full bg-default">
-									{isUploadingVaultFile ? (
-										<Spinner size="sm" />
-									) : (
-										<Ionicons
-											color="#18181B"
-											name="document-attach-outline"
-											size={19}
-										/>
-									)}
-								</View>
-								<View className="min-w-0 flex-1 gap-0.5">
-									<Text type="body-sm" weight="bold">
-										Add files
-									</Text>
-									<Text color="muted" numberOfLines={2} type="body-xs">
-										Upload documents, bookings, receipts, or notes.
-									</Text>
-								</View>
-								<Ionicons color={mutedColor} name="chevron-forward" size={18} />
-							</Pressable>
+								title="Add files"
+							/>
 						</View>
 					</BottomSheet.Content>
 				</BottomSheet.Portal>
@@ -1327,7 +1404,7 @@ export function ViyaChatScreen() {
 				<BottomSheet.Portal>
 					<BottomSheet.Overlay />
 					<BottomSheet.Content
-						backgroundClassName="rounded-t-[36px] bg-background"
+						backgroundClassName="rounded-t-[32px] bg-background"
 						enablePanDownToClose={true}
 					>
 						<View
@@ -1335,17 +1412,29 @@ export function ViyaChatScreen() {
 							style={{ paddingBottom: Math.max(insets.bottom, 18) }}
 						>
 							<View className="items-end">
-								<Pressable
+								<PressableScale
 									accessibilityLabel="Close message editor"
-									accessibilityRole="button"
-									className="h-10 w-10 items-center justify-center rounded-full bg-surface"
 									onPress={() => setIsComposerSheetOpen(false)}
+									style={{
+										alignItems: "center",
+										backgroundColor: palette.fill,
+										borderRadius: radius.pill,
+										height: 44,
+										justifyContent: "center",
+										width: 44,
+									}}
 								>
-									<Ionicons color="#18181B" name="close" size={19} />
-								</Pressable>
+									<Ionicons color={palette.ink} name="close" size={20} />
+								</PressableScale>
 							</View>
 
-							<Surface className="rounded-[28px] border border-border bg-surface p-4">
+							<View
+								style={{
+									backgroundColor: palette.surface,
+									borderRadius: radius.card,
+									padding: spacing.lg,
+								}}
+							>
 								<View style={{ height: expandedComposerEditorLayout.height }}>
 									<ComposerTextInput
 										height={expandedComposerEditorLayout.height}
@@ -1360,32 +1449,27 @@ export function ViyaChatScreen() {
 										}}
 										placeholder={selectedModeOption.placeholder}
 										placeholderTextColor={mutedColor}
+										textColor={palette.ink}
 										value={input}
 									/>
 								</View>
-							</Surface>
+							</View>
 
 							<View className="flex-row items-center justify-between gap-3">
-								<Text color="muted" type="body-xs">
+								<AppText tone="secondary" variant="footnote">
 									{remainingInputCharacters.toLocaleString()} characters left
-								</Text>
-								<Button
-									isDisabled={!input.trim() || isAwaitingViya}
-									onPress={handleExpandedComposerSubmit}
-									size="sm"
-									variant={
-										input.trim() && !isAwaitingViya ? "primary" : "secondary"
-									}
-								>
-									<Button.Label>Send</Button.Label>
-									<Ionicons
-										color={
-											input.trim() && !isAwaitingViya ? "#FFFFFF" : mutedColor
-										}
-										name="arrow-up"
-										size={16}
+								</AppText>
+								<View style={{ minWidth: 120 }}>
+									<PrimaryButton
+										disabled={!input.trim() || isAwaitingViya}
+										fullWidth={false}
+										icon="arrow-up"
+										label="Send"
+										onPress={() => {
+											runAsyncTask(handleExpandedComposerSubmit());
+										}}
 									/>
-								</Button>
+								</View>
 							</View>
 						</View>
 					</BottomSheet.Content>

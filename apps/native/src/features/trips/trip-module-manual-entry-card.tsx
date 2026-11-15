@@ -1,7 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Button, Text } from "heroui-native";
 import type { ComponentProps } from "react";
 import { View } from "react-native";
+
+import {
+	AppText,
+	Card,
+	PrimaryButton,
+	radius,
+	SecondaryButton,
+} from "@/src/components/ui";
 
 type IoniconName = ComponentProps<typeof Ionicons>["name"];
 
@@ -110,62 +117,57 @@ export function TripModuleManualEntryCard({
 	const cardIcon = icon ?? getModuleIcon(moduleLabel);
 	const displayLabel = getModuleDisplayLabel(moduleLabel);
 	const cardTitle = title ?? `${displayLabel} board`;
-	const actionButtonClassName = "min-w-[132px] flex-1";
 
 	return (
-		<View className="gap-3 rounded-[28px] bg-surface-secondary p-3.5">
-			<View className="flex-row items-center gap-3">
+		<Card padding="md" style={{ gap: 12 }}>
+			<View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
 				<View
-					className="h-10 w-10 items-center justify-center rounded-full"
-					style={{ backgroundColor: accent.backgroundColor }}
+					style={{
+						alignItems: "center",
+						backgroundColor: accent.backgroundColor,
+						borderRadius: radius.pill,
+						height: 40,
+						justifyContent: "center",
+						width: 40,
+					}}
 				>
 					<Ionicons color={accent.color} name={cardIcon} size={19} />
 				</View>
-				<View className="min-w-0 flex-1 gap-1">
-					<Text color="muted" type="body-xs" weight="semibold">
-						{eyebrow.toUpperCase()}
-					</Text>
-					<Text type="body" weight="bold">
-						{cardTitle}
-					</Text>
-					<Text color="muted" numberOfLines={2} type="body-sm">
+				<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+					<AppText tone="secondary" variant="eyebrow">
+						{eyebrow}
+					</AppText>
+					<AppText variant="headline">{cardTitle}</AppText>
+					<AppText numberOfLines={2} tone="secondary" variant="subhead">
 						{description}
-					</Text>
+					</AppText>
 				</View>
 			</View>
 
 			{primaryActionLabel || secondaryActionLabel ? (
-				<View className="flex-row flex-wrap gap-2">
+				<View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
 					{primaryActionLabel ? (
-						<Button
-							className={actionButtonClassName}
-							isDisabled={isPrimaryDisabled}
-							onPress={onPrimaryPress}
-							size="sm"
-							variant="primary"
-						>
-							<Ionicons color="#FFFFFF" name={primaryActionIcon} size={16} />
-							<Button.Label>{primaryActionLabel}</Button.Label>
-						</Button>
+						<View style={{ flex: 1, minWidth: 132 }}>
+							<PrimaryButton
+								disabled={isPrimaryDisabled}
+								icon={primaryActionIcon}
+								label={primaryActionLabel}
+								onPress={() => onPrimaryPress?.()}
+							/>
+						</View>
 					) : null}
 					{secondaryActionLabel ? (
-						<Button
-							className={actionButtonClassName}
-							isDisabled={isSecondaryDisabled}
-							onPress={onSecondaryPress}
-							size="sm"
-							variant="secondary"
-						>
-							<Ionicons
-								color={accent.color}
-								name={secondaryActionIcon}
-								size={16}
+						<View style={{ flex: 1, minWidth: 132 }}>
+							<SecondaryButton
+								disabled={isSecondaryDisabled}
+								icon={secondaryActionIcon}
+								label={secondaryActionLabel}
+								onPress={() => onSecondaryPress?.()}
 							/>
-							<Button.Label>{secondaryActionLabel}</Button.Label>
-						</Button>
+						</View>
 					) : null}
 				</View>
 			) : null}
-		</View>
+		</Card>
 	);
 }

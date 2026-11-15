@@ -8,27 +8,28 @@ import {
 } from "@viya-app/domain";
 import { useMutation, useQuery } from "convex/react";
 import { type Href, Link } from "expo-router";
-import {
-	BottomSheet,
-	Button,
-	Chip,
-	CloseButton,
-	Input,
-	Label,
-	Spinner,
-	Surface,
-	Text,
-	TextArea,
-	TextField,
-} from "heroui-native";
+import { BottomSheet, Input, Label, TextArea, TextField } from "heroui-native";
 import { useState } from "react";
 import { ScrollView, View } from "react-native";
+import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
+
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Container } from "@/components/container";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
-import { EmptyState } from "@/src/components/empty-state";
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
+import {
+	AppText,
+	Card,
+	Chip,
+	EmptyState,
+	GlassIconButton,
+	PrimaryButton,
+	radius,
+	spacing,
+	useUITheme,
+} from "@/src/components/ui";
 import { VIYA_ROUTES } from "@/src/constants/routes";
+import { PillAction } from "@/src/features/bookings/pill-action";
 import { TripModuleScreenFrame } from "@/src/features/trips/trip-module-floating-bar";
 import { TripModuleManualEntryCard } from "@/src/features/trips/trip-module-manual-entry-card";
 import {
@@ -183,7 +184,7 @@ function SheetField({
 				<Label.Text>{label}</Label.Text>
 			</Label>
 			<Input
-				className="h-12 border border-border bg-surface px-4"
+				className="h-12 border-0 bg-surface px-4"
 				onBlur={onBlur}
 				onChangeText={onChangeText}
 				onFocus={onFocus}
@@ -214,7 +215,7 @@ function SheetTextArea({
 				<Label.Text>{label}</Label.Text>
 			</Label>
 			<TextArea
-				className="min-h-20 rounded-[18px] border border-border bg-surface px-4 py-3"
+				className="min-h-20 rounded-[16px] border-0 bg-surface px-4 py-3"
 				onBlur={onBlur}
 				onChangeText={onChangeText}
 				onFocus={onFocus}
@@ -238,22 +239,18 @@ function RiskChoiceGroup({
 	value: string;
 }) {
 	return (
-		<View className="gap-2">
-			<Text color="muted" type="body-xs" weight="semibold">
-				{label.toUpperCase()}
-			</Text>
-			<View className="flex-row flex-wrap gap-2">
+		<View style={{ gap: spacing.sm }}>
+			<AppText tone="secondary" variant="eyebrow">
+				{label}
+			</AppText>
+			<View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
 				{options.map((option) => (
-					<Button
+					<Chip
 						key={option}
+						label={severityLabels[option] ?? formatRiskChoiceLabel(option)}
 						onPress={() => onChange(option)}
-						size="sm"
-						variant={value === option ? "primary" : "secondary"}
-					>
-						<Button.Label>
-							{severityLabels[option] ?? formatRiskChoiceLabel(option)}
-						</Button.Label>
-					</Button>
+						selected={value === option}
+					/>
 				))}
 			</View>
 		</View>
@@ -272,33 +269,25 @@ function RiskRelatedEntityPicker({
 	const visibleOptions = options.slice(0, 12);
 
 	return (
-		<View className="gap-2">
-			<Text color="muted" type="body-xs" weight="semibold">
+		<View style={{ gap: spacing.sm }}>
+			<AppText tone="secondary" variant="eyebrow">
 				LINK TO TRIP ITEM
-			</Text>
-			<View className="flex-row flex-wrap gap-2">
-				<Button
-					onPress={() => onChange("")}
-					size="sm"
-					variant={value ? "secondary" : "primary"}
-				>
-					<Button.Label>None</Button.Label>
-				</Button>
+			</AppText>
+			<View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
+				<Chip label="None" onPress={() => onChange("")} selected={!value} />
 				{visibleOptions.map((option) => (
-					<Button
+					<Chip
 						key={option.key}
+						label={getCompactRelatedLabel(option.label)}
 						onPress={() => onChange(option.key)}
-						size="sm"
-						variant={value === option.key ? "primary" : "secondary"}
-					>
-						<Button.Label>{getCompactRelatedLabel(option.label)}</Button.Label>
-					</Button>
+						selected={value === option.key}
+					/>
 				))}
 			</View>
 			{options.length > visibleOptions.length ? (
-				<Text color="muted" type="body-xs">
+				<AppText tone="secondary" variant="footnote">
 					Showing the most relevant {visibleOptions.length} trip items.
-				</Text>
+				</AppText>
 			) : null}
 		</View>
 	);
@@ -326,22 +315,37 @@ function RiskSheet({
 	relatedEntityOptions: TripRelatedEntityOption[];
 }) {
 	const insets = useSafeAreaInsets();
+	const { palette } = useUITheme();
 
 	return (
 		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
 			<BottomSheet.Portal>
 				<BottomSheet.Overlay />
 				<BottomSheet.Content
-					backgroundClassName="rounded-t-[36px] bg-background"
+					backgroundClassName="bg-background"
+					backgroundStyle={{
+						backgroundColor: palette.canvas,
+						borderTopLeftRadius: radius.sheet,
+						borderTopRightRadius: radius.sheet,
+					}}
 					enablePanDownToClose={true}
 					snapPoints={["84%"]}
 				>
 					<View
-						className="gap-4 px-5 pt-2"
-						style={{ paddingBottom: Math.max(insets.bottom, 18) }}
+						style={{
+							gap: spacing.lg,
+							paddingBottom: Math.max(insets.bottom, spacing.lg),
+							paddingHorizontal: spacing.screen,
+						}}
 					>
-						<View className="flex-row items-start justify-between gap-4">
-							<View className="flex-1 gap-1">
+						<View
+							style={{
+								alignItems: "flex-start",
+								flexDirection: "row",
+								gap: spacing.lg,
+							}}
+						>
+							<View style={{ flex: 1, gap: 2 }}>
 								<BottomSheet.Title>
 									{mode === "edit" ? "Edit risk" : "Add risk"}
 								</BottomSheet.Title>
@@ -350,15 +354,18 @@ function RiskSheet({
 									risk with a clear backup action.
 								</BottomSheet.Description>
 							</View>
-							<CloseButton
+							<GlassIconButton
 								accessibilityLabel="Close risk form"
-								className="h-10 w-10 rounded-full bg-surface"
+								icon="close"
 								onPress={() => onOpenChange(false)}
 							/>
 						</View>
 
 						<ScrollView
-							contentContainerStyle={{ gap: 14, paddingBottom: 8 }}
+							contentContainerStyle={{
+								gap: spacing.lg,
+								paddingBottom: spacing.sm,
+							}}
 							keyboardShouldPersistTaps="handled"
 							showsVerticalScrollIndicator={false}
 							style={{ maxHeight: 500 }}
@@ -401,16 +408,22 @@ function RiskSheet({
 						</ScrollView>
 
 						{errorMessage ? (
-							<Text className="text-danger" type="body-sm">
-								{errorMessage}
-							</Text>
+							<Animated.View entering={FadeIn}>
+								<AppText
+									accessibilityRole="alert"
+									tone="danger"
+									variant="subhead"
+								>
+									{errorMessage}
+								</AppText>
+							</Animated.View>
 						) : null}
-						<Button isDisabled={isSaving} onPress={onSubmit} size="lg">
-							{isSaving ? <Spinner size="sm" /> : null}
-							<Button.Label>
-								{mode === "edit" ? "Save risk" : "Add risk"}
-							</Button.Label>
-						</Button>
+						<PrimaryButton
+							disabled={isSaving}
+							isPending={isSaving}
+							label={mode === "edit" ? "Save risk" : "Add risk"}
+							onPress={onSubmit}
+						/>
 					</View>
 				</BottomSheet.Content>
 			</BottomSheet.Portal>
@@ -435,86 +448,87 @@ function TopRiskSummary({
 	relatedEntityLabel: string | null;
 	risk: Doc<"risks"> | null;
 }) {
+	const { palette } = useUITheme();
+
 	return (
-		<View className="gap-3 rounded-[24px] bg-surface p-4">
-			<View className="flex-row items-center gap-3">
-				<View
-					className="h-9 w-9 items-center justify-center rounded-full"
-					style={{ backgroundColor: "rgba(255, 59, 48, 0.12)" }}
-				>
-					<Ionicons color="#FF3B30" name="alert-outline" size={18} />
-				</View>
-				<View className="min-w-0 flex-1 gap-1">
-					<Text color="muted" type="body-xs" weight="semibold">
+		<View
+			style={{
+				backgroundColor: palette.fill,
+				borderRadius: radius.card,
+				gap: spacing.md,
+				padding: spacing.lg,
+			}}
+		>
+			<View
+				style={{ alignItems: "center", flexDirection: "row", gap: spacing.md }}
+			>
+				<Ionicons
+					color={palette.danger}
+					name="alert-circle-outline"
+					size={22}
+				/>
+				<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+					<AppText tone="secondary" variant="eyebrow">
 						TOP RISK
-					</Text>
-					<Text numberOfLines={1} type="body-sm" weight="bold">
+					</AppText>
+					<AppText bold={true} numberOfLines={1}>
 						{risk?.title ?? "No active risk"}
-					</Text>
+					</AppText>
 				</View>
 			</View>
-			<Text.Paragraph color="muted" type="body-sm">
+			<AppText tone="secondary" variant="subhead">
 				{risk
 					? risk.suggestedAction
 					: "Add weather, schedule, budget, document, or safety risks so Travel Mode can surface backup actions."}
-			</Text.Paragraph>
+			</AppText>
 			{risk ? (
 				<>
-					<View className="flex-row flex-wrap gap-2">
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>{formatRiskChoiceLabel(risk.type)}</Chip.Label>
-						</Chip>
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>
-								{severityLabels[risk.severity] ?? risk.severity}
-							</Chip.Label>
-						</Chip>
-						{relatedEntityLabel ? (
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>{relatedEntityLabel}</Chip.Label>
-							</Chip>
-						) : null}
+					<View
+						style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}
+					>
+						<Chip label={formatRiskChoiceLabel(risk.type)} />
+						<Chip label={severityLabels[risk.severity] ?? risk.severity} />
+						{relatedEntityLabel ? <Chip label={relatedEntityLabel} /> : null}
 					</View>
-					<View className="flex-row flex-wrap gap-2">
-						<Button
-							className="flex-1"
-							isDisabled={isPending}
+					<View
+						style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}
+					>
+						<PillAction
+							disabled={isPending}
+							icon="create-outline"
+							label="Review top risk"
 							onPress={onReview}
-							size="sm"
-						>
-							<Ionicons color="#FFFFFF" name="create-outline" size={16} />
-							<Button.Label>Review top risk</Button.Label>
-						</Button>
+							tone="primary"
+						/>
 						{relatedEntityHref ? (
 							<Link asChild href={relatedEntityHref}>
-								<Button className="flex-1" size="sm" variant="secondary">
-									<Ionicons color="#0A84FF" name="open-outline" size={15} />
-									<Button.Label>Open top linked item</Button.Label>
-								</Button>
+								<PillAction icon="open-outline" label="Open top linked item" />
 							</Link>
 						) : null}
-						<Button
-							className="flex-1"
-							isDisabled={isPending || risk.status === "mitigated"}
+						<PillAction
+							disabled={risk.status === "mitigated"}
+							isPending={isPending}
+							label="Mark top mitigated"
 							onPress={onMitigate}
-							size="sm"
-							variant="secondary"
-						>
-							<Button.Label>Mark top mitigated</Button.Label>
-						</Button>
+						/>
 					</View>
 				</>
 			) : (
-				<Button onPress={onCreateTopRisk} size="sm" variant="secondary">
-					<Ionicons color="#0A84FF" name="add-circle-outline" size={16} />
-					<Button.Label>Add top risk</Button.Label>
-				</Button>
+				<View style={{ alignItems: "flex-start" }}>
+					<PillAction
+						icon="add-circle-outline"
+						label="Add top risk"
+						onPress={onCreateTopRisk}
+					/>
+				</View>
 			)}
 		</View>
 	);
 }
 
 export default function TripRisksScreen() {
+	const { palette } = useUITheme();
+
 	const tripId = useTripIdParam();
 	const workspace = useQuery(
 		api.tripWorkspace.getTripWorkspace,
@@ -561,7 +575,7 @@ export default function TripRisksScreen() {
 
 	if (!tripId) {
 		return (
-			<Container className="px-4 pb-28">
+			<Container className="pb-28">
 				<EmptyState
 					description="Open a saved trip before reviewing risks."
 					icon="warning-outline"
@@ -642,7 +656,7 @@ export default function TripRisksScreen() {
 
 	if (workspace === null) {
 		return (
-			<Container className="px-4 pb-28">
+			<Container className="pb-28">
 				<EmptyState
 					description="This trip was deleted or is no longer available."
 					icon="warning-outline"
@@ -695,10 +709,10 @@ export default function TripRisksScreen() {
 	return (
 		<TripModuleScreenFrame activeTab="risks" tripId={tripId}>
 			<Container
-				className="px-4 pb-28"
+				className="px-5 pb-28"
 				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
 			>
-				<View className="gap-4 pb-4">
+				<View style={{ gap: spacing.section, paddingBottom: spacing.lg }}>
 					<TripModuleManualEntryCard
 						description="Track schedule, budget, safety, document, and transport risks with clear backup actions."
 						moduleLabel="risks"
@@ -707,78 +721,91 @@ export default function TripRisksScreen() {
 						primaryActionLabel="Add risk"
 					/>
 					{riskErrorMessage ? (
-						<Text className="px-1 text-danger" type="body-sm">
-							{riskErrorMessage}
-						</Text>
+						<Animated.View entering={FadeIn}>
+							<AppText
+								accessibilityRole="alert"
+								tone="danger"
+								variant="subhead"
+							>
+								{riskErrorMessage}
+							</AppText>
+						</Animated.View>
 					) : null}
 
-					<Surface className="gap-4 rounded-[30px] bg-surface-secondary p-4">
-						<View className="flex-row items-start justify-between gap-3">
-							<View className="min-w-0 flex-1 gap-1">
-								<Text.Heading type="h5" weight="semibold">
-									Risk board
-								</Text.Heading>
-								<Text color="muted" type="body-sm">
-									Surface the most urgent risk and its backup move.
-								</Text>
+					<Animated.View entering={FadeInDown.springify().damping(20)}>
+						<Card padding="lg" style={{ gap: spacing.lg }}>
+							<View
+								style={{
+									alignItems: "flex-start",
+									flexDirection: "row",
+									gap: spacing.md,
+								}}
+							>
+								<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+									<AppText accessibilityRole="header" variant="heading">
+										Risk board
+									</AppText>
+									<AppText tone="secondary" variant="subhead">
+										Surface the most urgent risk and its backup move.
+									</AppText>
+								</View>
+								<Ionicons
+									color={palette.danger}
+									name="warning-outline"
+									size={24}
+								/>
 							</View>
 							<View
-								className="h-11 w-11 items-center justify-center rounded-full"
-								style={{ backgroundColor: "rgba(255, 59, 48, 0.1)" }}
+								style={{
+									flexDirection: "row",
+									flexWrap: "wrap",
+									gap: spacing.sm,
+								}}
 							>
-								<Ionicons color="#FF3B30" name="warning-outline" size={20} />
+								<Chip label={`${openRisks.length} open`} />
+								<Chip label={`${severeRiskCount} severe`} />
+								<Chip label={`${mitigatedRiskCount} mitigated`} />
+								<Chip label={`${riskTypeCount} types`} />
+								<Chip label={`${linkedRiskCount} linked`} />
 							</View>
-						</View>
-						<View className="flex-row flex-wrap gap-2">
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>{openRisks.length} open</Chip.Label>
-							</Chip>
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>{severeRiskCount} severe</Chip.Label>
-							</Chip>
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>{mitigatedRiskCount} mitigated</Chip.Label>
-							</Chip>
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>{riskTypeCount} types</Chip.Label>
-							</Chip>
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>{linkedRiskCount} linked</Chip.Label>
-							</Chip>
-						</View>
-						<TopRiskSummary
-							isPending={activeRisk ? pendingRiskId === activeRisk._id : false}
-							onCreateTopRisk={openCreateSheet}
-							onMitigate={() => {
-								if (activeRisk) {
-									runRiskAction(activeRisk._id, () =>
-										mitigateRisk({ riskId: activeRisk._id })
-									).catch(() => undefined);
+							<TopRiskSummary
+								isPending={
+									activeRisk ? pendingRiskId === activeRisk._id : false
 								}
-							}}
-							onReview={() => {
-								if (activeRisk) {
-									openEditSheet(activeRisk);
-								}
-							}}
-							relatedEntityHref={activeRiskRelatedHref}
-							relatedEntityLabel={activeRiskRelatedLabel}
-							risk={activeRisk}
-						/>
-					</Surface>
+								onCreateTopRisk={openCreateSheet}
+								onMitigate={() => {
+									if (activeRisk) {
+										runRiskAction(activeRisk._id, () =>
+											mitigateRisk({ riskId: activeRisk._id })
+										).catch(() => undefined);
+									}
+								}}
+								onReview={() => {
+									if (activeRisk) {
+										openEditSheet(activeRisk);
+									}
+								}}
+								relatedEntityHref={activeRiskRelatedHref}
+								relatedEntityLabel={activeRiskRelatedLabel}
+								risk={activeRisk}
+							/>
+						</Card>
+					</Animated.View>
 
 					{risks.length === 0 ? (
-						<EmptyState
-							action={{
-								label: "Add risk",
-								onPress: openCreateSheet,
-							}}
-							description="No risks yet. Add weather, schedule, budget, document, or safety risks as they appear."
-							icon="warning-outline"
-							title="No risks"
-						/>
+						<Card padding="none">
+							<EmptyState
+								action={{
+									label: "Add risk",
+									onPress: openCreateSheet,
+								}}
+								description="No risks yet. Add weather, schedule, budget, document, or safety risks as they appear."
+								icon="warning-outline"
+								title="No risks"
+							/>
+						</Card>
 					) : (
-						<View className="gap-3">
+						<View style={{ gap: spacing.md }}>
 							{risks.map((risk) => (
 								<RiskCard
 									isPending={pendingRiskId === risk._id}
@@ -855,93 +882,70 @@ function RiskCard({
 	relatedEntityHref: Href | null;
 	relatedEntityLabel: string | null;
 }) {
+	const { palette } = useUITheme();
+
 	return (
-		<Surface className="gap-4 rounded-[28px] border border-border bg-surface p-5">
-			<View className="flex-row items-start gap-3">
+		<Animated.View entering={FadeInDown.springify().damping(20)}>
+			<Card padding="lg" style={{ gap: spacing.lg }}>
 				<View
-					className="h-10 w-10 items-center justify-center rounded-full"
-					style={{ backgroundColor: "rgba(255, 59, 48, 0.1)" }}
+					style={{ alignItems: "flex-start", flexDirection: "row", gap: 12 }}
 				>
-					<Ionicons color="#FF3B30" name="alert-circle-outline" size={18} />
-				</View>
-				<View className="min-w-0 flex-1 gap-2">
-					<View className="flex-row flex-wrap gap-2">
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>{formatRiskChoiceLabel(risk.type)}</Chip.Label>
-						</Chip>
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>
-								{severityLabels[risk.severity] ?? risk.severity}
-							</Chip.Label>
-						</Chip>
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>
-								{statusLabels[risk.status] ?? risk.status}
-							</Chip.Label>
-						</Chip>
-						{relatedEntityLabel ? (
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>{relatedEntityLabel}</Chip.Label>
-							</Chip>
-						) : null}
+					<Ionicons
+						color={palette.danger}
+						name="alert-circle-outline"
+						size={22}
+						style={{ marginTop: 1 }}
+					/>
+					<View style={{ flex: 1, gap: spacing.sm, minWidth: 0 }}>
+						<View
+							style={{
+								flexDirection: "row",
+								flexWrap: "wrap",
+								gap: spacing.sm,
+							}}
+						>
+							<Chip label={formatRiskChoiceLabel(risk.type)} />
+							<Chip label={severityLabels[risk.severity] ?? risk.severity} />
+							<Chip label={statusLabels[risk.status] ?? risk.status} />
+							{relatedEntityLabel ? <Chip label={relatedEntityLabel} /> : null}
+						</View>
+						<AppText variant="headline">{risk.title}</AppText>
+						<AppText tone="secondary" variant="subhead">
+							{risk.message}
+						</AppText>
+						<AppText tone="secondary" variant="footnote">
+							{risk.suggestedAction}
+						</AppText>
 					</View>
-					<Text type="body" weight="bold">
-						{risk.title}
-					</Text>
-					<Text.Paragraph color="muted" type="body-sm">
-						{risk.message}
-					</Text.Paragraph>
-					<Text.Paragraph color="muted" type="body-xs">
-						{risk.suggestedAction}
-					</Text.Paragraph>
 				</View>
-			</View>
-			<View className="flex-row flex-wrap gap-2">
-				{relatedEntityHref ? (
-					<Link asChild href={relatedEntityHref}>
-						<Button className="flex-1" size="sm" variant="secondary">
-							<Ionicons color="#0A84FF" name="open-outline" size={15} />
-							<Button.Label>Open linked item</Button.Label>
-						</Button>
-					</Link>
-				) : null}
-				<Button
-					className="flex-1"
-					isDisabled={isPending || risk.status === "mitigated"}
-					onPress={onMitigate}
-					size="sm"
-					variant="secondary"
+				<View
+					style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}
 				>
-					<Button.Label>Mitigate</Button.Label>
-				</Button>
-				<Button
-					className="flex-1"
-					isDisabled={isPending}
-					onPress={onEdit}
-					size="sm"
-					variant="secondary"
-				>
-					<Button.Label>Edit</Button.Label>
-				</Button>
-				<Button
-					className="flex-1"
-					isDisabled={isPending || risk.status === "dismissed"}
-					onPress={onDismiss}
-					size="sm"
-					variant="secondary"
-				>
-					<Button.Label>Dismiss</Button.Label>
-				</Button>
-				<Button
-					className="w-full"
-					isDisabled={isPending}
-					onPress={onDelete}
-					size="sm"
-					variant="tertiary"
-				>
-					<Button.Label>Delete risk</Button.Label>
-				</Button>
-			</View>
-		</Surface>
+					{relatedEntityHref ? (
+						<Link asChild href={relatedEntityHref}>
+							<PillAction icon="open-outline" label="Open linked item" />
+						</Link>
+					) : null}
+					<PillAction
+						disabled={risk.status === "mitigated"}
+						isPending={isPending}
+						label="Mitigate"
+						onPress={onMitigate}
+					/>
+					<PillAction disabled={isPending} label="Edit" onPress={onEdit} />
+					<PillAction
+						disabled={isPending || risk.status === "dismissed"}
+						label="Dismiss"
+						onPress={onDismiss}
+					/>
+					<PillAction
+						disabled={isPending}
+						label="Delete risk"
+						onPress={onDelete}
+						tone="danger"
+					/>
+				</View>
+			</Card>
+		</Animated.View>
 	);
 }

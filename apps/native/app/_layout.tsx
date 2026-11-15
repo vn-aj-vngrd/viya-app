@@ -6,12 +6,13 @@ import { env } from "@viya-app/env/native";
 import { ConvexReactClient } from "convex/react";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { Stack } from "expo-router";
-import { HeroUINativeProvider, useThemeColor } from "heroui-native";
+import { HeroUINativeProvider } from "heroui-native";
 import { View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 
 import { AppThemeProvider } from "@/contexts/app-theme-context";
+import { FeedbackProvider, useUITheme } from "@/src/components/ui";
 
 export const unstable_settings = {
 	initialRouteName: "(app)",
@@ -21,23 +22,27 @@ const convex = new ConvexReactClient(env.EXPO_PUBLIC_CONVEX_URL, {
 	unsavedChangesWarning: false,
 });
 
-const APP_SCREEN_BACKGROUND = "#F5F5F5";
-
 function StackLayout() {
-	const themeColorBackground = useThemeColor("background");
+	const { palette } = useUITheme();
 
 	return (
-		<View className="flex-1" style={{ backgroundColor: themeColorBackground }}>
+		<View className="flex-1" style={{ backgroundColor: palette.canvas }}>
 			<Stack
 				screenOptions={{
-					contentStyle: { backgroundColor: themeColorBackground },
+					contentStyle: { backgroundColor: palette.canvas },
 				}}
 			>
 				<Stack.Screen name="(app)" options={{ headerShown: false }} />
 				<Stack.Screen name="(auth)" options={{ headerShown: false }} />
 				<Stack.Screen
 					name="modal"
-					options={{ title: "Modal", presentation: "modal" }}
+					options={{
+						headerShadowVisible: false,
+						headerStyle: { backgroundColor: palette.canvas },
+						headerTintColor: palette.ink,
+						presentation: "modal",
+						title: "Modal",
+					}}
 				/>
 			</Stack>
 		</View>
@@ -51,13 +56,13 @@ export default function Layout() {
 			tokenCache={tokenCache}
 		>
 			<ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-				<GestureHandlerRootView
-					style={{ backgroundColor: APP_SCREEN_BACKGROUND, flex: 1 }}
-				>
+				<GestureHandlerRootView style={{ flex: 1 }}>
 					<KeyboardProvider>
 						<AppThemeProvider>
 							<HeroUINativeProvider>
-								<StackLayout />
+								<FeedbackProvider>
+									<StackLayout />
+								</FeedbackProvider>
 							</HeroUINativeProvider>
 						</AppThemeProvider>
 					</KeyboardProvider>

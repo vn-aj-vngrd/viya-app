@@ -4,8 +4,7 @@ import { useMemo, useState } from "react";
 import { View } from "react-native";
 
 import { Container } from "@/components/container";
-import { EmptyState } from "@/src/components/empty-state";
-import { ScreenLoadingState } from "@/src/components/screen-loading-state";
+import { EmptyState, LoadingState, useUITheme } from "@/src/components/ui";
 
 import {
 	MainModules,
@@ -26,6 +25,7 @@ export function TripDashboardScreen({
 	initialTab?: TripTab;
 } = {}) {
 	const tripId = useTripIdParam();
+	const { palette } = useUITheme();
 	const workspace = useQuery(
 		api.tripWorkspace.getTripWorkspace,
 		tripId ? { tripId } : "skip"
@@ -69,18 +69,25 @@ export function TripDashboardScreen({
 	}
 
 	if (workspace === undefined || !model) {
-		return <ScreenLoadingState />;
+		return (
+			<Container className="px-4 pb-28">
+				<LoadingState
+					message="Opening your trip workspace."
+					title="Loading trip"
+				/>
+			</Container>
+		);
 	}
 
 	return (
-		<View className="flex-1 bg-background">
+		<View style={{ backgroundColor: palette.canvas, flex: 1 }}>
 			<TripStickyHeader model={model} />
 			<Container
 				className="px-4"
 				includeBottomInset={false}
 				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
 			>
-				<View className="gap-3 pb-28">
+				<View style={{ gap: 12, paddingBottom: 112 }}>
 					<TripHero model={model} />
 					<MainModules model={model} />
 					{shouldShowFocusSections ? (

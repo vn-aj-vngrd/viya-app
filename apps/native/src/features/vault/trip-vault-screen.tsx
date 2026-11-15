@@ -4,26 +4,34 @@ import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import type { Href } from "expo-router";
 import { Link } from "expo-router";
-import {
-	BottomSheet,
-	Button,
-	CloseButton,
-	Input,
-	Label,
-	Spinner,
-	Text,
-	TextField,
-} from "heroui-native";
+import { BottomSheet } from "heroui-native";
 import { useState } from "react";
 import { Linking, ScrollView, View } from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Container } from "@/components/container";
-import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
-import { EmptyState } from "@/src/components/empty-state";
 import { NavigationIconButton } from "@/src/components/navigation/navigation-icon-button";
-import { ScreenLoadingState } from "@/src/components/screen-loading-state";
+import {
+	AppText,
+	Chip,
+	EmptyState,
+	LoadingState,
+	PressableScale,
+	SecondaryButton,
+	SheetHeader,
+	spacing,
+	useFeedback,
+	useUITheme,
+} from "@/src/components/ui";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 import { TripModuleScreenFrame } from "@/src/features/trips/trip-module-floating-bar";
+import {
+	ChoiceChips,
+	FieldLabel,
+	FormSheet,
+	InlineMessage,
+	SheetField,
+} from "@/src/features/trips/trip-module-form-kit";
 import {
 	getLinkedEntityMutationFields,
 	getRelatedEntityKey,
@@ -124,37 +132,6 @@ const getVaultRelatedHref = ({
 	}
 };
 
-function SheetField({
-	label,
-	onChangeText,
-	placeholder,
-	value,
-}: {
-	label: string;
-	onChangeText: (value: string) => void;
-	placeholder: string;
-	value: string;
-}) {
-	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
-
-	return (
-		<TextField className="gap-2">
-			<Label>
-				<Label.Text>{label}</Label.Text>
-			</Label>
-			<Input
-				className="h-12 border border-border bg-surface px-4"
-				onBlur={onBlur}
-				onChangeText={onChangeText}
-				onFocus={onFocus}
-				placeholder={placeholder}
-				value={value}
-				variant="secondary"
-			/>
-		</TextField>
-	);
-}
-
 function VaultGroupChip({
 	count,
 	isSelected,
@@ -167,15 +144,7 @@ function VaultGroupChip({
 	onPress: () => void;
 }) {
 	return (
-		<Button
-			onPress={onPress}
-			size="sm"
-			variant={isSelected ? "primary" : "secondary"}
-		>
-			<Button.Label>
-				{label} {count}
-			</Button.Label>
-		</Button>
+		<Chip label={`${label} ${count}`} onPress={onPress} selected={isSelected} />
 	);
 }
 
@@ -187,23 +156,16 @@ function VaultKindPicker({
 	value: string;
 }) {
 	return (
-		<View className="gap-2">
-			<Text color="muted" type="body-xs" weight="semibold">
-				KIND
-			</Text>
-			<View className="flex-row flex-wrap gap-2">
-				{vaultKindOptions.map((kind) => (
-					<Button
-						key={kind}
-						onPress={() => onChange(kind)}
-						size="sm"
-						variant={value === kind ? "primary" : "secondary"}
-					>
-						<Button.Label>{formatVaultKindLabel(kind)}</Button.Label>
-					</Button>
-				))}
-			</View>
-		</View>
+		<ChoiceChips label="Kind">
+			{vaultKindOptions.map((kind) => (
+				<Chip
+					key={kind}
+					label={formatVaultKindLabel(kind)}
+					onPress={() => onChange(kind)}
+					selected={value === kind}
+				/>
+			))}
+		</ChoiceChips>
 	);
 }
 
@@ -226,110 +188,90 @@ function VaultEditSheet({
 	onSubmit: () => void;
 	onUpdateForm: (key: keyof VaultForm, value: string) => void;
 }) {
-	const insets = useSafeAreaInsets();
-
 	return (
-		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
-			<BottomSheet.Portal>
-				<BottomSheet.Overlay />
-				<BottomSheet.Content
-					backgroundClassName="rounded-t-[36px] bg-background"
-					enablePanDownToClose={true}
-					snapPoints={["78%"]}
-				>
-					<View
-						className="gap-4 px-5 pt-2"
-						style={{ paddingBottom: Math.max(insets.bottom, 18) }}
+		<FormSheet
+			description="Update the label used across trip modules."
+			errorMessage={errorMessage}
+			isOpen={isOpen}
+			isSaving={isSaving}
+			onOpenChange={onOpenChange}
+			onSubmit={onSubmit}
+			saveLabel="Save item"
+			snapPoint="78%"
+			title="Edit vault item"
+		>
+			<SheetField
+				label="Title"
+				onChangeText={(value) => onUpdateForm("title", value)}
+				placeholder="Hotel confirmation"
+				value={form.title}
+			/>
+			<VaultKindPicker
+				onChange={(value) => onUpdateForm("kind", value)}
+				value={form.kind}
+			/>
+			<SheetField
+				label="Note"
+				onChangeText={(value) => onUpdateForm("note", value)}
+				placeholder="Optional note"
+				value={form.note}
+			/>
+			<View style={{ gap: spacing.sm }}>
+				<FieldLabel>Linked trip item</FieldLabel>
+				{linkOptions.length === 0 ? (
+					<AppText tone="secondary" variant="subhead">
+						Add bookings, documents, moments, or checklist tasks before linking
+						this file.
+					</AppText>
+				) : (
+					<ScrollView
+						contentContainerStyle={{ gap: spacing.sm }}
+						nestedScrollEnabled={true}
+						showsVerticalScrollIndicator={false}
+						style={{ maxHeight: 220 }}
 					>
-						<View className="flex-row items-start justify-between gap-4">
-							<View className="flex-1 gap-1">
-								<BottomSheet.Title>Edit vault item</BottomSheet.Title>
-								<BottomSheet.Description>
-									Update the label used across trip modules.
-								</BottomSheet.Description>
-							</View>
-							<CloseButton
-								accessibilityLabel="Close vault edit form"
-								className="h-10 w-10 rounded-full bg-surface"
-								onPress={() => onOpenChange(false)}
+						<Chip
+							label="No linked item"
+							onPress={() => onUpdateForm("relatedEntityKey", "")}
+							selected={!form.relatedEntityKey}
+						/>
+						{linkOptions.map((option) => (
+							<Chip
+								key={option.key}
+								label={`${option.label} · ${option.detail}`}
+								onPress={() => onUpdateForm("relatedEntityKey", option.key)}
+								selected={form.relatedEntityKey === option.key}
 							/>
-						</View>
-						<SheetField
-							label="Title"
-							onChangeText={(value) => onUpdateForm("title", value)}
-							placeholder="Hotel confirmation"
-							value={form.title}
-						/>
-						<VaultKindPicker
-							onChange={(value) => onUpdateForm("kind", value)}
-							value={form.kind}
-						/>
-						<SheetField
-							label="Note"
-							onChangeText={(value) => onUpdateForm("note", value)}
-							placeholder="Optional note"
-							value={form.note}
-						/>
-						<View className="gap-2">
-							<Label>
-								<Label.Text>Linked trip item</Label.Text>
-							</Label>
-							{linkOptions.length === 0 ? (
-								<Text color="muted" type="body-sm">
-									Add bookings, documents, moments, or checklist tasks before
-									linking this file.
-								</Text>
-							) : (
-								<ScrollView
-									contentContainerStyle={{ gap: 8 }}
-									showsVerticalScrollIndicator={false}
-									style={{ maxHeight: 220 }}
-								>
-									<Button
-										onPress={() => {
-											onUpdateForm("relatedEntityKey", "");
-										}}
-										size="sm"
-										variant={form.relatedEntityKey ? "secondary" : "primary"}
-									>
-										<Button.Label>No linked item</Button.Label>
-									</Button>
-									{linkOptions.map((option) => {
-										const isSelected = form.relatedEntityKey === option.key;
-
-										return (
-											<Button
-												key={option.key}
-												onPress={() => {
-													onUpdateForm("relatedEntityKey", option.key);
-												}}
-												size="sm"
-												variant={isSelected ? "primary" : "secondary"}
-											>
-												<Button.Label>
-													{option.label} · {option.detail}
-												</Button.Label>
-											</Button>
-										);
-									})}
-								</ScrollView>
-							)}
-						</View>
-						{errorMessage ? (
-							<Text className="text-danger" type="body-sm">
-								{errorMessage}
-							</Text>
-						) : null}
-						<Button isDisabled={isSaving} onPress={onSubmit} size="lg">
-							{isSaving ? <Spinner size="sm" /> : null}
-							<Button.Label>Save item</Button.Label>
-						</Button>
-					</View>
-				</BottomSheet.Content>
-			</BottomSheet.Portal>
-		</BottomSheet>
+						))}
+					</ScrollView>
+				)}
+			</View>
+		</FormSheet>
 	);
 }
+
+const uploadActionMeta = [
+	{
+		description: "PDFs, IDs, tickets, or travel forms",
+		icon: "document-outline",
+		label: "Document",
+	},
+	{
+		description: "Flights, stays, tours, and confirmations",
+		icon: "ticket-outline",
+		label: "Booking",
+	},
+	{
+		description: "Payments, refunds, and expense proof",
+		icon: "receipt-outline",
+		label: "Receipt",
+	},
+	{
+		description: "Camera roll photos or screenshots",
+		icon: "images-outline",
+		label: "Photo or screenshot",
+	},
+] as const;
 
 function VaultAddSheet({
 	isOpen,
@@ -349,94 +291,69 @@ function VaultAddSheet({
 	onPickReceipt: () => void;
 }) {
 	const insets = useSafeAreaInsets();
-	const uploadActions = [
-		{
-			accent: "#0A84FF",
-			description: "PDFs, IDs, tickets, or travel forms",
-			icon: "document-outline",
-			label: "Document",
-			onPress: onPickDocument,
-		},
-		{
-			accent: "#FF9F0A",
-			description: "Flights, stays, tours, and confirmations",
-			icon: "ticket-outline",
-			label: "Booking",
-			onPress: onPickBooking,
-		},
-		{
-			accent: "#34C759",
-			description: "Payments, refunds, and expense proof",
-			icon: "receipt-outline",
-			label: "Receipt",
-			onPress: onPickReceipt,
-		},
-		{
-			accent: "#AF52DE",
-			description: "Camera roll photos or screenshots",
-			icon: "images-outline",
-			label: "Photo or screenshot",
-			onPress: onPickPhoto,
-		},
-	] as const;
+	const { palette } = useUITheme();
+	const handlers = [onPickDocument, onPickBooking, onPickReceipt, onPickPhoto];
 
 	return (
 		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
 			<BottomSheet.Portal>
 				<BottomSheet.Overlay />
 				<BottomSheet.Content
-					backgroundClassName="rounded-t-[36px] bg-background"
+					backgroundClassName="rounded-t-[32px] bg-background"
 					enablePanDownToClose={true}
 					snapPoints={["52%"]}
 				>
+					<SheetHeader
+						onClose={() => onOpenChange(false)}
+						subtitle="Choose what kind of file Viya should extract and link."
+						title="Add to vault"
+					/>
 					<View
-						className="gap-4 px-5 pt-2"
-						style={{ paddingBottom: Math.max(insets.bottom, 18) }}
+						style={{
+							gap: spacing.sm,
+							paddingBottom: Math.max(insets.bottom, spacing.lg),
+							paddingHorizontal: spacing.screen,
+							paddingTop: spacing.sm,
+						}}
 					>
-						<View className="flex-row items-start justify-between gap-4">
-							<View className="flex-1 gap-1">
-								<BottomSheet.Title>Add to vault</BottomSheet.Title>
-								<BottomSheet.Description>
-									Choose what kind of file Viya should extract and link.
-								</BottomSheet.Description>
-							</View>
-							<CloseButton
-								accessibilityLabel="Close add file options"
-								className="h-10 w-10 rounded-full bg-surface"
-								onPress={() => onOpenChange(false)}
-							/>
-						</View>
-						<View className="gap-2">
-							{uploadActions.map((action) => (
-								<Button
-									className="h-16 justify-start rounded-3xl bg-surface px-4"
-									isDisabled={isUploading}
-									key={action.label}
-									onPress={action.onPress}
-									size="lg"
-									variant="secondary"
-								>
-									<View
-										className="h-10 w-10 items-center justify-center rounded-full"
-										style={{ backgroundColor: `${action.accent}1F` }}
+						{uploadActionMeta.map((action, index) => (
+							<PressableScale
+								accessibilityLabel={action.label}
+								disabled={isUploading}
+								haptic="selection"
+								key={action.label}
+								onPress={handlers[index]}
+								scaleTo={0.98}
+								style={{
+									alignItems: "center",
+									backgroundColor: palette.surface,
+									borderRadius: 16,
+									flexDirection: "row",
+									gap: spacing.md,
+									minHeight: 64,
+									opacity: isUploading ? 0.5 : 1,
+									paddingHorizontal: spacing.lg,
+									paddingVertical: spacing.md,
+								}}
+							>
+								<Ionicons color={palette.accent} name={action.icon} size={22} />
+								<View style={{ flex: 1, gap: 2 }}>
+									<AppText variant="headline">{action.label}</AppText>
+									<AppText
+										numberOfLines={1}
+										tone="secondary"
+										variant="footnote"
 									>
-										<Ionicons
-											color={action.accent}
-											name={action.icon}
-											size={19}
-										/>
-									</View>
-									<View className="min-w-0 flex-1 items-start">
-										<Text type="body-sm" weight="semibold">
-											{action.label}
-										</Text>
-										<Text color="muted" numberOfLines={1} type="body-xs">
-											{action.description}
-										</Text>
-									</View>
-								</Button>
-							))}
-						</View>
+										{action.description}
+									</AppText>
+								</View>
+								<Ionicons
+									color={palette.inkTertiary}
+									name="chevron-forward"
+									size={16}
+								/>
+							</PressableScale>
+						))}
 					</View>
 				</BottomSheet.Content>
 			</BottomSheet.Portal>
@@ -483,6 +400,7 @@ export function TripVaultScreen() {
 	const [vaultErrorMessage, setVaultErrorMessage] = useState<string | null>(
 		null
 	);
+	const { confirm, showToast } = useFeedback();
 	const [openFileErrorMessage, setOpenFileErrorMessage] = useState<
 		string | null
 	>(null);
@@ -500,7 +418,7 @@ export function TripVaultScreen() {
 	}
 
 	if (vaultItems === undefined) {
-		return <ScreenLoadingState />;
+		return <LoadingState title="Loading vault" />;
 	}
 
 	const handlePhotoUpload = async () => {
@@ -531,6 +449,7 @@ export function TripVaultScreen() {
 			});
 			setPendingReview(null);
 			setDidSync(true);
+			showToast({ message: "TripSync saved", tone: "success" });
 		} catch {
 			setVaultErrorMessage("Could not save TripSync review.");
 		} finally {
@@ -590,6 +509,20 @@ export function TripVaultScreen() {
 			await deleteVaultItem({ vaultItemId });
 		} catch {
 			setVaultErrorMessage("Could not delete vault item.");
+		}
+	};
+	const confirmDeleteVaultItem = async (
+		vaultItemId: Id<"vaultItems">,
+		itemTitle: string
+	) => {
+		const confirmed = await confirm({
+			confirmLabel: "Delete",
+			destructive: true,
+			message: "This removes the file from the trip vault.",
+			title: `Delete ${itemTitle}?`,
+		});
+		if (confirmed) {
+			await handleDeleteVaultItem(vaultItemId);
 		}
 	};
 	const handleOpenVaultFile = async (url?: string | null) => {
@@ -685,27 +618,16 @@ export function TripVaultScreen() {
 
 		if (filteredVaultItems.length === 0) {
 			return (
-				<View className="items-center gap-3 rounded-[28px] bg-surface p-5">
-					<View
-						className="h-12 w-12 items-center justify-center rounded-full"
-						style={{ backgroundColor: "rgba(10, 132, 255, 0.1)" }}
-					>
-						<Ionicons color="#0A84FF" name="folder-open-outline" size={22} />
-					</View>
-					<View className="items-center gap-1">
-						<Text type="body-sm" weight="semibold">
-							No {selectedVaultGroupLabel.toLowerCase()} yet
-						</Text>
-						<Text color="muted" type="body-sm">
-							Add one from the plus button.
-						</Text>
-					</View>
-				</View>
+				<EmptyState
+					description="Add one from the plus button."
+					icon="folder-open-outline"
+					title={`No ${selectedVaultGroupLabel.toLowerCase()} yet`}
+				/>
 			);
 		}
 
 		return (
-			<View className="gap-3">
+			<View style={{ gap: spacing.md }}>
 				{filteredVaultItems.map((item) => (
 					<VaultPreviewCard
 						createdAt={item.createdAt}
@@ -728,7 +650,9 @@ export function TripVaultScreen() {
 								: undefined
 						}
 						onDelete={() => {
-							handleDeleteVaultItem(item._id).catch(() => undefined);
+							confirmDeleteVaultItem(item._id, item.title).catch(
+								() => undefined
+							);
 						}}
 						onEdit={() => openEditSheet(item)}
 						onOpenFile={() => {
@@ -758,70 +682,63 @@ export function TripVaultScreen() {
 				<ScrollView
 					contentContainerStyle={{
 						flexGrow: 1,
-						gap: 14,
+						gap: spacing.md,
 						paddingBottom: 112,
-						paddingHorizontal: 16,
+						paddingHorizontal: spacing.lg,
 					}}
 					contentInsetAdjustmentBehavior="automatic"
 					keyboardShouldPersistTaps="handled"
 					showsVerticalScrollIndicator={false}
 				>
-					<View className="gap-3">
-						<ScrollView
-							contentContainerStyle={{ gap: 8, paddingRight: 16 }}
-							horizontal={true}
-							showsHorizontalScrollIndicator={false}
+					<ScrollView
+						contentContainerStyle={{
+							gap: spacing.sm,
+							paddingRight: spacing.lg,
+						}}
+						horizontal={true}
+						showsHorizontalScrollIndicator={false}
+					>
+						{vaultGroupOptions.map((option) => (
+							<VaultGroupChip
+								count={getVaultGroupCount(option.id)}
+								isSelected={selectedVaultGroup === option.id}
+								key={option.id}
+								label={option.label}
+								onPress={() => setSelectedVaultGroup(option.id)}
+							/>
+						))}
+					</ScrollView>
+					{isUploading ||
+					uploadErrorMessage ||
+					vaultErrorMessage ||
+					openFileErrorMessage ||
+					didSync ? (
+						<Animated.View
+							entering={FadeIn.duration(180)}
+							style={{ gap: spacing.sm }}
 						>
-							{vaultGroupOptions.map((option) => (
-								<VaultGroupChip
-									count={getVaultGroupCount(option.id)}
-									isSelected={selectedVaultGroup === option.id}
-									key={option.id}
-									label={option.label}
-									onPress={() => setSelectedVaultGroup(option.id)}
+							{isUploading ? (
+								<LoadingState
+									delay={0}
+									message="Viya is reading the file and linking it to your trip."
+									title="Uploading and extracting..."
 								/>
-							))}
-						</ScrollView>
-						{isUploading ||
-						uploadErrorMessage ||
-						vaultErrorMessage ||
-						openFileErrorMessage ||
-						didSync ? (
-							<View className="gap-2">
-								{isUploading ? (
-									<View className="flex-row items-center gap-2">
-										<Spinner size="sm" />
-										<Text color="muted" type="body-sm">
-											Uploading and extracting...
-										</Text>
-									</View>
-								) : null}
-								{uploadErrorMessage ? (
-									<Text className="text-danger" type="body-sm">
-										{uploadErrorMessage}
-									</Text>
-								) : null}
-								{vaultErrorMessage ? (
-									<Text className="text-danger" type="body-sm">
-										{vaultErrorMessage}
-									</Text>
-								) : null}
-								{openFileErrorMessage ? (
-									<Text className="text-danger" type="body-sm">
-										{openFileErrorMessage}
-									</Text>
-								) : null}
-								{didSync ? (
-									<Link asChild href={VIYA_ROUTES.tripReadiness(tripId)}>
-										<Button size="sm" variant="secondary">
-											<Button.Label>Review readiness impact</Button.Label>
-										</Button>
-									</Link>
-								) : null}
-							</View>
-						) : null}
-						{savedFilesContent}
-					</View>
+							) : null}
+							<InlineMessage message={uploadErrorMessage ?? null} />
+							<InlineMessage message={vaultErrorMessage} />
+							<InlineMessage message={openFileErrorMessage} />
+							{didSync ? (
+								<Link asChild href={VIYA_ROUTES.tripReadiness(tripId)}>
+									<SecondaryButton
+										icon="checkmark-circle-outline"
+										label="Review readiness impact"
+										onPress={() => undefined}
+									/>
+								</Link>
+							) : null}
+						</Animated.View>
+					) : null}
+					{savedFilesContent}
 				</ScrollView>
 
 				<TripSyncReviewSheet

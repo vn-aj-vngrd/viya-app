@@ -1,8 +1,8 @@
 import { useUser } from "@clerk/expo";
 import { useRouter } from "expo-router";
-import { Text } from "heroui-native";
-import { Image, Pressable, View } from "react-native";
+import { Image, View } from "react-native";
 
+import { AppText, PressableScale, useUITheme } from "@/src/components/ui";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 
 interface AccountAvatarButtonProps {
@@ -31,6 +31,7 @@ function AccountAvatar({
 	name?: string | null;
 	size: number;
 }) {
+	const { palette } = useUITheme();
 	const borderRadius = size / 2;
 
 	if (imageUrl) {
@@ -45,34 +46,45 @@ function AccountAvatar({
 
 	return (
 		<View
-			className="items-center justify-center bg-foreground"
-			style={{ borderRadius, height: size, width: size }}
+			style={{
+				alignItems: "center",
+				backgroundColor: palette.ink,
+				borderRadius,
+				height: size,
+				justifyContent: "center",
+				width: size,
+			}}
 		>
-			<Text className="text-white" type="body-sm" weight="semibold">
+			<AppText
+				bold={true}
+				style={{ color: palette.onPrimary }}
+				variant="subhead"
+			>
 				{getInitials(name)}
-			</Text>
+			</AppText>
 		</View>
 	);
 }
 
-export function AccountAvatarButton({ size = 48 }: AccountAvatarButtonProps) {
+export function AccountAvatarButton({ size = 44 }: AccountAvatarButtonProps) {
 	const { user } = useUser();
 	const router = useRouter();
 	const displayName = user?.fullName ?? "Viya traveler";
+	const dimension = Math.max(size, 44);
 
 	return (
-		<Pressable
+		<PressableScale
 			accessibilityLabel="Open profile"
 			accessibilityRole="button"
-			className="items-center justify-center rounded-full"
 			onPress={() => router.push(VIYA_ROUTES.profile)}
-			style={({ pressed }) => ({
-				height: size,
-				transform: [{ scale: pressed ? 0.97 : 1 }],
-				width: size,
-			})}
+			style={{
+				alignItems: "center",
+				height: dimension,
+				justifyContent: "center",
+				width: dimension,
+			}}
 		>
 			<AccountAvatar imageUrl={user?.imageUrl} name={displayName} size={size} />
-		</Pressable>
+		</PressableScale>
 	);
 }

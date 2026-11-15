@@ -3,11 +3,18 @@ import { Ionicons } from "@expo/vector-icons";
 import { makeRedirectUri } from "expo-auth-session";
 import { useRouter } from "expo-router";
 import { maybeCompleteAuthSession } from "expo-web-browser";
-import { Button, Spinner } from "heroui-native";
 import React from "react";
-import { View } from "react-native";
+import { ActivityIndicator, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
+import {
+	AppText,
+	metrics,
+	PressableScale,
+	radius,
+	spacing,
+	useUITheme,
+} from "@/src/components/ui";
 import {
 	getAuthErrorMessage,
 	pushDecoratedUrl,
@@ -16,7 +23,6 @@ import {
 maybeCompleteAuthSession();
 
 const SIGNED_IN_HOME = "/(app)/(tabs)";
-const SOCIAL_ICON_COLOR = "#18181B";
 const OAUTH_REOPEN_DELAY_MS = 250;
 
 const SOCIAL_PROVIDERS = [
@@ -129,7 +135,7 @@ export function AuthSocialButtons({
 	};
 
 	return (
-		<View className="gap-2">
+		<View style={{ gap: spacing.sm }}>
 			{SOCIAL_PROVIDERS.map((provider) => (
 				<SocialProviderButton
 					activeStrategy={activeStrategy}
@@ -151,31 +157,42 @@ function SocialProviderButton({
 	onPress: () => void;
 	provider: (typeof SOCIAL_PROVIDERS)[number];
 }) {
+	const { palette } = useUITheme();
 	const isActive = activeStrategy === provider.strategy;
+	const isDisabled = activeStrategy !== null;
 	let startContent: React.ReactNode =
 		provider.icon === "google" ? (
 			<GoogleLogo />
 		) : (
-			<Ionicons color={SOCIAL_ICON_COLOR} name={provider.icon} size={18} />
+			<Ionicons color={palette.ink} name={provider.icon} size={18} />
 		);
 
 	if (isActive) {
-		startContent = <Spinner size="sm" />;
+		startContent = <ActivityIndicator color={palette.inkSecondary} />;
 	}
 
 	return (
-		<Button
-			className="rounded-full border border-border bg-surface"
-			isDisabled={activeStrategy !== null}
+		<PressableScale
+			accessibilityLabel={provider.label}
+			accessibilityState={{ busy: isActive, disabled: isDisabled }}
+			disabled={isDisabled}
 			onPress={onPress}
-			variant="secondary"
+			style={{
+				alignItems: "center",
+				backgroundColor: palette.fill,
+				borderRadius: radius.pill,
+				flexDirection: "row",
+				gap: spacing.sm,
+				height: metrics.actionHeight,
+				justifyContent: "center",
+				opacity: isDisabled && !isActive ? 0.5 : 1,
+				paddingHorizontal: spacing.section,
+			}}
 		>
-			<View className="flex-row items-center justify-center gap-2">
-				{startContent}
-				<Button.Label className="text-foreground">
-					{isActive ? "Opening..." : provider.label}
-				</Button.Label>
-			</View>
-		</Button>
+			{startContent}
+			<AppText bold={true} numberOfLines={1}>
+				{isActive ? "Opening..." : provider.label}
+			</AppText>
+		</PressableScale>
 	);
 }

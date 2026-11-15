@@ -1,19 +1,22 @@
 import { Ionicons } from "@expo/vector-icons";
-import {
-	BottomSheet,
-	Button,
-	Input,
-	Label,
-	Text,
-	TextField,
-} from "heroui-native";
-import { useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { BottomSheet } from "heroui-native";
+import { type ReactNode, useState } from "react";
+import { ScrollView, View } from "react-native";
 import type { DateData } from "react-native-calendars";
 import { Calendar } from "react-native-calendars";
 import type { MarkedDates, Theme } from "react-native-calendars/src/types";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
+import {
+	AppText,
+	metrics,
+	type Palette,
+	PressableScale,
+	PrimaryButton,
+	radius,
+	SheetHeader,
+	spacing,
+	useUITheme,
+} from "@/src/components/ui";
 
 const isoDatePattern = /^\d{4}-\d{2}-\d{2}$/;
 const dateNumberFormatter = new Intl.NumberFormat("en", {
@@ -21,8 +24,7 @@ const dateNumberFormatter = new Intl.NumberFormat("en", {
 	useGrouping: false,
 });
 const dateDisplayFormats = ["short", "medium", "long", "full"] as const;
-const selectedDateColor = "#0A84FF";
-const rangeFillColor = "#EAF2FF";
+const FIELD_HEIGHT = 50;
 
 type DateDisplayFormat = (typeof dateDisplayFormats)[number];
 
@@ -31,23 +33,23 @@ const getDateFormatter = (
 	locale?: string
 ) => new Intl.DateTimeFormat(locale, { dateStyle: dateDisplayFormat });
 
-const calendarTheme = {
-	arrowColor: selectedDateColor,
+const getCalendarTheme = (palette: Palette): Theme => ({
+	arrowColor: palette.accent,
 	backgroundColor: "transparent",
 	calendarBackground: "transparent",
-	dayTextColor: "#18181B",
-	monthTextColor: "#18181B",
-	selectedDayBackgroundColor: selectedDateColor,
+	dayTextColor: palette.ink,
+	monthTextColor: palette.ink,
+	selectedDayBackgroundColor: palette.accent,
 	selectedDayTextColor: "#FFFFFF",
 	textDayFontSize: 18,
 	textDayHeaderFontSize: 13,
 	textDayHeaderFontWeight: "600",
-	textDisabledColor: "#D4D4D8",
+	textDisabledColor: palette.inkTertiary,
 	textMonthFontSize: 17,
 	textMonthFontWeight: "700",
-	textSectionTitleColor: "#A1A1AA",
-	todayTextColor: selectedDateColor,
-} as const satisfies Theme;
+	textSectionTitleColor: palette.inkSecondary,
+	todayTextColor: palette.accent,
+});
 
 export interface DateRangeValue {
 	end: string;
@@ -153,18 +155,21 @@ const formatRangeLabel = ({
 	return `${startLabel} ${rangeSeparator} ${endLabel}`;
 };
 
-const getSingleMarkedDate = (value: string): MarkedDates =>
+const getSingleMarkedDate = (value: string, palette: Palette): MarkedDates =>
 	isIsoDate(value)
 		? {
 				[value]: {
 					selected: true,
-					selectedColor: selectedDateColor,
+					selectedColor: palette.accent,
 					selectedTextColor: "#FFFFFF",
 				},
 			}
 		: {};
 
-const getRangeMarkedDates = (range: DateRangeValue): MarkedDates => {
+const getRangeMarkedDates = (
+	range: DateRangeValue,
+	palette: Palette
+): MarkedDates => {
 	if (!(isIsoDate(range.start) && isIsoDate(range.end))) {
 		return {};
 	}
@@ -184,10 +189,10 @@ const getRangeMarkedDates = (range: DateRangeValue): MarkedDates => {
 		const isEnd = isoDate === orderedRange.end;
 
 		markedDates[isoDate] = {
-			color: isStart || isEnd ? selectedDateColor : rangeFillColor,
+			color: isStart || isEnd ? palette.accent : palette.fill,
 			endingDay: isEnd,
 			startingDay: isStart,
-			textColor: isStart || isEnd ? "#FFFFFF" : "#18181B",
+			textColor: isStart || isEnd ? "#FFFFFF" : palette.ink,
 		};
 	}
 
@@ -195,10 +200,21 @@ const getRangeMarkedDates = (range: DateRangeValue): MarkedDates => {
 };
 
 function CalendarArrow({ direction }: { direction: "left" | "right" }) {
+	const { palette } = useUITheme();
+
 	return (
-		<View className="h-9 w-9 items-center justify-center rounded-full bg-surface">
+		<View
+			style={{
+				alignItems: "center",
+				backgroundColor: palette.fill,
+				borderRadius: radius.pill,
+				height: 36,
+				justifyContent: "center",
+				width: 36,
+			}}
+		>
 			<Ionicons
-				color={selectedDateColor}
+				color={palette.accent}
 				name={direction === "left" ? "chevron-back" : "chevron-forward"}
 				size={22}
 			/>
@@ -217,9 +233,9 @@ function FieldHelperText({
 }) {
 	if (isInvalid && errorText) {
 		return (
-			<Text className="text-danger" type="body-xs">
+			<AppText tone="danger" variant="footnote">
 				{errorText}
-			</Text>
+			</AppText>
 		);
 	}
 
@@ -228,13 +244,13 @@ function FieldHelperText({
 	}
 
 	return (
-		<Text color="muted" type="body-xs">
+		<AppText tone="secondary" variant="footnote">
 			{helperText}
-		</Text>
+		</AppText>
 	);
 }
 
-function RequiredLabelText({
+function FieldLabel({
 	isRequired,
 	label,
 }: {
@@ -242,10 +258,15 @@ function RequiredLabelText({
 	label: string;
 }) {
 	return (
-		<Label.Text>
+		<AppText tone="secondary" variant="footnote">
 			{label}
-			{isRequired ? <Text className="text-danger"> *</Text> : null}
-		</Label.Text>
+			{isRequired ? (
+				<AppText tone="danger" variant="footnote">
+					{" "}
+					*
+				</AppText>
+			) : null}
+		</AppText>
 	);
 }
 
@@ -264,43 +285,48 @@ function DateTriggerField({
 	placeholder: string;
 	valueLabel: string | null;
 }) {
-	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
-	const inputClassName = isInvalid
-		? "h-12 border border-danger bg-surface px-4 pr-11"
-		: "h-12 border border-border bg-surface px-4 pr-11";
+	const { palette } = useUITheme();
 
 	return (
-		<Pressable
+		<PressableScale
 			accessibilityLabel={label}
 			accessibilityRole="button"
-			className="relative"
 			disabled={isDisabled}
+			haptic="selection"
 			onPress={onOpen}
-			style={({ pressed }) => ({
+			scaleTo={0.99}
+			style={{
+				alignItems: "center",
+				backgroundColor: palette.surface,
+				borderColor: isInvalid ? palette.danger : "transparent",
+				borderRadius: radius.field,
+				borderWidth: isInvalid ? 1 : 0,
+				flexDirection: "row",
+				gap: spacing.sm,
+				height: FIELD_HEIGHT,
 				opacity: isDisabled ? 0.5 : 1,
-				transform: [{ scale: pressed && !isDisabled ? 0.995 : 1 }],
-			})}
+				paddingHorizontal: spacing.lg,
+			}}
 		>
-			<Input
-				className={inputClassName}
-				editable={false}
-				onBlur={onBlur}
-				onFocus={onFocus}
-				placeholder={placeholder}
-				pointerEvents="none"
-				value={valueLabel ?? ""}
-				variant="secondary"
+			<AppText
+				numberOfLines={1}
+				style={{ flex: 1 }}
+				tone={valueLabel ? "ink" : "tertiary"}
+			>
+				{valueLabel ?? placeholder}
+			</AppText>
+			<Ionicons
+				color={palette.inkSecondary}
+				name="calendar-outline"
+				size={18}
 			/>
-			<View className="pointer-events-none absolute top-3.5 right-4">
-				<Ionicons color="#71717A" name="calendar-outline" size={18} />
-			</View>
-		</Pressable>
+		</PressableScale>
 	);
 }
 
 function DateRangeButtonTrigger({
 	className,
-	iconColor = selectedDateColor,
+	iconColor,
 	isDisabled,
 	label,
 	onOpen,
@@ -315,32 +341,106 @@ function DateRangeButtonTrigger({
 	placeholder: string;
 	valueLabel: string | null;
 }) {
+	const { palette } = useUITheme();
+
 	return (
-		<Pressable
+		<PressableScale
 			accessibilityLabel={label}
 			accessibilityRole="button"
-			className={
-				className ??
-				"h-11 flex-row items-center gap-2 self-start rounded-full border border-border/70 bg-white px-3"
-			}
+			className={className}
 			disabled={isDisabled}
+			haptic="selection"
 			onPress={onOpen}
-			style={({ pressed }) => ({
+			scaleTo={0.97}
+			style={{
+				alignItems: "center",
+				alignSelf: "flex-start",
+				backgroundColor: palette.surface,
+				borderRadius: radius.pill,
+				flexDirection: "row",
+				gap: spacing.sm,
+				height: metrics.minTarget,
 				opacity: isDisabled ? 0.5 : 1,
-				transform: [{ scale: pressed && !isDisabled ? 0.98 : 1 }],
-			})}
+				paddingHorizontal: spacing.md,
+			}}
 		>
-			<Ionicons color={iconColor} name="calendar-outline" size={17} />
-			<Text
-				className="min-w-0 flex-1"
-				numberOfLines={1}
-				type="body-sm"
-				weight="semibold"
-			>
+			<Ionicons
+				color={iconColor ?? palette.accent}
+				name="calendar-outline"
+				size={17}
+			/>
+			<AppText bold={true} numberOfLines={1} variant="subhead">
 				{valueLabel ?? placeholder}
-			</Text>
-			<Ionicons color="#71717A" name="chevron-down" size={14} />
-		</Pressable>
+			</AppText>
+			<Ionicons color={palette.inkTertiary} name="chevron-down" size={14} />
+		</PressableScale>
+	);
+}
+
+function PickerSheet({
+	children,
+	isOpen,
+	label,
+	onOpenChange,
+	snapPoint,
+	subtitle,
+}: {
+	children: ReactNode;
+	isOpen: boolean;
+	label: string;
+	onOpenChange: (isOpen: boolean) => void;
+	snapPoint: string;
+	subtitle: string;
+}) {
+	const insets = useSafeAreaInsets();
+
+	return (
+		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
+			<BottomSheet.Portal>
+				<BottomSheet.Overlay />
+				<BottomSheet.Content
+					backgroundClassName="bg-background"
+					enablePanDownToClose={true}
+					snapPoints={[snapPoint]}
+				>
+					<SheetHeader
+						onClose={() => onOpenChange(false)}
+						subtitle={subtitle}
+						title={label}
+					/>
+					<ScrollView
+						contentContainerStyle={{
+							gap: spacing.lg,
+							padding: spacing.lg,
+							paddingBottom: Math.max(insets.bottom + spacing.lg, 36),
+						}}
+						keyboardShouldPersistTaps="handled"
+						showsVerticalScrollIndicator={false}
+					>
+						{children}
+						<PrimaryButton label="Done" onPress={() => onOpenChange(false)} />
+					</ScrollView>
+				</BottomSheet.Content>
+			</BottomSheet.Portal>
+		</BottomSheet>
+	);
+}
+
+function CalendarCard({ children }: { children: ReactNode }) {
+	const { palette } = useUITheme();
+
+	return (
+		<View
+			style={{
+				backgroundColor: palette.surface,
+				borderRadius: radius.card,
+				overflow: "hidden",
+				paddingHorizontal: spacing.sm,
+				paddingVertical: spacing.md,
+			}}
+		>
+			{children}
+		</View>
 	);
 }
 
@@ -381,7 +481,7 @@ export function DatePickerField({
 	placeholder = "Choose a date",
 	value,
 }: DatePickerFieldProps) {
-	const insets = useSafeAreaInsets();
+	const { palette, scheme } = useUITheme();
 	const [isOpen, setIsOpen] = useState(false);
 	const fallbackDate = minimumDate ?? getStartOfToday();
 	const selectedDate = parseIsoDate(value, fallbackDate);
@@ -396,10 +496,8 @@ export function DatePickerField({
 	};
 
 	return (
-		<TextField className="gap-2">
-			<Label>
-				<RequiredLabelText isRequired={isRequired} label={label} />
-			</Label>
+		<View style={{ gap: spacing.sm }}>
+			<FieldLabel isRequired={isRequired} label={label} />
 			<DateTriggerField
 				isDisabled={isDisabled}
 				isInvalid={isInvalid}
@@ -414,53 +512,31 @@ export function DatePickerField({
 				isInvalid={isInvalid}
 			/>
 
-			<BottomSheet isOpen={isOpen} onOpenChange={updateOpen}>
-				<BottomSheet.Portal>
-					<BottomSheet.Overlay />
-					<BottomSheet.Content
-						backgroundClassName="rounded-t-[32px] bg-background"
-						enablePanDownToClose={true}
-						snapPoints={["76%"]}
-					>
-						<ScrollView
-							contentContainerClassName="gap-5 px-5 pt-2"
-							contentContainerStyle={{
-								paddingBottom: Math.max(insets.bottom + 18, 36),
-							}}
-							keyboardShouldPersistTaps="handled"
-							showsVerticalScrollIndicator={false}
-						>
-							<View className="gap-1">
-								<BottomSheet.Title>{label}</BottomSheet.Title>
-								<BottomSheet.Description>
-									Select a date for this field.
-								</BottomSheet.Description>
-							</View>
-							<View className="overflow-hidden rounded-[28px] bg-surface-secondary px-2 py-3">
-								<Calendar
-									current={formatIsoDate(selectedDate)}
-									enableSwipeMonths={true}
-									hideExtraDays={true}
-									markedDates={getSingleMarkedDate(value)}
-									maxDate={maximumDate ? formatIsoDate(maximumDate) : undefined}
-									minDate={minimumDate ? formatIsoDate(minimumDate) : undefined}
-									monthFormat="MMMM yyyy"
-									onDayPress={(day: DateData) => onChangeText(day.dateString)}
-									renderArrow={(direction) => (
-										<CalendarArrow direction={direction} />
-									)}
-									style={{ backgroundColor: "transparent" }}
-									theme={calendarTheme}
-								/>
-							</View>
-							<Button onPress={() => updateOpen(false)}>
-								<Button.Label>Done</Button.Label>
-							</Button>
-						</ScrollView>
-					</BottomSheet.Content>
-				</BottomSheet.Portal>
-			</BottomSheet>
-		</TextField>
+			<PickerSheet
+				isOpen={isOpen}
+				label={label}
+				onOpenChange={updateOpen}
+				snapPoint="76%"
+				subtitle="Select a date for this field."
+			>
+				<CalendarCard>
+					<Calendar
+						current={formatIsoDate(selectedDate)}
+						enableSwipeMonths={true}
+						hideExtraDays={true}
+						key={scheme}
+						markedDates={getSingleMarkedDate(value, palette)}
+						maxDate={maximumDate ? formatIsoDate(maximumDate) : undefined}
+						minDate={minimumDate ? formatIsoDate(minimumDate) : undefined}
+						monthFormat="MMMM yyyy"
+						onDayPress={(day: DateData) => onChangeText(day.dateString)}
+						renderArrow={(direction) => <CalendarArrow direction={direction} />}
+						style={{ backgroundColor: "transparent" }}
+						theme={getCalendarTheme(palette)}
+					/>
+				</CalendarCard>
+			</PickerSheet>
+		</View>
 	);
 }
 
@@ -511,7 +587,7 @@ export function DateRangePickerField({
 	triggerVariant = "field",
 	value,
 }: DateRangePickerFieldProps) {
-	const insets = useSafeAreaInsets();
+	const { palette, scheme } = useUITheme();
 	const fallbackDate = minimumDate ?? getStartOfToday();
 	const [isOpen, setIsOpen] = useState(false);
 	const [activeSlot, setActiveSlot] = useState<keyof DateRangeValue>("start");
@@ -555,12 +631,10 @@ export function DateRangePickerField({
 	};
 
 	return (
-		<TextField className={className ?? "gap-2"}>
+		<View className={className} style={{ gap: spacing.sm }}>
 			{triggerVariant === "field" ? (
 				<>
-					<Label>
-						<RequiredLabelText isRequired={isRequired} label={label} />
-					</Label>
+					<FieldLabel isRequired={isRequired} label={label} />
 					<DateTriggerField
 						isDisabled={isDisabled}
 						isInvalid={isInvalid}
@@ -587,83 +661,79 @@ export function DateRangePickerField({
 				/>
 			)}
 
-			<BottomSheet isOpen={isOpen} onOpenChange={updateOpen}>
-				<BottomSheet.Portal>
-					<BottomSheet.Overlay />
-					<BottomSheet.Content
-						backgroundClassName="rounded-t-[32px] bg-background"
-						enablePanDownToClose={true}
-						snapPoints={["92%"]}
-					>
-						<ScrollView
-							contentContainerClassName="gap-5 px-5 pt-2"
-							contentContainerStyle={{
-								paddingBottom: Math.max(insets.bottom + 18, 36),
-							}}
-							keyboardShouldPersistTaps="handled"
-							showsVerticalScrollIndicator={false}
-						>
-							<View className="gap-1">
-								<BottomSheet.Title>{label}</BottomSheet.Title>
-								<BottomSheet.Description>
-									Select a start date, then an end date.
-								</BottomSheet.Description>
-							</View>
+			<PickerSheet
+				isOpen={isOpen}
+				label={label}
+				onOpenChange={updateOpen}
+				snapPoint="92%"
+				subtitle="Select a start date, then an end date."
+			>
+				<View
+					style={{
+						backgroundColor: palette.fill,
+						borderRadius: radius.group,
+						flexDirection: "row",
+						gap: spacing.xs,
+						padding: spacing.xs,
+					}}
+				>
+					{(["start", "end"] as const).map((slot) => {
+						const slotDate = slot === "start" ? startDate : endDate;
+						const isSelected = activeSlot === slot;
 
-							<View className="flex-row gap-2 rounded-[18px] bg-surface-secondary p-1">
-								{(["start", "end"] as const).map((slot) => {
-									const slotDate = slot === "start" ? startDate : endDate;
-									const isSelected = activeSlot === slot;
+						return (
+							<PressableScale
+								accessibilityLabel={`${slot === "start" ? "Start" : "End"} date`}
+								accessibilityRole="button"
+								accessibilityState={{ selected: isSelected }}
+								haptic="selection"
+								key={slot}
+								onPress={() => setActiveSlot(slot)}
+								scaleTo={0.98}
+								style={{
+									alignItems: "center",
+									backgroundColor: isSelected ? palette.surface : "transparent",
+									borderRadius: radius.tile,
+									flex: 1,
+									justifyContent: "center",
+									minHeight: metrics.minTarget,
+									paddingHorizontal: spacing.sm,
+								}}
+							>
+								<AppText
+									bold={isSelected}
+									numberOfLines={1}
+									tone={isSelected ? "ink" : "secondary"}
+									variant="subhead"
+								>
+									{slot === "start" ? "Start" : "End"} ·{" "}
+									{formatReadableDate(slotDate, dateDisplayFormat, locale)}
+								</AppText>
+							</PressableScale>
+						);
+					})}
+				</View>
 
-									return (
-										<Button
-											className="flex-1"
-											key={slot}
-											onPress={() => setActiveSlot(slot)}
-											size="sm"
-											variant={isSelected ? "primary" : "secondary"}
-										>
-											<Button.Label>
-												{slot === "start" ? "Start" : "End"} ·{" "}
-												{formatReadableDate(
-													slotDate,
-													dateDisplayFormat,
-													locale
-												)}
-											</Button.Label>
-										</Button>
-									);
-								})}
-							</View>
-
-							<View className="overflow-hidden rounded-[28px] bg-surface-secondary px-2 py-3">
-								<Calendar
-									current={formatIsoDate(startDate)}
-									enableSwipeMonths={true}
-									hideExtraDays={true}
-									markedDates={getRangeMarkedDates(orderedValue)}
-									markingType="period"
-									maxDate={maximumDate ? formatIsoDate(maximumDate) : undefined}
-									minDate={minimumDate ? formatIsoDate(minimumDate) : undefined}
-									monthFormat="MMMM yyyy"
-									onDayPress={(day: DateData) =>
-										updateRange(activeSlot, day.dateString)
-									}
-									renderArrow={(direction) => (
-										<CalendarArrow direction={direction} />
-									)}
-									style={{ backgroundColor: "transparent" }}
-									theme={calendarTheme}
-								/>
-							</View>
-
-							<Button onPress={() => updateOpen(false)}>
-								<Button.Label>Done</Button.Label>
-							</Button>
-						</ScrollView>
-					</BottomSheet.Content>
-				</BottomSheet.Portal>
-			</BottomSheet>
-		</TextField>
+				<CalendarCard>
+					<Calendar
+						current={formatIsoDate(startDate)}
+						enableSwipeMonths={true}
+						hideExtraDays={true}
+						key={scheme}
+						markedDates={getRangeMarkedDates(orderedValue, palette)}
+						markingType="period"
+						maxDate={maximumDate ? formatIsoDate(maximumDate) : undefined}
+						minDate={minimumDate ? formatIsoDate(minimumDate) : undefined}
+						monthFormat="MMMM yyyy"
+						onDayPress={(day: DateData) =>
+							updateRange(activeSlot, day.dateString)
+						}
+						renderArrow={(direction) => <CalendarArrow direction={direction} />}
+						style={{ backgroundColor: "transparent" }}
+						theme={getCalendarTheme(palette)}
+					/>
+				</CalendarCard>
+			</PickerSheet>
+		</View>
 	);
 }

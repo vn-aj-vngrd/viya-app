@@ -4,26 +4,27 @@ import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
 import { getBookingProgress, groupBookingsByType } from "@viya-app/domain";
 import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "expo-router";
-import {
-	BottomSheet,
-	Button,
-	Chip,
-	CloseButton,
-	Input,
-	Label,
-	Spinner,
-	Surface,
-	Text,
-	TextArea,
-	TextField,
-} from "heroui-native";
+import { BottomSheet, Input, Label, TextArea, TextField } from "heroui-native";
 import { useState } from "react";
 import { Linking, ScrollView, View } from "react-native";
+import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Container } from "@/components/container";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
-import { EmptyState } from "@/src/components/empty-state";
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
+import {
+	AppText,
+	Card,
+	Chip,
+	EmptyState,
+	GlassIconButton,
+	PrimaryButton,
+	radius,
+	SecondaryButton,
+	spacing,
+	useUITheme,
+} from "@/src/components/ui";
+
 import { VIYA_ROUTES } from "@/src/constants/routes";
 import {
 	getTripMapSearchUrl,
@@ -34,6 +35,7 @@ import { TripModuleManualEntryCard } from "@/src/features/trips/trip-module-manu
 import { useTripIdParam } from "@/src/features/trips/use-trip-id-param";
 
 import { BookingTargetCard } from "./booking-target-card";
+import { PillAction } from "./pill-action";
 
 type BookingType =
 	| "flight"
@@ -101,7 +103,7 @@ function SheetField({
 				<Label.Text>{label}</Label.Text>
 			</Label>
 			<Input
-				className="h-12 border border-border bg-surface px-4"
+				className="h-12 border-0 bg-surface px-4"
 				onBlur={onBlur}
 				onChangeText={onChangeText}
 				onFocus={onFocus}
@@ -132,7 +134,7 @@ function SheetTextArea({
 				<Label.Text>{label}</Label.Text>
 			</Label>
 			<TextArea
-				className="min-h-20 rounded-[18px] border border-border bg-surface px-4 py-3"
+				className="min-h-20 rounded-[16px] border-0 bg-surface px-4 py-3"
 				onBlur={onBlur}
 				onChangeText={onChangeText}
 				onFocus={onFocus}
@@ -152,20 +154,18 @@ function BookingTypePicker({
 	value: string;
 }) {
 	return (
-		<View className="gap-2">
-			<Text color="muted" type="body-xs" weight="semibold">
+		<View style={{ gap: spacing.sm }}>
+			<AppText tone="secondary" variant="eyebrow">
 				TYPE
-			</Text>
-			<View className="flex-row flex-wrap gap-2">
+			</AppText>
+			<View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
 				{bookingTypeOptions.map((type) => (
-					<Button
+					<Chip
 						key={type}
+						label={getBookingTypeLabel(type)}
 						onPress={() => onChange(type)}
-						size="sm"
-						variant={value === type ? "primary" : "secondary"}
-					>
-						<Button.Label>{getBookingTypeLabel(type)}</Button.Label>
-					</Button>
+						selected={value === type}
+					/>
 				))}
 			</View>
 		</View>
@@ -173,14 +173,25 @@ function BookingTypePicker({
 }
 
 function BookingMetric({ label, value }: { label: string; value: string }) {
+	const { palette } = useUITheme();
+
 	return (
-		<View className="min-w-[47%] flex-1 gap-1 rounded-[20px] bg-surface p-3">
-			<Text color="muted" type="body-xs" weight="semibold">
-				{label.toUpperCase()}
-			</Text>
-			<Text numberOfLines={1} type="body-sm" weight="bold">
+		<View
+			style={{
+				backgroundColor: palette.fill,
+				borderRadius: radius.tile,
+				flexBasis: "47%",
+				flexGrow: 1,
+				gap: 2,
+				padding: spacing.md,
+			}}
+		>
+			<AppText tone="secondary" variant="eyebrow">
+				{label}
+			</AppText>
+			<AppText bold={true} numberOfLines={1} variant="subhead">
 				{value}
-			</Text>
+			</AppText>
 		</View>
 	);
 }
@@ -213,22 +224,37 @@ function BookingTargetSheet({
 	onUpdateForm: (key: keyof BookingForm, value: string) => void;
 }) {
 	const insets = useSafeAreaInsets();
+	const { palette } = useUITheme();
 
 	return (
 		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
 			<BottomSheet.Portal>
 				<BottomSheet.Overlay />
 				<BottomSheet.Content
-					backgroundClassName="rounded-t-[36px] bg-background"
+					backgroundClassName="bg-background"
+					backgroundStyle={{
+						backgroundColor: palette.canvas,
+						borderTopLeftRadius: radius.sheet,
+						borderTopRightRadius: radius.sheet,
+					}}
 					enablePanDownToClose={true}
 					snapPoints={["84%"]}
 				>
 					<View
-						className="gap-4 px-5 pt-2"
-						style={{ paddingBottom: Math.max(insets.bottom, 18) }}
+						style={{
+							gap: spacing.lg,
+							paddingBottom: Math.max(insets.bottom, spacing.lg),
+							paddingHorizontal: spacing.screen,
+						}}
 					>
-						<View className="flex-row items-start justify-between gap-4">
-							<View className="flex-1 gap-1">
+						<View
+							style={{
+								alignItems: "flex-start",
+								flexDirection: "row",
+								gap: spacing.lg,
+							}}
+						>
+							<View style={{ flex: 1, gap: 2 }}>
 								<BottomSheet.Title>
 									{mode === "edit"
 										? "Edit booking target"
@@ -238,15 +264,18 @@ function BookingTargetSheet({
 									Track what still needs to be reserved externally.
 								</BottomSheet.Description>
 							</View>
-							<CloseButton
+							<GlassIconButton
 								accessibilityLabel="Close booking target form"
-								className="h-10 w-10 rounded-full bg-surface"
+								icon="close"
 								onPress={() => onOpenChange(false)}
 							/>
 						</View>
 
 						<ScrollView
-							contentContainerStyle={{ gap: 14, paddingBottom: 8 }}
+							contentContainerStyle={{
+								gap: spacing.lg,
+								paddingBottom: spacing.sm,
+							}}
 							keyboardShouldPersistTaps="handled"
 							showsVerticalScrollIndicator={false}
 							style={{ maxHeight: 500 }}
@@ -294,16 +323,22 @@ function BookingTargetSheet({
 						</ScrollView>
 
 						{errorMessage ? (
-							<Text className="text-danger" type="body-sm">
-								{errorMessage}
-							</Text>
+							<Animated.View entering={FadeIn}>
+								<AppText
+									accessibilityRole="alert"
+									tone="danger"
+									variant="subhead"
+								>
+									{errorMessage}
+								</AppText>
+							</Animated.View>
 						) : null}
-						<Button isDisabled={isSaving} onPress={onSubmit} size="lg">
-							{isSaving ? <Spinner size="sm" /> : null}
-							<Button.Label>
-								{mode === "edit" ? "Save target" : "Add target"}
-							</Button.Label>
-						</Button>
+						<PrimaryButton
+							disabled={isSaving}
+							isPending={isSaving}
+							label={mode === "edit" ? "Save target" : "Add target"}
+							onPress={onSubmit}
+						/>
 					</View>
 				</BottomSheet.Content>
 			</BottomSheet.Portal>
@@ -345,6 +380,7 @@ function NextBookingTargetSummary({
 	onReview: () => void;
 	proofMeta?: BookingProofMeta;
 }) {
+	const { palette } = useUITheme();
 	const canOpenMaps = booking
 		? hasTripMapSearchTarget({
 				address: booking.address,
@@ -354,76 +390,72 @@ function NextBookingTargetSummary({
 		: false;
 
 	return (
-		<View className="gap-3 rounded-[24px] bg-surface p-4">
-			<View className="flex-row items-center gap-3">
-				<View className="h-9 w-9 items-center justify-center rounded-full bg-primary/10">
-					<Ionicons color="#0A84FF" name="flag-outline" size={18} />
-				</View>
-				<View className="min-w-0 flex-1 gap-1">
-					<Text color="muted" type="body-xs" weight="semibold">
+		<View
+			style={{
+				backgroundColor: palette.surface,
+				borderRadius: radius.card,
+				gap: spacing.md,
+				padding: spacing.lg,
+			}}
+		>
+			<View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
+				<Ionicons color={palette.accent} name="flag-outline" size={20} />
+				<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+					<AppText tone="secondary" variant="eyebrow">
 						NEXT TARGET
-					</Text>
-					<Text numberOfLines={1} type="body-sm" weight="bold">
+					</AppText>
+					<AppText bold={true} numberOfLines={1}>
 						{booking?.title ?? "No open booking target"}
-					</Text>
+					</AppText>
 				</View>
 			</View>
-			<Text color="muted" numberOfLines={2} type="body-sm">
+			<AppText numberOfLines={2} tone="secondary" variant="subhead">
 				{booking
 					? `${getBookingTypeLabel(booking.type)} · ${
 							booking.provider ?? "Provider TBD"
 						} · ${booking.startDateTime ?? "Date TBD"}`
 					: "Add booking targets for flights, stays, activities, transport, and reservations."}
-			</Text>
+			</AppText>
 			{booking ? (
-				<View className="flex-row flex-wrap gap-2">
-					<Button className="flex-1" onPress={onReview} size="sm">
-						<Ionicons color="#FFFFFF" name="create-outline" size={16} />
-						<Button.Label>Review next target</Button.Label>
-					</Button>
+				<View
+					style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}
+				>
+					<PillAction
+						icon="create-outline"
+						label="Review next target"
+						onPress={onReview}
+						tone="primary"
+					/>
 					{canOpenMaps ? (
-						<Button
-							className="flex-1"
+						<PillAction
+							icon="map-outline"
+							label="Open next Maps"
 							onPress={onOpenMaps}
-							size="sm"
-							variant="secondary"
-						>
-							<Ionicons color="#FF9F0A" name="map-outline" size={16} />
-							<Button.Label>Open next Maps</Button.Label>
-						</Button>
+						/>
 					) : null}
 					{hasItinerary ? (
-						<Button
-							className="flex-1"
+						<PillAction
+							icon="calendar-outline"
+							label="Open next itinerary"
 							onPress={onOpenItinerary}
-							size="sm"
-							variant="secondary"
-						>
-							<Ionicons color="#0A84FF" name="calendar-outline" size={16} />
-							<Button.Label>Open next itinerary</Button.Label>
-						</Button>
+						/>
 					) : null}
 					{proofMeta?.url ? (
-						<Button
-							className="flex-1"
+						<PillAction
+							icon="document-attach-outline"
+							label="Open next proof"
 							onPress={onOpenProof}
-							size="sm"
-							variant="secondary"
-						>
-							<Ionicons
-								color="#0A84FF"
-								name="document-attach-outline"
-								size={16}
-							/>
-							<Button.Label>Open next proof</Button.Label>
-						</Button>
+						/>
 					) : null}
 				</View>
 			) : (
-				<Button onPress={onCreateNextTarget} size="sm" variant="secondary">
-					<Ionicons color="#0A84FF" name="add-circle-outline" size={16} />
-					<Button.Label>Add next target</Button.Label>
-				</Button>
+				<View style={{ alignItems: "flex-start" }}>
+					<PillAction
+						icon="add-circle-outline"
+						label="Add next target"
+						onPress={onCreateNextTarget}
+					/>
+				</View>
 			)}
 		</View>
 	);
@@ -507,6 +539,8 @@ const getBookingItineraryLabelById = ({
 };
 
 export function BookingHubScreen() {
+	const { palette } = useUITheme();
+
 	const router = useRouter();
 	const tripId = useTripIdParam();
 	const bookings = useQuery(
@@ -536,7 +570,7 @@ export function BookingHubScreen() {
 
 	if (!tripId) {
 		return (
-			<Container className="px-4 pb-28">
+			<Container className="pb-28">
 				<EmptyState
 					description="Open a saved trip before reviewing booking targets."
 					icon="calendar-outline"
@@ -714,7 +748,7 @@ export function BookingHubScreen() {
 	const bookingsContent = (() => {
 		if (bookings.length === 0) {
 			return (
-				<View className="gap-3">
+				<Card padding="none">
 					<EmptyState
 						action={{
 							label: "Add booking target",
@@ -724,17 +758,22 @@ export function BookingHubScreen() {
 						icon="ticket-outline"
 						title="No booking targets"
 					/>
-				</View>
+				</Card>
 			);
 		}
 
 		return (
-			<View className="gap-5">
+			<View style={{ gap: spacing.section }}>
 				{groupedBookings.map((group) => (
-					<View className="gap-3" key={group.type}>
-						<Text color="muted" type="body-xs" weight="semibold">
+					<View key={group.type} style={{ gap: spacing.sm }}>
+						<AppText
+							accessibilityRole="header"
+							style={{ paddingHorizontal: spacing.lg }}
+							tone="secondary"
+							variant="eyebrow"
+						>
 							{group.type.toUpperCase()}
-						</Text>
+						</AppText>
 						{group.items.map((booking) => (
 							<BookingTargetCard
 								booking={booking}
@@ -774,10 +813,10 @@ export function BookingHubScreen() {
 	return (
 		<TripModuleScreenFrame activeTab="bookings" tripId={tripId}>
 			<Container
-				className="px-4 pb-28"
+				className="px-5 pb-28"
 				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
 			>
-				<View className="gap-4 pb-4">
+				<View style={{ gap: spacing.section, paddingBottom: spacing.lg }}>
 					<TripModuleManualEntryCard
 						description="Add reservation targets manually, mark them booked or confirmed, then upload confirmations."
 						moduleLabel="bookings"
@@ -786,92 +825,113 @@ export function BookingHubScreen() {
 						primaryActionLabel="Add booking target"
 					/>
 					{bookingErrorMessage ? (
-						<Text className="text-danger" type="body-sm">
-							{bookingErrorMessage}
-						</Text>
+						<Animated.View entering={FadeIn}>
+							<AppText
+								accessibilityRole="alert"
+								tone="danger"
+								variant="subhead"
+							>
+								{bookingErrorMessage}
+							</AppText>
+						</Animated.View>
 					) : null}
 
-					<Surface className="gap-3 rounded-[30px] bg-surface-secondary p-4">
-						<View className="flex-row items-start justify-between gap-3">
-							<View className="min-w-0 flex-1 gap-1">
-								<Text.Heading type="h5" weight="semibold">
-									Reservation board
-								</Text.Heading>
-								<Text color="muted" type="body-sm">
-									Track targets from idea to booking to confirmed proof.
-								</Text>
+					<Animated.View entering={FadeInDown.springify().damping(20)}>
+						<Card padding="lg" style={{ gap: spacing.lg }}>
+							<View
+								style={{
+									alignItems: "flex-start",
+									flexDirection: "row",
+									gap: spacing.md,
+								}}
+							>
+								<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+									<AppText accessibilityRole="header" variant="heading">
+										Reservation board
+									</AppText>
+									<AppText tone="secondary" variant="subhead">
+										Track targets from idea to booking to confirmed proof.
+									</AppText>
+								</View>
+								<Ionicons
+									color={palette.accent}
+									name="ticket-outline"
+									size={24}
+								/>
 							</View>
-							<View className="h-11 w-11 items-center justify-center rounded-full bg-primary/10">
-								<Ionicons color="#0A84FF" name="ticket-outline" size={20} />
+							<View
+								style={{
+									flexDirection: "row",
+									flexWrap: "wrap",
+									gap: spacing.sm,
+								}}
+							>
+								<Chip
+									label={`${progress.confirmed}/${progress.total} confirmed`}
+								/>
+								<Chip label={`${progress.remaining} remaining`} />
 							</View>
-						</View>
-						<View className="flex-row flex-wrap gap-2">
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>
-									{progress.confirmed}/{progress.total} confirmed
-								</Chip.Label>
-							</Chip>
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>{progress.remaining} remaining</Chip.Label>
-							</Chip>
-						</View>
-						<View className="flex-row flex-wrap gap-3">
-							<BookingMetric label="Targets" value={`${progress.total}`} />
-							<BookingMetric
-								label="Booked"
-								value={`${bookedExternallyCount} need proof`}
-							/>
-							<BookingMetric label="Drafts" value={`${draftCount} pending`} />
-							<BookingMetric
-								label="Confirmed"
-								value={`${progress.confirmed}/${progress.total}`}
-							/>
-							<BookingMetric
-								label="Proof"
-								value={`${proofLinkedCount}/${progress.total} linked`}
-							/>
-							<BookingMetric
-								label="Route"
-								value={`${routeLinkedCount}/${progress.total} scheduled`}
-							/>
-						</View>
-						<NextBookingTargetSummary
-							booking={nextBooking}
-							hasItinerary={nextBookingHasItinerary}
-							onCreateNextTarget={openCreateSheet}
-							onOpenItinerary={() =>
-								router.push(VIYA_ROUTES.tripItinerary(tripId))
-							}
-							onOpenMaps={() => {
-								if (nextBooking) {
-									openNextBookingMaps(nextBooking).catch(() => undefined);
+							<View
+								style={{
+									flexDirection: "row",
+									flexWrap: "wrap",
+									gap: spacing.md,
+								}}
+							>
+								<BookingMetric label="Targets" value={`${progress.total}`} />
+								<BookingMetric
+									label="Booked"
+									value={`${bookedExternallyCount} need proof`}
+								/>
+								<BookingMetric label="Drafts" value={`${draftCount} pending`} />
+								<BookingMetric
+									label="Confirmed"
+									value={`${progress.confirmed}/${progress.total}`}
+								/>
+								<BookingMetric
+									label="Proof"
+									value={`${proofLinkedCount}/${progress.total} linked`}
+								/>
+								<BookingMetric
+									label="Route"
+									value={`${routeLinkedCount}/${progress.total} scheduled`}
+								/>
+							</View>
+							<NextBookingTargetSummary
+								booking={nextBooking}
+								hasItinerary={nextBookingHasItinerary}
+								onCreateNextTarget={openCreateSheet}
+								onOpenItinerary={() =>
+									router.push(VIYA_ROUTES.tripItinerary(tripId))
 								}
-							}}
-							onOpenProof={() => {
-								openNextBookingProof(nextBookingProofMeta?.url).catch(
-									() => undefined
-								);
-							}}
-							onReview={() => {
-								if (nextBooking) {
-									openEditSheet(nextBooking);
+								onOpenMaps={() => {
+									if (nextBooking) {
+										openNextBookingMaps(nextBooking).catch(() => undefined);
+									}
+								}}
+								onOpenProof={() => {
+									openNextBookingProof(nextBookingProofMeta?.url).catch(
+										() => undefined
+									);
+								}}
+								onReview={() => {
+									if (nextBooking) {
+										openEditSheet(nextBooking);
+									}
+								}}
+								proofMeta={nextBookingProofMeta}
+							/>
+							<SecondaryButton
+								icon="cloud-upload-outline"
+								label={
+									needsProofCount > 0
+										? `Upload ${needsProofCount} confirmations`
+										: "Manage confirmations"
 								}
-							}}
-							proofMeta={nextBookingProofMeta}
-						/>
-						<Button
-							onPress={() => router.push(VIYA_ROUTES.tripVault(tripId))}
-							size="sm"
-							variant="secondary"
-						>
-							<Ionicons color="#0A84FF" name="cloud-upload-outline" size={16} />
-							<Button.Label>
-								{needsProofCount > 0
-									? `Upload ${needsProofCount} confirmations`
-									: "Manage confirmations"}
-							</Button.Label>
-						</Button>
-					</Surface>
+								onPress={() => router.push(VIYA_ROUTES.tripVault(tripId))}
+							/>
+						</Card>
+					</Animated.View>
 
 					{bookingsContent}
 				</View>

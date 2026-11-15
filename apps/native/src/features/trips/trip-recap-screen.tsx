@@ -4,17 +4,29 @@ import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
 import { getBudgetWalletSummary } from "@viya-app/domain";
 import { useMutation, useQuery } from "convex/react";
 import { type Href, Link, useRouter } from "expo-router";
-import { Button, Spinner, Surface, Text } from "heroui-native";
 import type { ComponentProps } from "react";
 import { useMemo, useState } from "react";
 import { Share, View } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 
 import { Container } from "@/components/container";
-import { EmptyState } from "@/src/components/empty-state";
-import { ScreenLoadingState } from "@/src/components/screen-loading-state";
+import {
+	AppText,
+	Card,
+	EmptyState,
+	LoadingState,
+	PrimaryButton,
+	radius,
+	SecondaryButton,
+	SectionHeader,
+	spacing,
+	useFeedback,
+	useUITheme,
+} from "@/src/components/ui";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 import { formatMoney } from "./trip-dashboard-utils";
 import { TripModuleScreenFrame } from "./trip-module-floating-bar";
+import { InlineMessage, TagRow } from "./trip-module-form-kit";
 import { TripModuleManualEntryCard } from "./trip-module-manual-entry-card";
 import { buildTripRecapShareMessage } from "./trip-recap-share";
 import { useTripIdParam } from "./use-trip-id-param";
@@ -57,25 +69,32 @@ function RecapStat({
 	label: string;
 	value: string;
 }) {
+	const { palette } = useUITheme();
+
 	return (
-		<Surface className="min-w-[47%] flex-1 gap-3 rounded-[24px] border border-border bg-surface p-4">
-			<View className="h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-				<Ionicons color="#0A84FF" name={icon} size={18} />
-			</View>
-			<View className="gap-1">
-				<Text color="muted" type="body-xs" weight="semibold">
-					{label.toUpperCase()}
-				</Text>
-				<Text.Heading type="h4" weight="semibold">
-					{value}
-				</Text.Heading>
+		<View
+			style={{
+				backgroundColor: palette.fill,
+				borderRadius: radius.group,
+				flexBasis: "47%",
+				flexGrow: 1,
+				gap: spacing.sm,
+				padding: spacing.lg,
+			}}
+		>
+			<Ionicons color={palette.accent} name={icon} size={20} />
+			<View style={{ gap: 2 }}>
+				<AppText tone="secondary" variant="eyebrow">
+					{label}
+				</AppText>
+				<AppText variant="heading">{value}</AppText>
 				{detail ? (
-					<Text color="muted" type="body-sm">
+					<AppText tone="secondary" variant="footnote">
 						{detail}
-					</Text>
+					</AppText>
 				) : null}
 			</View>
-		</Surface>
+		</View>
 	);
 }
 
@@ -92,44 +111,47 @@ function RecapRow({
 	icon: ComponentProps<typeof Ionicons>["name"];
 	label: string;
 }) {
+	const { palette } = useUITheme();
 	const actionContent =
 		actionHref && actionLabel ? (
 			<Link asChild href={actionHref}>
-				<Button className="self-start" size="sm" variant="secondary">
-					<Ionicons color="#0A84FF" name="open-outline" size={16} />
-					<Button.Label>{actionLabel}</Button.Label>
-				</Button>
+				<SecondaryButton
+					fullWidth={false}
+					icon="open-outline"
+					label={actionLabel}
+					onPress={() => undefined}
+					variant="plain"
+				/>
 			</Link>
 		) : null;
 
 	return (
-		<View className="gap-3 rounded-[22px] bg-surface-secondary p-4">
-			<View className="flex-row items-start gap-3">
-				<View className="h-9 w-9 items-center justify-center rounded-full bg-primary/10">
-					<Ionicons color="#0A84FF" name={icon} size={17} />
-				</View>
-				<View className="min-w-0 flex-1 gap-1">
-					<Text type="body-sm" weight="bold">
-						{label}
-					</Text>
+		<View
+			style={{
+				backgroundColor: palette.fill,
+				borderRadius: radius.group,
+				gap: spacing.sm,
+				padding: spacing.lg,
+			}}
+		>
+			<View
+				style={{
+					alignItems: "flex-start",
+					flexDirection: "row",
+					gap: spacing.md,
+				}}
+			>
+				<Ionicons color={palette.accent} name={icon} size={20} />
+				<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+					<AppText variant="headline">{label}</AppText>
 					{detail ? (
-						<Text.Paragraph color="muted" type="body-sm">
+						<AppText tone="secondary" variant="subhead">
 							{detail}
-						</Text.Paragraph>
+						</AppText>
 					) : null}
 				</View>
 			</View>
 			{actionContent}
-		</View>
-	);
-}
-
-function RecapPill({ children }: { children: string }) {
-	return (
-		<View className="rounded-full bg-surface-secondary px-3 py-1.5">
-			<Text color="muted" type="body-xs" weight="semibold">
-				{children}
-			</Text>
 		</View>
 	);
 }
@@ -145,28 +167,36 @@ function StoryFocus({
 	detail: string;
 	label: string;
 }) {
+	const { palette } = useUITheme();
 	const actionContent =
 		actionHref && actionLabel ? (
 			<Link asChild href={actionHref}>
-				<Button className="self-start" size="sm" variant="secondary">
-					<Ionicons color="#0A84FF" name="open-outline" size={16} />
-					<Button.Label>{actionLabel}</Button.Label>
-				</Button>
+				<SecondaryButton
+					fullWidth={false}
+					icon="open-outline"
+					label={actionLabel}
+					onPress={() => undefined}
+				/>
 			</Link>
 		) : null;
 
 	return (
-		<View className="gap-3 rounded-[22px] bg-surface p-4">
-			<Text color="muted" type="body-xs" weight="semibold">
-				WRAP-UP FOCUS
-			</Text>
-			<View className="gap-1">
-				<Text type="body-sm" weight="bold">
-					{label}
-				</Text>
-				<Text.Paragraph color="muted" type="body-sm">
+		<View
+			style={{
+				backgroundColor: palette.fill,
+				borderRadius: radius.group,
+				gap: spacing.md,
+				padding: spacing.lg,
+			}}
+		>
+			<AppText tone="secondary" variant="eyebrow">
+				Wrap-up focus
+			</AppText>
+			<View style={{ gap: 2 }}>
+				<AppText variant="headline">{label}</AppText>
+				<AppText tone="secondary" variant="subhead">
 					{detail}
-				</Text.Paragraph>
+				</AppText>
 			</View>
 			{actionContent}
 		</View>
@@ -316,6 +346,7 @@ export function TripRecapScreen() {
 	const [lifecycleErrorMessage, setLifecycleErrorMessage] = useState<
 		string | null
 	>(null);
+	const { confirm } = useFeedback();
 	const [isSharingRecap, setIsSharingRecap] = useState(false);
 
 	const wallet = useMemo(() => {
@@ -361,7 +392,7 @@ export function TripRecapScreen() {
 	}
 
 	if (workspace === undefined || !wallet) {
-		return <ScreenLoadingState />;
+		return <LoadingState title="Loading recap" />;
 	}
 
 	const currency = workspace.trip.budgetCurrency ?? "PHP";
@@ -433,6 +464,17 @@ export function TripRecapScreen() {
 			setPendingAction(null);
 		}
 	};
+	const confirmArchive = async () => {
+		const confirmed = await confirm({
+			confirmLabel: "Archive",
+			destructive: true,
+			message: "The trip leaves active planning. Its history is kept.",
+			title: "Archive this trip?",
+		});
+		if (confirmed) {
+			await archiveCurrentTrip();
+		}
+	};
 	const shareRecap = async () => {
 		const highlightTitles = workspace.moments
 			.filter((moment) => moment.isHighlight)
@@ -470,7 +512,10 @@ export function TripRecapScreen() {
 				className="px-4 pb-28"
 				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
 			>
-				<View className="gap-4 pb-4">
+				<Animated.View
+					entering={FadeInDown.duration(220)}
+					style={{ gap: spacing.lg, paddingBottom: spacing.lg }}
+				>
 					<TripModuleManualEntryCard
 						description="Review the trip story from saved itinerary items, moments, files, bookings, and spend."
 						moduleLabel="recap"
@@ -485,176 +530,162 @@ export function TripRecapScreen() {
 						secondaryActionIcon="share-outline"
 						secondaryActionLabel="Share recap"
 					/>
-					{lifecycleErrorMessage ? (
-						<Text className="text-danger" type="body-sm">
-							{lifecycleErrorMessage}
-						</Text>
-					) : null}
+					<InlineMessage message={lifecycleErrorMessage} />
 
-					<Surface className="gap-4 rounded-[30px] bg-surface-secondary p-4">
-						<View className="flex-row items-start justify-between gap-3">
-							<View className="min-w-0 flex-1 gap-2">
-								<View className="flex-row flex-wrap gap-2">
-									<RecapPill>{workspace.trip.destination}</RecapPill>
-									<RecapPill>{dateWindow}</RecapPill>
-									<RecapPill>
-										{openStoryGaps === 0
+					<Card>
+						<View style={{ gap: spacing.lg }}>
+							<View style={{ gap: spacing.sm }}>
+								<TagRow
+									labels={[
+										workspace.trip.destination,
+										dateWindow,
+										openStoryGaps === 0
 											? "Story ready"
-											: `${openStoryGaps} story gaps`}
-									</RecapPill>
-								</View>
-								<Text.Heading type="h3" weight="semibold">
+											: `${openStoryGaps} story gaps`,
+									]}
+								/>
+								<AppText accessibilityRole="header" variant="title">
 									{workspace.trip.title}
-								</Text.Heading>
-								<Text.Paragraph color="muted" type="body-sm">
+								</AppText>
+								<AppText tone="secondary" variant="subhead">
 									{workspace.trip.summary ||
 										"Capture the trip outcome once itinerary, spend, and moments are ready."}
-								</Text.Paragraph>
+								</AppText>
 							</View>
-							<View className="h-11 w-11 items-center justify-center rounded-full bg-primary/10">
-								<Ionicons color="#0A84FF" name="sparkles-outline" size={20} />
+							<StoryFocus
+								actionHref={storyFocus.actionHref}
+								actionLabel={storyFocus.actionLabel}
+								detail={storyFocus.detail}
+								label={storyFocus.label}
+							/>
+							<SecondaryButton
+								disabled={isSharingRecap}
+								icon="share-outline"
+								isPending={isSharingRecap}
+								label="Share recap"
+								onPress={() => {
+									shareRecap().catch(() => undefined);
+								}}
+							/>
+							<View
+								style={{
+									flexDirection: "row",
+									flexWrap: "wrap",
+									gap: spacing.md,
+								}}
+							>
+								<RecapStat
+									detail={`${completedItems} completed`}
+									icon="calendar-outline"
+									label="Itinerary"
+									value={totalItems ? `${completedItems}/${totalItems}` : "0"}
+								/>
+								<RecapStat
+									detail={`${workspace.expenses.length} expenses logged`}
+									icon="wallet-outline"
+									label="Tracked spend"
+									value={formatMoney(wallet.totalTrackedSpend, currency)}
+								/>
+								<RecapStat
+									detail={`${dayLinkedMomentCount} day-linked`}
+									icon="images-outline"
+									label="Highlights"
+									value={`${highlightCount}`}
+								/>
+								<RecapStat
+									detail={`${savedDocumentCount} docs or files`}
+									icon="ticket-outline"
+									label="Bookings"
+									value={`${confirmedBookings}`}
+								/>
 							</View>
 						</View>
-						<StoryFocus
-							actionHref={storyFocus.actionHref}
-							actionLabel={storyFocus.actionLabel}
-							detail={storyFocus.detail}
-							label={storyFocus.label}
-						/>
-						<Button
-							isDisabled={isSharingRecap}
-							onPress={() => {
-								shareRecap().catch(() => undefined);
-							}}
-							size="sm"
-							variant="secondary"
-						>
-							{isSharingRecap ? <Spinner size="sm" /> : null}
-							<Ionicons color="#0A84FF" name="share-outline" size={16} />
-							<Button.Label>Share recap</Button.Label>
-						</Button>
-						<View className="flex-row flex-wrap gap-3">
-							<RecapStat
-								detail={`${completedItems} completed`}
-								icon="calendar-outline"
-								label="Itinerary"
-								value={totalItems ? `${completedItems}/${totalItems}` : "0"}
+					</Card>
+
+					<Card>
+						<View style={{ gap: spacing.md }}>
+							<SectionHeader
+								action={{
+									label: "Open",
+									onPress: () => router.push(VIYA_ROUTES.tripMoments(tripId)),
+								}}
+								title="Moments"
 							/>
-							<RecapStat
-								detail={`${workspace.expenses.length} expenses logged`}
-								icon="wallet-outline"
-								label="Tracked spend"
-								value={formatMoney(wallet.totalTrackedSpend, currency)}
+							<AppText tone="secondary" variant="subhead">
+								Highlights become the recap source by trip day.
+							</AppText>
+							<RecapRow
+								actionHref={VIYA_ROUTES.tripMoments(tripId)}
+								actionLabel="Review story coverage"
+								detail={`${coveredStoryDayCount}/${workspace.itineraryDays.length} days have linked memory context`}
+								icon="calendar-number-outline"
+								label="Story coverage"
 							/>
-							<RecapStat
-								detail={`${dayLinkedMomentCount} day-linked`}
-								icon="images-outline"
-								label="Highlights"
-								value={`${highlightCount}`}
-							/>
-							<RecapStat
-								detail={`${savedDocumentCount} docs or files`}
-								icon="ticket-outline"
-								label="Bookings"
-								value={`${confirmedBookings}`}
+							<HighlightRows
+								days={workspace.itineraryDays}
+								moments={workspace.moments}
+								tripId={tripId}
 							/>
 						</View>
-					</Surface>
+					</Card>
 
-					<Surface className="gap-3 rounded-[28px] border border-border bg-surface p-5">
-						<View className="flex-row items-center justify-between gap-3">
-							<View className="gap-1">
-								<Text.Heading type="h5" weight="semibold">
-									Moments
-								</Text.Heading>
-								<Text color="muted" type="body-sm">
-									Highlights become the recap source by trip day.
-								</Text>
-							</View>
-							<Link asChild href={VIYA_ROUTES.tripMoments(tripId)}>
-								<Button size="sm" variant="secondary">
-									<Button.Label>Open</Button.Label>
-								</Button>
-							</Link>
+					<Card>
+						<View style={{ gap: spacing.md }}>
+							<SectionHeader title="Wrap-up checklist" />
+							<RecapRow
+								actionHref={VIYA_ROUTES.tripPlaces(tripId)}
+								actionLabel="Open route"
+								detail={`${workspace.savedPlaces.length} saved places, ${workspace.itineraryDays.length} planned days`}
+								icon="map-outline"
+								label="Route and places"
+							/>
+							<RecapRow
+								actionHref={VIYA_ROUTES.tripVault(tripId)}
+								actionLabel="Open files"
+								detail={`${confirmedBookings} confirmed bookings, ${savedDocumentCount} saved documents`}
+								icon="file-tray-full-outline"
+								label="Confirmations and documents"
+							/>
+							<RecapRow
+								actionHref={VIYA_ROUTES.tripBudget(tripId)}
+								actionLabel="Open budget"
+								detail={`${formatMoney(wallet.remainingAmount, currency)} remaining from planned budget`}
+								icon="cash-outline"
+								label="Budget outcome"
+							/>
 						</View>
-						<RecapRow
-							actionHref={VIYA_ROUTES.tripMoments(tripId)}
-							actionLabel="Review story coverage"
-							detail={`${coveredStoryDayCount}/${workspace.itineraryDays.length} days have linked memory context`}
-							icon="calendar-number-outline"
-							label="Story coverage"
-						/>
-						<HighlightRows
-							days={workspace.itineraryDays}
-							moments={workspace.moments}
-							tripId={tripId}
-						/>
-					</Surface>
+					</Card>
 
-					<Surface className="gap-3 rounded-[28px] border border-border bg-surface p-5">
-						<Text.Heading type="h5" weight="semibold">
-							Wrap-up checklist
-						</Text.Heading>
-						<RecapRow
-							actionHref={VIYA_ROUTES.tripPlaces(tripId)}
-							actionLabel="Open route"
-							detail={`${workspace.savedPlaces.length} saved places, ${workspace.itineraryDays.length} planned days`}
-							icon="map-outline"
-							label="Route and places"
-						/>
-						<RecapRow
-							actionHref={VIYA_ROUTES.tripVault(tripId)}
-							actionLabel="Open files"
-							detail={`${confirmedBookings} confirmed bookings, ${savedDocumentCount} saved documents`}
-							icon="file-tray-full-outline"
-							label="Confirmations and documents"
-						/>
-						<RecapRow
-							actionHref={VIYA_ROUTES.tripBudget(tripId)}
-							actionLabel="Open budget"
-							detail={`${formatMoney(wallet.remainingAmount, currency)} remaining from planned budget`}
-							icon="cash-outline"
-							label="Budget outcome"
-						/>
-					</Surface>
-
-					<Surface className="gap-3 rounded-[28px] border border-border bg-surface p-5">
-						<Text.Heading type="h5" weight="semibold">
-							Trip lifecycle
-						</Text.Heading>
-						<Text.Paragraph color="muted" type="body-sm">
-							Mark complete when the recap is ready. Archive hides the trip from
-							active planning without deleting the history.
-						</Text.Paragraph>
-						<View className="flex-row flex-wrap gap-2">
-							<Button
-								className="flex-1"
-								isDisabled={
+					<Card>
+						<View style={{ gap: spacing.md }}>
+							<SectionHeader title="Trip lifecycle" />
+							<AppText tone="secondary" variant="subhead">
+								Mark complete when the recap is ready. Archive hides the trip
+								from active planning without deleting the history.
+							</AppText>
+							<PrimaryButton
+								disabled={
 									pendingAction !== null ||
 									workspace.trip.status === "completed"
 								}
+								isPending={pendingAction === "complete"}
+								label="Mark complete"
 								onPress={() => {
 									completeTrip().catch(() => undefined);
 								}}
-								variant="secondary"
-							>
-								{pendingAction === "complete" ? <Spinner size="sm" /> : null}
-								<Button.Label>Mark complete</Button.Label>
-							</Button>
-							<Button
-								className="flex-1"
-								isDisabled={pendingAction !== null}
+							/>
+							<SecondaryButton
+								disabled={pendingAction !== null}
+								isPending={pendingAction === "archive"}
+								label="Archive"
 								onPress={() => {
-									archiveCurrentTrip().catch(() => undefined);
+									confirmArchive().catch(() => undefined);
 								}}
-								variant="tertiary"
-							>
-								{pendingAction === "archive" ? <Spinner size="sm" /> : null}
-								<Button.Label>Archive</Button.Label>
-							</Button>
+								variant="plain"
+							/>
 						</View>
-					</Surface>
-				</View>
+					</Card>
+				</Animated.View>
 			</Container>
 		</TripModuleScreenFrame>
 	);

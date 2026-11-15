@@ -1,7 +1,7 @@
 import type { Href } from "expo-router";
-import { Button, Text } from "heroui-native";
 import { View } from "react-native";
 
+import { AppText, SecondaryButton } from "@/src/components/ui";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 
 import {
@@ -208,12 +208,12 @@ function MissingList({
 					key={`${item.category}-${item.title}`}
 				>
 					<View className="min-w-0 flex-1">
-						<Text numberOfLines={1} type="body-sm" weight="semibold">
+						<AppText bold numberOfLines={1} variant="subhead">
 							{item.title}
-						</Text>
-						<Text color="muted" numberOfLines={1} type="body-xs">
+						</AppText>
+						<AppText numberOfLines={1} tone="secondary" variant="footnote">
 							{item.category}
-						</Text>
+						</AppText>
 					</View>
 					<LinkButton href={item.href}>Fix</LinkButton>
 				</View>
@@ -277,13 +277,10 @@ export function OverviewTab({
 			<Section icon="alert-circle-outline" title="Needs Attention">
 				<MissingList items={model.missingItems} limit={3} />
 				{model.missingItems.length > 3 ? (
-					<Button
+					<SecondaryButton
+						label="See all gaps"
 						onPress={() => onSelectTab("checklist")}
-						size="sm"
-						variant="secondary"
-					>
-						<Button.Label>See all gaps</Button.Label>
-					</Button>
+					/>
 				) : null}
 			</Section>
 
@@ -313,9 +310,9 @@ export function ItineraryTab({ model }: { model: TripDashboardModel }) {
 	return (
 		<View className="gap-4">
 			<Section icon="calendar-outline" title="Trip Plan">
-				<Text color="muted" type="body-sm">
+				<AppText tone="secondary" variant="subhead">
 					Daily schedule, timing, locations, costs, notes, and linked bookings.
-				</Text>
+				</AppText>
 				<LinkButton href={VIYA_ROUTES.tripItinerary(model.tripId)}>
 					Add or edit items
 				</LinkButton>
@@ -342,10 +339,10 @@ export function ItineraryTab({ model }: { model: TripDashboardModel }) {
 								key={day._id}
 								title={`Day ${day.dayNumber}: ${day.title}`}
 							>
-								<Text color="muted" type="body-sm">
+								<AppText tone="secondary" variant="subhead">
 									{day.date} - {day.theme} -{" "}
 									{formatMoney(day.estimatedCost, model.currency)}
-								</Text>
+								</AppText>
 								{dayItems.length === 0 ? (
 									<EmptyCopy
 										actionHref={VIYA_ROUTES.tripItinerary(model.tripId)}
@@ -408,9 +405,9 @@ export function PlacesTab({ model }: { model: TripDashboardModel }) {
 	return (
 		<View className="gap-4">
 			<Section icon="map-outline" title="Map / Places">
-				<Text color="muted" type="body-sm">
+				<AppText tone="secondary" variant="subhead">
 					Review saved places and itinerary stops before assigning them to days.
-				</Text>
+				</AppText>
 				<LinkButton href={VIYA_ROUTES.tripPlaces(model.tripId)}>
 					Open places
 				</LinkButton>
@@ -483,10 +480,10 @@ export function BookingsTab({ model }: { model: TripDashboardModel }) {
 	return (
 		<View className="gap-4">
 			<Section icon="briefcase-outline" title="Bookings">
-				<Text color="muted" type="body-sm">
+				<AppText tone="secondary" variant="subhead">
 					Confirm external bookings, upload confirmations, and keep references
 					linked to itinerary and budget.
-				</Text>
+				</AppText>
 				<View className="flex-row flex-wrap gap-2">
 					<LinkButton href={VIYA_ROUTES.tripBookings(model.tripId)}>
 						Manage bookings
@@ -563,10 +560,10 @@ export function DocumentsTab({ model }: { model: TripDashboardModel }) {
 	return (
 		<View className="gap-4">
 			<Section icon="folder-open-outline" title="Documents">
-				<Text color="muted" type="body-sm">
+				<AppText tone="secondary" variant="subhead">
 					Upload confirmations, IDs, receipts, QR codes, maps, and screenshots.
 					TripSync reviews extracted details before saving.
-				</Text>
+				</AppText>
 				<LinkButton href={VIYA_ROUTES.tripVault(model.tripId)}>
 					Upload document
 				</LinkButton>
@@ -648,9 +645,9 @@ export function ChecklistTab({ model }: { model: TripDashboardModel }) {
 	return (
 		<View className="gap-4">
 			<Section icon="checkbox-outline" title="Checklist">
-				<Text color="muted" type="body-sm">
+				<AppText tone="secondary" variant="subhead">
 					Preparation tasks drive the readiness score. Finish blockers first.
-				</Text>
+				</AppText>
 				<LinkButton href={VIYA_ROUTES.tripReadiness(model.tripId)}>
 					Manage checklist
 				</LinkButton>
@@ -884,10 +881,10 @@ export function RisksTab({ model }: { model: TripDashboardModel }) {
 	return (
 		<View className="gap-4">
 			<Section icon="warning-outline" title="Risks">
-				<Text color="muted" type="body-sm">
+				<AppText tone="secondary" variant="subhead">
 					Track schedule, booking, budget, document, safety, and transport risks
 					before they affect the trip.
-				</Text>
+				</AppText>
 				<LinkButton href={VIYA_ROUTES.tripRisks(model.tripId)}>
 					Manage risks
 				</LinkButton>
@@ -957,10 +954,10 @@ export function CompanionsTab({ model }: { model: TripDashboardModel }) {
 	return (
 		<View className="gap-4">
 			<Section icon="people-outline" title="Companions">
-				<Text color="muted" type="body-sm">
+				<AppText tone="secondary" variant="subhead">
 					Keep travelers, organizers, emergency contacts, and role notes close
 					to the plan.
-				</Text>
+				</AppText>
 				<LinkButton href={VIYA_ROUTES.tripCompanions(model.tripId)}>
 					Manage companions
 				</LinkButton>
@@ -1008,10 +1005,10 @@ export function NotesTab({ model }: { model: TripDashboardModel }) {
 	return (
 		<View className="gap-4">
 			<Section icon="document-text-outline" title="Notes">
-				<Text color="muted" type="body-sm">
+				<AppText tone="secondary" variant="subhead">
 					Save decisions, reminders, constraints, and shared planning context
 					for the whole trip.
-				</Text>
+				</AppText>
 				<LinkButton href={VIYA_ROUTES.tripNotes(model.tripId)}>
 					Manage notes
 				</LinkButton>
@@ -1066,9 +1063,9 @@ export function MemoriesTab({ model }: { model: TripDashboardModel }) {
 	return (
 		<View className="gap-4">
 			<Section icon="images-outline" title="Memories">
-				<Text color="muted" type="body-sm">
+				<AppText tone="secondary" variant="subhead">
 					Capture moments during the trip. They become the recap source.
-				</Text>
+				</AppText>
 				<LinkButton href={VIYA_ROUTES.tripMoments(model.tripId)}>
 					Add memory
 				</LinkButton>
@@ -1115,9 +1112,9 @@ export function RecapTab({ model }: { model: TripDashboardModel }) {
 	return (
 		<View className="gap-4">
 			<Section icon="share-social-outline" title="Recap">
-				<Text.Paragraph color="muted" type="body-sm">
+				<AppText tone="secondary" variant="subhead">
 					{getTripSummaryPreview(model.workspace.trip)}
-				</Text.Paragraph>
+				</AppText>
 				<View className="flex-row flex-wrap gap-2">
 					<LinkButton href={VIYA_ROUTES.tripMoments(model.tripId)}>
 						Edit moments

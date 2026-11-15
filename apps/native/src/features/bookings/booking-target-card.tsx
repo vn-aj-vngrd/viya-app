@@ -2,15 +2,25 @@ import { Ionicons } from "@expo/vector-icons";
 import type { Doc } from "@viya-app/backend/convex/_generated/dataModel";
 import type { Href } from "expo-router";
 import { Link } from "expo-router";
-import { Button, Chip, Spinner, Surface, Text } from "heroui-native";
 import { useState } from "react";
 import { Linking, View } from "react-native";
+import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 
 import { formatReadableTripDateRange } from "@/src/components/date/date-format-utils";
+import {
+	AppText,
+	Card,
+	Chip,
+	radius,
+	spacing,
+	useUITheme,
+} from "@/src/components/ui";
 import {
 	getTripMapSearchUrl,
 	hasTripMapSearchTarget,
 } from "@/src/features/trips/trip-map-link-utils";
+
+import { PillAction } from "./pill-action";
 
 const statusLabels: Record<string, string> = {
 	bookedExternally: "Booked externally",
@@ -86,93 +96,72 @@ function BookingTargetActions({
 	proofUrl?: string | null;
 }) {
 	return (
-		<View className="flex-row flex-wrap gap-2">
-			{canOpenMaps ? (
-				<Button
-					className="flex-1"
-					onPress={onOpenMaps}
-					size="sm"
-					variant="secondary"
-				>
-					<Ionicons color="#FF9F0A" name="map-outline" size={16} />
-					<Button.Label>Open Maps</Button.Label>
-				</Button>
-			) : null}
-			{booking.externalUrl ? (
-				<Button
-					className="flex-1"
-					onPress={onOpenProvider}
-					size="sm"
-					variant="secondary"
-				>
-					<Button.Label>Open provider</Button.Label>
-				</Button>
-			) : null}
-			{proofUrl ? (
-				<Button
-					className="flex-1"
-					onPress={onOpenProof}
-					size="sm"
-					variant="secondary"
-				>
-					<Ionicons color="#0A84FF" name="document-attach-outline" size={16} />
-					<Button.Label>Open proof</Button.Label>
-				</Button>
-			) : null}
-			{itineraryHref ? (
-				<Link asChild href={itineraryHref}>
-					<Button className="flex-1" size="sm" variant="secondary">
-						<Ionicons color="#0A84FF" name="calendar-outline" size={16} />
-						<Button.Label>Open itinerary</Button.Label>
-					</Button>
-				</Link>
-			) : null}
-			<Button
-				className="flex-1"
-				isDisabled={isUpdating || booking.status === "bookedExternally"}
-				onPress={() => onMarkBooked(booking)}
-				size="sm"
-				variant="secondary"
-			>
-				{isUpdating ? <Spinner size="sm" /> : null}
-				<Button.Label>Mark booked externally</Button.Label>
-			</Button>
-			<Button
-				className="flex-1"
-				isDisabled={isUpdating || booking.status === "confirmed"}
-				onPress={() => onMarkConfirmed(booking)}
-				size="sm"
-			>
-				<Button.Label>Confirm</Button.Label>
-			</Button>
-			<Button
-				className="w-full"
-				onPress={onUploadConfirmation}
-				size="sm"
-				variant="tertiary"
-			>
-				<Button.Label>
-					{linkedVaultItemLabel ? "Manage confirmation" : "Upload confirmation"}
-				</Button.Label>
-			</Button>
-			<Button
-				className="flex-1"
-				isDisabled={isUpdating}
-				onPress={() => onEdit(booking)}
-				size="sm"
-				variant="secondary"
-			>
-				<Button.Label>Edit target</Button.Label>
-			</Button>
-			<Button
-				className="flex-1"
-				isDisabled={isUpdating}
-				onPress={() => onDelete(booking)}
-				size="sm"
-				variant="tertiary"
-			>
-				<Button.Label>Delete target</Button.Label>
-			</Button>
+		<View style={{ gap: spacing.sm }}>
+			<View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
+				<PillAction
+					disabled={booking.status === "confirmed"}
+					isPending={isUpdating}
+					label="Confirm"
+					onPress={() => onMarkConfirmed(booking)}
+					tone="primary"
+				/>
+				<PillAction
+					disabled={booking.status === "bookedExternally"}
+					isPending={isUpdating}
+					label="Mark booked externally"
+					onPress={() => onMarkBooked(booking)}
+				/>
+			</View>
+			<View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
+				{canOpenMaps ? (
+					<PillAction
+						icon="map-outline"
+						label="Open Maps"
+						onPress={onOpenMaps}
+					/>
+				) : null}
+				{booking.externalUrl ? (
+					<PillAction
+						icon="open-outline"
+						label="Open provider"
+						onPress={onOpenProvider}
+					/>
+				) : null}
+				{proofUrl ? (
+					<PillAction
+						icon="document-attach-outline"
+						label="Open proof"
+						onPress={onOpenProof}
+					/>
+				) : null}
+				{itineraryHref ? (
+					<Link asChild href={itineraryHref}>
+						<PillAction icon="calendar-outline" label="Open itinerary" />
+					</Link>
+				) : null}
+				<PillAction
+					icon="cloud-upload-outline"
+					label={
+						linkedVaultItemLabel ? "Manage confirmation" : "Upload confirmation"
+					}
+					onPress={onUploadConfirmation}
+				/>
+			</View>
+			<View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
+				<PillAction
+					disabled={isUpdating}
+					icon="create-outline"
+					label="Edit target"
+					onPress={() => onEdit(booking)}
+				/>
+				<PillAction
+					disabled={isUpdating}
+					icon="trash-outline"
+					label="Delete target"
+					onPress={() => onDelete(booking)}
+					tone="danger"
+				/>
+			</View>
 		</View>
 	);
 }
@@ -190,6 +179,7 @@ export function BookingTargetCard({
 	onUploadConfirmation,
 	proofUrl,
 }: BookingTargetCardProps) {
+	const { palette } = useUITheme();
 	const cost = formatCost(booking.cost, booking.currency);
 	const [providerErrorMessage, setProviderErrorMessage] = useState<
 		string | null
@@ -251,113 +241,127 @@ export function BookingTargetCard({
 	});
 
 	return (
-		<Surface className="gap-4 rounded-[30px] border border-border bg-surface p-5">
-			<View className="flex-row items-start gap-3">
+		<Animated.View entering={FadeInDown.springify().damping(20)}>
+			<Card padding="lg" style={{ gap: spacing.lg }}>
 				<View
-					className="h-11 w-11 items-center justify-center rounded-full"
-					style={{ backgroundColor: "rgba(255, 159, 10, 0.12)" }}
+					style={{ alignItems: "flex-start", flexDirection: "row", gap: 12 }}
 				>
-					<Ionicons color="#FF9F0A" name="calendar-outline" size={20} />
-				</View>
-				<View className="flex-1 gap-2">
-					<View className="flex-row flex-wrap gap-2">
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>{formatBookingTypeLabel(booking.type)}</Chip.Label>
-						</Chip>
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>
-								{statusLabels[booking.status] ?? booking.status}
-							</Chip.Label>
-						</Chip>
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>
-								{linkedVaultItemLabel ? "Proof linked" : "Needs proof"}
-							</Chip.Label>
-						</Chip>
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>
-								{itineraryUsageLabel ? "On route" : "Not scheduled"}
-							</Chip.Label>
-						</Chip>
+					<View
+						style={{
+							alignItems: "center",
+							backgroundColor: palette.fill,
+							borderRadius: radius.pill,
+							height: 40,
+							justifyContent: "center",
+							width: 40,
+						}}
+					>
+						<Ionicons
+							color={palette.accent}
+							name="calendar-outline"
+							size={19}
+						/>
 					</View>
-					<Text type="body" weight="bold">
-						{booking.title}
-					</Text>
-					{booking.provider ? (
-						<Text color="muted" type="body-sm">
-							{booking.provider}
-						</Text>
-					) : null}
-					{booking.confirmationCode ? (
-						<Text color="muted" type="body-xs" weight="semibold">
-							Confirmation {booking.confirmationCode}
-						</Text>
-					) : null}
-					{linkedVaultItemLabel ? (
-						<Text color="muted" type="body-xs" weight="semibold">
-							Proof {linkedVaultItemLabel}
-						</Text>
-					) : null}
-					{bookingWindow ? (
-						<Text color="muted" type="body-xs">
-							{bookingWindow}
-						</Text>
-					) : null}
-					{itineraryUsageLabel ? (
-						<Text color="muted" type="body-xs" weight="semibold">
-							Route {itineraryUsageLabel}
-						</Text>
-					) : null}
-					{booking.locationName ? (
-						<Text color="muted" type="body-xs">
-							{booking.locationName}
-						</Text>
-					) : null}
+					<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+						<AppText variant="headline">{booking.title}</AppText>
+						{booking.provider ? (
+							<AppText tone="secondary" variant="subhead">
+								{booking.provider}
+							</AppText>
+						) : null}
+						{bookingWindow ? (
+							<AppText tone="secondary" variant="footnote">
+								{bookingWindow}
+							</AppText>
+						) : null}
+					</View>
 					{cost ? (
-						<Text color="muted" type="body-xs" weight="semibold">
+						<AppText bold={true} variant="subhead">
 							{cost}
-						</Text>
-					) : null}
-					{booking.notes ? (
-						<Text.Paragraph color="muted" type="body-sm">
-							{booking.notes}
-						</Text.Paragraph>
+						</AppText>
 					) : null}
 				</View>
-			</View>
 
-			<BookingTargetActions
-				booking={booking}
-				canOpenMaps={canOpenMaps}
-				isUpdating={isUpdating}
-				itineraryHref={itineraryHref}
-				linkedVaultItemLabel={linkedVaultItemLabel}
-				onDelete={onDelete}
-				onEdit={onEdit}
-				onMarkBooked={onMarkBooked}
-				onMarkConfirmed={onMarkConfirmed}
-				onOpenMaps={() => {
-					openMaps().catch(() => undefined);
-				}}
-				onOpenProof={() => {
-					onOpenProof().catch(() => undefined);
-				}}
-				onOpenProvider={() => {
-					openProvider().catch(() => undefined);
-				}}
-				onUploadConfirmation={onUploadConfirmation}
-				proofUrl={proofUrl}
-			/>
-			{providerErrorMessage ? (
-				<Text className="text-danger" type="body-sm">
-					{providerErrorMessage}
-				</Text>
-			) : null}
-			{proofErrorMessage ? (
-				<Text className="text-danger" type="body-sm">
-					{proofErrorMessage}
-				</Text>
-			) : null}
-		</Surface>
+				<View
+					style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}
+				>
+					<Chip label={formatBookingTypeLabel(booking.type)} />
+					<Chip label={statusLabels[booking.status] ?? booking.status} />
+					<Chip label={linkedVaultItemLabel ? "Proof linked" : "Needs proof"} />
+					<Chip label={itineraryUsageLabel ? "On route" : "Not scheduled"} />
+				</View>
+
+				{booking.confirmationCode ||
+				linkedVaultItemLabel ||
+				itineraryUsageLabel ||
+				booking.locationName ||
+				booking.notes ? (
+					<View style={{ gap: 4 }}>
+						{booking.confirmationCode ? (
+							<AppText tone="secondary" variant="footnote">
+								Confirmation {booking.confirmationCode}
+							</AppText>
+						) : null}
+						{linkedVaultItemLabel ? (
+							<AppText tone="secondary" variant="footnote">
+								Proof {linkedVaultItemLabel}
+							</AppText>
+						) : null}
+						{itineraryUsageLabel ? (
+							<AppText tone="secondary" variant="footnote">
+								Route {itineraryUsageLabel}
+							</AppText>
+						) : null}
+						{booking.locationName ? (
+							<AppText tone="secondary" variant="footnote">
+								{booking.locationName}
+							</AppText>
+						) : null}
+						{booking.notes ? (
+							<AppText tone="secondary" variant="subhead">
+								{booking.notes}
+							</AppText>
+						) : null}
+					</View>
+				) : null}
+
+				<BookingTargetActions
+					booking={booking}
+					canOpenMaps={canOpenMaps}
+					isUpdating={isUpdating}
+					itineraryHref={itineraryHref}
+					linkedVaultItemLabel={linkedVaultItemLabel}
+					onDelete={onDelete}
+					onEdit={onEdit}
+					onMarkBooked={onMarkBooked}
+					onMarkConfirmed={onMarkConfirmed}
+					onOpenMaps={() => {
+						openMaps().catch(() => undefined);
+					}}
+					onOpenProof={() => {
+						onOpenProof().catch(() => undefined);
+					}}
+					onOpenProvider={() => {
+						openProvider().catch(() => undefined);
+					}}
+					onUploadConfirmation={onUploadConfirmation}
+					proofUrl={proofUrl}
+				/>
+				{providerErrorMessage ? (
+					<Animated.View entering={FadeIn}>
+						<AppText accessibilityRole="alert" tone="danger" variant="subhead">
+							{providerErrorMessage}
+						</AppText>
+					</Animated.View>
+				) : null}
+				{proofErrorMessage ? (
+					<Animated.View entering={FadeIn}>
+						<AppText accessibilityRole="alert" tone="danger" variant="subhead">
+							{proofErrorMessage}
+						</AppText>
+					</Animated.View>
+				) : null}
+			</Card>
+		</Animated.View>
 	);
 }

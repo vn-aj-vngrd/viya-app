@@ -28,7 +28,8 @@
     "ios": {
       "infoPlist": {
         "CFBundleDisplayName": "Viya"
-      }
+      },
+      "bundleIdentifier": "com.vnajvngrd.viya"
     },
     "plugins": ["expo-font"],
     "experiments": {

@@ -77,6 +77,14 @@
       "quoteStyle": "double"
     }
   },
+  "overrides": [
+    {
+      "includes": ["apps/native/global.css"],
+      "linter": {
+        "rules": { "suspicious": { "noDuplicateCustomProperties": "off" } }
+      }
+    }
+  ],
   "css": {
     "parser": {
       "tailwindDirectives": true

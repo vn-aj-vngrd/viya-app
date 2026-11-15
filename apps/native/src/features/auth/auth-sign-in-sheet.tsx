@@ -1,24 +1,23 @@
 import { useSignIn, useSignUp } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import {
-	Alert,
-	BottomSheet,
-	Button,
-	Description,
-	FieldError,
-	Input,
-	Label,
-	Spinner,
-	Text,
-	TextField,
-	useThemeColor,
-} from "heroui-native";
+import { BottomSheet } from "heroui-native";
 import React from "react";
 import { Platform, Pressable, TextInput, View } from "react-native";
+import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 
+import {
+	AppText,
+	haptic,
+	metrics,
+	PrimaryButton,
+	radius,
+	SecondaryButton,
+	spacing,
+	useUITheme,
+} from "@/src/components/ui";
 import { ViyaMark } from "@/src/components/viya-mark";
 import {
 	getAuthErrorMessage,
@@ -105,35 +104,73 @@ function SheetInput({
 	secureTextEntry,
 	value,
 }: SheetInputProps) {
+	const { palette } = useUITheme();
 	const { onBlur: handleSheetBlur, onFocus } =
 		useCompatibleBottomSheetAwareHandlers();
+	const [isFocused, setIsFocused] = React.useState(false);
 
 	let helperText: React.ReactNode = null;
 
 	if (isInvalid && errorMessage) {
-		helperText = <FieldError>{errorMessage}</FieldError>;
+		helperText = (
+			<AppText accessibilityRole="alert" tone="danger" variant="footnote">
+				{errorMessage}
+			</AppText>
+		);
 	} else if (description) {
-		helperText = <Description>{description}</Description>;
+		helperText = (
+			<AppText tone="secondary" variant="footnote">
+				{description}
+			</AppText>
+		);
+	}
+
+	let borderColor = "transparent";
+	if (isInvalid) {
+		borderColor = palette.danger;
+	} else if (isFocused) {
+		borderColor = palette.accent;
 	}
 
 	return (
-		<TextField isInvalid={isInvalid} isRequired={isRequired}>
-			{label ? <Label>{label}</Label> : null}
-			<Input
+		<View style={{ gap: spacing.xs }}>
+			{label ? (
+				<AppText bold={true} tone="secondary" variant="subhead">
+					{label}
+					{isRequired ? " *" : ""}
+				</AppText>
+			) : null}
+			<TextInput
+				accessibilityLabel={label ?? placeholder}
 				autoCapitalize={autoCapitalize}
 				keyboardType={keyboardType}
 				onBlur={(event) => {
+					setIsFocused(false);
 					handleSheetBlur(event);
 					onBlur?.();
 				}}
 				onChangeText={onChangeText}
-				onFocus={onFocus}
+				onFocus={(event) => {
+					setIsFocused(true);
+					onFocus(event);
+				}}
 				placeholder={placeholder}
+				placeholderTextColor={palette.inkTertiary}
 				secureTextEntry={secureTextEntry}
+				style={{
+					backgroundColor: palette.fill,
+					borderColor,
+					borderRadius: radius.field,
+					borderWidth: 1.5,
+					color: palette.ink,
+					fontSize: 17,
+					height: metrics.actionHeight,
+					paddingHorizontal: spacing.lg,
+				}}
 				value={value}
 			/>
 			{helperText}
-		</TextField>
+		</View>
 	);
 }
 
@@ -143,6 +180,7 @@ interface SheetOtpInputProps {
 }
 
 function SheetOtpInput({ onChange, value }: SheetOtpInputProps) {
+	const { palette } = useUITheme();
 	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
 	const inputRef = React.useRef<TextInput>(null);
 	const [isFocused, setIsFocused] = React.useState(false);
@@ -150,9 +188,13 @@ function SheetOtpInput({ onChange, value }: SheetOtpInputProps) {
 	const activeSlotIndex = Math.min(value.length, EMAIL_CODE_LENGTH - 1);
 
 	const handleChangeText = (nextValue: string) => {
-		onChange(
-			nextValue.replace(DIGITS_ONLY_PATTERN, "").slice(0, EMAIL_CODE_LENGTH)
-		);
+		const digits = nextValue
+			.replace(DIGITS_ONLY_PATTERN, "")
+			.slice(0, EMAIL_CODE_LENGTH);
+		if (digits.length > value.length) {
+			haptic("selection");
+		}
+		onChange(digits);
 	};
 
 	return (
@@ -177,26 +219,41 @@ function SheetOtpInput({ onChange, value }: SheetOtpInputProps) {
 						return (
 							<React.Fragment key={`otp-slot-${slotIndex}`}>
 								<View
-									className="items-center justify-center rounded-2xl border bg-surface"
 									style={{
-										borderColor: isActive ? "#0A84FF" : "#E5E7EB",
+										alignItems: "center",
+										backgroundColor: palette.fill,
+										borderColor: isActive ? palette.accent : "transparent",
+										borderRadius: radius.field,
+										borderWidth: 1.5,
 										height: OTP_SLOT_SIZE,
+										justifyContent: "center",
 										width: OTP_SLOT_SIZE,
 									}}
 								>
 									{char ? (
-										<Text className="absolute" weight="semibold">
+										<AppText bold={true} style={{ position: "absolute" }}>
 											{char}
-										</Text>
+										</AppText>
 									) : null}
 									{isCaretVisible ? (
-										<View className="absolute h-5 w-0.5 rounded-full bg-muted-foreground" />
+										<View
+											style={{
+												backgroundColor: palette.inkSecondary,
+												borderRadius: radius.pill,
+												height: 20,
+												position: "absolute",
+												width: 2,
+											}}
+										/>
 									) : null}
 								</View>
 								{slotIndex === 2 ? (
 									<View
-										className="h-px rounded-full bg-border"
-										style={{ width: OTP_SEPARATOR_WIDTH }}
+										style={{
+											backgroundColor: palette.separator,
+											height: 2,
+											width: OTP_SEPARATOR_WIDTH,
+										}}
 									/>
 								) : null}
 							</React.Fragment>
@@ -243,7 +300,7 @@ export function AuthSignInSheet({
 	const { fetchStatus: signUpFetchStatus, signUp } = useSignUp();
 	const router = useRouter();
 	const insets = useSafeAreaInsets();
-	const accentForegroundColor = useThemeColor("accent-foreground");
+	const { palette } = useUITheme();
 	const [emailAddress, setEmailAddress] = React.useState("");
 	const [hasEmailBlurred, setHasEmailBlurred] = React.useState(false);
 	const [code, setCode] = React.useState("");
@@ -577,20 +634,26 @@ export function AuthSignInSheet({
 			<BottomSheet.Portal>
 				<BottomSheet.Overlay />
 				<BottomSheet.Content
-					backgroundClassName="rounded-t-[36px] bg-background"
+					backgroundStyle={{
+						backgroundColor: palette.canvas,
+						borderTopLeftRadius: radius.sheet,
+						borderTopRightRadius: radius.sheet,
+					}}
 					enablePanDownToClose={true}
+					handleIndicatorStyle={{ backgroundColor: palette.inkTertiary }}
 					keyboardBehavior="extend"
 				>
 					<View
-						className="gap-5 px-5 pt-2"
-						style={{ paddingBottom: Math.max(insets.bottom, 18) }}
+						style={{
+							gap: spacing.section,
+							paddingBottom: Math.max(insets.bottom, spacing.lg),
+							paddingHorizontal: spacing.screen,
+							paddingTop: spacing.sm,
+						}}
 					>
-						<View className="items-center">
-							<ViyaMark size={56} />
-						</View>
-
-						<View className="items-center gap-2">
-							<BottomSheet.Title className="text-center">
+						<View style={{ alignItems: "center", gap: spacing.sm }}>
+							<ViyaMark size={52} />
+							<BottomSheet.Title className="text-center font-semibold text-[22px] text-foreground">
 								Sign in to Viya
 							</BottomSheet.Title>
 							{isCodeStep ? null : (
@@ -601,31 +664,60 @@ export function AuthSignInSheet({
 						</View>
 
 						{statusMessage ? (
-							<Alert className="items-center rounded-2xl" status="danger">
-								<Alert.Indicator className="pt-0" iconProps={{ size: 18 }} />
-								<Alert.Content>
-									<Alert.Description className="leading-5" selectable={true}>
-										{statusMessage}
-									</Alert.Description>
-								</Alert.Content>
-							</Alert>
+							<Animated.View
+								accessibilityLiveRegion="polite"
+								entering={FadeIn.duration(200)}
+								exiting={FadeOut.duration(150)}
+								style={{
+									alignItems: "center",
+									backgroundColor: palette.surface,
+									borderRadius: radius.field,
+									flexDirection: "row",
+									gap: spacing.md,
+									padding: spacing.lg,
+								}}
+							>
+								<Ionicons
+									color={palette.danger}
+									name="alert-circle"
+									size={20}
+								/>
+								<AppText
+									selectable={true}
+									style={{ flex: 1 }}
+									tone="danger"
+									variant="subhead"
+								>
+									{statusMessage}
+								</AppText>
+							</Animated.View>
 						) : null}
 
 						{isCodeStep ? (
-							<View className="gap-5">
-								<Text.Paragraph align="center" color="muted" type="body-sm">
+							<View style={{ gap: spacing.section }}>
+								<AppText
+									style={{ textAlign: "center" }}
+									tone="secondary"
+									variant="subhead"
+								>
 									{needsSignUpPassword ? (
 										<>
 											Finish the account for{" "}
-											<Text weight="semibold">{codeDeliveryAddress}</Text>.
+											<AppText bold={true} variant="subhead">
+												{codeDeliveryAddress}
+											</AppText>
+											.
 										</>
 									) : (
 										<>
 											Enter the {EMAIL_CODE_LENGTH}-digit code sent to{" "}
-											<Text weight="semibold">{codeDeliveryAddress}</Text>.
+											<AppText bold={true} variant="subhead">
+												{codeDeliveryAddress}
+											</AppText>
+											.
 										</>
 									)}
-								</Text.Paragraph>
+								</AppText>
 								{needsSignUpPassword ? (
 									<SheetInput
 										autoCapitalize="none"
@@ -637,41 +729,55 @@ export function AuthSignInSheet({
 								) : (
 									<SheetOtpInput onChange={setCode} value={code} />
 								)}
-								<Button
-									isDisabled={isAuthBusy || !canVerify}
+								<PrimaryButton
+									disabled={isAuthBusy || !canVerify}
+									isPending={isVerifyingCode}
+									label={verifyButtonLabel}
 									onPress={handleVerify}
-								>
-									{isVerifyingCode ? (
-										<Spinner color={accentForegroundColor} size="sm" />
-									) : null}
-									<Button.Label>{verifyButtonLabel}</Button.Label>
-								</Button>
+								/>
 								{needsSignUpPassword ? null : (
-									<Button
-										isDisabled={isResendDisabled}
+									<SecondaryButton
+										disabled={isResendDisabled}
+										isPending={isResendingCode}
+										label={resendCodeLabel}
 										onPress={handleResendEmailCode}
-										variant="tertiary"
-									>
-										{isResendingCode ? <Spinner size="sm" /> : null}
-										<Button.Label>{resendCodeLabel}</Button.Label>
-									</Button>
+										variant="plain"
+									/>
 								)}
 							</View>
 						) : (
-							<View className="gap-4">
+							<View style={{ gap: spacing.lg }}>
 								<AuthSocialButtons
 									onBeforeOAuthStart={handleBeforeOAuthStart}
 									onOAuthFallback={handleOAuthFallback}
 									onStatusMessageChange={setStatusMessage}
 								/>
-								<View className="flex-row items-center gap-3">
-									<View className="h-px flex-1 bg-border" />
-									<Text color="muted" type="body-xs">
+								<View
+									style={{
+										alignItems: "center",
+										flexDirection: "row",
+										gap: spacing.md,
+									}}
+								>
+									<View
+										style={{
+											backgroundColor: palette.separator,
+											flex: 1,
+											height: 1,
+										}}
+									/>
+									<AppText tone="tertiary" variant="footnote">
 										or use email
-									</Text>
-									<View className="h-px flex-1 bg-border" />
+									</AppText>
+									<View
+										style={{
+											backgroundColor: palette.separator,
+											flex: 1,
+											height: 1,
+										}}
+									/>
 								</View>
-								<View className="gap-3">
+								<View style={{ gap: spacing.md }}>
 									<SheetInput
 										autoCapitalize="none"
 										description="Please enter a valid email address."
@@ -693,19 +799,13 @@ export function AuthSignInSheet({
 										/>
 									) : null}
 								</View>
-								<Button
-									isDisabled={!emailAddress.trim() || isAuthBusy}
+								<PrimaryButton
+									disabled={!emailAddress.trim() || isAuthBusy}
+									icon="mail-outline"
+									isPending={isSendingCode}
+									label="Continue with email"
 									onPress={handleSendEmailCode}
-								>
-									{isSendingCode ? (
-										<Spinner color={accentForegroundColor} size="sm" />
-									) : (
-										<Ionicons color="#FFFFFF" name="mail-outline" size={18} />
-									)}
-									<Button.Label>
-										{isSendingCode ? "Sending..." : "Continue with email"}
-									</Button.Label>
-								</Button>
+								/>
 							</View>
 						)}
 					</View>

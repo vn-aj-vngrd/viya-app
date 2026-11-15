@@ -2,8 +2,8 @@ import { Feather } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import type { ComponentProps } from "react";
 import type { ColorValue } from "react-native";
-
 import { FloatingTabBar } from "@/src/components/navigation/floating-tab-bar";
+import { useUITheme } from "@/src/components/ui";
 
 type TabIconName = ComponentProps<typeof Feather>["name"];
 
@@ -14,24 +14,21 @@ interface FloatingTabIconProps {
 }
 
 function FloatingTabIcon({ color, focused, name }: FloatingTabIconProps) {
-	return <Feather color={focused ? "#FFFFFF" : color} name={name} size={19} />;
+	return <Feather color={color} name={name} size={focused ? 21 : 20} />;
 }
 
-function FloatingAiIcon({ focused }: Omit<FloatingTabIconProps, "name">) {
-	return (
-		<Feather
-			color={focused ? "#FFFFFF" : "#0A84FF"}
-			name="message-circle"
-			size={23}
-		/>
-	);
+function FloatingAiIcon({ color }: Pick<FloatingTabIconProps, "color">) {
+	return <Feather color={color} name="message-circle" size={24} />;
 }
 
 export default function TabLayout() {
+	const { palette } = useUITheme();
+
 	return (
 		<Tabs
 			screenOptions={{
 				headerShown: false,
+				sceneStyle: { backgroundColor: palette.canvas },
 				tabBarShowLabel: false,
 			}}
 			tabBar={(props) => <FloatingTabBar {...props} />}
@@ -58,9 +55,7 @@ export default function TabLayout() {
 				name="viya"
 				options={{
 					title: "Ask Viya",
-					tabBarIcon: ({ color, focused }) => (
-						<FloatingAiIcon color={color} focused={focused} />
-					),
+					tabBarIcon: ({ color }) => <FloatingAiIcon color={color} />,
 				}}
 			/>
 			<Tabs.Screen

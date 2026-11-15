@@ -1,6 +1,6 @@
 ---
 name: Viya Mobile Design System
-version: 0.2.0
+version: 0.3.0
 status: draft
 source: /Users/vanajvanguardia/Downloads/viya_heroui_mobile_design.md
 platforms:
@@ -11,7 +11,7 @@ frameworks:
   - Expo
   - React Native
   - HeroUI Native
-description: HeroUI Pro-inspired island UI for Viya mobile screens.
+description: Premium, minimalist, iOS-native UI with Liquid Glass on compact controls and flat opaque islands for content.
 colors:
   app:
     value: "#F4F4F5"
@@ -147,6 +147,70 @@ onboarding:
 Viya should feel like a premium mobile travel companion: calm, native, modern, and polished. The design direction follows a HeroUI Pro-inspired island UI pattern: soft non-white canvas, floating white content surfaces, large rounded cards, subtle elevation, compact typography, and native-feeling controls.
 
 This is not a web dashboard compressed into mobile. Every screen should feel like a focused mobile workflow for planning, readiness, TripSync, Travel Mode, alerts, moments, and wrap-up.
+
+## UI Foundation (v0.3, supersedes conflicting rules below)
+
+Code is the token source: `apps/native/src/components/ui/tokens.ts` (mirrored as CSS variables in `apps/native/global.css`). Import everything from `@/src/components/ui` (index). Hand-built equivalents of these primitives are a defect.
+
+### Principles
+
+- Premium through restraint: quiet opaque content, one accent, precise alignment. No decorative gradients, no heavy shadows, no borders around rows.
+- Glass only on compact controls: header icon buttons, the floating tab bar, toasts, floating actions. Never on cards, rows, fields or on top of other glass. Content islands stay flat and opaque.
+- Native feel: 44pt minimum hit targets, spring press feedback plus a haptic on every tappable, system font with Dynamic Type, large titles that collapse.
+- Dark mode is first class: read colors from `useUITheme().palette` (or CSS variables via className), never hard-code hex in screens.
+- Reduce Transparency and Android: glass becomes a solid translucent surface with a hairline edge. Reduce Motion should favor fades (springs are short and overshoot-free).
+
+### Glass tiers (`GlassSurface`)
+
+| Platform | Rendering |
+| --- | --- |
+| iOS 26+ | native Liquid Glass (`expo-glass-effect`) |
+| iOS < 26 | system blur (`expo-blur`) + hairline |
+| Android, web, Reduce Transparency | solid translucent surface + hairline |
+
+### Tokens
+
+| Group | Values |
+| --- | --- |
+| Palette (light / dark) | canvas `#F4F4F5` / `#0B0B0C`; surface `#FFFFFF` / `#1C1C1E`; fill `#EEEEF0` / `#2C2C2E`; ink `#18181B` / `#F5F5F7`; inkSecondary `#6B6B73` / `#A1A1AA`; inkTertiary `#A1A1AA` / `#71717A`; accent `#0A84FF`; success `#248A3D` / `#30D158`; warning `#B25E00` / `#FF9F0A`; danger `#D70015` / `#FF453A`; selection, separator, hairline, scrim, glassFallback |
+| Spacing | xs 4, sm 8, md 12, lg 16, screen 20, xl/section 24, 2xl 32, 3xl 40 |
+| Radius | tile 12, group 14, field 16, card 20, sheet 32, pill 999 |
+| Metrics | action 50, chip 34 (44 hit), icon button 44, nav bar 44, row 54, tab bar 60, tab slot 52 |
+| Type | largeTitle 34/700, title 28/700, heading 22/600, headline 17/600, body 17, callout 16, subhead 15, footnote 13, eyebrow 12/600 uppercase |
+| Motion | spring press / selection / surface; durations fast 120, normal 220, slow 360, toast 2800; press scale 0.96 |
+
+Primary actions are ink-filled (near-black in light, near-white in dark); accent blue is for links, selection tint and AI guidance, not button fills.
+
+### Components
+
+| Need | Component |
+| --- | --- |
+| Themed text on the type scale | `AppText` (`variant`, `tone`) |
+| Tappable with spring + haptic | `PressableScale` |
+| Glass container for compact controls | `GlassSurface` |
+| Round header/back/close button | `GlassIconButton` (also `NavigationIconButton`, `NavigationBackButton`) |
+| Primary / secondary 50pt pill with pending spinner | `PrimaryButton`, `SecondaryButton` |
+| Filter / category pill | `Chip` |
+| Opaque content island | `Card` (`Island` alias) |
+| Section title + one action | `SectionHeader` |
+| Grouped rows with inner dividers | `ListGroup` + `ListRow` |
+| Scrolling screen with collapsing large title | `CollapsingScreen`; static: `ScreenHeader` |
+| Bottom sheet / modal header | `SheetHeader` |
+| Empty page | `EmptyState` |
+| Loading page (delayed) | `LoadingState` |
+| Toast and confirm | `FeedbackProvider` + `useFeedback()` -> `showToast`, `confirm`; `ConfirmDialog` |
+| Floating tab bar | `components/navigation/floating-tab-bar.tsx` (glass bar, spring selection pill, separate glass AI button) |
+
+### Rules
+
+- One `PrimaryButton` per screen or footer. While async work runs pass `isPending`: the spinner replaces the label, size is kept and the button is disabled. Never swap the label text for "Saving...".
+- Empty states show symbol, title and one line naming the control that fills the page; no button unless nothing else on screen can.
+- Loading uses `LoadingState` (delayed so fast loads never flash); content already on screen stays and refreshes inline.
+- Destructive or irreversible actions use `useFeedback().confirm({ destructive: true })`, never `Alert`.
+- Success, failure and info acknowledgements use `showToast`.
+- Rows are at least 54pt; tappable rows use `ListRow onPress`. Dividers are hairlines inside the group.
+- Selection is never color alone: selected chips and tabs also change fill.
+- Large title screens use `CollapsingScreen`; give `contentContainerStyle` bottom padding for the floating tab bar (about 96).
 
 ## Core Visual Formula
 

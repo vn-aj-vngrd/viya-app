@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Button, Spinner, Surface, Text, useThemeColor } from "heroui-native";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+	ActivityIndicator,
 	FlatList,
 	type NativeScrollEvent,
 	type NativeSyntheticEvent,
@@ -24,7 +24,14 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
 
-import { Container } from "@/components/container";
+import {
+	AppText,
+	Card,
+	PrimaryButton,
+	radius,
+	spacing,
+	useUITheme,
+} from "@/src/components/ui";
 import { ViyaMark } from "@/src/components/viya-mark";
 import { AuthSignInSheet } from "@/src/features/auth/auth-sign-in-sheet";
 import {
@@ -122,6 +129,7 @@ const CHAT_BUBBLES = [
 ] as const;
 
 const BUBBLE_OUT_MS = 220;
+const ON_ACCENT = "#FFFFFF";
 
 interface ChatBubbleProps {
 	children: ReactNode;
@@ -130,57 +138,42 @@ interface ChatBubbleProps {
 }
 
 function ChatBubble({ children, delay, fromViya }: ChatBubbleProps) {
-	const accent = useThemeColor("accent");
-	const accentForeground = useThemeColor("accent-foreground");
+	const { palette } = useUITheme();
 	const entering = fromViya
 		? FadeInLeft.duration(CHAT_BUBBLE_IN_MS).delay(delay)
 		: FadeInRight.duration(CHAT_BUBBLE_IN_MS).delay(delay);
 
-	if (fromViya) {
-		return (
-			<Animated.View
-				className="self-start"
-				entering={entering}
-				exiting={FadeOut.duration(BUBBLE_OUT_MS)}
-			>
-				<Surface className="max-w-[82%] rounded-3xl rounded-bl-md border border-border px-4 py-2.5">
-					<Text type="body-sm" weight="medium">
-						{children}
-					</Text>
-				</Surface>
-			</Animated.View>
-		);
-	}
-
 	return (
 		<Animated.View
-			className="self-end"
 			entering={entering}
 			exiting={FadeOut.duration(BUBBLE_OUT_MS)}
+			style={{
+				alignSelf: fromViya ? "flex-start" : "flex-end",
+				backgroundColor: fromViya ? palette.surface : palette.accent,
+				borderBottomLeftRadius: fromViya ? 6 : radius.card,
+				borderBottomRightRadius: fromViya ? radius.card : 6,
+				borderRadius: radius.card,
+				maxWidth: "84%",
+				paddingHorizontal: spacing.lg,
+				paddingVertical: spacing.md,
+			}}
 		>
-			<View
-				className="max-w-[84%] rounded-3xl rounded-br-md px-4 py-2.5"
-				style={{ backgroundColor: accent }}
+			<AppText
+				style={fromViya ? undefined : { color: ON_ACCENT }}
+				variant="subhead"
 			>
-				<Text
-					style={{ color: accentForeground }}
-					type="body-sm"
-					weight="medium"
-				>
-					{children}
-				</Text>
-			</View>
+				{children}
+			</AppText>
 		</Animated.View>
 	);
 }
 
 function DreamPreview() {
-	const accent = useThemeColor("accent");
-	const accentForeground = useThemeColor("accent-foreground");
+	const { palette } = useUITheme();
 
 	return (
-		<View className="flex-1 justify-between gap-4">
-			<View className="gap-2.5">
+		<View style={{ flex: 1, gap: spacing.lg, justifyContent: "space-between" }}>
+			<View style={{ gap: spacing.sm }}>
 				{CHAT_BUBBLES.map((bubble, index) => (
 					<ChatBubble
 						delay={120 + index * CHAT_BUBBLE_STAGGER_MS}
@@ -192,19 +185,33 @@ function DreamPreview() {
 				))}
 			</View>
 
-			<Surface className="flex-row items-center gap-2 rounded-full border border-border px-4 py-3">
-				<View className="min-h-[18px] flex-1 flex-row items-center">
-					<Text color="muted" type="body-sm">
-						Ask Viya anything…
-					</Text>
-				</View>
+			<View
+				style={{
+					alignItems: "center",
+					backgroundColor: palette.surface,
+					borderRadius: radius.pill,
+					flexDirection: "row",
+					gap: spacing.sm,
+					paddingHorizontal: spacing.lg,
+					paddingVertical: spacing.md,
+				}}
+			>
+				<AppText style={{ flex: 1 }} tone="tertiary" variant="subhead">
+					Ask Viya anything…
+				</AppText>
 				<View
-					className="h-9 w-9 items-center justify-center rounded-full"
-					style={{ backgroundColor: accent }}
+					style={{
+						alignItems: "center",
+						backgroundColor: palette.accent,
+						borderRadius: radius.pill,
+						height: 32,
+						justifyContent: "center",
+						width: 32,
+					}}
 				>
-					<Ionicons color={accentForeground} name="arrow-up" size={18} />
+					<Ionicons color={ON_ACCENT} name="arrow-up" size={18} />
 				</View>
-			</Surface>
+			</View>
 		</View>
 	);
 }
@@ -218,8 +225,7 @@ function CheckRow({
 	label: string;
 	revealDelay: number;
 }) {
-	const accent = useThemeColor("accent");
-	const muted = useThemeColor("muted");
+	const { palette } = useUITheme();
 	const checkedProgress = useSharedValue(0);
 
 	useEffect(() => {
@@ -245,29 +251,39 @@ function CheckRow({
 
 	return (
 		<Animated.View
-			className="flex-row items-center gap-2.5"
 			entering={FadeInLeft.delay(revealDelay).duration(CHECK_REVEAL_MS)}
+			style={{ alignItems: "center", flexDirection: "row", gap: spacing.md }}
 		>
-			<View className="h-5 w-5 items-center justify-center">
-				<Animated.View className="absolute" style={uncheckedStyle}>
-					<Ionicons color={muted} name="ellipse-outline" size={20} />
+			<View
+				style={{
+					alignItems: "center",
+					height: 22,
+					justifyContent: "center",
+					width: 22,
+				}}
+			>
+				<Animated.View style={[{ position: "absolute" }, uncheckedStyle]}>
+					<Ionicons
+						color={palette.inkTertiary}
+						name="ellipse-outline"
+						size={22}
+					/>
 				</Animated.View>
-				<Animated.View className="absolute" style={checkedStyle}>
-					<Ionicons color={accent} name="checkmark-circle" size={20} />
+				<Animated.View style={[{ position: "absolute" }, checkedStyle]}>
+					<Ionicons color={palette.accent} name="checkmark-circle" size={22} />
 				</Animated.View>
 			</View>
 			<Animated.View style={labelStyle}>
-				<Text type="body-sm" weight="medium">
+				<AppText bold={true} variant="subhead">
 					{label}
-				</Text>
+				</AppText>
 			</Animated.View>
 		</Animated.View>
 	);
 }
 
 function ReadinessRing({ value }: { value: number }) {
-	const accent = useThemeColor("accent");
-	const border = useThemeColor("border");
+	const { palette } = useUITheme();
 	const [displayValue, setDisplayValue] = useState(0);
 	const [ringProgress, setRingProgress] = useState(0);
 
@@ -301,7 +317,15 @@ function ReadinessRing({ value }: { value: number }) {
 	const strokeDashoffset = READINESS_RING_CIRCUMFERENCE * (1 - ringProgress);
 
 	return (
-		<View className="h-24 w-24 items-center justify-center rounded-full">
+		<View
+			accessibilityLabel={`Readiness ${displayValue} percent`}
+			style={{
+				alignItems: "center",
+				height: READINESS_RING_SIZE,
+				justifyContent: "center",
+				width: READINESS_RING_SIZE,
+			}}
+		>
 			<Svg
 				height={READINESS_RING_SIZE}
 				style={{ position: "absolute" }}
@@ -312,7 +336,7 @@ function ReadinessRing({ value }: { value: number }) {
 					cy={READINESS_RING_SIZE / 2}
 					fill="none"
 					r={READINESS_RING_RADIUS}
-					stroke={border}
+					stroke={palette.fill}
 					strokeWidth={READINESS_RING_STROKE}
 				/>
 				<Circle
@@ -320,7 +344,7 @@ function ReadinessRing({ value }: { value: number }) {
 					cy={READINESS_RING_SIZE / 2}
 					fill="none"
 					r={READINESS_RING_RADIUS}
-					stroke={accent}
+					stroke={palette.accent}
 					strokeDasharray={READINESS_RING_CIRCUMFERENCE}
 					strokeDashoffset={strokeDashoffset}
 					strokeLinecap="round"
@@ -328,33 +352,35 @@ function ReadinessRing({ value }: { value: number }) {
 					transform={`rotate(-90 ${READINESS_RING_SIZE / 2} ${READINESS_RING_SIZE / 2})`}
 				/>
 			</Svg>
-			<Text.Heading type="h3" weight="semibold">
-				{displayValue}%
-			</Text.Heading>
+			<AppText variant="heading">{displayValue}%</AppText>
 		</View>
 	);
 }
 
 function PreparePreview() {
 	return (
-		<View className="flex-1 justify-center gap-4">
+		<View style={{ flex: 1, gap: spacing.lg, justifyContent: "center" }}>
 			<Animated.View entering={FadeIn.duration(420)}>
-				<Surface className="flex-row items-center justify-between rounded-[30px] border border-border p-5">
-					<View className="gap-1">
-						<Text color="muted" type="body-xs" weight="semibold">
-							TRIP READINESS
-						</Text>
-						<Text.Heading type="h4" weight="semibold">
-							Ready to go
-						</Text.Heading>
-						<Text color="muted" type="body-xs">
+				<Card
+					style={{
+						alignItems: "center",
+						flexDirection: "row",
+						justifyContent: "space-between",
+					}}
+				>
+					<View style={{ gap: spacing.xs }}>
+						<AppText tone="secondary" variant="eyebrow">
+							Trip readiness
+						</AppText>
+						<AppText variant="heading">Ready to go</AppText>
+						<AppText tone="secondary" variant="footnote">
 							All essentials checked
-						</Text>
+						</AppText>
 					</View>
 					<ReadinessRing value={READINESS_TARGET_PERCENT} />
-				</Surface>
+				</Card>
 			</Animated.View>
-			<Surface className="gap-3 rounded-[30px] border border-border p-5">
+			<Card style={{ gap: spacing.md }}>
 				<CheckRow
 					checkDelay={CHECK_SEQUENCE_START_MS}
 					label="Flight confirmed"
@@ -375,69 +401,81 @@ function PreparePreview() {
 					label="Pack for light rain"
 					revealDelay={CHECK_REVEAL_STAGGER_MS * 3}
 				/>
-			</Surface>
+			</Card>
 		</View>
 	);
 }
 
 function StatChip({ delay, label }: { delay: number; label: string }) {
+	const { palette } = useUITheme();
+
 	return (
 		<Animated.View
-			className="min-w-[96px] flex-1"
 			entering={FadeInDown.delay(delay).duration(420)}
+			style={{
+				backgroundColor: palette.surface,
+				borderRadius: radius.field,
+				flex: 1,
+				justifyContent: "center",
+				minHeight: 48,
+				minWidth: 96,
+				paddingHorizontal: spacing.sm,
+				paddingVertical: spacing.md,
+			}}
 		>
-			<Surface className="min-h-[48px] justify-center rounded-2xl border border-border px-2 py-3">
-				<Text align="center" type="body-xs" weight="semibold">
-					{label}
-				</Text>
-			</Surface>
+			<AppText bold={true} style={{ textAlign: "center" }} variant="footnote">
+				{label}
+			</AppText>
 		</Animated.View>
 	);
 }
 
 function RememberPreview() {
-	const accent = useThemeColor("accent");
-	const accentForeground = useThemeColor("accent-foreground");
+	const { palette } = useUITheme();
 
 	return (
-		<View className="flex-1 justify-center gap-3">
+		<View style={{ flex: 1, gap: spacing.md, justifyContent: "center" }}>
 			<Animated.View
-				className="flex-1 justify-between rounded-[34px] p-6"
 				entering={FadeIn.duration(RECAP_CARD_IN_MS).delay(120)}
-				style={{ backgroundColor: accent, maxHeight: 280 }}
+				style={{
+					backgroundColor: palette.accent,
+					borderRadius: radius.sheet,
+					flex: 1,
+					justifyContent: "space-between",
+					maxHeight: 280,
+					padding: spacing.section,
+				}}
 			>
-				<View className="flex-row items-center justify-between">
-					<Text
-						style={{ color: accentForeground, opacity: 0.85 }}
-						type="body-xs"
-						weight="semibold"
+				<View
+					style={{
+						alignItems: "center",
+						flexDirection: "row",
+						justifyContent: "space-between",
+					}}
+				>
+					<AppText
+						style={{ color: ON_ACCENT, opacity: 0.85 }}
+						variant="eyebrow"
 					>
-						YOUR TRIP STORY
-					</Text>
+						Your trip story
+					</AppText>
 					<Ionicons
-						color={accentForeground}
+						color={ON_ACCENT}
 						name="sparkles"
 						size={18}
 						style={{ opacity: 0.85 }}
 					/>
 				</View>
-				<View className="gap-1">
-					<Text.Heading
-						style={{ color: accentForeground }}
-						type="h1"
-						weight="semibold"
-					>
+				<View style={{ gap: spacing.xs }}>
+					<AppText style={{ color: ON_ACCENT }} variant="title">
 						Palawan, 5 days
-					</Text.Heading>
-					<Text
-						style={{ color: accentForeground, opacity: 0.9 }}
-						type="body-sm"
-					>
+					</AppText>
+					<AppText style={{ color: ON_ACCENT, opacity: 0.9 }} variant="subhead">
 						7 places · ₱28.4k spent · a new favorite food town
-					</Text>
+					</AppText>
 				</View>
 			</Animated.View>
-			<View className="flex-row gap-2">
+			<View style={{ flexDirection: "row", gap: spacing.sm }}>
 				<StatChip delay={520} label="Share recap" />
 				<StatChip delay={520 + RECAP_CHIP_STAGGER_MS} label="Reuse as guide" />
 				<StatChip
@@ -469,36 +507,33 @@ interface ActPageProps {
 }
 
 function ActPage({ act, isActive, isCompact, width }: ActPageProps) {
-	const accent = useThemeColor("accent");
 	const previewHeight = isCompact ? COMPACT_PREVIEW_HEIGHT : PREVIEW_HEIGHT;
 
 	return (
-		<View className="flex-1 justify-center px-6" style={{ width }}>
-			<View className="justify-center" style={{ height: previewHeight }}>
+		<View
+			style={{
+				flex: 1,
+				justifyContent: "center",
+				paddingHorizontal: spacing.screen,
+				width,
+			}}
+		>
+			<View style={{ height: previewHeight, justifyContent: "center" }}>
 				{isActive ? <ActPreview id={act.id} /> : null}
 			</View>
-			<View className="gap-2 pt-4">
-				<Text
-					style={{ color: accent, letterSpacing: 1.4 }}
-					type="body-xs"
-					weight="semibold"
-				>
+			<View style={{ gap: spacing.sm, paddingTop: spacing.lg }}>
+				<AppText tone="accent" variant="eyebrow">
 					{act.eyebrow}
-				</Text>
-				<Text.Heading
-					className={isCompact ? "leading-8" : "leading-10"}
-					type={isCompact ? "h2" : "h1"}
-					weight="semibold"
+				</AppText>
+				<AppText
+					accessibilityRole="header"
+					variant={isCompact ? "title" : "largeTitle"}
 				>
 					{act.title}
-				</Text.Heading>
-				<Text.Paragraph
-					className="max-w-[340px] leading-5"
-					color="muted"
-					type="body-sm"
-				>
+				</AppText>
+				<AppText style={{ maxWidth: 340 }} tone="secondary" variant="subhead">
 					{act.subtitle}
-				</Text.Paragraph>
+				</AppText>
 			</View>
 		</View>
 	);
@@ -506,7 +541,7 @@ function ActPage({ act, isActive, isCompact, width }: ActPageProps) {
 
 function PageDots({ activeIndex }: { activeIndex: number }) {
 	return (
-		<View className="flex-row gap-2">
+		<View style={{ flexDirection: "row", gap: spacing.sm }}>
 			{ONBOARDING_ACTS.map((act, index) => {
 				let status: ProgressSegmentStatus = "pending";
 				if (index < activeIndex) {
@@ -524,8 +559,7 @@ function PageDots({ activeIndex }: { activeIndex: number }) {
 type ProgressSegmentStatus = "active" | "complete" | "pending";
 
 function ProgressSegment({ status }: { status: ProgressSegmentStatus }) {
-	const border = useThemeColor("border");
-	const accent = useThemeColor("accent");
+	const { palette } = useUITheme();
 	const progress = useSharedValue(status === "complete" ? 1 : 0);
 
 	useEffect(() => {
@@ -544,14 +578,20 @@ function ProgressSegment({ status }: { status: ProgressSegmentStatus }) {
 
 	return (
 		<View
-			className="h-1.5 flex-1 overflow-hidden rounded-full"
-			style={{ backgroundColor: border }}
+			style={{
+				backgroundColor: palette.fill,
+				borderRadius: radius.pill,
+				flex: 1,
+				height: 4,
+				overflow: "hidden",
+			}}
 		>
 			<Animated.View
-				className="h-full rounded-full"
 				style={[
 					{
-						backgroundColor: accent,
+						backgroundColor: palette.ink,
+						borderRadius: radius.pill,
+						height: "100%",
 					},
 					fillStyle,
 				]}
@@ -563,7 +603,7 @@ function ProgressSegment({ status }: { status: ProgressSegmentStatus }) {
 export default function AuthOnboardingScreen() {
 	const insets = useSafeAreaInsets();
 	const { height, width } = useWindowDimensions();
-	const accentForeground = useThemeColor("accent-foreground");
+	const { palette } = useUITheme();
 	const carouselRef = useRef<FlatList<OnboardingAct>>(null);
 	const hasInteractedRef = useRef(false);
 	const [activeIndex, setActiveIndex] = useState(FIRST_INDEX);
@@ -657,18 +697,35 @@ export default function AuthOnboardingScreen() {
 
 	if (isCheckingCompletion) {
 		return (
-			<Container isScrollable={false}>
-				<View className="flex-1 items-center justify-center">
-					<Spinner />
-				</View>
-			</Container>
+			<View
+				style={{
+					alignItems: "center",
+					backgroundColor: palette.canvas,
+					flex: 1,
+					justifyContent: "center",
+				}}
+			>
+				<ActivityIndicator color={palette.inkSecondary} size="large" />
+			</View>
 		);
 	}
 
 	return (
-		<Container isScrollable={false}>
-			<View className="flex-1" style={{ paddingTop: insets.top + 4 }}>
-				<View className="items-center px-6 pb-2">
+		<View style={{ backgroundColor: palette.canvas, flex: 1 }}>
+			<View
+				style={{
+					flex: 1,
+					paddingBottom: Math.max(insets.bottom, spacing.lg),
+					paddingTop: insets.top + spacing.xs,
+				}}
+			>
+				<View
+					style={{
+						alignItems: "center",
+						paddingBottom: spacing.sm,
+						paddingHorizontal: spacing.screen,
+					}}
+				>
 					<ViyaMark size={46} />
 				</View>
 
@@ -697,21 +754,21 @@ export default function AuthOnboardingScreen() {
 					showsHorizontalScrollIndicator={false}
 				/>
 
-				<View className="gap-5 px-6" style={{ paddingBottom: 8 }}>
+				<View
+					style={{ gap: spacing.section, paddingHorizontal: spacing.screen }}
+				>
 					<PageDots activeIndex={activeIndex} />
-					<Button
-						className="h-[54px] gap-2 rounded-full"
+					<PrimaryButton
+						icon="arrow-forward"
+						label="Get started"
 						onPress={handleSignInPress}
-					>
-						<Button.Label className="text-[17px]">Get started</Button.Label>
-						<Ionicons color={accentForeground} name="arrow-forward" size={18} />
-					</Button>
+					/>
 				</View>
 			</View>
 			<AuthSignInSheet
 				isOpen={isSignInSheetOpen}
 				onOpenChange={setIsSignInSheetOpen}
 			/>
-		</Container>
+		</View>
 	);
 }

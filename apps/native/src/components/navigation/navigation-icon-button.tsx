@@ -1,8 +1,7 @@
-import { Ionicons } from "@expo/vector-icons";
-import { Button, cn, useThemeColor } from "heroui-native";
-import type { ComponentProps } from "react";
-
-type IconName = ComponentProps<typeof Ionicons>["name"];
+import {
+	GlassIconButton,
+	type IconName,
+} from "@/src/components/ui/glass-icon-button";
 
 interface NavigationIconButtonProps {
 	accessibilityLabel: string;
@@ -12,6 +11,7 @@ interface NavigationIconButtonProps {
 	onPress: () => void;
 }
 
+/** Glass round icon button for route headers (44pt). */
 export function NavigationIconButton({
 	accessibilityLabel,
 	className,
@@ -19,21 +19,13 @@ export function NavigationIconButton({
 	iconColor,
 	onPress,
 }: NavigationIconButtonProps) {
-	const foregroundColor = useThemeColor("foreground");
-
 	return (
-		<Button
+		<GlassIconButton
 			accessibilityLabel={accessibilityLabel}
-			className={cn(
-				"h-11 w-11 rounded-full border border-border bg-surface",
-				className
-			)}
-			isIconOnly={true}
+			className={className}
+			icon={icon}
+			iconColor={iconColor}
 			onPress={onPress}
-			size="md"
-			variant="secondary"
-		>
-			<Ionicons color={iconColor ?? foregroundColor} name={icon} size={22} />
-		</Button>
+		/>
 	);
 }

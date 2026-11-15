@@ -1,6 +1,17 @@
-import { BottomSheet, Button, Spinner, Surface, Text } from "heroui-native";
+import { BottomSheet } from "heroui-native";
 import type { ReactNode } from "react";
-import { View } from "react-native";
+import { ScrollView, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import {
+	AppText,
+	Card,
+	Chip,
+	PrimaryButton,
+	SecondaryButton,
+	SheetHeader,
+	spacing,
+} from "@/src/components/ui";
 
 import type { PendingTripSyncReview } from "./tripsync-types";
 
@@ -13,13 +24,22 @@ interface TripSyncReviewSheetProps {
 	review: PendingTripSyncReview | null;
 }
 
-function ReviewPill({ children }: { children: ReactNode }) {
+function ReviewSection({
+	children,
+	eyebrow,
+}: {
+	children: ReactNode;
+	eyebrow: string;
+}) {
 	return (
-		<View className="rounded-full bg-surface px-2.5 py-1">
-			<Text color="muted" type="body-xs" weight="semibold">
+		<Card padding="md">
+			<View style={{ gap: spacing.xs }}>
+				<AppText tone="secondary" variant="eyebrow">
+					{eyebrow}
+				</AppText>
 				{children}
-			</Text>
-		</View>
+			</View>
+		</Card>
 	);
 }
 
@@ -36,6 +56,7 @@ export function TripSyncReviewSheet({
 	onOpenChange,
 	review,
 }: TripSyncReviewSheetProps) {
+	const insets = useSafeAreaInsets();
 	const extraction = review?.extraction;
 	const bookingAmountLabel = extraction?.booking
 		? formatExtractedAmount(
@@ -49,115 +70,127 @@ export function TripSyncReviewSheet({
 			<BottomSheet.Portal>
 				<BottomSheet.Overlay />
 				<BottomSheet.Content
-					className="rounded-t-[34px] border border-border bg-surface px-5 pt-4 pb-8"
-					enableDynamicSizing={true}
+					backgroundClassName="rounded-t-[32px] bg-background"
+					enablePanDownToClose={!isConfirming}
+					snapPoints={["78%"]}
 				>
-					<View className="gap-4">
-						<View className="gap-1">
-							<BottomSheet.Title>Review TripSync</BottomSheet.Title>
-							<BottomSheet.Description>
-								Confirm the extracted trip updates before saving them.
-							</BottomSheet.Description>
-						</View>
-
-						{extraction ? (
-							<View className="gap-3">
-								<Surface className="gap-2 rounded-[24px] bg-surface-secondary p-4">
-									<View className="flex-row flex-wrap gap-2">
-										<ReviewPill>{review.upload.kind}</ReviewPill>
-										<ReviewPill>
-											{Math.round(extraction.confidence * 100)}% confidence
-										</ReviewPill>
-									</View>
-									<Text type="body" weight="bold">
-										{extraction.extractedTitle}
-									</Text>
-									<Text.Paragraph color="muted" type="body-sm">
-										{extraction.summary}
-									</Text.Paragraph>
-								</Surface>
-
-								{extraction.booking ? (
-									<Surface className="gap-1 rounded-[24px] bg-surface-secondary p-4">
-										<Text color="muted" type="body-xs" weight="semibold">
-											BOOKING
-										</Text>
-										<Text type="body-sm" weight="bold">
-											{extraction.booking.title}
-										</Text>
-										<Text color="muted" type="body-xs">
-											{extraction.booking.provider ?? "Provider not detected"}
-										</Text>
-										<Text color="muted" type="body-xs">
-											{extraction.booking.confirmationCode ??
-												"Confirmation code not detected"}
-										</Text>
-										{bookingAmountLabel ? (
-											<Text color="muted" type="body-xs">
-												{bookingAmountLabel}
-											</Text>
-										) : null}
-									</Surface>
-								) : null}
-
-								{extraction.expense ? (
-									<Surface className="gap-1 rounded-[24px] bg-surface-secondary p-4">
-										<Text color="muted" type="body-xs" weight="semibold">
-											BUDGET
-										</Text>
-										<Text type="body-sm" weight="bold">
-											{extraction.expense.title}
-										</Text>
-										<Text color="muted" type="body-xs">
-											{extraction.expense.currency} {extraction.expense.amount}
-										</Text>
-										<Text color="muted" type="body-xs">
-											{extraction.expense.category}
-										</Text>
-									</Surface>
-								) : null}
-
-								<Surface className="gap-1 rounded-[24px] bg-surface-secondary p-4">
-									<Text color="muted" type="body-xs" weight="semibold">
-										DOCUMENT
-									</Text>
-									<Text type="body-sm" weight="bold">
-										{extraction.documentType}
-									</Text>
-								</Surface>
-
-								{extraction.readinessSuggestions.length > 0 ? (
-									<Surface className="gap-2 rounded-[24px] bg-surface-secondary p-4">
-										<Text color="muted" type="body-xs" weight="semibold">
-											READINESS
-										</Text>
-										{extraction.readinessSuggestions.map((suggestion) => (
-											<View className="gap-1" key={suggestion.title}>
-												<Text type="body-sm" weight="bold">
-													{suggestion.title}
-												</Text>
-												<Text color="muted" type="body-xs">
-													{suggestion.reason}
-												</Text>
+					<SheetHeader
+						onClose={isConfirming ? undefined : onDiscard}
+						subtitle="Confirm the extracted trip updates before saving them."
+						title="Review TripSync"
+					/>
+					<View
+						style={{
+							gap: spacing.lg,
+							paddingBottom: Math.max(insets.bottom, spacing.lg),
+							paddingHorizontal: spacing.screen,
+							paddingTop: spacing.sm,
+						}}
+					>
+						<ScrollView
+							contentContainerStyle={{ gap: spacing.md }}
+							showsVerticalScrollIndicator={false}
+							style={{ maxHeight: 420 }}
+						>
+							{extraction ? (
+								<>
+									<Card padding="md">
+										<View style={{ gap: spacing.sm }}>
+											<View
+												style={{
+													flexDirection: "row",
+													flexWrap: "wrap",
+													gap: spacing.sm,
+												}}
+											>
+												<Chip label={review.upload.kind} />
+												<Chip
+													label={`${Math.round(extraction.confidence * 100)}% confidence`}
+												/>
 											</View>
-										))}
-									</Surface>
-								) : null}
-							</View>
-						) : null}
+											<AppText variant="headline">
+												{extraction.extractedTitle}
+											</AppText>
+											<AppText tone="secondary" variant="subhead">
+												{extraction.summary}
+											</AppText>
+										</View>
+									</Card>
 
-						<View className="gap-2">
-							<Button isDisabled={isConfirming || !review} onPress={onConfirm}>
-								{isConfirming ? <Spinner size="sm" /> : null}
-								<Button.Label>Confirm and sync</Button.Label>
-							</Button>
-							<Button
-								isDisabled={isConfirming}
+									{extraction.booking ? (
+										<ReviewSection eyebrow="Booking">
+											<AppText variant="headline">
+												{extraction.booking.title}
+											</AppText>
+											<AppText tone="secondary" variant="footnote">
+												{extraction.booking.provider ?? "Provider not detected"}
+											</AppText>
+											<AppText tone="secondary" variant="footnote">
+												{extraction.booking.confirmationCode ??
+													"Confirmation code not detected"}
+											</AppText>
+											{bookingAmountLabel ? (
+												<AppText tone="secondary" variant="footnote">
+													{bookingAmountLabel}
+												</AppText>
+											) : null}
+										</ReviewSection>
+									) : null}
+
+									{extraction.expense ? (
+										<ReviewSection eyebrow="Budget">
+											<AppText variant="headline">
+												{extraction.expense.title}
+											</AppText>
+											<AppText tone="secondary" variant="footnote">
+												{extraction.expense.currency}{" "}
+												{extraction.expense.amount}
+											</AppText>
+											<AppText tone="secondary" variant="footnote">
+												{extraction.expense.category}
+											</AppText>
+										</ReviewSection>
+									) : null}
+
+									<ReviewSection eyebrow="Document">
+										<AppText variant="headline">
+											{extraction.documentType}
+										</AppText>
+									</ReviewSection>
+
+									{extraction.readinessSuggestions.length > 0 ? (
+										<ReviewSection eyebrow="Readiness">
+											<View style={{ gap: spacing.md }}>
+												{extraction.readinessSuggestions.map((suggestion) => (
+													<View key={suggestion.title} style={{ gap: 2 }}>
+														<AppText variant="headline">
+															{suggestion.title}
+														</AppText>
+														<AppText tone="secondary" variant="footnote">
+															{suggestion.reason}
+														</AppText>
+													</View>
+												))}
+											</View>
+										</ReviewSection>
+									) : null}
+								</>
+							) : null}
+						</ScrollView>
+
+						<View style={{ gap: spacing.sm }}>
+							<PrimaryButton
+								disabled={!review}
+								isPending={isConfirming}
+								label="Confirm and sync"
+								onPress={onConfirm}
+							/>
+							<SecondaryButton
+								disabled={isConfirming}
+								label="Discard"
 								onPress={onDiscard}
-								variant="secondary"
-							>
-								<Button.Label>Discard</Button.Label>
-							</Button>
+								variant="plain"
+							/>
 						</View>
 					</View>
 				</BottomSheet.Content>

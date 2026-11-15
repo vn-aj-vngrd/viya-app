@@ -1,12 +1,20 @@
 import type { BottomTabBarProps } from "expo-router/build/react-navigation/bottom-tabs";
-import { Surface } from "heroui-native";
-import { Pressable, View } from "react-native";
+import { useEffect } from "react";
+import { View } from "react-native";
+import Animated, {
+	useAnimatedStyle,
+	useSharedValue,
+	withSpring,
+} from "react-native-reanimated";
 
-const ACTIVE_TAB_COLOR = "#0A84FF";
-const INACTIVE_TAB_COLOR = "#71717A";
+import { GlassSurface } from "@/src/components/ui/glass-surface";
+import { PressableScale } from "@/src/components/ui/pressable-scale";
+import { metrics, motion, spacing } from "@/src/components/ui/tokens";
+import { useUITheme } from "@/src/components/ui/use-ui-theme";
+
 const AI_TAB_NAME = "viya";
-const TAB_SLOT_WIDTH = 52;
-const TAB_BAR_HORIZONTAL_PADDING = 16;
+const BAR_PADDING = 6;
+const INDICATOR_SIZE = metrics.tabSlot - 8;
 const HIDDEN_TAB_NAMES = new Set(["moments", "vault"]);
 
 function emitTabPress({
@@ -50,6 +58,7 @@ export function FloatingTabBar({
 	state,
 	insets,
 }: BottomTabBarProps) {
+	const { palette } = useUITheme();
 	const focusedRoute = state.routes[state.index];
 	const mainRoutes = state.routes.filter(
 		(route) => route.name !== AI_TAB_NAME && !HIDDEN_TAB_NAMES.has(route.name)
@@ -57,8 +66,28 @@ export function FloatingTabBar({
 	const aiRoute = state.routes.find((route) => route.name === AI_TAB_NAME);
 	const aiDescriptor = aiRoute ? descriptors[aiRoute.key] : null;
 	const isAiFocused = focusedRoute.name === AI_TAB_NAME;
-	const floatingTabWidth =
-		mainRoutes.length * TAB_SLOT_WIDTH + TAB_BAR_HORIZONTAL_PADDING;
+	const focusedIndex = mainRoutes.findIndex(
+		(route) => route.key === focusedRoute.key
+	);
+	const barWidth = mainRoutes.length * metrics.tabSlot + BAR_PADDING * 2;
+
+	const position = useSharedValue(Math.max(focusedIndex, 0));
+	const indicatorOpacity = useSharedValue(focusedIndex >= 0 ? 1 : 0);
+
+	useEffect(() => {
+		if (focusedIndex >= 0) {
+			position.value = withSpring(focusedIndex, motion.spring.selection);
+		}
+		indicatorOpacity.value = withSpring(
+			focusedIndex >= 0 ? 1 : 0,
+			motion.spring.selection
+		);
+	}, [focusedIndex, indicatorOpacity, position]);
+
+	const indicatorStyle = useAnimatedStyle(() => ({
+		opacity: indicatorOpacity.value,
+		transform: [{ translateX: position.value * metrics.tabSlot }],
+	}));
 
 	if (isAiFocused) {
 		return null;
@@ -69,91 +98,104 @@ export function FloatingTabBar({
 			pointerEvents="box-none"
 			style={{
 				alignItems: "center",
-				bottom: Math.max(insets.bottom + 10, 24),
+				bottom: Math.max(insets.bottom, spacing.sm) + spacing.xs,
 				flexDirection: "row",
-				gap: 10,
+				gap: spacing.sm,
 				justifyContent: "center",
 				left: 0,
 				position: "absolute",
 				right: 0,
 			}}
 		>
-			<Surface
-				className="flex-row items-center rounded-full border border-border bg-surface px-2 py-2"
+			<GlassSurface
+				shape="pill"
 				style={{
-					width: floatingTabWidth,
+					flexDirection: "row",
+					height: metrics.tabBarHeight,
+					padding: BAR_PADDING,
+					width: barWidth,
 				}}
 			>
+				<Animated.View
+					pointerEvents="none"
+					style={[
+						{
+							backgroundColor: palette.selection,
+							borderRadius: INDICATOR_SIZE,
+							height: metrics.tabBarHeight - BAR_PADDING * 2,
+							left: BAR_PADDING + 2,
+							position: "absolute",
+							top: BAR_PADDING,
+							width: INDICATOR_SIZE,
+						},
+						indicatorStyle,
+					]}
+				/>
 				{mainRoutes.map((route) => {
-					const descriptor = descriptors[route.key];
-					const options = descriptor.options;
+					const options = descriptors[route.key].options;
 					const isFocused = focusedRoute.key === route.key;
-					const color = isFocused ? "#FFFFFF" : INACTIVE_TAB_COLOR;
-					const tabBarIcon = options.tabBarIcon;
-
-					const handlePress = () => {
-						emitTabPress({ isFocused, navigation, route });
-					};
-
-					const handleLongPress = () => {
-						emitTabLongPress({ navigation, route });
-					};
+					const color = isFocused ? palette.ink : palette.inkSecondary;
 
 					return (
-						<Pressable
-							accessibilityLabel={options.tabBarAccessibilityLabel}
-							accessibilityRole="button"
-							accessibilityState={isFocused ? { selected: true } : undefined}
-							className="h-10 flex-1 items-center justify-center rounded-full"
+						<PressableScale
+							accessibilityLabel={
+								options.tabBarAccessibilityLabel ?? options.title
+							}
+							accessibilityState={{ selected: isFocused }}
+							haptic="selection"
 							key={route.key}
-							onLongPress={handleLongPress}
-							onPress={handlePress}
+							onLongPress={() => emitTabLongPress({ navigation, route })}
+							onPress={() => emitTabPress({ isFocused, navigation, route })}
+							scaleTo={0.9}
+							style={{
+								alignItems: "center",
+								height: "100%",
+								justifyContent: "center",
+								width: metrics.tabSlot,
+							}}
 							testID={options.tabBarButtonTestID}
 						>
-							<View
-								className="h-10 w-10 items-center justify-center rounded-full"
-								style={{
-									backgroundColor: isFocused ? ACTIVE_TAB_COLOR : "transparent",
-								}}
-							>
-								{tabBarIcon?.({ color, focused: isFocused, size: 20 })}
-							</View>
-						</Pressable>
+							{options.tabBarIcon?.({ color, focused: isFocused, size: 22 })}
+						</PressableScale>
 					);
 				})}
-			</Surface>
+			</GlassSurface>
 			{aiRoute && aiDescriptor ? (
-				<Surface className="h-14 w-14 items-center justify-center rounded-full border border-border bg-surface">
-					<Pressable
-						accessibilityLabel={aiDescriptor.options.tabBarAccessibilityLabel}
-						accessibilityRole="button"
-						accessibilityState={isAiFocused ? { selected: true } : undefined}
-						className="h-12 w-12 items-center justify-center rounded-full"
-						onLongPress={() => emitTabLongPress({ navigation, route: aiRoute })}
-						onPress={() =>
-							emitTabPress({
-								isFocused: isAiFocused,
-								navigation,
-								params: { fromTab: focusedRoute.name },
-								route: aiRoute,
-							})
-						}
-						testID={aiDescriptor.options.tabBarButtonTestID}
+				<PressableScale
+					accessibilityLabel={
+						aiDescriptor.options.tabBarAccessibilityLabel ??
+						aiDescriptor.options.title
+					}
+					onLongPress={() => emitTabLongPress({ navigation, route: aiRoute })}
+					onPress={() =>
+						emitTabPress({
+							isFocused: isAiFocused,
+							navigation,
+							params: { fromTab: focusedRoute.name },
+							route: aiRoute,
+						})
+					}
+					scaleTo={0.92}
+					style={{ height: metrics.tabBarHeight, width: metrics.tabBarHeight }}
+					testID={aiDescriptor.options.tabBarButtonTestID}
+				>
+					<GlassSurface
+						interactive={true}
+						shape="circle"
+						style={{
+							alignItems: "center",
+							height: metrics.tabBarHeight,
+							justifyContent: "center",
+							width: metrics.tabBarHeight,
+						}}
 					>
-						<View
-							className="h-12 w-12 items-center justify-center rounded-full"
-							style={{
-								backgroundColor: isAiFocused ? ACTIVE_TAB_COLOR : "transparent",
-							}}
-						>
-							{aiDescriptor.options.tabBarIcon?.({
-								color: isAiFocused ? "#FFFFFF" : INACTIVE_TAB_COLOR,
-								focused: isAiFocused,
-								size: 20,
-							})}
-						</View>
-					</Pressable>
-				</Surface>
+						{aiDescriptor.options.tabBarIcon?.({
+							color: palette.accent,
+							focused: false,
+							size: 24,
+						})}
+					</GlassSurface>
+				</PressableScale>
 			) : null}
 		</View>
 	);

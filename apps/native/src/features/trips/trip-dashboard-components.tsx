@@ -3,28 +3,16 @@ import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
 import { useAction, useMutation } from "convex/react";
 import { type Href, Link, useRouter } from "expo-router";
-import {
-	BottomSheet,
-	Button,
-	CloseButton,
-	Input,
-	Label,
-	Menu,
-	Spinner,
-	Surface,
-	Text,
-	TextField,
-	useThemeColor,
-} from "heroui-native";
+import { BottomSheet, Menu } from "heroui-native";
 import type { ReactNode } from "react";
 import { useRef, useState } from "react";
 import {
 	ImageBackground,
-	Pressable,
 	ScrollView,
 	useWindowDimensions,
 	View,
 } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 import {
@@ -33,6 +21,18 @@ import {
 } from "@/src/components/date/date-picker-field";
 
 import { NavigationBackButton } from "@/src/components/navigation/navigation-back-button";
+import {
+	AppText,
+	Card,
+	GlassSurface,
+	haptic,
+	PressableScale,
+	PrimaryButton,
+	radius,
+	SecondaryButton,
+	SheetHeader,
+	useUITheme,
+} from "@/src/components/ui";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 import { useDestinationImages } from "@/src/features/home/use-destination-images";
 import { TripMetricBlock } from "@/src/features/trips/trip-card-primitives";
@@ -55,12 +55,8 @@ import type {
 	TripTab,
 } from "./trip-dashboard-types";
 import { formatMoney, getReadinessDisplay } from "./trip-dashboard-utils";
+import { TripTextField } from "./trip-text-field";
 
-const accentColor = "#0A84FF";
-const mutedColor = "#71717A";
-const foregroundColor = "#18181B";
-const borderColor = "rgba(24, 24, 27, 0.08)";
-const softBackgroundColor = "rgba(24, 24, 27, 0.04)";
 export const tripFloatingBarBottomInset = 24;
 export const tripFloatingBarGap = 6;
 const viyaButtonNavigationThrottleMs = 800;
@@ -185,7 +181,7 @@ const moduleAccents: Record<string, ModuleAccent> = {
 
 const defaultModuleAccent: ModuleAccent = {
 	bg: "rgba(10, 132, 255, 0.1)",
-	color: accentColor,
+	color: "#0A84FF",
 };
 const getModuleAccent = (label: string): ModuleAccent =>
 	moduleAccents[label] ?? defaultModuleAccent;
@@ -215,20 +211,14 @@ function SheetField({
 	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
 
 	return (
-		<TextField className="gap-2">
-			<Label>
-				<Label.Text>{label}</Label.Text>
-			</Label>
-			<Input
-				className="h-12 border border-border bg-surface px-4"
-				onBlur={onBlur}
-				onChangeText={onChangeText}
-				onFocus={onFocus}
-				placeholder={placeholder}
-				value={value}
-				variant="secondary"
-			/>
-		</TextField>
+		<TripTextField
+			label={label}
+			onBlur={onBlur}
+			onChangeText={onChangeText}
+			onFocus={onFocus}
+			placeholder={placeholder}
+			value={value}
+		/>
 	);
 }
 
@@ -242,15 +232,15 @@ function ProfileFormSection({
 	title: string;
 }) {
 	return (
-		<View className="gap-3">
-			<View className="gap-0.5">
-				<Text type="body-sm" weight="bold">
+		<View style={{ gap: 12 }}>
+			<View style={{ gap: 2 }}>
+				<AppText accessibilityRole="header" bold variant="subhead">
 					{title}
-				</Text>
+				</AppText>
 				{subtitle ? (
-					<Text color="muted" type="body-xs">
+					<AppText tone="secondary" variant="footnote">
 						{subtitle}
-					</Text>
+					</AppText>
 				) : null}
 			</View>
 			{children}
@@ -267,27 +257,36 @@ function ProfileChoiceChip({
 	label: string;
 	onPress: () => void;
 }) {
+	const { palette } = useUITheme();
+
 	return (
-		<Pressable
+		<PressableScale
+			accessibilityLabel={label}
 			accessibilityRole="button"
 			accessibilityState={{ selected: isSelected }}
-			className="min-h-10 flex-row items-center rounded-full border bg-white px-4"
+			haptic="selection"
+			hitSlop={{ bottom: 5, top: 5 }}
 			onPress={onPress}
-			style={({ pressed }) => ({
-				backgroundColor: isSelected ? accentColor : "#FFFFFF",
-				borderColor: isSelected ? accentColor : "rgba(24, 24, 27, 0.06)",
-				opacity: pressed ? 0.82 : 1,
-				transform: [{ scale: pressed ? 0.98 : 1 }],
-			})}
+			scaleTo={0.97}
+			style={{
+				alignItems: "center",
+				backgroundColor: isSelected ? palette.ink : palette.surface,
+				borderRadius: radius.pill,
+				flexDirection: "row",
+				height: 34,
+				paddingHorizontal: 16,
+			}}
 		>
-			<Text
-				style={{ color: isSelected ? "#FFFFFF" : foregroundColor }}
-				type="body-sm"
-				weight="semibold"
+			<AppText
+				style={{
+					color: isSelected ? palette.onPrimary : palette.ink,
+					fontWeight: "500",
+				}}
+				variant="subhead"
 			>
 				{label}
-			</Text>
-		</Pressable>
+			</AppText>
+		</PressableScale>
 	);
 }
 
@@ -304,45 +303,55 @@ function ProfileOptionCard({
 	onPress: () => void;
 	title: string;
 }) {
+	const { palette } = useUITheme();
+
 	return (
-		<Pressable
+		<PressableScale
+			accessibilityLabel={`${title}. ${description}`}
 			accessibilityRole="button"
 			accessibilityState={{ selected: isSelected }}
-			className="rounded-3xl"
+			haptic="selection"
 			onPress={onPress}
-			style={({ pressed }) => ({
-				transform: [{ scale: pressed ? 0.99 : 1 }],
-			})}
+			scaleTo={0.98}
+			style={{
+				alignItems: "center",
+				backgroundColor: palette.surface,
+				borderColor: isSelected ? palette.ink : "transparent",
+				borderCurve: "continuous",
+				borderRadius: radius.card,
+				borderWidth: 1.5,
+				flexDirection: "row",
+				gap: 12,
+				minHeight: 64,
+				padding: 16,
+			}}
 		>
-			<Surface
-				className="flex-row items-center gap-3 rounded-3xl border bg-surface p-4"
+			<View
 				style={{
-					borderColor: isSelected ? accentColor : borderColor,
+					alignItems: "center",
+					backgroundColor: palette.fill,
+					borderRadius: radius.pill,
+					height: 44,
+					justifyContent: "center",
+					width: 44,
 				}}
 			>
-				<View
-					className="h-11 w-11 items-center justify-center rounded-full"
-					style={{ backgroundColor: isSelected ? "#EAF2FF" : "#F4F4F5" }}
-				>
-					<Ionicons
-						color={isSelected ? accentColor : mutedColor}
-						name={icon}
-						size={20}
-					/>
-				</View>
-				<View className="min-w-0 flex-1 gap-1">
-					<Text type="body" weight="semibold">
-						{title}
-					</Text>
-					<Text.Paragraph color="muted" type="body-sm">
-						{description}
-					</Text.Paragraph>
-				</View>
-				{isSelected ? (
-					<Ionicons color={accentColor} name="checkmark-circle" size={22} />
-				) : null}
-			</Surface>
-		</Pressable>
+				<Ionicons
+					color={isSelected ? palette.ink : palette.inkSecondary}
+					name={icon}
+					size={20}
+				/>
+			</View>
+			<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+				<AppText variant="headline">{title}</AppText>
+				<AppText tone="secondary" variant="subhead">
+					{description}
+				</AppText>
+			</View>
+			{isSelected ? (
+				<Ionicons color={palette.ink} name="checkmark-circle" size={22} />
+			) : null}
+		</PressableScale>
 	);
 }
 
@@ -364,6 +373,7 @@ function TripProfileEditSheet({
 	onUpdateForm: (key: keyof TripProfileForm, value: string) => void;
 }) {
 	const insets = useSafeAreaInsets();
+	const { palette } = useUITheme();
 	const dateRange: DateRangeValue = {
 		end: form.endDate,
 		start: form.startDate,
@@ -393,22 +403,18 @@ function TripProfileEditSheet({
 					snapPoints={["88%"]}
 				>
 					<View
-						className="gap-4 px-5 pt-2"
-						style={{ paddingBottom: Math.max(insets.bottom, 18) }}
+						style={{
+							backgroundColor: palette.canvas,
+							gap: 16,
+							paddingBottom: Math.max(insets.bottom, 18),
+							paddingHorizontal: 20,
+						}}
 					>
-						<View className="flex-row items-start justify-between gap-4">
-							<View className="flex-1 gap-1">
-								<BottomSheet.Title>Edit trip profile</BottomSheet.Title>
-								<BottomSheet.Description>
-									Update the core trip details used across every module.
-								</BottomSheet.Description>
-							</View>
-							<CloseButton
-								accessibilityLabel="Close trip profile form"
-								className="h-10 w-10 rounded-full bg-surface"
-								onPress={() => onOpenChange(false)}
-							/>
-						</View>
+						<SheetHeader
+							onClose={() => onOpenChange(false)}
+							subtitle="Update the core trip details used across every module."
+							title="Edit trip profile"
+						/>
 						<ScrollView
 							contentContainerStyle={{ gap: 22, paddingBottom: 8 }}
 							keyboardShouldPersistTaps="handled"
@@ -513,14 +519,16 @@ function TripProfileEditSheet({
 							</ProfileFormSection>
 						</ScrollView>
 						{errorMessage ? (
-							<Text className="text-danger" type="body-sm">
+							<AppText tone="danger" variant="subhead">
 								{errorMessage}
-							</Text>
+							</AppText>
 						) : null}
-						<Button isDisabled={isSaving} onPress={onSubmit} size="lg">
-							{isSaving ? <Spinner size="sm" /> : null}
-							<Button.Label>Save profile</Button.Label>
-						</Button>
+						<PrimaryButton
+							disabled={isSaving}
+							isPending={isSaving}
+							label="Save profile"
+							onPress={onSubmit}
+						/>
 					</View>
 				</BottomSheet.Content>
 			</BottomSheet.Portal>
@@ -542,59 +550,56 @@ function TripDeleteConfirmSheet({
 	onOpenChange: (isOpen: boolean) => void;
 }) {
 	const insets = useSafeAreaInsets();
+	const { palette } = useUITheme();
 
 	return (
 		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
 			<BottomSheet.Portal>
 				<BottomSheet.Overlay />
 				<BottomSheet.Content
-					backgroundClassName="rounded-t-[36px] bg-background"
+					backgroundClassName="rounded-t-[32px] bg-background"
 					enablePanDownToClose={!isDeleting}
 					snapPoints={["38%"]}
 				>
 					<View
-						className="gap-4 px-5 pt-2"
-						style={{ paddingBottom: Math.max(insets.bottom, 18) }}
+						style={{
+							backgroundColor: palette.canvas,
+							gap: 16,
+							paddingBottom: Math.max(insets.bottom, 18),
+							paddingHorizontal: 20,
+						}}
 					>
-						<View className="flex-row items-start justify-between gap-4">
-							<View className="flex-1 gap-1">
-								<BottomSheet.Title>Delete trip?</BottomSheet.Title>
-								<BottomSheet.Description>
-									This permanently removes the trip and its saved planning
-									details.
-								</BottomSheet.Description>
-							</View>
-							<CloseButton
-								accessibilityLabel="Close delete trip confirmation"
-								className="h-10 w-10 rounded-full bg-surface"
+						<SheetHeader
+							onClose={() => {
+								if (!isDeleting) {
+									onOpenChange(false);
+								}
+							}}
+							subtitle="This permanently removes the trip and its saved planning details."
+							title="Delete trip?"
+						/>
+						{errorMessage ? (
+							<AppText
+								accessibilityLiveRegion="polite"
+								tone="danger"
+								variant="subhead"
+							>
+								{errorMessage}
+							</AppText>
+						) : null}
+						<View style={{ gap: 8 }}>
+							<PrimaryButton
+								destructive
+								disabled={isDeleting}
+								isPending={isDeleting}
+								label="Delete"
+								onPress={onConfirm}
+							/>
+							<SecondaryButton
+								disabled={isDeleting}
+								label="Cancel"
 								onPress={() => onOpenChange(false)}
 							/>
-						</View>
-						{errorMessage ? (
-							<Text className="text-danger" type="body-sm">
-								{errorMessage}
-							</Text>
-						) : null}
-						<View className="flex-row gap-2">
-							<Button
-								className="flex-1"
-								isDisabled={isDeleting}
-								onPress={() => onOpenChange(false)}
-								size="lg"
-								variant="secondary"
-							>
-								<Button.Label>Cancel</Button.Label>
-							</Button>
-							<Button
-								className="flex-1"
-								isDisabled={isDeleting}
-								onPress={onConfirm}
-								size="lg"
-								variant="tertiary"
-							>
-								{isDeleting ? <Spinner size="sm" /> : null}
-								<Button.Label>Delete</Button.Label>
-							</Button>
 						</View>
 					</View>
 				</BottomSheet.Content>
@@ -616,15 +621,42 @@ export function LinkButton({
 	icon,
 	variant = "secondary",
 }: LinkButtonProps) {
-	const iconColor = variant === "primary" ? "#FFFFFF" : accentColor;
+	const router = useRouter();
+	const { palette } = useUITheme();
+	const isPrimary = variant === "primary";
+	const foreground = isPrimary ? palette.onPrimary : palette.accent;
 
 	return (
-		<Link asChild href={href}>
-			<Button size="sm" variant={variant}>
-				{icon ? <Ionicons color={iconColor} name={icon} size={16} /> : null}
-				<Button.Label>{children}</Button.Label>
-			</Button>
-		</Link>
+		<PressableScale
+			accessibilityLabel={children}
+			accessibilityRole="link"
+			hitSlop={{ bottom: 5, top: 5 }}
+			onPress={() => router.push(href)}
+			scaleTo={0.97}
+			style={{
+				alignItems: "center",
+				alignSelf: "flex-start",
+				backgroundColor: (() => {
+					if (isPrimary) {
+						return palette.ink;
+					}
+					return variant === "ghost" ? "transparent" : palette.fill;
+				})(),
+				borderRadius: radius.pill,
+				flexDirection: "row",
+				gap: 6,
+				height: 34,
+				paddingHorizontal: 14,
+			}}
+		>
+			{icon ? <Ionicons color={foreground} name={icon} size={16} /> : null}
+			<AppText
+				style={{ color: foreground, fontWeight: "600" }}
+				variant="subhead"
+			>
+				{children}
+			</AppText>
+		</PressableScale>
 	);
 }
 
@@ -637,13 +669,17 @@ export function Section({
 	icon?: IoniconName;
 	title: string;
 }) {
+	const { palette } = useUITheme();
+
 	return (
-		<View className="gap-3 py-2">
-			<View className="flex-row items-center gap-2">
-				{icon ? <Ionicons color={mutedColor} name={icon} size={18} /> : null}
-				<Text.Heading type="h5" weight="semibold">
+		<View style={{ gap: 12, paddingVertical: 8 }}>
+			<View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
+				{icon ? (
+					<Ionicons color={palette.inkSecondary} name={icon} size={18} />
+				) : null}
+				<AppText accessibilityRole="header" bold variant="headline">
 					{title}
-				</Text.Heading>
+				</AppText>
 			</View>
 			{children}
 		</View>
@@ -661,12 +697,27 @@ export function EmptyCopy({
 	children: string;
 	icon?: IoniconName;
 }) {
+	const { palette } = useUITheme();
+
 	return (
-		<View className="items-center gap-2 rounded-[20px] border border-border border-dashed p-5">
-			<Ionicons color="#8E8E93" name={icon} size={20} />
-			<Text align="center" color="muted" type="body-sm">
+		<View
+			style={{
+				alignItems: "center",
+				backgroundColor: palette.fill,
+				borderCurve: "continuous",
+				borderRadius: radius.card,
+				gap: 8,
+				padding: 20,
+			}}
+		>
+			<Ionicons color={palette.inkTertiary} name={icon} size={20} />
+			<AppText
+				style={{ textAlign: "center" }}
+				tone="secondary"
+				variant="subhead"
+			>
 				{children}
-			</Text>
+			</AppText>
 			{actionHref && actionLabel ? (
 				<LinkButton href={actionHref}>{actionLabel}</LinkButton>
 			) : null}
@@ -680,6 +731,7 @@ export function TripHeaderActionGroup({
 	model: TripDashboardModel;
 }) {
 	const router = useRouter();
+	const { palette } = useUITheme();
 	const updateTripProfile = useMutation(api.trips.updateTripProfile);
 	const toggleTripFavorite = useMutation(api.trips.toggleTripFavorite);
 	const archiveTrip = useMutation(api.trips.archiveTrip);
@@ -766,6 +818,7 @@ export function TripHeaderActionGroup({
 
 	const handleFavoritePress = () => {
 		setActionErrorMessage(null);
+		haptic("selection");
 		toggleTripFavorite({
 			isFavorite: !isFavorite,
 			tripId: model.tripId,
@@ -786,9 +839,11 @@ export function TripHeaderActionGroup({
 		setIsDeletingTrip(true);
 		try {
 			await deleteTrip({ tripId: model.tripId });
+			haptic("success");
 			setIsDeleteSheetOpen(false);
 			router.replace(VIYA_ROUTES.trips as Href);
 		} catch {
+			haptic("error");
 			setActionErrorMessage("Could not delete trip.");
 		} finally {
 			setIsDeletingTrip(false);
@@ -802,29 +857,33 @@ export function TripHeaderActionGroup({
 
 	return (
 		<>
-			<View className="items-end gap-1">
+			<View style={{ alignItems: "flex-end", gap: 4 }}>
 				<Menu>
 					<Menu.Trigger asChild={true}>
-						<Pressable
+						<PressableScale
 							accessibilityLabel="Open trip options"
 							accessibilityRole="button"
-							className="h-12 w-12 items-center justify-center rounded-full border border-border bg-surface"
-							style={({ pressed }) => ({
-								transform: [{ scale: pressed ? 0.99 : 1 }],
-							})}
+							style={{
+								alignItems: "center",
+								backgroundColor: palette.surface,
+								borderRadius: radius.pill,
+								height: 44,
+								justifyContent: "center",
+								width: 44,
+							}}
 						>
 							<Ionicons
-								color={foregroundColor}
+								color={palette.ink}
 								name="ellipsis-horizontal"
 								size={22}
 							/>
-						</Pressable>
+						</PressableScale>
 					</Menu.Trigger>
 					<Menu.Portal>
 						<Menu.Overlay />
 						<Menu.Content
 							align="end"
-							className="rounded-[28px] border border-border bg-surface p-2"
+							className="rounded-[24px] bg-surface p-2"
 							offset={10}
 							placement="bottom"
 							presentation="popover"
@@ -838,7 +897,7 @@ export function TripHeaderActionGroup({
 							>
 								<View className="h-9 w-9 items-center justify-center rounded-full bg-primary/10">
 									<Ionicons
-										color={accentColor}
+										color={palette.accent}
 										name="create-outline"
 										size={18}
 									/>
@@ -862,7 +921,7 @@ export function TripHeaderActionGroup({
 							>
 								<View className="h-9 w-9 items-center justify-center rounded-full bg-warning/10">
 									<Ionicons
-										color="#FF9F0A"
+										color={palette.warning}
 										name={isFavorite ? "heart" : "heart-outline"}
 										size={18}
 									/>
@@ -890,7 +949,7 @@ export function TripHeaderActionGroup({
 							>
 								<View className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary">
 									<Ionicons
-										color={mutedColor}
+										color={palette.inkSecondary}
 										name="archive-outline"
 										size={18}
 									/>
@@ -912,7 +971,11 @@ export function TripHeaderActionGroup({
 								onPress={handleDeletePress}
 							>
 								<View className="h-9 w-9 items-center justify-center rounded-full bg-danger/10">
-									<Ionicons color="#FF3B30" name="trash-outline" size={18} />
+									<Ionicons
+										color={palette.danger}
+										name="trash-outline"
+										size={18}
+									/>
 								</View>
 								<View className="flex-1">
 									<Menu.ItemTitle className="font-semibold text-danger text-sm">
@@ -927,9 +990,14 @@ export function TripHeaderActionGroup({
 					</Menu.Portal>
 				</Menu>
 				{actionErrorMessage ? (
-					<Text className="max-w-44 text-danger" type="body-xs">
+					<AppText
+						accessibilityLiveRegion="polite"
+						className="max-w-44"
+						tone="danger"
+						variant="footnote"
+					>
 						{actionErrorMessage}
-					</Text>
+					</AppText>
 				) : null}
 			</View>
 			<TripProfileEditSheet
@@ -969,26 +1037,47 @@ export function TripHeaderActionGroup({
 export function TripStickyHeader({ model }: { model: TripDashboardModel }) {
 	const router = useRouter();
 	const insets = useSafeAreaInsets();
+	const { palette } = useUITheme();
 	const { trip } = model.workspace;
 
 	return (
 		<View
-			className="bg-background px-4 pb-3"
-			style={{ paddingTop: insets.top + 10, zIndex: 30 }}
+			style={{
+				backgroundColor: palette.canvas,
+				paddingBottom: 12,
+				paddingHorizontal: 16,
+				paddingTop: insets.top + 10,
+				zIndex: 30,
+			}}
 		>
-			<View className="min-h-11 flex-row items-center gap-3">
-				<View className="min-w-0 flex-1 flex-row items-center gap-3">
+			<View
+				style={{
+					alignItems: "center",
+					flexDirection: "row",
+					gap: 12,
+					minHeight: 44,
+				}}
+			>
+				<View
+					style={{
+						alignItems: "center",
+						flex: 1,
+						flexDirection: "row",
+						gap: 12,
+						minWidth: 0,
+					}}
+				>
 					<NavigationBackButton onPress={() => router.back()} />
-					<View className="min-w-0 flex-1">
-						<Text numberOfLines={1} type="body-sm" weight="bold">
+					<View style={{ flex: 1, minWidth: 0 }}>
+						<AppText bold numberOfLines={1} variant="subhead">
 							{trip.title}
-						</Text>
-						<Text color="muted" numberOfLines={1} type="body-xs">
+						</AppText>
+						<AppText numberOfLines={1} tone="secondary" variant="footnote">
 							{trip.destination} · {model.tripWindow}
-						</Text>
+						</AppText>
 					</View>
 				</View>
-				<View className="w-12 items-end">
+				<View style={{ alignItems: "flex-end", minWidth: 48 }}>
 					<TripHeaderActionGroup model={model} />
 				</View>
 			</View>
@@ -1004,6 +1093,7 @@ export function TripFloatingViyaButton({
 	tripId: Id<"trips">;
 }) {
 	const router = useRouter();
+	const { palette } = useUITheme();
 	const lastNavigationPressRef = useRef(0);
 
 	const handlePress = () => {
@@ -1029,36 +1119,45 @@ export function TripFloatingViyaButton({
 	};
 
 	return (
-		<Surface className="h-14 w-14 items-center justify-center rounded-full border border-border bg-surface">
-			<Pressable
+		<GlassSurface interactive shape="circle" style={{ height: 56, width: 56 }}>
+			<PressableScale
 				accessibilityLabel="Open Viya for this trip"
 				accessibilityRole="button"
-				className="h-12 w-12 items-center justify-center rounded-full"
 				onPress={handlePress}
-				style={({ pressed }) => ({
-					transform: [{ scale: pressed ? 0.99 : 1 }],
-				})}
+				style={{
+					alignItems: "center",
+					height: 56,
+					justifyContent: "center",
+					width: 56,
+				}}
 			>
-				<View className="h-12 w-12 items-center justify-center rounded-full">
-					<Ionicons color={accentColor} name="chatbubble-outline" size={22} />
-				</View>
-			</Pressable>
-		</Surface>
+				<Ionicons color={palette.accent} name="chatbubble-outline" size={22} />
+			</PressableScale>
+		</GlassSurface>
 	);
 }
 
 function TripMetaChip({ icon, label }: { icon: IoniconName; label: string }) {
+	const { palette } = useUITheme();
+
 	return (
-		<View className="max-w-full flex-row items-center gap-1.5">
-			<Ionicons color={mutedColor} name={icon} size={13} />
-			<Text
-				className="shrink"
+		<View
+			style={{
+				alignItems: "center",
+				flexDirection: "row",
+				gap: 6,
+				maxWidth: "100%",
+			}}
+		>
+			<Ionicons color={palette.inkSecondary} name={icon} size={13} />
+			<AppText
+				bold
 				numberOfLines={1}
-				type="body-xs"
-				weight="semibold"
+				style={{ flexShrink: 1 }}
+				variant="footnote"
 			>
 				{label}
-			</Text>
+			</AppText>
 		</View>
 	);
 }
@@ -1070,36 +1169,49 @@ function TripHeroCover({
 	coverImageUrl?: string | null;
 	destination: string;
 }) {
+	const { palette } = useUITheme();
 	const destinationInitial = (
 		destination.trim().charAt(0) || "V"
 	).toUpperCase();
 
 	if (coverImageUrl) {
 		return (
-			<View className="h-24 w-24 overflow-hidden rounded-[22px] bg-surface-secondary">
+			<View
+				style={{
+					backgroundColor: palette.fill,
+					borderCurve: "continuous",
+					borderRadius: 22,
+					height: 96,
+					overflow: "hidden",
+					width: 96,
+				}}
+			>
 				<ImageBackground
 					accessibilityIgnoresInvertColors={true}
-					className="h-full w-full"
+					accessibilityLabel={`${destination} cover photo`}
 					imageStyle={{ borderRadius: 22 }}
 					source={{ uri: coverImageUrl }}
-				/>
-				<View
-					className="absolute inset-0 rounded-[22px]"
-					pointerEvents="none"
-					style={{
-						borderColor: "rgba(0, 0, 0, 0.06)",
-						borderWidth: 1,
-					}}
+					style={{ height: "100%", width: "100%" }}
 				/>
 			</View>
 		);
 	}
 
 	return (
-		<View className="h-24 w-24 items-center justify-center rounded-[22px] bg-accent-soft">
-			<Text type="body" weight="bold">
+		<View
+			style={{
+				alignItems: "center",
+				backgroundColor: palette.fill,
+				borderCurve: "continuous",
+				borderRadius: 22,
+				height: 96,
+				justifyContent: "center",
+				width: 96,
+			}}
+		>
+			<AppText bold variant="heading">
 				{destinationInitial}
-			</Text>
+			</AppText>
 		</View>
 	);
 }
@@ -1119,6 +1231,7 @@ const getDestinationImageFallbackNames = (destination: string) => {
 };
 
 export function TripHero({ model }: { model: TripDashboardModel }) {
+	const { palette } = useUITheme();
 	const { readiness, travelerLabel, tripWindow, workspace } = model;
 	const destinationImageFallbackNames = getDestinationImageFallbackNames(
 		workspace.trip.destination
@@ -1160,22 +1273,34 @@ export function TripHero({ model }: { model: TripDashboardModel }) {
 				)
 			: 0;
 	return (
-		<View className="gap-5 px-1 py-2">
-			<View className="flex-row items-center gap-4">
+		<Animated.View
+			entering={FadeInDown.duration(220)}
+			style={{ gap: 20, paddingHorizontal: 4, paddingVertical: 8 }}
+		>
+			<View style={{ alignItems: "center", flexDirection: "row", gap: 16 }}>
 				<TripHeroCover
 					coverImageUrl={coverImageUrl}
 					destination={workspace.trip.destination}
 				/>
-				<View className="min-w-0 flex-1 gap-2.5">
-					<View className="flex-row items-start gap-2">
-						<View className="min-w-0 flex-1">
-							<Text.Heading numberOfLines={2} type="h2" weight="semibold">
-								{workspace.trip.title}
-							</Text.Heading>
-						</View>
-					</View>
-					<View className="gap-1.5">
-						<View className="flex-row flex-wrap items-center gap-x-3 gap-y-1.5">
+				<View style={{ flex: 1, gap: 10, minWidth: 0 }}>
+					<AppText
+						accessibilityRole="header"
+						bold
+						numberOfLines={2}
+						variant="heading"
+					>
+						{workspace.trip.title}
+					</AppText>
+					<View style={{ gap: 6 }}>
+						<View
+							style={{
+								alignItems: "center",
+								columnGap: 12,
+								flexDirection: "row",
+								flexWrap: "wrap",
+								rowGap: 6,
+							}}
+						>
 							<TripMetaChip icon="location-outline" label={destinationLabel} />
 							<TripMetaChip icon="people-outline" label={travelerLabel} />
 						</View>
@@ -1183,12 +1308,20 @@ export function TripHero({ model }: { model: TripDashboardModel }) {
 					</View>
 				</View>
 			</View>
-			<View className="flex-row items-stretch gap-4 pt-4">
+			<View
+				style={{
+					alignItems: "stretch",
+					flexDirection: "row",
+					gap: 16,
+					paddingTop: 16,
+				}}
+			>
 				<Link asChild href={VIYA_ROUTES.tripReadiness(model.tripId)}>
-					<Pressable
+					<PressableScale
 						accessibilityLabel="View readiness details"
 						accessibilityRole="button"
-						className="min-w-0 flex-1"
+						scaleTo={0.98}
+						style={{ flex: 1, minWidth: 0 }}
 					>
 						<TripMetricBlock
 							detail={readinessDisplay.detail}
@@ -1197,14 +1330,21 @@ export function TripHero({ model }: { model: TripDashboardModel }) {
 							tone="success"
 							value={readinessDisplay.value}
 						/>
-					</Pressable>
+					</PressableScale>
 				</Link>
-				<View className="w-px self-stretch bg-border" />
+				<View
+					style={{
+						alignSelf: "stretch",
+						backgroundColor: palette.separator,
+						width: 1,
+					}}
+				/>
 				<Link asChild href={VIYA_ROUTES.tripBudget(model.tripId)}>
-					<Pressable
+					<PressableScale
 						accessibilityLabel="Open trip budget"
 						accessibilityRole="button"
-						className="min-w-0 flex-1"
+						scaleTo={0.98}
+						style={{ flex: 1, minWidth: 0 }}
 					>
 						<TripMetricBlock
 							align="flex-end"
@@ -1213,10 +1353,10 @@ export function TripHero({ model }: { model: TripDashboardModel }) {
 							progress={budgetProgress}
 							value={budgetSummary}
 						/>
-					</Pressable>
+					</PressableScale>
 				</Link>
 			</View>
-		</View>
+		</Animated.View>
 	);
 }
 
@@ -1327,14 +1467,19 @@ function ModuleLauncherBadge({
 	isActive: boolean;
 	value: string;
 }) {
+	const { palette } = useUITheme();
+
 	if (isActive) {
 		return (
 			<View
-				className="min-w-6 flex-row items-center gap-1 rounded-full px-2 py-1"
 				style={{
-					backgroundColor: "#FFFFFF",
-					borderColor: accent.color,
-					borderWidth: 1,
+					alignItems: "center",
+					backgroundColor: palette.surface,
+					borderRadius: radius.pill,
+					flexDirection: "row",
+					gap: 4,
+					paddingHorizontal: 8,
+					paddingVertical: 4,
 				}}
 			>
 				<Ionicons
@@ -1342,23 +1487,34 @@ function ModuleLauncherBadge({
 					name="checkmark-circle-outline"
 					size={12}
 				/>
-				<Text style={{ color: accent.color }} type="body-xs" weight="semibold">
+				<AppText bold style={{ color: accent.color }} variant="footnote">
 					Current
-				</Text>
+				</AppText>
 			</View>
 		);
 	}
 
 	return (
-		<View className="min-w-0 max-w-32 shrink items-center rounded-full border border-border bg-white px-2 py-1">
-			<Text
+		<View
+			style={{
+				alignItems: "center",
+				backgroundColor: palette.fill,
+				borderRadius: radius.pill,
+				flexShrink: 1,
+				maxWidth: 128,
+				minWidth: 0,
+				paddingHorizontal: 8,
+				paddingVertical: 4,
+			}}
+		>
+			<AppText
+				bold
 				numberOfLines={1}
 				style={{ color: accent.color }}
-				type="body-xs"
-				weight="semibold"
+				variant="footnote"
 			>
 				{value}
-			</Text>
+			</AppText>
 		</View>
 	);
 }
@@ -1372,51 +1528,64 @@ function ModuleLauncherTile({
 	item: TripWorkspaceModule;
 	onPress: () => void;
 }) {
+	const { palette } = useUITheme();
 	const accent = getModuleAccent(item.label);
 
 	return (
-		<Pressable
+		<PressableScale
 			accessibilityLabel={`${isActive ? "Current module" : "Open"} ${item.label}`}
 			accessibilityRole="button"
 			accessibilityState={{ selected: isActive }}
-			className={
-				item.span === "full"
-					? "min-h-24 basis-full rounded-[24px]"
-					: "min-h-24 flex-1 basis-[47%] rounded-[24px]"
-			}
+			haptic="selection"
 			onPress={onPress}
-			style={({ pressed }) => ({
-				transform: [{ scale: pressed ? 0.985 : 1 }],
-			})}
+			scaleTo={0.98}
+			style={{
+				backgroundColor: isActive ? accent.bg : palette.surface,
+				borderCurve: "continuous",
+				borderRadius: radius.card,
+				flexBasis: item.span === "full" ? "100%" : "47%",
+				flexGrow: 1,
+				gap: 10,
+				justifyContent: "space-between",
+				minHeight: 96,
+				padding: 14,
+			}}
 		>
-			<Surface
-				className="flex-1 justify-between gap-2.5 rounded-[24px] bg-surface p-3.5"
+			<View
 				style={{
-					backgroundColor: isActive ? accent.bg : undefined,
-					borderColor: isActive ? accent.color : borderColor,
-					borderWidth: 1,
+					alignItems: "center",
+					flexDirection: "row",
+					gap: 8,
+					justifyContent: "space-between",
 				}}
 			>
-				<View className="flex-row items-center justify-between gap-2">
-					<View className="h-9 w-9 items-center justify-center rounded-2xl bg-surface-secondary">
-						<Ionicons color={accent.color} name={item.icon} size={18} />
-					</View>
-					<ModuleLauncherBadge
-						accent={accent}
-						isActive={isActive}
-						value={item.value}
-					/>
+				<View
+					style={{
+						alignItems: "center",
+						backgroundColor: palette.fill,
+						borderRadius: radius.group,
+						height: 36,
+						justifyContent: "center",
+						width: 36,
+					}}
+				>
+					<Ionicons color={accent.color} name={item.icon} size={18} />
 				</View>
-				<View className="gap-0.5">
-					<Text numberOfLines={1} type="body" weight="bold">
-						{item.label}
-					</Text>
-					<Text color="muted" numberOfLines={2} type="body-xs">
-						{item.detail}
-					</Text>
-				</View>
-			</Surface>
-		</Pressable>
+				<ModuleLauncherBadge
+					accent={accent}
+					isActive={isActive}
+					value={item.value}
+				/>
+			</View>
+			<View style={{ gap: 2 }}>
+				<AppText bold numberOfLines={1} variant="callout">
+					{item.label}
+				</AppText>
+				<AppText numberOfLines={2} tone="secondary" variant="footnote">
+					{item.detail}
+				</AppText>
+			</View>
+		</PressableScale>
 	);
 }
 
@@ -1433,7 +1602,7 @@ function TripModulesSheet({
 }) {
 	const router = useRouter();
 	const insets = useSafeAreaInsets();
-	const foreground = useThemeColor("foreground");
+	const { palette } = useUITheme();
 	const { height } = useWindowDimensions();
 	const moduleGroups = getTripWorkspaceModuleGroups(model, {
 		includeOverview: true,
@@ -1461,23 +1630,18 @@ function TripModulesSheet({
 					snapPoints={["78%"]}
 				>
 					<View
-						className="gap-5 px-5 pt-2"
-						style={{ paddingBottom: Math.max(insets.bottom, 18) }}
+						style={{
+							backgroundColor: palette.surface,
+							gap: 16,
+							paddingBottom: Math.max(insets.bottom, 18),
+							paddingHorizontal: 20,
+						}}
 					>
-						<View className="flex-row items-start justify-between gap-4">
-							<View className="min-w-0 flex-1 gap-1">
-								<BottomSheet.Title>Workspace</BottomSheet.Title>
-								<BottomSheet.Description numberOfLines={2}>
-									Jump between sections for {model.workspace.trip.title}.
-								</BottomSheet.Description>
-							</View>
-							<CloseButton
-								accessibilityLabel="Close workspace"
-								className="h-10 w-10 rounded-full bg-surface"
-								iconProps={{ color: foreground, size: 22 }}
-								onPress={() => onOpenChange(false)}
-							/>
-						</View>
+						<SheetHeader
+							onClose={() => onOpenChange(false)}
+							subtitle={`Jump between sections for ${model.workspace.trip.title}.`}
+							title="Workspace"
+						/>
 
 						<ScrollView
 							contentContainerStyle={{ gap: 18, paddingBottom: 6 }}
@@ -1485,16 +1649,17 @@ function TripModulesSheet({
 							style={{ maxHeight: moduleListMaxHeight }}
 						>
 							{moduleGroups.map((group) => (
-								<View className="gap-3" key={group.value}>
-									<Text
-										className="px-1"
-										color="muted"
-										type="body-xs"
-										weight="semibold"
+								<View key={group.value} style={{ gap: 12 }}>
+									<AppText
+										style={{ paddingHorizontal: 4 }}
+										tone="secondary"
+										variant="eyebrow"
 									>
-										{group.label.toUpperCase()}
-									</Text>
-									<View className="flex-row flex-wrap gap-3">
+										{group.label}
+									</AppText>
+									<View
+										style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}
+									>
 										{group.items.map((item) => (
 											<ModuleLauncherTile
 												isActive={item.tab === activeTab}
@@ -1521,25 +1686,36 @@ export function TripModuleMenuButton({
 	activeTab: TripTab;
 	model: TripDashboardModel;
 }) {
+	const { palette } = useUITheme();
 	const [isModulesOpen, setIsModulesOpen] = useState(false);
 	const activeScreen = tripScreenMeta[activeTab];
 	const activeAccent = getModuleAccent(activeScreen.label);
 
 	return (
 		<>
-			<Surface className="h-14 w-44 justify-center rounded-full border border-border bg-surface px-2 py-2">
-				<Pressable
+			<GlassSurface interactive shape="pill" style={{ height: 56, width: 176 }}>
+				<PressableScale
 					accessibilityLabel={`Open workspace from ${activeScreen.label}`}
 					accessibilityRole="button"
-					className="h-10 flex-row items-center gap-3 rounded-full px-2"
 					onPress={() => setIsModulesOpen(true)}
-					style={({ pressed }) => ({
-						transform: [{ scale: pressed ? 0.99 : 1 }],
-					})}
+					scaleTo={0.97}
+					style={{
+						alignItems: "center",
+						flexDirection: "row",
+						gap: 12,
+						height: 56,
+						paddingHorizontal: 8,
+					}}
 				>
 					<View
-						className="h-10 w-10 items-center justify-center rounded-full"
-						style={{ backgroundColor: activeAccent.bg }}
+						style={{
+							alignItems: "center",
+							backgroundColor: activeAccent.bg,
+							borderRadius: radius.pill,
+							height: 40,
+							justifyContent: "center",
+							width: 40,
+						}}
 					>
 						<Ionicons
 							color={activeAccent.color}
@@ -1547,19 +1723,19 @@ export function TripModuleMenuButton({
 							size={18}
 						/>
 					</View>
-					<View className="min-w-0 flex-1">
-						<Text
+					<View style={{ flex: 1, minWidth: 0 }}>
+						<AppText
 							adjustsFontSizeToFit={true}
+							bold
 							numberOfLines={1}
-							type="body-sm"
-							weight="bold"
+							variant="subhead"
 						>
 							{activeScreen.label}
-						</Text>
+						</AppText>
 					</View>
-					<Ionicons color={mutedColor} name="chevron-up" size={14} />
-				</Pressable>
-			</Surface>
+					<Ionicons color={palette.inkSecondary} name="chevron-up" size={14} />
+				</PressableScale>
+			</GlassSurface>
 			<TripModulesSheet
 				activeTab={activeTab}
 				isOpen={isModulesOpen}
@@ -1581,11 +1757,17 @@ export function TripModuleNavigationBar({
 
 	return (
 		<View
-			className="absolute right-0 left-0 flex-row items-center justify-center px-4"
 			pointerEvents="box-none"
 			style={{
+				alignItems: "center",
 				bottom: Math.max(insets.bottom + 10, tripFloatingBarBottomInset),
+				flexDirection: "row",
 				gap: tripFloatingBarGap,
+				justifyContent: "center",
+				left: 0,
+				paddingHorizontal: 16,
+				position: "absolute",
+				right: 0,
 				zIndex: 30,
 			}}
 		>
@@ -1596,47 +1778,78 @@ export function TripModuleNavigationBar({
 }
 
 function WorkspaceModuleTile({ item }: { item: TripWorkspaceModule }) {
+	const { palette } = useUITheme();
 	const accent = getModuleAccent(item.label);
 
 	return (
 		<Link asChild href={item.href}>
-			<Pressable
+			<PressableScale
 				accessibilityLabel={`Open ${item.label}`}
 				accessibilityRole="button"
-				className="min-h-24 flex-1 basis-[47%] rounded-[24px]"
-				style={({ pressed }) => ({
-					transform: [{ scale: pressed ? 0.985 : 1 }],
-				})}
+				scaleTo={0.98}
+				style={{
+					backgroundColor: palette.surface,
+					borderCurve: "continuous",
+					borderRadius: radius.card,
+					flexBasis: "47%",
+					flexGrow: 1,
+					gap: 10,
+					justifyContent: "space-between",
+					minHeight: 96,
+					padding: 14,
+				}}
 			>
-				<Surface
-					className="flex-1 justify-between gap-2.5 rounded-[24px] bg-surface p-3.5"
-					style={{ borderColor, borderWidth: 1 }}
+				<View
+					style={{
+						alignItems: "center",
+						flexDirection: "row",
+						gap: 8,
+						justifyContent: "space-between",
+						minWidth: 0,
+					}}
 				>
-					<View className="min-w-0 flex-row items-center justify-between gap-2">
-						<View className="h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-surface-secondary">
-							<Ionicons color={accent.color} name={item.icon} size={18} />
-						</View>
-						<View className="min-w-0 max-w-32 shrink rounded-full border border-border bg-white px-2.5 py-1">
-							<Text
-								numberOfLines={1}
-								style={{ color: accent.color }}
-								type="body-xs"
-								weight="semibold"
-							>
-								{item.value}
-							</Text>
-						</View>
+					<View
+						style={{
+							alignItems: "center",
+							backgroundColor: palette.fill,
+							borderRadius: radius.group,
+							height: 36,
+							justifyContent: "center",
+							width: 36,
+						}}
+					>
+						<Ionicons color={accent.color} name={item.icon} size={18} />
 					</View>
-					<View className="gap-0.5">
-						<Text numberOfLines={1} type="body" weight="bold">
-							{item.label}
-						</Text>
-						<Text color="muted" numberOfLines={2} type="body-xs">
-							{item.detail}
-						</Text>
+					<View
+						style={{
+							backgroundColor: palette.fill,
+							borderRadius: radius.pill,
+							flexShrink: 1,
+							maxWidth: 128,
+							minWidth: 0,
+							paddingHorizontal: 10,
+							paddingVertical: 4,
+						}}
+					>
+						<AppText
+							bold
+							numberOfLines={1}
+							style={{ color: accent.color }}
+							variant="footnote"
+						>
+							{item.value}
+						</AppText>
 					</View>
-				</Surface>
-			</Pressable>
+				</View>
+				<View style={{ gap: 2 }}>
+					<AppText bold numberOfLines={1} variant="callout">
+						{item.label}
+					</AppText>
+					<AppText numberOfLines={2} tone="secondary" variant="footnote">
+						{item.detail}
+					</AppText>
+				</View>
+			</PressableScale>
 		</Link>
 	);
 }
@@ -1705,43 +1918,58 @@ function TripAgentDraftRow({
 	onApply: (draftId: Id<"tripAgentDrafts">) => void;
 	onDismiss: (draftId: Id<"tripAgentDrafts">) => void;
 }) {
+	const { palette } = useUITheme();
+
 	return (
-		<View className="gap-2 border-border border-t pt-3">
-			<View className="flex-row items-start gap-3">
-				<View className="h-8 w-8 items-center justify-center rounded-full bg-accent-soft">
-					<Ionicons color={accentColor} name="sparkles-outline" size={15} />
+		<View
+			style={{
+				borderTopColor: palette.separator,
+				borderTopWidth: 1,
+				gap: 8,
+				paddingTop: 12,
+			}}
+		>
+			<View style={{ alignItems: "flex-start", flexDirection: "row", gap: 12 }}>
+				<View
+					style={{
+						alignItems: "center",
+						backgroundColor: palette.fill,
+						borderRadius: radius.pill,
+						height: 32,
+						justifyContent: "center",
+						width: 32,
+					}}
+				>
+					<Ionicons color={palette.accent} name="sparkles-outline" size={15} />
 				</View>
-				<View className="min-w-0 flex-1 gap-0.5">
-					<Text color="muted" type="body-xs" weight="semibold">
-						{tripAgentModuleLabels[draft.module].toUpperCase()} DRAFT
-					</Text>
-					<Text numberOfLines={1} type="body-sm" weight="bold">
+				<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+					<AppText tone="secondary" variant="eyebrow">
+						{tripAgentModuleLabels[draft.module]} draft
+					</AppText>
+					<AppText bold numberOfLines={1} variant="subhead">
 						{draft.title}
-					</Text>
-					<Text color="muted" numberOfLines={2} type="body-xs">
+					</AppText>
+					<AppText numberOfLines={2} tone="secondary" variant="footnote">
 						{draft.rationale}
-					</Text>
+					</AppText>
 				</View>
 			</View>
-			<View className="flex-row gap-2">
-				<Button
-					className="min-w-0 flex-1"
-					isDisabled={isPending}
-					onPress={() => onApply(draft._id)}
-					size="sm"
-				>
-					{isPending ? <Spinner size="sm" /> : null}
-					<Button.Label>Apply</Button.Label>
-				</Button>
-				<Button
-					className="min-w-0 flex-1"
-					isDisabled={isPending}
-					onPress={() => onDismiss(draft._id)}
-					size="sm"
-					variant="secondary"
-				>
-					<Button.Label>Dismiss</Button.Label>
-				</Button>
+			<View style={{ flexDirection: "row", gap: 8 }}>
+				<View style={{ flex: 1, minWidth: 0 }}>
+					<PrimaryButton
+						disabled={isPending}
+						isPending={isPending}
+						label="Apply"
+						onPress={() => onApply(draft._id)}
+					/>
+				</View>
+				<View style={{ flex: 1, minWidth: 0 }}>
+					<SecondaryButton
+						disabled={isPending}
+						label="Dismiss"
+						onPress={() => onDismiss(draft._id)}
+					/>
+				</View>
 			</View>
 		</View>
 	);
@@ -1749,6 +1977,7 @@ function TripAgentDraftRow({
 
 function WorkspaceAutopilotCard({ model }: { model: TripDashboardModel }) {
 	const router = useRouter();
+	const { palette } = useUITheme();
 	const { workspace } = model;
 	const generateTripAgentDraft = useAction(
 		api.ai.tripAgent.generateTripAgentDraft
@@ -1837,6 +2066,7 @@ function WorkspaceAutopilotCard({ model }: { model: TripDashboardModel }) {
 					})
 				)
 			);
+			haptic("success");
 			setAgentMessage("Viya staged reviewable drafts for this workspace.");
 		} catch (error) {
 			setAgentErrorMessage(
@@ -1854,6 +2084,7 @@ function WorkspaceAutopilotCard({ model }: { model: TripDashboardModel }) {
 
 		try {
 			await applyTripAgentDraft({ draftId });
+			haptic("success");
 			setAgentMessage("Draft applied to the trip workspace.");
 		} catch (error) {
 			setAgentErrorMessage(
@@ -1880,153 +2111,196 @@ function WorkspaceAutopilotCard({ model }: { model: TripDashboardModel }) {
 	};
 
 	return (
-		<Surface
-			className="gap-4 rounded-[28px] border bg-surface p-4"
-			style={{ borderColor }}
-		>
-			<View className="flex-row items-start gap-3">
-				<View className="h-11 w-11 items-center justify-center rounded-[20px] bg-accent-soft">
-					<Ionicons color={accentColor} name="sparkles-outline" size={20} />
-				</View>
-				<View className="min-w-0 flex-1 gap-1">
-					<Text color="muted" type="body-xs" weight="semibold">
-						VIYA AUTOPILOT
-					</Text>
-					<Text type="body" weight="bold">
-						{autopilotTitle}
-					</Text>
-					<Text.Paragraph color="muted" type="body-sm">
-						{autopilotDescription}
-					</Text.Paragraph>
-				</View>
-			</View>
-			<View className="flex-row flex-wrap gap-2">
-				<View className="rounded-full bg-surface-secondary px-3 py-1.5">
-					<Text color="muted" type="body-xs" weight="semibold">
-						{completedStageCount}/5 stages
-					</Text>
-				</View>
-				<View className="rounded-full bg-surface-secondary px-3 py-1.5">
-					<Text color="muted" type="body-xs" weight="semibold">
-						{readinessDisplay.value} readiness
-					</Text>
-				</View>
-			</View>
-			{agentMessage ? (
-				<Text color="muted" type="body-xs">
-					{agentMessage}
-				</Text>
-			) : null}
-			{agentErrorMessage ? (
-				<Text className="text-danger" type="body-xs">
-					{agentErrorMessage}
-				</Text>
-			) : null}
-			{visibleDrafts.length > 0 ? (
-				<View className="gap-3">
-					<Text color="muted" type="body-xs" weight="semibold">
-						REVIEWABLE CHANGES
-					</Text>
-					{visibleDrafts.map((draft) => (
-						<TripAgentDraftRow
-							draft={draft}
-							isPending={pendingDraftId === draft._id}
-							key={draft._id}
-							onApply={handleApplyDraft}
-							onDismiss={handleDismissDraft}
-						/>
-					))}
-				</View>
-			) : null}
-			<View className="flex-row flex-wrap gap-2">
-				<Button
-					accessibilityLabel={
-						isWorkspaceReady
-							? "Ask Viya about this ready trip"
-							: "Complete this trip with Viya"
-					}
-					className="min-w-[47%] flex-1"
-					isDisabled={isGeneratingDrafts}
-					onPress={handleGenerateDrafts}
-					size="md"
+		<Animated.View entering={FadeInDown.duration(220)}>
+			<Card style={{ gap: 16 }}>
+				<View
+					style={{ alignItems: "flex-start", flexDirection: "row", gap: 12 }}
 				>
-					{isGeneratingDrafts ? (
-						<Spinner size="sm" />
-					) : (
-						<Ionicons color="#FFFFFF" name="sparkles-outline" size={16} />
-					)}
-					<Button.Label>{primaryActionLabel}</Button.Label>
-				</Button>
-				{isWorkspaceReady ? null : (
-					<Button
-						accessibilityLabel="Ask Viya about this trip"
-						className="min-w-[47%] flex-1"
-						isDisabled={isGeneratingDrafts}
-						onPress={openTripChat}
-						size="md"
-						variant="secondary"
+					<View
+						style={{
+							alignItems: "center",
+							backgroundColor: palette.fill,
+							borderRadius: radius.group,
+							height: 44,
+							justifyContent: "center",
+							width: 44,
+						}}
 					>
-						<Ionicons color={accentColor} name="chatbubble-outline" size={16} />
-						<Button.Label>Ask Viya</Button.Label>
-					</Button>
-				)}
-			</View>
-		</Surface>
+						<Ionicons
+							color={palette.accent}
+							name="sparkles-outline"
+							size={20}
+						/>
+					</View>
+					<View style={{ flex: 1, gap: 4, minWidth: 0 }}>
+						<AppText tone="secondary" variant="eyebrow">
+							Viya autopilot
+						</AppText>
+						<AppText bold variant="callout">
+							{autopilotTitle}
+						</AppText>
+						<AppText tone="secondary" variant="subhead">
+							{autopilotDescription}
+						</AppText>
+					</View>
+				</View>
+				<View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+					<View
+						style={{
+							backgroundColor: palette.fill,
+							borderRadius: radius.pill,
+							paddingHorizontal: 12,
+							paddingVertical: 6,
+						}}
+					>
+						<AppText bold tone="secondary" variant="footnote">
+							{completedStageCount}/5 stages
+						</AppText>
+					</View>
+					<View
+						style={{
+							backgroundColor: palette.fill,
+							borderRadius: radius.pill,
+							paddingHorizontal: 12,
+							paddingVertical: 6,
+						}}
+					>
+						<AppText bold tone="secondary" variant="footnote">
+							{readinessDisplay.value} readiness
+						</AppText>
+					</View>
+				</View>
+				{agentMessage ? (
+					<AppText
+						accessibilityLiveRegion="polite"
+						tone="secondary"
+						variant="footnote"
+					>
+						{agentMessage}
+					</AppText>
+				) : null}
+				{agentErrorMessage ? (
+					<AppText
+						accessibilityLiveRegion="polite"
+						tone="danger"
+						variant="footnote"
+					>
+						{agentErrorMessage}
+					</AppText>
+				) : null}
+				{visibleDrafts.length > 0 ? (
+					<View style={{ gap: 12 }}>
+						<AppText tone="secondary" variant="eyebrow">
+							Reviewable changes
+						</AppText>
+						{visibleDrafts.map((draft) => (
+							<TripAgentDraftRow
+								draft={draft}
+								isPending={pendingDraftId === draft._id}
+								key={draft._id}
+								onApply={handleApplyDraft}
+								onDismiss={handleDismissDraft}
+							/>
+						))}
+					</View>
+				) : null}
+				<View style={{ gap: 8 }}>
+					<PrimaryButton
+						accessibilityLabel={
+							isWorkspaceReady
+								? "Ask Viya about this ready trip"
+								: "Complete this trip with Viya"
+						}
+						disabled={isGeneratingDrafts}
+						icon="sparkles-outline"
+						isPending={isGeneratingDrafts}
+						label={primaryActionLabel}
+						onPress={handleGenerateDrafts}
+					/>
+					{isWorkspaceReady ? null : (
+						<SecondaryButton
+							accessibilityLabel="Ask Viya about this trip"
+							disabled={isGeneratingDrafts}
+							icon="chatbubble-outline"
+							label="Ask Viya"
+							onPress={openTripChat}
+						/>
+					)}
+				</View>
+			</Card>
+		</Animated.View>
 	);
 }
 
 export function MainModules({ model }: { model: TripDashboardModel }) {
+	const { palette } = useUITheme();
 	const [activeWorkspaceGroup, setActiveWorkspaceGroup] =
 		useState<WorkspaceModuleGroupKey>("core");
 	const workspaceModuleGroups = getTripWorkspaceModuleGroups(model);
 	const shouldShowWorkspacePicker = workspaceModuleGroups.length > 1;
 
 	return (
-		<View className="gap-7">
+		<View style={{ gap: 28 }}>
 			<WorkspaceAutopilotCard model={model} />
-			<View className="gap-3">
-				<View className="gap-1 px-1">
-					<Text.Heading type="h5" weight="bold">
+			<View style={{ gap: 12 }}>
+				<View style={{ paddingHorizontal: 4 }}>
+					<AppText accessibilityRole="header" bold variant="headline">
 						Workspace
-					</Text.Heading>
+					</AppText>
 				</View>
-				<View className="gap-3">
+				<View style={{ gap: 12 }}>
 					{shouldShowWorkspacePicker ? (
-						<View className="w-full flex-row items-center rounded-full bg-surface p-1">
+						<View
+							style={{
+								alignItems: "center",
+								backgroundColor: palette.fill,
+								borderRadius: radius.pill,
+								flexDirection: "row",
+								padding: 4,
+								width: "100%",
+							}}
+						>
 							{workspaceModuleGroups.map((group) => {
 								const isSelected = group.value === activeWorkspaceGroup;
 
 								return (
-									<Pressable
+									<PressableScale
 										accessibilityLabel={`Show ${group.label} modules`}
 										accessibilityRole="tab"
 										accessibilityState={{ selected: isSelected }}
-										className={
-											isSelected
-												? "h-8 min-w-0 flex-1 items-center justify-center rounded-full"
-												: "h-8 min-w-0 flex-1 items-center justify-center"
-										}
+										haptic="selection"
 										key={group.value}
 										onPress={() => setActiveWorkspaceGroup(group.value)}
 										style={{
-											backgroundColor: isSelected ? accentColor : "transparent",
+											alignItems: "center",
+											backgroundColor: isSelected
+												? palette.selection
+												: "transparent",
+											borderRadius: radius.pill,
+											flex: 1,
+											height: 36,
+											justifyContent: "center",
+											minWidth: 0,
 										}}
 									>
-										<Text
-											style={{ color: isSelected ? "#FFFFFF" : mutedColor }}
-											type="body-sm"
-											weight={isSelected ? "semibold" : "medium"}
+										<AppText
+											bold={isSelected}
+											tone={isSelected ? "ink" : "secondary"}
+											variant="subhead"
 										>
 											{group.label}
-										</Text>
-									</Pressable>
+										</AppText>
+									</PressableScale>
 								);
 							})}
 						</View>
 					) : null}
 					{workspaceModuleGroups.map((group) =>
 						group.value === activeWorkspaceGroup ? (
-							<View className="flex-row flex-wrap gap-3" key={group.value}>
+							<View
+								key={group.value}
+								style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}
+							>
 								{group.items.map((item) => (
 									<WorkspaceModuleTile item={item} key={item.label} />
 								))}
@@ -2046,18 +2320,32 @@ function QuickActionButton({
 	action: DashboardAction;
 	onSelectTab: (tab: TripTab) => void;
 }) {
+	const { palette } = useUITheme();
 	const button = (
-		<Button
-			className="min-w-28"
+		<PressableScale
+			accessibilityLabel={action.label}
+			accessibilityRole="button"
+			hitSlop={{ bottom: 5, top: 5 }}
 			onPress={
 				action.tab ? () => onSelectTab(action.tab as TripTab) : undefined
 			}
-			size="sm"
-			variant="secondary"
+			scaleTo={0.97}
+			style={{
+				alignItems: "center",
+				backgroundColor: palette.surface,
+				borderRadius: radius.pill,
+				flexDirection: "row",
+				gap: 6,
+				height: 34,
+				minWidth: 112,
+				paddingHorizontal: 14,
+			}}
 		>
-			<Ionicons color={accentColor} name={action.icon} size={16} />
-			<Button.Label>{action.label}</Button.Label>
-		</Button>
+			<Ionicons color={palette.accent} name={action.icon} size={16} />
+			<AppText bold variant="subhead">
+				{action.label}
+			</AppText>
+		</PressableScale>
 	);
 
 	if (!action.href) {
@@ -2079,10 +2367,14 @@ export function QuickActions({
 	onSelectTab: (tab: TripTab) => void;
 }) {
 	return (
-		<View className="gap-2">
-			<Text className="px-1" color="muted" type="body-xs" weight="semibold">
-				QUICK ACTIONS
-			</Text>
+		<View style={{ gap: 8 }}>
+			<AppText
+				style={{ paddingHorizontal: 4 }}
+				tone="secondary"
+				variant="eyebrow"
+			>
+				Quick actions
+			</AppText>
 			<ScrollView
 				contentContainerStyle={{ gap: 8, paddingRight: 8 }}
 				horizontal
@@ -2111,39 +2403,44 @@ function TabButton({
 	onPress: () => void;
 	tab: DashboardTab;
 }) {
+	const { palette } = useUITheme();
+	const foreground = isActive ? palette.onPrimary : palette.ink;
+
 	return (
-		<Pressable
+		<PressableScale
+			accessibilityLabel={tab.label}
 			accessibilityRole="tab"
 			accessibilityState={{ selected: isActive }}
-			className="h-11 flex-row items-center gap-2 rounded-full border px-4"
+			haptic="selection"
 			onPress={onPress}
+			scaleTo={0.97}
 			style={{
-				backgroundColor: isActive ? accentColor : softBackgroundColor,
-				borderColor: isActive ? accentColor : borderColor,
+				alignItems: "center",
+				backgroundColor: isActive ? palette.ink : palette.surface,
+				borderRadius: radius.pill,
+				flexDirection: "row",
+				gap: 8,
+				height: 44,
+				paddingHorizontal: 16,
 			}}
 		>
 			<Ionicons
-				color={isActive ? "#FFFFFF" : accentColor}
+				color={isActive ? palette.onPrimary : palette.accent}
 				name={tab.icon}
 				size={16}
 			/>
-			<Text
-				style={{ color: isActive ? "#FFFFFF" : foregroundColor }}
-				type="body-sm"
-				weight="semibold"
-			>
+			<AppText bold style={{ color: foreground }} variant="subhead">
 				{tab.label}
-			</Text>
+			</AppText>
 			{count ? (
-				<Text
-					color={isActive ? undefined : "muted"}
-					style={isActive ? { color: "#FFFFFF" } : undefined}
-					type="body-xs"
+				<AppText
+					style={{ color: isActive ? palette.onPrimary : palette.inkSecondary }}
+					variant="footnote"
 				>
 					{count}
-				</Text>
+				</AppText>
 			) : null}
-		</Pressable>
+		</PressableScale>
 	);
 }
 
@@ -2157,10 +2454,14 @@ export function TripTabPicker({
 	onSelectTab: (tab: TripTab) => void;
 }) {
 	return (
-		<View className="gap-2">
-			<Text className="px-1" color="muted" type="body-xs" weight="semibold">
-				FOCUS
-			</Text>
+		<View style={{ gap: 8 }}>
+			<AppText
+				style={{ paddingHorizontal: 4 }}
+				tone="secondary"
+				variant="eyebrow"
+			>
+				Focus
+			</AppText>
 			<ScrollView
 				contentContainerStyle={{ gap: 8, paddingRight: 8 }}
 				horizontal
@@ -2191,23 +2492,32 @@ export function InfoRow({
 	label: string;
 	right?: string;
 }) {
+	const { palette } = useUITheme();
+
 	return (
-		<View className="flex-row items-center gap-3 py-2">
-			{icon ? <Ionicons color={accentColor} name={icon} size={18} /> : null}
-			<View className="min-w-0 flex-1">
-				<Text numberOfLines={1} type="body-sm" weight="semibold">
+		<View
+			style={{
+				alignItems: "center",
+				flexDirection: "row",
+				gap: 12,
+				paddingVertical: 8,
+			}}
+		>
+			{icon ? <Ionicons color={palette.accent} name={icon} size={18} /> : null}
+			<View style={{ flex: 1, minWidth: 0 }}>
+				<AppText bold numberOfLines={1} variant="subhead">
 					{label}
-				</Text>
+				</AppText>
 				{detail ? (
-					<Text color="muted" numberOfLines={1} type="body-xs">
+					<AppText numberOfLines={1} tone="secondary" variant="footnote">
 						{detail}
-					</Text>
+					</AppText>
 				) : null}
 			</View>
 			{right ? (
-				<Text color="muted" numberOfLines={1} type="body-xs">
+				<AppText numberOfLines={1} tone="secondary" variant="footnote">
 					{right}
-				</Text>
+				</AppText>
 			) : null}
 		</View>
 	);

@@ -1,10 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
 import type { NextBestAction } from "@viya-app/domain";
-import { Link } from "expo-router";
-import { Button, Surface, Text } from "heroui-native";
+import { useRouter } from "expo-router";
 import { View } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 
+import {
+	AppText,
+	Card,
+	PrimaryButton,
+	radius,
+	useUITheme,
+} from "@/src/components/ui";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 
 interface NextBestActionCardProps {
@@ -16,6 +23,8 @@ export function NextBestActionCard({
 	action,
 	tripId,
 }: NextBestActionCardProps) {
+	const router = useRouter();
+	const { palette } = useUITheme();
 	const targetRoute = {
 		itinerary: VIYA_ROUTES.tripItinerary(tripId),
 		moments: VIYA_ROUTES.tripMoments(tripId),
@@ -25,37 +34,36 @@ export function NextBestActionCard({
 	} as const;
 
 	return (
-		<Surface className="gap-4 rounded-lg p-4" variant="secondary">
-			<View className="flex-row gap-3">
-				<View className="h-10 w-10 items-center justify-center rounded-lg bg-primary">
-					<Ionicons color="white" name="flash" size={20} />
-				</View>
-				<View className="flex-1">
-					<Text
-						className="uppercase"
-						color="muted"
-						type="body-xs"
-						weight="semibold"
+		<Animated.View entering={FadeInDown.duration(220)}>
+			<Card style={{ gap: 16 }}>
+				<View style={{ flexDirection: "row", gap: 12 }}>
+					<View
+						style={{
+							alignItems: "center",
+							backgroundColor: palette.accent,
+							borderRadius: radius.tile,
+							height: 40,
+							justifyContent: "center",
+							width: 40,
+						}}
 					>
-						Next best action
-					</Text>
-					<Text.Heading className="mt-1" type="h5" weight="semibold">
-						{action.label}
-					</Text.Heading>
-					<Text.Paragraph
-						className="mt-1 leading-5"
-						color="muted"
-						type="body-sm"
-					>
-						{action.reason}
-					</Text.Paragraph>
+						<Ionicons color="#FFFFFF" name="flash" size={20} />
+					</View>
+					<View style={{ flex: 1, gap: 4 }}>
+						<AppText tone="secondary" variant="eyebrow">
+							Next best action
+						</AppText>
+						<AppText variant="headline">{action.label}</AppText>
+						<AppText tone="secondary" variant="subhead">
+							{action.reason}
+						</AppText>
+					</View>
 				</View>
-			</View>
-			<Link asChild href={targetRoute[action.target]}>
-				<Button size="sm">
-					<Button.Label>Open</Button.Label>
-				</Button>
-			</Link>
-		</Surface>
+				<PrimaryButton
+					label="Open"
+					onPress={() => router.push(targetRoute[action.target])}
+				/>
+			</Card>
+		</Animated.View>
 	);
 }

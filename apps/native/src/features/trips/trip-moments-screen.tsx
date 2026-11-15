@@ -4,34 +4,45 @@ import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import type { Href } from "expo-router";
 import { Link } from "expo-router";
-import {
-	BottomSheet,
-	Button,
-	Chip,
-	CloseButton,
-	Input,
-	Label,
-	Menu,
-	Spinner,
-	Surface,
-	Text,
-	TextArea,
-	TextField,
-} from "heroui-native";
+import { Menu } from "heroui-native";
 import { useState } from "react";
-import { Linking, Pressable, ScrollView, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Linking, View } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { Container } from "@/components/container";
-import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
-import { EmptyState } from "@/src/components/empty-state";
 import { NavigationIconButton } from "@/src/components/navigation/navigation-icon-button";
-import { ScreenLoadingState } from "@/src/components/screen-loading-state";
+import {
+	AppText,
+	Card,
+	Chip,
+	EmptyState,
+	LoadingState,
+	PrimaryButton,
+	radius,
+	SecondaryButton,
+	SectionHeader,
+	spacing,
+	useFeedback,
+	useUITheme,
+} from "@/src/components/ui";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 import {
 	getTripMapSearchUrl,
 	hasTripMapSearchTarget,
 } from "./trip-map-link-utils";
 import { TripModuleScreenFrame } from "./trip-module-floating-bar";
+import {
+	ChoiceChips,
+	FormSheet,
+	InlineMessage,
+	MenuDivider,
+	MenuIcon,
+	MenuTrigger,
+	menuContentClassName,
+	menuItemClassName,
+	SheetField,
+	SheetTextArea,
+	TagRow,
+} from "./trip-module-form-kit";
 import { TripModuleManualEntryCard } from "./trip-module-manual-entry-card";
 import { useTripIdParam } from "./use-trip-id-param";
 
@@ -50,68 +61,6 @@ const initialMomentForm: MomentForm = {
 	note: "",
 	title: "",
 };
-
-function SheetField({
-	label,
-	onChangeText,
-	placeholder,
-	value,
-}: {
-	label: string;
-	onChangeText: (value: string) => void;
-	placeholder: string;
-	value: string;
-}) {
-	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
-
-	return (
-		<TextField className="gap-2">
-			<Label>
-				<Label.Text>{label}</Label.Text>
-			</Label>
-			<Input
-				className="h-12 border border-border bg-surface px-4"
-				onBlur={onBlur}
-				onChangeText={onChangeText}
-				onFocus={onFocus}
-				placeholder={placeholder}
-				value={value}
-				variant="secondary"
-			/>
-		</TextField>
-	);
-}
-
-function SheetTextArea({
-	label,
-	onChangeText,
-	placeholder,
-	value,
-}: {
-	label: string;
-	onChangeText: (value: string) => void;
-	placeholder: string;
-	value: string;
-}) {
-	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
-
-	return (
-		<TextField className="gap-2">
-			<Label>
-				<Label.Text>{label}</Label.Text>
-			</Label>
-			<TextArea
-				className="min-h-20 rounded-[18px] border border-border bg-surface px-4 py-3"
-				onBlur={onBlur}
-				onChangeText={onChangeText}
-				onFocus={onFocus}
-				placeholder={placeholder}
-				value={value}
-				variant="secondary"
-			/>
-		</TextField>
-	);
-}
 
 const getDayLabel = (days: Doc<"itineraryDays">[], dayId?: string) => {
 	const day = days.find((itineraryDay) => itineraryDay._id === dayId);
@@ -133,30 +82,17 @@ function MomentDayPicker({
 	value: string;
 }) {
 	return (
-		<View className="gap-2">
-			<Text color="muted" type="body-xs" weight="semibold">
-				ITINERARY DAY
-			</Text>
-			<View className="flex-row flex-wrap gap-2">
-				<Button
-					onPress={() => onChange("")}
-					size="sm"
-					variant={value ? "secondary" : "primary"}
-				>
-					<Button.Label>No day</Button.Label>
-				</Button>
-				{days.map((day) => (
-					<Button
-						key={day._id}
-						onPress={() => onChange(day._id)}
-						size="sm"
-						variant={value === day._id ? "primary" : "secondary"}
-					>
-						<Button.Label>{`Day ${day.dayNumber}`}</Button.Label>
-					</Button>
-				))}
-			</View>
-		</View>
+		<ChoiceChips label="Itinerary day">
+			<Chip label="No day" onPress={() => onChange("")} selected={!value} />
+			{days.map((day) => (
+				<Chip
+					key={day._id}
+					label={`Day ${day.dayNumber}`}
+					onPress={() => onChange(day._id)}
+					selected={value === day._id}
+				/>
+			))}
+		</ChoiceChips>
 	);
 }
 
@@ -181,85 +117,47 @@ function MomentSheet({
 	onSubmit: () => void;
 	onUpdateForm: (key: keyof MomentForm, value: string) => void;
 }) {
-	const insets = useSafeAreaInsets();
-
 	return (
-		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
-			<BottomSheet.Portal>
-				<BottomSheet.Overlay />
-				<BottomSheet.Content
-					backgroundClassName="rounded-t-[36px] bg-background"
-					enablePanDownToClose={true}
-					snapPoints={["82%"]}
-				>
-					<View
-						className="gap-4 px-5 pt-2"
-						style={{ paddingBottom: Math.max(insets.bottom, 18) }}
-					>
-						<View className="flex-row items-start justify-between gap-4">
-							<View className="flex-1 gap-1">
-								<BottomSheet.Title>
-									{mode === "edit" ? "Edit moment" : "Add moment"}
-								</BottomSheet.Title>
-								<BottomSheet.Description>
-									Capture highlights that power the recap.
-								</BottomSheet.Description>
-							</View>
-							<CloseButton
-								accessibilityLabel="Close moment form"
-								className="h-10 w-10 rounded-full bg-surface"
-								onPress={() => onOpenChange(false)}
-							/>
-						</View>
-						<ScrollView
-							contentContainerStyle={{ gap: 14, paddingBottom: 8 }}
-							keyboardShouldPersistTaps="handled"
-							showsVerticalScrollIndicator={false}
-							style={{ maxHeight: 500 }}
-						>
-							<SheetField
-								label="Title"
-								onChangeText={(value) => onUpdateForm("title", value)}
-								placeholder="Sunset dinner"
-								value={form.title}
-							/>
-							<SheetField
-								label="Location"
-								onChangeText={(value) => onUpdateForm("locationName", value)}
-								placeholder="Place or area"
-								value={form.locationName}
-							/>
-							<MomentDayPicker
-								days={days}
-								onChange={(value) => onUpdateForm("dayId", value)}
-								value={form.dayId}
-							/>
-							<SheetField
-								label="Caption"
-								onChangeText={(value) => onUpdateForm("caption", value)}
-								placeholder="Short recap caption"
-								value={form.caption}
-							/>
-							<SheetTextArea
-								label="Notes"
-								onChangeText={(value) => onUpdateForm("note", value)}
-								placeholder="What happened?"
-								value={form.note}
-							/>
-						</ScrollView>
-						{errorMessage ? (
-							<Text className="text-danger" type="body-sm">
-								{errorMessage}
-							</Text>
-						) : null}
-						<Button isDisabled={isSaving} onPress={onSubmit} size="lg">
-							{isSaving ? <Spinner size="sm" /> : null}
-							<Button.Label>Save moment</Button.Label>
-						</Button>
-					</View>
-				</BottomSheet.Content>
-			</BottomSheet.Portal>
-		</BottomSheet>
+		<FormSheet
+			description="Capture highlights that power the recap."
+			errorMessage={errorMessage}
+			isOpen={isOpen}
+			isSaving={isSaving}
+			onOpenChange={onOpenChange}
+			onSubmit={onSubmit}
+			saveLabel="Save moment"
+			title={mode === "edit" ? "Edit moment" : "Add moment"}
+		>
+			<SheetField
+				label="Title"
+				onChangeText={(value) => onUpdateForm("title", value)}
+				placeholder="Sunset dinner"
+				value={form.title}
+			/>
+			<SheetField
+				label="Location"
+				onChangeText={(value) => onUpdateForm("locationName", value)}
+				placeholder="Place or area"
+				value={form.locationName}
+			/>
+			<MomentDayPicker
+				days={days}
+				onChange={(value) => onUpdateForm("dayId", value)}
+				value={form.dayId}
+			/>
+			<SheetField
+				label="Caption"
+				onChangeText={(value) => onUpdateForm("caption", value)}
+				placeholder="Short recap caption"
+				value={form.caption}
+			/>
+			<SheetTextArea
+				label="Notes"
+				onChangeText={(value) => onUpdateForm("note", value)}
+				placeholder="What happened?"
+				value={form.note}
+			/>
+		</FormSheet>
 	);
 }
 
@@ -278,6 +176,7 @@ function SpotlightMomentSummary({
 	spotlightItineraryHref: Href | null;
 	spotlightMoment: Doc<"moments"> | null;
 }) {
+	const { palette } = useUITheme();
 	const canOpenMaps = Boolean(
 		spotlightMoment &&
 			hasTripMapSearchTarget({
@@ -287,80 +186,81 @@ function SpotlightMomentSummary({
 	);
 
 	return (
-		<View className="gap-3 rounded-[24px] bg-surface p-4">
-			<View className="flex-row items-center gap-3">
-				<View className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary">
-					<Ionicons
-						color="#BF5AF2"
-						name={
-							spotlightMoment?.isHighlight ? "star-outline" : "image-outline"
-						}
-						size={18}
-					/>
-				</View>
-				<View className="min-w-0 flex-1 gap-1">
-					<Text color="muted" type="body-xs" weight="semibold">
-						SPOTLIGHT
-					</Text>
-					<Text numberOfLines={1} type="body-sm" weight="bold">
+		<View
+			style={{
+				backgroundColor: palette.fill,
+				borderRadius: radius.group,
+				gap: spacing.md,
+				padding: spacing.lg,
+			}}
+		>
+			<View
+				style={{
+					alignItems: "center",
+					flexDirection: "row",
+					gap: spacing.md,
+				}}
+			>
+				<Ionicons
+					color={palette.accent}
+					name={spotlightMoment?.isHighlight ? "star" : "image-outline"}
+					size={20}
+				/>
+				<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+					<AppText tone="secondary" variant="eyebrow">
+						Spotlight
+					</AppText>
+					<AppText numberOfLines={1} variant="headline">
 						{spotlightMoment?.title ?? "No spotlight yet"}
-					</Text>
+					</AppText>
 				</View>
 			</View>
-			<Text.Paragraph color="muted" type="body-sm">
+			<AppText tone="secondary" variant="subhead">
 				{spotlightMoment
 					? spotlightMoment.note ||
 						spotlightMoment.caption ||
 						spotlightMoment.locationName ||
 						"Add a caption or note to give this memory context."
 					: "Add the first moment, then mark the best ones as highlights for the recap."}
-			</Text.Paragraph>
+			</AppText>
 			{spotlightMoment?.locationName ? (
-				<Text color="muted" numberOfLines={1} type="body-xs">
+				<AppText numberOfLines={1} tone="tertiary" variant="footnote">
 					{`${dayLabel} · ${spotlightMoment.locationName}`}
-				</Text>
+				</AppText>
 			) : null}
 			{spotlightMoment ? (
-				<View className="flex-row flex-wrap gap-2">
-					<Button
-						className="flex-1"
+				<View style={{ gap: spacing.sm }}>
+					<SecondaryButton
+						icon="create-outline"
+						label="Review spotlight"
 						onPress={onReview}
-						size="sm"
-						variant="secondary"
-					>
-						<Ionicons color="#0A84FF" name="create-outline" size={15} />
-						<Button.Label>Review spotlight</Button.Label>
-					</Button>
+					/>
 					{canOpenMaps ? (
-						<Button
-							className="flex-1"
+						<SecondaryButton
+							icon="map-outline"
+							label="Open spotlight Maps"
 							onPress={onOpenMaps}
-							size="sm"
-							variant="secondary"
-						>
-							<Ionicons color="#0A84FF" name="map-outline" size={15} />
-							<Button.Label>Open spotlight Maps</Button.Label>
-						</Button>
+							variant="plain"
+						/>
 					) : null}
 					{spotlightItineraryHref ? (
 						<Link asChild href={spotlightItineraryHref}>
-							<Button className="w-full" size="sm" variant="secondary">
-								<Ionicons color="#0A84FF" name="calendar-outline" size={15} />
-								<Button.Label>Open spotlight day</Button.Label>
-							</Button>
+							<SecondaryButton
+								icon="calendar-outline"
+								label="Open spotlight day"
+								onPress={() => undefined}
+								variant="plain"
+							/>
 						</Link>
 					) : null}
 				</View>
 			) : (
-				<Button
-					className="self-start"
+				<PrimaryButton
+					fullWidth={false}
+					icon="add-outline"
+					label="Add first moment"
 					onPress={onCreateSpotlight}
-					size="sm"
-					variant="secondary"
-				>
-					<Ionicons color="#0A84FF" name="add-outline" size={15} />
-					<Button.Label>Add first moment</Button.Label>
-				</Button>
+				/>
 			)}
 		</View>
 	);
@@ -380,6 +280,7 @@ export function TripMomentsScreen() {
 	const deleteMoment = useMutation(api.moments.deleteMoment);
 	const toggleMomentHighlight = useMutation(api.moments.toggleMomentHighlight);
 	const updateMoment = useMutation(api.moments.updateMoment);
+	const { confirm } = useFeedback();
 	const [form, setForm] = useState<MomentForm>(initialMomentForm);
 	const [editingMomentId, setEditingMomentId] = useState<Id<"moments"> | null>(
 		null
@@ -511,7 +412,7 @@ export function TripMomentsScreen() {
 	};
 
 	if (moments === undefined || itinerary === undefined) {
-		return <ScreenLoadingState />;
+		return <LoadingState title="Loading moments" />;
 	}
 
 	const highlightCount = moments.filter((moment) => moment.isHighlight).length;
@@ -527,6 +428,20 @@ export function TripMomentsScreen() {
 		? VIYA_ROUTES.tripItinerary(tripId)
 		: null;
 	const spotlightDayLabel = getDayLabel(itinerary.days, spotlightMoment?.dayId);
+
+	const confirmDeleteMoment = async (moment: Doc<"moments">) => {
+		const confirmed = await confirm({
+			confirmLabel: "Delete",
+			destructive: true,
+			message: "This moment will be removed from the recap.",
+			title: `Delete ${moment.title}?`,
+		});
+		if (confirmed) {
+			await runMomentAction(moment._id, () =>
+				deleteMoment({ momentId: moment._id })
+			);
+		}
+	};
 
 	return (
 		<TripModuleScreenFrame
@@ -544,7 +459,7 @@ export function TripMomentsScreen() {
 				className="px-4 pb-28"
 				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
 			>
-				<View className="gap-4 pb-4">
+				<View style={{ gap: spacing.lg, paddingBottom: spacing.lg }}>
 					<TripModuleManualEntryCard
 						description="Capture highlights, captions, places, and recap notes while they are fresh."
 						moduleLabel="moments"
@@ -552,62 +467,41 @@ export function TripMomentsScreen() {
 						primaryActionIcon="images-outline"
 						primaryActionLabel="Add moment"
 					/>
-					{momentErrorMessage ? (
-						<Text className="text-danger" type="body-sm">
-							{momentErrorMessage}
-						</Text>
-					) : null}
-					{mapErrorMessage ? (
-						<Text className="text-danger" type="body-sm">
-							{mapErrorMessage}
-						</Text>
-					) : null}
+					<InlineMessage message={momentErrorMessage} />
+					<InlineMessage message={mapErrorMessage} />
 
-					<View className="gap-4 rounded-[30px] bg-surface-secondary p-4">
-						<View className="flex-row items-start justify-between gap-3">
-							<View className="min-w-0 flex-1 gap-1">
-								<Text.Heading type="h5" weight="semibold">
-									Recap board
-								</Text.Heading>
-								<Text color="muted" type="body-sm">
-									Choose the moments that should shape the trip story.
-								</Text>
-							</View>
-							<View className="h-11 w-11 items-center justify-center rounded-full bg-surface-secondary">
-								<Ionicons color="#BF5AF2" name="images-outline" size={20} />
-							</View>
+					<Card>
+						<View style={{ gap: spacing.lg }}>
+							<SectionHeader eyebrow="Recap board" title="Trip story" />
+							<AppText tone="secondary" variant="subhead">
+								Choose the moments that should shape the trip story.
+							</AppText>
+							<TagRow
+								labels={[
+									`${moments.length} moments`,
+									`${highlightCount} highlights`,
+									`${dayLinkedCount} day-linked`,
+									`${locationCount} places`,
+								]}
+							/>
+							<SpotlightMomentSummary
+								dayLabel={spotlightDayLabel}
+								onCreateSpotlight={openCreateSheet}
+								onOpenMaps={() => {
+									if (spotlightMoment) {
+										handleOpenMaps(spotlightMoment).catch(() => undefined);
+									}
+								}}
+								onReview={() => {
+									if (spotlightMoment) {
+										openEditSheet(spotlightMoment);
+									}
+								}}
+								spotlightItineraryHref={spotlightItineraryHref}
+								spotlightMoment={spotlightMoment}
+							/>
 						</View>
-						<View className="flex-row flex-wrap gap-2">
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>{moments.length} moments</Chip.Label>
-							</Chip>
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>{highlightCount} highlights</Chip.Label>
-							</Chip>
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>{dayLinkedCount} day-linked</Chip.Label>
-							</Chip>
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>{locationCount} places</Chip.Label>
-							</Chip>
-						</View>
-						<SpotlightMomentSummary
-							dayLabel={spotlightDayLabel}
-							onCreateSpotlight={openCreateSheet}
-							onOpenMaps={() => {
-								if (spotlightMoment) {
-									handleOpenMaps(spotlightMoment).catch(() => undefined);
-								}
-							}}
-							onReview={() => {
-								if (spotlightMoment) {
-									openEditSheet(spotlightMoment);
-								}
-							}}
-							spotlightItineraryHref={spotlightItineraryHref}
-							spotlightMoment={spotlightMoment}
-						/>
-					</View>
+					</Card>
 
 					{moments.length === 0 ? (
 						<EmptyState
@@ -620,7 +514,7 @@ export function TripMomentsScreen() {
 							title="No moments yet"
 						/>
 					) : (
-						<View className="gap-3">
+						<View style={{ gap: spacing.md }}>
 							{moments.map((moment) => (
 								<MomentCard
 									dayLabel={getDayLabel(itinerary.days, moment.dayId)}
@@ -631,9 +525,7 @@ export function TripMomentsScreen() {
 									key={moment._id}
 									moment={moment}
 									onDelete={() => {
-										runMomentAction(moment._id, () =>
-											deleteMoment({ momentId: moment._id })
-										).catch(() => undefined);
+										confirmDeleteMoment(moment).catch(() => undefined);
 									}}
 									onEdit={() => openEditSheet(moment)}
 									onOpenMaps={() => {
@@ -695,151 +587,127 @@ function MomentCard({
 		label: moment.title,
 		locationName: moment.locationName,
 	});
+	const tags = [
+		...(moment.isHighlight ? ["Highlight"] : []),
+		...(moment.locationName ? [moment.locationName] : []),
+		dayLabel,
+	];
 
 	return (
-		<Surface className="gap-4 rounded-[28px] border border-border bg-surface p-5">
-			<View className="flex-row items-start gap-3">
-				<View className="h-10 w-10 items-center justify-center rounded-full bg-surface-secondary">
-					<Ionicons color="#BF5AF2" name="image-outline" size={18} />
-				</View>
-				<View className="min-w-0 flex-1 gap-2">
-					<View className="flex-row flex-wrap gap-2">
-						{moment.isHighlight ? (
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>Highlight</Chip.Label>
-							</Chip>
+		<Animated.View
+			entering={FadeInDown.duration(220)}
+			style={{ opacity: isPending ? 0.6 : 1 }}
+		>
+			<Card padding="md">
+				<View
+					style={{
+						alignItems: "flex-start",
+						flexDirection: "row",
+						gap: spacing.md,
+					}}
+				>
+					<View style={{ flex: 1, gap: spacing.sm, minWidth: 0 }}>
+						<TagRow labels={tags} />
+						<AppText variant="headline">{moment.title}</AppText>
+						{moment.note || moment.caption ? (
+							<AppText tone="secondary" variant="subhead">
+								{moment.note || moment.caption}
+							</AppText>
 						) : null}
-						{moment.locationName ? (
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>{moment.locationName}</Chip.Label>
-							</Chip>
-						) : null}
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>{dayLabel}</Chip.Label>
-						</Chip>
 					</View>
-					<Text type="body" weight="bold">
-						{moment.title}
-					</Text>
-					<Text.Paragraph color="muted" type="body-sm">
-						{moment.note || moment.caption}
-					</Text.Paragraph>
-				</View>
-				<Menu>
-					<Menu.Trigger asChild={true}>
-						<Pressable
-							accessibilityLabel="Moment options"
-							accessibilityRole="button"
-							className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary"
-							style={({ pressed }) => ({
-								transform: [{ scale: pressed ? 0.94 : 1 }],
-							})}
-						>
-							<Ionicons color="#71717A" name="ellipsis-horizontal" size={17} />
-						</Pressable>
-					</Menu.Trigger>
-					<Menu.Portal>
-						<Menu.Overlay />
-						<Menu.Content
-							align="end"
-							className="rounded-[24px] border border-border bg-surface p-2"
-							offset={8}
-							placement="bottom"
-							presentation="popover"
-							width={220}
-						>
-							<Menu.Item
-								accessibilityLabel={
-									moment.isHighlight ? "Remove highlight" : "Mark as highlight"
-								}
-								className="flex-row items-center gap-3 rounded-[18px] p-2.5"
-								isAnimatedStyleActive={false}
-								isDisabled={isPending}
-								onPress={onToggleHighlight}
+					<Menu>
+						<Menu.Trigger asChild={true}>
+							<MenuTrigger label="Moment options" />
+						</Menu.Trigger>
+						<Menu.Portal>
+							<Menu.Overlay />
+							<Menu.Content
+								align="end"
+								className={menuContentClassName}
+								offset={8}
+								placement="bottom"
+								presentation="popover"
+								width={220}
 							>
-								<View className="h-8 w-8 items-center justify-center rounded-full bg-surface-secondary">
-									<Ionicons
-										color="#BF5AF2"
-										name={moment.isHighlight ? "star-outline" : "star-outline"}
-										size={16}
-									/>
-								</View>
-								<Menu.ItemTitle className="font-semibold text-sm">
-									{moment.isHighlight
-										? "Remove highlight"
-										: "Mark as highlight"}
-								</Menu.ItemTitle>
-							</Menu.Item>
-							{canOpenMaps ? (
 								<Menu.Item
-									accessibilityLabel="Open in Maps"
-									className="flex-row items-center gap-3 rounded-[18px] p-2.5"
+									accessibilityLabel={
+										moment.isHighlight
+											? "Remove highlight"
+											: "Mark as highlight"
+									}
+									className={menuItemClassName}
 									isAnimatedStyleActive={false}
 									isDisabled={isPending}
-									onPress={onOpenMaps}
+									onPress={onToggleHighlight}
 								>
-									<View className="h-8 w-8 items-center justify-center rounded-full bg-surface-secondary">
-										<Ionicons color="#0A84FF" name="map-outline" size={16} />
-									</View>
-									<Menu.ItemTitle className="font-semibold text-sm">
-										Open in Maps
+									<MenuIcon
+										name={moment.isHighlight ? "star" : "star-outline"}
+									/>
+									<Menu.ItemTitle className="text-base">
+										{moment.isHighlight
+											? "Remove highlight"
+											: "Mark as highlight"}
 									</Menu.ItemTitle>
 								</Menu.Item>
-							) : null}
-							{itineraryHref ? (
-								<Link asChild href={itineraryHref}>
+								{canOpenMaps ? (
 									<Menu.Item
-										accessibilityLabel="Open itinerary"
-										className="flex-row items-center gap-3 rounded-[18px] p-2.5"
+										accessibilityLabel="Open in Maps"
+										className={menuItemClassName}
 										isAnimatedStyleActive={false}
 										isDisabled={isPending}
+										onPress={onOpenMaps}
 									>
-										<View className="h-8 w-8 items-center justify-center rounded-full bg-surface-secondary">
-											<Ionicons
-												color="#0A84FF"
-												name="calendar-outline"
-												size={16}
-											/>
-										</View>
-										<Menu.ItemTitle className="font-semibold text-sm">
-											Open itinerary
+										<MenuIcon name="map-outline" />
+										<Menu.ItemTitle className="text-base">
+											Open in Maps
 										</Menu.ItemTitle>
 									</Menu.Item>
-								</Link>
-							) : null}
-							<Menu.Item
-								accessibilityLabel="Edit moment"
-								className="flex-row items-center gap-3 rounded-[18px] p-2.5"
-								isAnimatedStyleActive={false}
-								isDisabled={isPending}
-								onPress={onEdit}
-							>
-								<View className="h-8 w-8 items-center justify-center rounded-full bg-surface-secondary">
-									<Ionicons color="#0A84FF" name="create-outline" size={16} />
-								</View>
-								<Menu.ItemTitle className="font-semibold text-sm">
-									Edit moment
-								</Menu.ItemTitle>
-							</Menu.Item>
-							<View className="mx-2 my-1 h-px bg-border" />
-							<Menu.Item
-								accessibilityLabel="Delete moment"
-								className="flex-row items-center gap-3 rounded-[18px] p-2.5"
-								isAnimatedStyleActive={false}
-								isDisabled={isPending}
-								onPress={onDelete}
-							>
-								<View className="h-8 w-8 items-center justify-center rounded-full bg-danger/10">
-									<Ionicons color="#FF3B30" name="trash-outline" size={16} />
-								</View>
-								<Menu.ItemTitle className="font-semibold text-danger text-sm">
-									Delete moment
-								</Menu.ItemTitle>
-							</Menu.Item>
-						</Menu.Content>
-					</Menu.Portal>
-				</Menu>
-			</View>
-		</Surface>
+								) : null}
+								{itineraryHref ? (
+									<Link asChild href={itineraryHref}>
+										<Menu.Item
+											accessibilityLabel="Open itinerary"
+											className={menuItemClassName}
+											isAnimatedStyleActive={false}
+											isDisabled={isPending}
+										>
+											<MenuIcon name="calendar-outline" />
+											<Menu.ItemTitle className="text-base">
+												Open itinerary
+											</Menu.ItemTitle>
+										</Menu.Item>
+									</Link>
+								) : null}
+								<Menu.Item
+									accessibilityLabel="Edit moment"
+									className={menuItemClassName}
+									isAnimatedStyleActive={false}
+									isDisabled={isPending}
+									onPress={onEdit}
+								>
+									<MenuIcon name="create-outline" />
+									<Menu.ItemTitle className="text-base">
+										Edit moment
+									</Menu.ItemTitle>
+								</Menu.Item>
+								<MenuDivider />
+								<Menu.Item
+									accessibilityLabel="Delete moment"
+									className={menuItemClassName}
+									isAnimatedStyleActive={false}
+									isDisabled={isPending}
+									onPress={onDelete}
+								>
+									<MenuIcon destructive={true} name="trash-outline" />
+									<Menu.ItemTitle className="text-base text-danger">
+										Delete moment
+									</Menu.ItemTitle>
+								</Menu.Item>
+							</Menu.Content>
+						</Menu.Portal>
+					</Menu>
+				</View>
+			</Card>
+		</Animated.View>
 	);
 }

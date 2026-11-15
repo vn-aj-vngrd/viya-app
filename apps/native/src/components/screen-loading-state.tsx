@@ -1,14 +1,10 @@
-import { Spinner } from "heroui-native";
-import { View } from "react-native";
-
 import { Container } from "@/components/container";
+import { LoadingState } from "@/src/components/ui/loading-state";
 
 export function ScreenLoadingState() {
 	return (
 		<Container className="px-4 pb-28" isScrollable={false}>
-			<View className="flex-1 items-center justify-center">
-				<Spinner />
-			</View>
+			<LoadingState />
 		</Container>
 	);
 }

@@ -2,15 +2,15 @@ import { useAuth } from "@clerk/expo";
 import { api } from "@viya-app/backend/convex/_generated/api";
 import { useQuery } from "convex/react";
 import { Redirect, Stack, useSegments } from "expo-router";
-import { Spinner, useThemeColor } from "heroui-native";
 import { View } from "react-native";
+
+import { LoadingState, useUITheme } from "@/src/components/ui";
 
 function AppLayout() {
 	const { isLoaded, isSignedIn } = useAuth();
 	const segments = useSegments();
 	const routeSegments = segments as readonly string[];
-	const themeColorForeground = useThemeColor("foreground");
-	const themeColorBackground = useThemeColor("background");
+	const { palette } = useUITheme();
 	const preferences = useQuery(
 		api.preferences.getCurrentPreferences,
 		isLoaded && isSignedIn ? {} : "skip"
@@ -21,8 +21,8 @@ function AppLayout() {
 
 	if (!isLoaded) {
 		return (
-			<View className="flex-1 items-center justify-center bg-background">
-				<Spinner />
+			<View style={{ backgroundColor: palette.canvas, flex: 1 }}>
+				<LoadingState delay={0} title="Loading" />
 			</View>
 		);
 	}
@@ -33,8 +33,8 @@ function AppLayout() {
 
 	if (preferences === undefined) {
 		return (
-			<View className="flex-1 items-center justify-center bg-background">
-				<Spinner />
+			<View style={{ backgroundColor: palette.canvas, flex: 1 }}>
+				<LoadingState delay={0} title="Loading" />
 			</View>
 		);
 	}
@@ -46,13 +46,13 @@ function AppLayout() {
 	return (
 		<Stack
 			screenOptions={{
-				contentStyle: { backgroundColor: themeColorBackground },
-				headerBackTitle: "Back",
+				contentStyle: { backgroundColor: palette.canvas },
+				headerBackButtonDisplayMode: "minimal",
 				headerShadowVisible: false,
-				headerStyle: { backgroundColor: themeColorBackground },
-				headerTintColor: themeColorForeground,
+				headerStyle: { backgroundColor: palette.canvas },
+				headerTintColor: palette.ink,
 				headerTitleStyle: {
-					color: themeColorForeground,
+					color: palette.ink,
 					fontWeight: "600",
 				},
 			}}

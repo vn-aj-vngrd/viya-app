@@ -1,6 +1,5 @@
-import { Text } from "heroui-native";
 import { View } from "react-native";
-
+import { AppText, spacing } from "@/src/components/ui";
 import { ViyaMark } from "@/src/components/viya-mark";
 
 interface AuthBrandProps {
@@ -12,19 +11,23 @@ export function AuthBrand({ align = "left", subtitle }: AuthBrandProps) {
 	const isCentered = align === "center";
 
 	return (
-		<View className={isCentered ? "items-center gap-2" : "items-start gap-2"}>
-			<ViyaMark size={isCentered ? 68 : 48} />
-			<Text.Heading className="text-5xl" type="h1" weight="semibold">
+		<View
+			style={{
+				alignItems: isCentered ? "center" : "flex-start",
+				gap: spacing.sm,
+			}}
+		>
+			<ViyaMark size={isCentered ? 64 : 48} />
+			<AppText accessibilityRole="header" variant="largeTitle">
 				Viya
-			</Text.Heading>
+			</AppText>
 			{subtitle ? (
-				<Text.Paragraph
-					className={isCentered ? "max-w-xs text-center leading-6" : undefined}
-					color="muted"
-					type="body"
+				<AppText
+					style={{ maxWidth: 280, textAlign: isCentered ? "center" : "left" }}
+					tone="secondary"
 				>
 					{subtitle}
-				</Text.Paragraph>
+				</AppText>
 			) : null}
 		</View>
 	);

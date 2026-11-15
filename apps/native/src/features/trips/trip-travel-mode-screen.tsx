@@ -1,27 +1,38 @@
-import { Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
 import { getBudgetWalletSummary } from "@viya-app/domain";
 import { useMutation, useQuery } from "convex/react";
-import { type Href, Link } from "expo-router";
-import {
-	Button,
-	Chip,
-	Input,
-	Label,
-	Spinner,
-	Surface,
-	Text,
-	TextArea,
-	TextField,
-} from "heroui-native";
-import type { ComponentProps, Dispatch, SetStateAction } from "react";
+import { type Href, Link, useRouter } from "expo-router";
+import { Input, Label, TextArea, TextField } from "heroui-native";
+import type { Dispatch, SetStateAction } from "react";
 import { useMemo, useState } from "react";
 import { Linking, View } from "react-native";
-
-import { Container } from "@/components/container";
-import { EmptyState } from "@/src/components/empty-state";
-import { ScreenLoadingState } from "@/src/components/screen-loading-state";
+import {
+	ActionPill,
+	GroupLabel,
+	IconBadge,
+	InlineError,
+	MetaTag,
+	ModuleLoading,
+	ModuleMissing,
+	ModuleScroll,
+	Reveal,
+	type Tone,
+} from "@/src/components/itinerary/trip-module-ui";
+import {
+	AppText,
+	Card,
+	haptic,
+	type IconName,
+	ListGroup,
+	ListRow,
+	metrics,
+	PrimaryButton,
+	radius,
+	SecondaryButton,
+	spacing,
+	useUITheme,
+} from "@/src/components/ui";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 
 import { formatMoney } from "./trip-dashboard-utils";
@@ -30,7 +41,6 @@ import {
 	hasTripMapSearchTarget,
 } from "./trip-map-link-utils";
 import { TripModuleScreenFrame } from "./trip-module-floating-bar";
-import { TripModuleManualEntryCard } from "./trip-module-manual-entry-card";
 import {
 	getTripRelatedEntityLabel,
 	getTripRelatedEntityLabelByKey,
@@ -254,26 +264,24 @@ function TravelInfoRow({
 	icon,
 	label,
 	onAction,
+	tone = "accent",
 }: {
 	actionHref?: Href;
-	actionIcon?: ComponentProps<typeof Ionicons>["name"];
+	actionIcon?: IconName;
 	actionLabel?: string;
 	detail?: string;
-	icon: ComponentProps<typeof Ionicons>["name"];
+	icon: IconName;
 	label: string;
 	onAction?: () => void;
+	tone?: Tone;
 }) {
 	const canShowAction = Boolean(actionLabel && (actionHref || onAction));
 	const actionButton = (
-		<Button
-			className="self-start"
+		<ActionPill
+			icon={actionIcon ?? "open-outline"}
+			label={actionLabel ?? ""}
 			onPress={onAction}
-			size="sm"
-			variant="secondary"
-		>
-			<Ionicons color="#0A84FF" name={actionIcon ?? "open-outline"} size={16} />
-			<Button.Label>{actionLabel}</Button.Label>
-		</Button>
+		/>
 	);
 	const actionContent = actionHref ? (
 		<Link asChild href={actionHref}>
@@ -284,36 +292,53 @@ function TravelInfoRow({
 	);
 
 	return (
-		<Surface className="gap-3 rounded-[24px] border border-border bg-surface p-4">
-			<View className="flex-row items-start gap-3">
-				<View className="h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-					<Ionicons color="#0A84FF" name={icon} size={18} />
+		<Card padding="md">
+			<View style={{ gap: spacing.md }}>
+				<View
+					style={{
+						alignItems: "flex-start",
+						flexDirection: "row",
+						gap: spacing.md,
+					}}
+				>
+					<IconBadge icon={icon} tone={tone} />
+					<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+						<AppText variant="headline">{label}</AppText>
+						{detail ? (
+							<AppText tone="secondary" variant="subhead">
+								{detail}
+							</AppText>
+						) : null}
+					</View>
 				</View>
-				<View className="min-w-0 flex-1 gap-1">
-					<Text type="body-sm" weight="bold">
-						{label}
-					</Text>
-					{detail ? (
-						<Text.Paragraph color="muted" type="body-sm">
-							{detail}
-						</Text.Paragraph>
-					) : null}
-				</View>
+				{canShowAction ? (
+					<View style={{ alignSelf: "flex-start" }}>{actionContent}</View>
+				) : null}
 			</View>
-			{canShowAction ? actionContent : null}
-		</Surface>
+		</Card>
 	);
 }
 
 function TravelMetric({ label, value }: { label: string; value: string }) {
+	const { palette } = useUITheme();
+
 	return (
-		<View className="min-w-[47%] flex-1 gap-1 rounded-[20px] bg-surface p-3">
-			<Text color="muted" type="body-xs" weight="semibold">
-				{label.toUpperCase()}
-			</Text>
-			<Text numberOfLines={1} type="body-sm" weight="bold">
+		<View
+			style={{
+				backgroundColor: palette.fill,
+				borderRadius: radius.tile,
+				flexBasis: "47%",
+				flexGrow: 1,
+				gap: 2,
+				padding: spacing.md,
+			}}
+		>
+			<AppText tone="secondary" variant="eyebrow">
+				{label}
+			</AppText>
+			<AppText numberOfLines={1} variant="headline">
 				{value}
-			</Text>
+			</AppText>
 		</View>
 	);
 }
@@ -324,34 +349,36 @@ function TravelTimelineRow({
 	label,
 }: {
 	detail: string;
-	icon: ComponentProps<typeof Ionicons>["name"];
+	icon: IconName;
 	label: string;
 }) {
 	return (
-		<View className="flex-row items-start gap-3 rounded-[22px] bg-surface p-4">
-			<View className="h-9 w-9 items-center justify-center rounded-full bg-primary/10">
-				<Ionicons color="#0A84FF" name={icon} size={17} />
-			</View>
-			<View className="min-w-0 flex-1 gap-1">
-				<Text numberOfLines={1} type="body-sm" weight="bold">
+		<View
+			style={{
+				alignItems: "center",
+				flexDirection: "row",
+				gap: spacing.md,
+			}}
+		>
+			<IconBadge icon={icon} />
+			<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+				<AppText numberOfLines={1} variant="headline">
 					{label}
-				</Text>
-				<Text color="muted" numberOfLines={2} type="body-sm">
+				</AppText>
+				<AppText numberOfLines={2} tone="secondary" variant="subhead">
 					{detail}
-				</Text>
+				</AppText>
 			</View>
 		</View>
 	);
 }
 
 function TravelStopMapButton({
-	className,
 	item,
 	label,
 	onOpenMaps,
 	variant = "secondary",
 }: {
-	className?: string;
 	item?: Doc<"itineraryItems">;
 	label: string;
 	onOpenMaps: (item: Doc<"itineraryItems">) => void;
@@ -371,18 +398,13 @@ function TravelStopMapButton({
 		return null;
 	}
 
-	const iconColor = variant === "primary" ? "#FFFFFF" : "#0A84FF";
-
 	return (
-		<Button
-			className={className}
+		<ActionPill
+			icon="map-outline"
+			label={label}
 			onPress={() => onOpenMaps(item)}
-			size="sm"
 			variant={variant}
-		>
-			<Ionicons color={iconColor} name="map-outline" size={16} />
-			<Button.Label>{label}</Button.Label>
-		</Button>
+		/>
 	);
 }
 
@@ -404,44 +426,72 @@ function TravelCurrentActions({
 	}
 
 	return (
-		<View className="flex-row flex-wrap gap-2">
+		<View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
 			<TravelStopMapButton
-				className="min-w-[47%] flex-1"
 				item={entry.item}
 				label="Open Maps"
 				onOpenMaps={onOpenMaps}
 				variant="primary"
 			/>
-			<Button
-				className="min-w-[47%] flex-1"
-				isDisabled={isUpdatingCurrentItem}
+			<ActionPill
+				disabled={isUpdatingCurrentItem}
+				icon="checkmark-circle-outline"
+				label={currentItemActionLabel}
 				onPress={onToggleCurrentItem}
-				size="sm"
-				variant="secondary"
-			>
-				{isUpdatingCurrentItem ? <Spinner size="sm" /> : null}
-				<Button.Label>{currentItemActionLabel}</Button.Label>
-			</Button>
+			/>
 		</View>
 	);
 }
 
-function TravelActionLink({
-	href,
-	icon,
+/** Plain field for in-page forms (not inside a bottom sheet). */
+function QuickField({
+	keyboardType,
 	label,
+	multiline,
+	onChangeText,
+	placeholder,
+	value,
 }: {
-	href: Href;
-	icon: ComponentProps<typeof Ionicons>["name"];
+	keyboardType?: "default" | "numeric";
 	label: string;
+	multiline?: boolean;
+	onChangeText: (value: string) => void;
+	placeholder: string;
+	value: string;
 }) {
+	const { palette } = useUITheme();
+	const fieldStyle = {
+		backgroundColor: palette.fill,
+		borderRadius: radius.field,
+		borderWidth: 0,
+	} as const;
+
 	return (
-		<Link asChild href={href}>
-			<Button className="min-w-[47%] flex-1" size="sm" variant="secondary">
-				<Ionicons color="#0A84FF" name={icon} size={16} />
-				<Button.Label>{label}</Button.Label>
-			</Button>
-		</Link>
+		<TextField className="gap-1.5">
+			<Label>
+				<Label.Text>{label}</Label.Text>
+			</Label>
+			{multiline ? (
+				<TextArea
+					className="px-4 py-3"
+					onChangeText={onChangeText}
+					placeholder={placeholder}
+					style={{ ...fieldStyle, minHeight: 96 }}
+					value={value}
+					variant="secondary"
+				/>
+			) : (
+				<Input
+					className="px-4"
+					keyboardType={keyboardType}
+					onChangeText={onChangeText}
+					placeholder={placeholder}
+					style={{ ...fieldStyle, height: metrics.actionHeight }}
+					value={value}
+					variant="secondary"
+				/>
+			)}
+		</TextField>
 	);
 }
 
@@ -464,70 +514,57 @@ function QuickExpensePanel({
 	setForm: Dispatch<SetStateAction<QuickExpenseForm>>;
 	tripId: Id<"trips">;
 }) {
+	const router = useRouter();
+
 	return (
-		<View className="gap-3 rounded-[26px] border border-border bg-surface p-5">
-			<Text.Heading type="h5" weight="semibold">
-				Quick expense
-			</Text.Heading>
-			<View className="flex-row flex-wrap gap-2">
-				<Chip size="sm" variant="secondary">
-					<Chip.Label>{plannedCategoryLabel}</Chip.Label>
-				</Chip>
-				{linkedBookingLabel ? (
-					<Chip size="sm" variant="secondary">
-						<Chip.Label>Links to {linkedBookingLabel}</Chip.Label>
-					</Chip>
-				) : null}
-			</View>
-			<TextField className="gap-2">
-				<Label>
-					<Label.Text>Title</Label.Text>
-				</Label>
-				<Input
-					className="h-11 rounded-[18px] border-0 bg-surface-secondary px-4"
+		<Card>
+			<View style={{ gap: spacing.md }}>
+				<AppText accessibilityRole="header" variant="heading">
+					Quick expense
+				</AppText>
+				<View
+					style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}
+				>
+					<MetaTag icon="pricetag-outline" label={plannedCategoryLabel} />
+					{linkedBookingLabel ? (
+						<MetaTag
+							icon="ticket-outline"
+							label={`Links to ${linkedBookingLabel}`}
+						/>
+					) : null}
+				</View>
+				<QuickField
+					label="Title"
 					onChangeText={(title) =>
 						setForm((current) => ({ ...current, title }))
 					}
 					placeholder="Taxi, snack, ticket"
 					value={form.title}
-					variant="secondary"
 				/>
-			</TextField>
-			<TextField className="gap-2">
-				<Label>
-					<Label.Text>Amount</Label.Text>
-				</Label>
-				<Input
-					className="h-11 rounded-[18px] border-0 bg-surface-secondary px-4"
+				<QuickField
 					keyboardType="numeric"
+					label="Amount"
 					onChangeText={(amount) =>
 						setForm((current) => ({ ...current, amount }))
 					}
 					placeholder="500"
 					value={form.amount}
-					variant="secondary"
 				/>
-			</TextField>
-			{error ? (
-				<Text className="text-danger" type="body-sm">
-					{error}
-				</Text>
-			) : null}
-			<Button
-				isDisabled={isSaving}
-				onPress={() => {
-					onSubmit();
-				}}
-			>
-				{isSaving ? <Spinner size="sm" /> : null}
-				<Button.Label>Log expense</Button.Label>
-			</Button>
-			<Link asChild href={VIYA_ROUTES.tripBudget(tripId)}>
-				<Button variant="secondary">
-					<Button.Label>Open budget</Button.Label>
-				</Button>
-			</Link>
-		</View>
+				<InlineError message={error} />
+				<PrimaryButton
+					isPending={isSaving}
+					label="Log expense"
+					onPress={() => {
+						onSubmit();
+					}}
+				/>
+				<SecondaryButton
+					label="Open budget"
+					onPress={() => router.push(VIYA_ROUTES.tripBudget(tripId))}
+					variant="plain"
+				/>
+			</View>
+		</Card>
 	);
 }
 
@@ -550,79 +587,66 @@ function QuickNotePanel({
 	setForm: Dispatch<SetStateAction<QuickNoteForm>>;
 	tripId: Id<"trips">;
 }) {
+	const router = useRouter();
+
 	return (
-		<View className="gap-3 rounded-[26px] border border-border bg-surface p-5">
-			<View className="flex-row items-start justify-between gap-3">
-				<View className="min-w-0 flex-1 gap-1">
-					<Text.Heading type="h5" weight="semibold">
-						Quick note
-					</Text.Heading>
-					<Text color="muted" type="body-sm">
-						Capture travel-day decisions, reminders, and issues.
-					</Text>
+		<Card>
+			<View style={{ gap: spacing.md }}>
+				<View
+					style={{
+						alignItems: "flex-start",
+						flexDirection: "row",
+						gap: spacing.md,
+					}}
+				>
+					<View style={{ flex: 1, gap: 2 }}>
+						<AppText accessibilityRole="header" variant="heading">
+							Quick note
+						</AppText>
+						<AppText tone="secondary" variant="subhead">
+							Capture travel-day decisions, reminders, and issues.
+						</AppText>
+					</View>
+					<MetaTag label={`${noteCount} notes`} />
 				</View>
-				<Chip size="sm" variant="secondary">
-					<Chip.Label>{noteCount} notes</Chip.Label>
-				</Chip>
-			</View>
-			{relatedLabel ? (
-				<View className="flex-row flex-wrap gap-2">
-					<Chip size="sm" variant="secondary">
-						<Chip.Label>Links to {relatedLabel}</Chip.Label>
-					</Chip>
-				</View>
-			) : null}
-			<TextField className="gap-2">
-				<Label>
-					<Label.Text>Title</Label.Text>
-				</Label>
-				<Input
-					className="h-11 rounded-[18px] border-0 bg-surface-secondary px-4"
+				{relatedLabel ? (
+					<MetaTag icon="link-outline" label={`Links to ${relatedLabel}`} />
+				) : null}
+				<QuickField
+					label="Title"
 					onChangeText={(title) =>
 						setForm((current) => ({ ...current, title }))
 					}
 					placeholder="Gate changed, hotel request, reminder"
 					value={form.title}
-					variant="secondary"
 				/>
-			</TextField>
-			<TextField className="gap-2">
-				<Label>
-					<Label.Text>Note</Label.Text>
-				</Label>
-				<TextArea
-					className="min-h-24 rounded-[18px] border-0 bg-surface-secondary px-4 py-3"
+				<QuickField
+					label="Note"
+					multiline={true}
 					onChangeText={(body) => setForm((current) => ({ ...current, body }))}
 					placeholder="What should you remember from today?"
 					value={form.body}
-					variant="secondary"
 				/>
-			</TextField>
-			{error ? (
-				<Text className="text-danger" type="body-sm">
-					{error}
-				</Text>
-			) : null}
-			<Button
-				isDisabled={isSaving}
-				onPress={() => {
-					onSubmit();
-				}}
-			>
-				{isSaving ? <Spinner size="sm" /> : null}
-				<Button.Label>Save note</Button.Label>
-			</Button>
-			<Link asChild href={VIYA_ROUTES.tripNotes(tripId)}>
-				<Button variant="secondary">
-					<Button.Label>Open notes</Button.Label>
-				</Button>
-			</Link>
-		</View>
+				<InlineError message={error} />
+				<PrimaryButton
+					isPending={isSaving}
+					label="Save note"
+					onPress={() => {
+						onSubmit();
+					}}
+				/>
+				<SecondaryButton
+					label="Open notes"
+					onPress={() => router.push(VIYA_ROUTES.tripNotes(tripId))}
+					variant="plain"
+				/>
+			</View>
+		</Card>
 	);
 }
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Travel Mode coordinates itinerary, wallet, documents, risks, quick expense, and notes in one day-of surface.
 export function TripTravelModeScreen() {
+	const router = useRouter();
 	const tripId = useTripIdParam();
 	const workspace = useQuery(
 		api.tripWorkspace.getTripWorkspace,
@@ -670,30 +694,24 @@ export function TripTravelModeScreen() {
 
 	if (!tripId) {
 		return (
-			<Container className="px-4 pb-28">
-				<EmptyState
-					description="Open a saved trip before using Travel Mode."
-					icon="navigate-outline"
-					title="Trip not found"
-				/>
-			</Container>
+			<ModuleMissing
+				description="Open a saved trip before using Travel Mode."
+				icon="navigate-outline"
+			/>
 		);
 	}
 
 	if (workspace === null) {
 		return (
-			<Container className="px-4 pb-28">
-				<EmptyState
-					description="This trip was deleted or is no longer available."
-					icon="navigate-outline"
-					title="Trip not found"
-				/>
-			</Container>
+			<ModuleMissing
+				description="This trip was deleted or is no longer available."
+				icon="navigate-outline"
+			/>
 		);
 	}
 
 	if (workspace === undefined || !wallet) {
-		return <ScreenLoadingState />;
+		return <ModuleLoading title="Loading Travel Mode" />;
 	}
 
 	const currency = workspace.trip.budgetCurrency ?? "PHP";
@@ -778,7 +796,9 @@ export function TripTravelModeScreen() {
 				tripId,
 			});
 			setExpenseForm({ amount: "", title: "" });
+			haptic("success");
 		} catch (error) {
+			haptic("error");
 			setExpenseError(
 				error instanceof Error ? error.message : "Could not log expense."
 			);
@@ -808,7 +828,9 @@ export function TripTravelModeScreen() {
 				tripId,
 			});
 			setNoteForm({ body: "", title: "" });
+			haptic("success");
 		} catch (error) {
+			haptic("error");
 			setNoteError(
 				error instanceof Error ? error.message : "Could not save note."
 			);
@@ -829,6 +851,7 @@ export function TripTravelModeScreen() {
 				itemId: now.item._id,
 				status: now.item.status === "completed" ? "planned" : "completed",
 			});
+			haptic(now.item.status === "completed" ? "selection" : "success");
 		} catch (error) {
 			setCurrentItemError(
 				error instanceof Error
@@ -877,293 +900,274 @@ export function TripTravelModeScreen() {
 
 	return (
 		<TripModuleScreenFrame activeTab="travel" tripId={tripId}>
-			<Container
-				className="px-4 pb-28"
-				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
-			>
-				<View className="gap-4 pb-4">
-					<TripModuleManualEntryCard
-						description="Use this day-of view to complete the current item, log expenses, save notes, and review documents."
-						isPrimaryDisabled={!now || isUpdatingCurrentItem}
-						moduleLabel="Travel Mode"
-						onPrimaryPress={() => {
-							handleToggleCurrentItem().catch(() => undefined);
-						}}
-						primaryActionIcon="checkmark-circle-outline"
-						primaryActionLabel={currentItemActionLabel}
-					/>
-					{currentItemError ? (
-						<Text className="px-1 text-danger" type="body-sm">
-							{currentItemError}
-						</Text>
-					) : null}
-					{mapError ? (
-						<Text className="px-1 text-danger" type="body-sm">
-							{mapError}
-						</Text>
-					) : null}
-					{documentOpenError ? (
-						<Text className="px-1 text-danger" type="body-sm">
-							{documentOpenError}
-						</Text>
-					) : null}
+			<ModuleScroll>
+				<InlineError message={currentItemError} />
+				<InlineError message={mapError} />
+				<InlineError message={documentOpenError} />
 
-					<View className="gap-4 rounded-[30px] bg-surface-secondary p-4">
-						<View className="flex-row items-start justify-between gap-3">
-							<View className="min-w-0 flex-1 flex-row items-center gap-3">
-								<View className="h-11 w-11 items-center justify-center rounded-full bg-primary/10">
-									<Ionicons color="#0A84FF" name="navigate-outline" size={20} />
-								</View>
-								<View className="min-w-0 flex-1 gap-1">
-									<Text.Heading type="h5" weight="semibold">
+				<Reveal>
+					<Card>
+						<View style={{ gap: spacing.lg }}>
+							<View
+								style={{
+									alignItems: "center",
+									flexDirection: "row",
+									gap: spacing.md,
+								}}
+							>
+								<IconBadge icon="navigate-outline" size={44} />
+								<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+									<AppText accessibilityRole="header" variant="heading">
 										Day command center
-									</Text.Heading>
-									<Text color="muted" numberOfLines={1} type="body-sm">
+									</AppText>
+									<AppText numberOfLines={1} tone="secondary" variant="subhead">
 										{workspace.trip.destination}
-									</Text>
+									</AppText>
 								</View>
+								<MetaTag
+									label={currentStatus}
+									tone={currentStatus === "Active" ? "accent" : "neutral"}
+								/>
 							</View>
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>{currentStatus}</Chip.Label>
-							</Chip>
+							<View
+								style={{
+									flexDirection: "row",
+									flexWrap: "wrap",
+									gap: spacing.sm,
+								}}
+							>
+								<TravelMetric
+									label="Daily safe"
+									value={formatMoney(wallet.dailySafeSpend, currency)}
+								/>
+								<TravelMetric
+									label="Bookings"
+									value={`${activeBookings.length} confirmed`}
+								/>
+								<TravelMetric
+									label="Documents"
+									value={`${activeDocuments.length} ready`}
+								/>
+								<TravelMetric
+									label="Risks"
+									value={`${openRisks.length} open`}
+								/>
+							</View>
+							<TravelTimelineRow
+								detail={
+									now
+										? `${getTimeRange(now.item)} · ${
+												now.item.locationName || "Location TBD"
+											}`
+										: "Add timed itinerary items to power Travel Mode."
+								}
+								icon="play-circle-outline"
+								label={now?.item.title ?? "No current item"}
+							/>
+							<TravelCurrentActions
+								currentItemActionLabel={currentItemActionLabel}
+								entry={now}
+								isUpdatingCurrentItem={isUpdatingCurrentItem}
+								onOpenMaps={(item) => {
+									handleOpenMaps(item).catch(() => undefined);
+								}}
+								onToggleCurrentItem={() => {
+									handleToggleCurrentItem().catch(() => undefined);
+								}}
+							/>
+							<TravelTimelineRow
+								detail={
+									next
+										? `${getTimeRange(next.item)} · ${
+												next.item.locationName || "Location TBD"
+											}`
+										: "No upcoming item found."
+								}
+								icon="play-forward-outline"
+								label={next?.item.title ?? "No next item"}
+							/>
+							<View
+								style={{
+									flexDirection: "row",
+									flexWrap: "wrap",
+									gap: spacing.sm,
+								}}
+							>
+								<TravelStopMapButton
+									item={next?.item}
+									label="Open Maps for next stop"
+									onOpenMaps={(item) => {
+										handleOpenMaps(item).catch(() => undefined);
+									}}
+								/>
+								{next ? null : (
+									<Link asChild href={VIYA_ROUTES.tripItinerary(tripId)}>
+										<ActionPill
+											icon="calendar-outline"
+											label="Plan next stop"
+										/>
+									</Link>
+								)}
+							</View>
 						</View>
-						<View className="flex-row flex-wrap gap-3">
-							<TravelMetric
-								label="Daily safe"
-								value={formatMoney(wallet.dailySafeSpend, currency)}
-							/>
-							<TravelMetric
-								label="Bookings"
-								value={`${activeBookings.length} confirmed`}
-							/>
-							<TravelMetric
-								label="Documents"
-								value={`${activeDocuments.length} ready`}
-							/>
-							<TravelMetric label="Risks" value={`${openRisks.length} open`} />
-						</View>
-						<TravelTimelineRow
-							detail={
-								now
-									? `${getTimeRange(now.item)} · ${
-											now.item.locationName || "Location TBD"
-										}`
-									: "Add timed itinerary items to power Travel Mode."
-							}
-							icon="play-circle-outline"
-							label={now?.item.title ?? "No current item"}
-						/>
-						<TravelCurrentActions
-							currentItemActionLabel={currentItemActionLabel}
-							entry={now}
-							isUpdatingCurrentItem={isUpdatingCurrentItem}
-							onOpenMaps={(item) => {
-								handleOpenMaps(item).catch(() => undefined);
-							}}
-							onToggleCurrentItem={() => {
-								handleToggleCurrentItem().catch(() => undefined);
-							}}
-						/>
-						<TravelTimelineRow
-							detail={
-								next
-									? `${getTimeRange(next.item)} · ${
-											next.item.locationName || "Location TBD"
-										}`
-									: "No upcoming item found."
-							}
-							icon="play-forward-outline"
-							label={next?.item.title ?? "No next item"}
-						/>
-						<TravelStopMapButton
-							item={next?.item}
-							label="Open Maps for next stop"
-							onOpenMaps={(item) => {
-								handleOpenMaps(item).catch(() => undefined);
-							}}
-						/>
-						{next ? null : (
-							<Link asChild href={VIYA_ROUTES.tripItinerary(tripId)}>
-								<Button size="sm" variant="secondary">
-									<Ionicons color="#0A84FF" name="calendar-outline" size={16} />
-									<Button.Label>Plan next stop</Button.Label>
-								</Button>
-							</Link>
-						)}
-						<View className="flex-row flex-wrap gap-2">
-							<TravelActionLink
-								href={VIYA_ROUTES.tripItinerary(tripId)}
-								icon="calendar-outline"
-								label="Itinerary"
-							/>
-							<TravelActionLink
-								href={VIYA_ROUTES.tripVault(tripId)}
-								icon="documents-outline"
-								label="Documents"
-							/>
-							<TravelActionLink
-								href={VIYA_ROUTES.tripRisks(tripId)}
-								icon="warning-outline"
-								label="Risks"
-							/>
-							<TravelActionLink
-								href={VIYA_ROUTES.tripNotes(tripId)}
-								icon="document-text-outline"
-								label="Notes"
-							/>
-						</View>
-					</View>
+					</Card>
+				</Reveal>
 
-					<QuickExpensePanel
-						error={expenseError}
-						form={expenseForm}
-						isSaving={isSavingExpense}
-						linkedBookingLabel={quickExpenseContext.bookingLabel}
-						onSubmit={() => {
-							handleQuickExpense().catch(() => undefined);
-						}}
-						plannedCategoryLabel={quickExpenseContext.categoryLabel}
-						setForm={setExpenseForm}
-						tripId={tripId}
+				<ListGroup header="Jump to">
+					<ListRow
+						leading={<IconBadge icon="calendar-outline" size={30} />}
+						onPress={() => router.push(VIYA_ROUTES.tripItinerary(tripId))}
+						title="Itinerary"
 					/>
-
-					<QuickNotePanel
-						error={noteError}
-						form={noteForm}
-						isSaving={isSavingNote}
-						noteCount={workspace.notes.length}
-						onSubmit={() => {
-							handleQuickNote().catch(() => undefined);
-						}}
-						relatedLabel={quickNoteRelatedContext?.label ?? null}
-						setForm={setNoteForm}
-						tripId={tripId}
+					<ListRow
+						leading={<IconBadge icon="documents-outline" size={30} />}
+						onPress={() => router.push(VIYA_ROUTES.tripVault(tripId))}
+						title="Documents"
 					/>
+					<ListRow
+						leading={
+							<IconBadge icon="warning-outline" size={30} tone="warning" />
+						}
+						onPress={() => router.push(VIYA_ROUTES.tripRisks(tripId))}
+						title="Risks"
+					/>
+					<ListRow
+						leading={<IconBadge icon="document-text-outline" size={30} />}
+						onPress={() => router.push(VIYA_ROUTES.tripNotes(tripId))}
+						title="Notes"
+					/>
+				</ListGroup>
 
-					<View className="gap-3">
-						<Text
-							className="px-1"
-							color="muted"
-							type="body-xs"
-							weight="semibold"
-						>
-							TICKETS AND CONFIRMATIONS
-						</Text>
-						{activeBookings.length === 0 ? (
-							<TravelInfoRow
-								actionHref={VIYA_ROUTES.tripBookings(tripId)}
-								actionIcon="ticket-outline"
-								actionLabel="Review bookings"
-								detail="Upload confirmations or mark booking targets confirmed."
-								icon="ticket-outline"
-								label="No confirmed bookings"
-							/>
-						) : (
-							activeBookingReferences
-								.slice(0, 5)
-								.map(({ booking, detail, proofUrl }) => (
-									<TravelInfoRow
-										actionIcon="open-outline"
-										actionLabel={proofUrl ? "Open proof" : undefined}
-										detail={detail}
-										icon="ticket-outline"
-										key={booking._id}
-										label={booking.title}
-										onAction={
-											proofUrl
-												? () => {
-														handleOpenTravelDocument(proofUrl).catch(
-															() => undefined
-														);
-													}
-												: undefined
-										}
-									/>
-								))
-						)}
-					</View>
+				<QuickExpensePanel
+					error={expenseError}
+					form={expenseForm}
+					isSaving={isSavingExpense}
+					linkedBookingLabel={quickExpenseContext.bookingLabel}
+					onSubmit={() => {
+						handleQuickExpense().catch(() => undefined);
+					}}
+					plannedCategoryLabel={quickExpenseContext.categoryLabel}
+					setForm={setExpenseForm}
+					tripId={tripId}
+				/>
 
-					<View className="gap-3">
-						<Text
-							className="px-1"
-							color="muted"
-							type="body-xs"
-							weight="semibold"
-						>
-							IMPORTANT DOCUMENTS
-						</Text>
-						{activeDocuments.length === 0 ? (
-							<TravelInfoRow
-								actionHref={VIYA_ROUTES.tripVault(tripId)}
-								actionIcon="cloud-upload-outline"
-								actionLabel="Upload documents"
-								detail="Upload IDs, tickets, vouchers, and insurance before travel."
-								icon="documents-outline"
-								label="No documents uploaded"
-							/>
-						) : (
-							activeDocuments.map((document) => {
-								const documentUrl = document.url;
+				<QuickNotePanel
+					error={noteError}
+					form={noteForm}
+					isSaving={isSavingNote}
+					noteCount={workspace.notes.length}
+					onSubmit={() => {
+						handleQuickNote().catch(() => undefined);
+					}}
+					relatedLabel={quickNoteRelatedContext?.label ?? null}
+					setForm={setNoteForm}
+					tripId={tripId}
+				/>
 
-								return (
-									<TravelInfoRow
-										actionIcon="open-outline"
-										actionLabel={documentUrl ? "Open file" : undefined}
-										detail={document.detail}
-										icon="document-outline"
-										key={document.key}
-										label={document.title}
-										onAction={
-											documentUrl
-												? () => {
-														handleOpenTravelDocument(documentUrl).catch(
-															() => undefined
-														);
-													}
-												: undefined
-										}
-									/>
-								);
-							})
-						)}
-					</View>
-
-					<View className="gap-3">
-						<Text
-							className="px-1"
-							color="muted"
-							type="body-xs"
-							weight="semibold"
-						>
-							OPEN RISKS
-						</Text>
-						{openRisks.length === 0 ? (
-							<TravelInfoRow
-								actionHref={VIYA_ROUTES.tripRisks(tripId)}
-								actionIcon="shield-checkmark-outline"
-								actionLabel="Review risks"
-								detail="Travel Mode will surface risk alerts here."
-								icon="checkmark-circle-outline"
-								label="No open risks"
-							/>
-						) : (
-							openRisks
-								.slice(0, 4)
-								.map((risk) => (
-									<TravelInfoRow
-										actionHref={VIYA_ROUTES.tripRisks(tripId)}
-										actionIcon="warning-outline"
-										actionLabel="Open risk"
-										detail={getRiskTravelDetail(risk, relatedEntityLabelByKey)}
-										icon="warning-outline"
-										key={risk._id}
-										label={risk.title}
-									/>
-								))
-						)}
-					</View>
+				<View style={{ gap: spacing.sm }}>
+					<GroupLabel>TICKETS AND CONFIRMATIONS</GroupLabel>
+					{activeBookings.length === 0 ? (
+						<TravelInfoRow
+							actionHref={VIYA_ROUTES.tripBookings(tripId)}
+							actionIcon="ticket-outline"
+							actionLabel="Review bookings"
+							detail="Upload confirmations or mark booking targets confirmed."
+							icon="ticket-outline"
+							label="No confirmed bookings"
+						/>
+					) : (
+						activeBookingReferences
+							.slice(0, 5)
+							.map(({ booking, detail, proofUrl }) => (
+								<TravelInfoRow
+									actionIcon="open-outline"
+									actionLabel={proofUrl ? "Open proof" : undefined}
+									detail={detail}
+									icon="ticket-outline"
+									key={booking._id}
+									label={booking.title}
+									onAction={
+										proofUrl
+											? () => {
+													handleOpenTravelDocument(proofUrl).catch(
+														() => undefined
+													);
+												}
+											: undefined
+									}
+								/>
+							))
+					)}
 				</View>
-			</Container>
+
+				<View style={{ gap: spacing.sm }}>
+					<GroupLabel>IMPORTANT DOCUMENTS</GroupLabel>
+					{activeDocuments.length === 0 ? (
+						<TravelInfoRow
+							actionHref={VIYA_ROUTES.tripVault(tripId)}
+							actionIcon="cloud-upload-outline"
+							actionLabel="Upload documents"
+							detail="Upload IDs, tickets, vouchers, and insurance before travel."
+							icon="documents-outline"
+							label="No documents uploaded"
+						/>
+					) : (
+						activeDocuments.map((document) => {
+							const documentUrl = document.url;
+
+							return (
+								<TravelInfoRow
+									actionIcon="open-outline"
+									actionLabel={documentUrl ? "Open file" : undefined}
+									detail={document.detail}
+									icon="document-outline"
+									key={document.key}
+									label={document.title}
+									onAction={
+										documentUrl
+											? () => {
+													handleOpenTravelDocument(documentUrl).catch(
+														() => undefined
+													);
+												}
+											: undefined
+									}
+								/>
+							);
+						})
+					)}
+				</View>
+
+				<View style={{ gap: spacing.sm }}>
+					<GroupLabel>OPEN RISKS</GroupLabel>
+					{openRisks.length === 0 ? (
+						<TravelInfoRow
+							actionHref={VIYA_ROUTES.tripRisks(tripId)}
+							actionIcon="shield-checkmark-outline"
+							actionLabel="Review risks"
+							detail="Travel Mode will surface risk alerts here."
+							icon="checkmark-circle-outline"
+							label="No open risks"
+							tone="success"
+						/>
+					) : (
+						openRisks
+							.slice(0, 4)
+							.map((risk) => (
+								<TravelInfoRow
+									actionHref={VIYA_ROUTES.tripRisks(tripId)}
+									actionIcon="warning-outline"
+									actionLabel="Open risk"
+									detail={getRiskTravelDetail(risk, relatedEntityLabelByKey)}
+									icon="warning-outline"
+									key={risk._id}
+									label={risk.title}
+									tone="warning"
+								/>
+							))
+					)}
+				</View>
+			</ModuleScroll>
 		</TripModuleScreenFrame>
 	);
 }

@@ -4,19 +4,9 @@ import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
 import { getPreferenceSuggestions } from "@viya-app/domain";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { useRouter } from "expo-router";
-import {
-	Button,
-	Input,
-	Label,
-	Spinner,
-	Surface,
-	Text,
-	TextField,
-	useThemeColor,
-} from "heroui-native";
 import type { ComponentProps, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { ActivityIndicator, ScrollView, View } from "react-native";
 import Animated, {
 	cancelAnimation,
 	Easing,
@@ -24,6 +14,7 @@ import Animated, {
 	useSharedValue,
 	withDelay,
 	withRepeat,
+	withSpring,
 	withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -34,6 +25,16 @@ import {
 	type DateRangeValue,
 } from "@/src/components/date/date-picker-field";
 import { NavigationBackButton } from "@/src/components/navigation/navigation-back-button";
+import {
+	AppText,
+	Card,
+	haptic,
+	motion,
+	PressableScale,
+	PrimaryButton,
+	radius,
+	useUITheme,
+} from "@/src/components/ui";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 
 import { LocationSuggestionField } from "./location-suggestion-field";
@@ -59,9 +60,11 @@ import {
 	tripCreateStepOrder,
 	tripStyleOptions,
 } from "./trip-create-flow-utils";
+import { TripTextField } from "./trip-text-field";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
 type FlowPhase = "flow" | "generating" | "starter";
+type AccentKey = "accent" | "success" | "warning";
 
 const generationSteps = [
 	{ icon: "map-outline", label: "Saving destination" },
@@ -76,22 +79,22 @@ const minimumGenerationDurationMs =
 
 const starterInsights = [
 	{
-		accent: "#0A84FF",
+		accent: "accent",
 		icon: "cloud-download-outline",
 		text: "Bookings can be imported through TripSync.",
 	},
 	{
-		accent: "#E97816",
+		accent: "warning",
 		icon: "shield-outline",
 		text: "Readiness starts low until documents and bookings are added.",
 	},
 	{
-		accent: "#059669",
+		accent: "success",
 		icon: "receipt-outline",
 		text: "Budget tracking becomes more accurate as receipts are logged.",
 	},
 ] as const satisfies readonly {
-	accent: string;
+	accent: AccentKey;
 	icon: IconName;
 	text: string;
 }[];
@@ -178,10 +181,7 @@ function Reveal({
 	const progress = useSharedValue(0);
 
 	useEffect(() => {
-		progress.value = withDelay(
-			delayMs,
-			withTiming(1, { duration: 620, easing: Easing.out(Easing.cubic) })
-		);
+		progress.value = withDelay(delayMs, withSpring(1, motion.spring.surface));
 
 		return () => cancelAnimation(progress);
 	}, [delayMs, progress]);
@@ -198,26 +198,31 @@ function Reveal({
 }
 
 function ProgressSegments({ step }: { step: TripCreateStep }) {
+	const { palette } = useUITheme();
 	const { current, total } = getStepPosition(step);
 
 	return (
-		<View className="gap-2">
-			<View className="flex-row gap-1.5">
-				{progressSegmentKeys.slice(0, total).map((segmentKey, index) => {
-					const isComplete = index < current;
-
-					return (
-						<View
-							className="h-2 flex-1 rounded-full"
-							key={segmentKey}
-							style={{ backgroundColor: isComplete ? "#0A84FF" : "#E4E7EC" }}
-						/>
-					);
-				})}
+		<View
+			accessibilityLabel={`Step ${current} of ${total}`}
+			accessibilityRole="progressbar"
+			style={{ gap: 8 }}
+		>
+			<View style={{ flexDirection: "row", gap: 6 }}>
+				{progressSegmentKeys.slice(0, total).map((segmentKey, index) => (
+					<View
+						key={segmentKey}
+						style={{
+							backgroundColor: index < current ? palette.ink : palette.fill,
+							borderRadius: radius.pill,
+							flex: 1,
+							height: 4,
+						}}
+					/>
+				))}
 			</View>
-			<Text color="muted" type="body-xs" weight="semibold">
+			<AppText tone="secondary" variant="footnote">
 				{current} of {total}
-			</Text>
+			</AppText>
 		</View>
 	);
 }
@@ -235,45 +240,55 @@ function OptionCard({
 	onPress: () => void;
 	title: string;
 }) {
+	const { palette } = useUITheme();
+
 	return (
-		<Pressable
+		<PressableScale
+			accessibilityLabel={`${title}. ${description}`}
 			accessibilityRole="button"
 			accessibilityState={{ selected: isSelected }}
-			className="rounded-3xl"
+			haptic="selection"
 			onPress={onPress}
-			style={({ pressed }) => ({
-				transform: [{ scale: pressed ? 0.99 : 1 }],
-			})}
+			scaleTo={0.98}
+			style={{
+				alignItems: "center",
+				backgroundColor: palette.surface,
+				borderColor: isSelected ? palette.ink : "transparent",
+				borderCurve: "continuous",
+				borderRadius: radius.card,
+				borderWidth: 1.5,
+				flexDirection: "row",
+				gap: 12,
+				minHeight: 64,
+				padding: 16,
+			}}
 		>
-			<Surface
-				className="flex-row items-center gap-3 rounded-3xl border bg-surface p-4"
+			<View
 				style={{
-					borderColor: isSelected ? "#0A84FF" : "rgba(24, 24, 27, 0.08)",
+					alignItems: "center",
+					backgroundColor: palette.fill,
+					borderRadius: radius.pill,
+					height: 44,
+					justifyContent: "center",
+					width: 44,
 				}}
 			>
-				<View
-					className="h-11 w-11 items-center justify-center rounded-full"
-					style={{ backgroundColor: isSelected ? "#EAF2FF" : "#F4F4F5" }}
-				>
-					<Ionicons
-						color={isSelected ? "#0A84FF" : "#71717A"}
-						name={icon}
-						size={20}
-					/>
-				</View>
-				<View className="min-w-0 flex-1 gap-1">
-					<Text type="body" weight="semibold">
-						{title}
-					</Text>
-					<Text.Paragraph color="muted" type="body-sm">
-						{description}
-					</Text.Paragraph>
-				</View>
-				{isSelected ? (
-					<Ionicons color="#0A84FF" name="checkmark-circle" size={22} />
-				) : null}
-			</Surface>
-		</Pressable>
+				<Ionicons
+					color={isSelected ? palette.ink : palette.inkSecondary}
+					name={icon}
+					size={20}
+				/>
+			</View>
+			<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+				<AppText variant="headline">{title}</AppText>
+				<AppText tone="secondary" variant="subhead">
+					{description}
+				</AppText>
+			</View>
+			{isSelected ? (
+				<Ionicons color={palette.ink} name="checkmark-circle" size={22} />
+			) : null}
+		</PressableScale>
 	);
 }
 
@@ -286,27 +301,36 @@ function ChoiceChip({
 	label: string;
 	onPress: () => void;
 }) {
+	const { palette } = useUITheme();
+
 	return (
-		<Pressable
+		<PressableScale
+			accessibilityLabel={label}
 			accessibilityRole="button"
 			accessibilityState={{ selected: isSelected }}
-			className="min-h-10 flex-row items-center rounded-full border bg-white px-4"
+			haptic="selection"
+			hitSlop={{ bottom: 5, top: 5 }}
 			onPress={onPress}
-			style={({ pressed }) => ({
-				backgroundColor: isSelected ? "#0A84FF" : "#FFFFFF",
-				borderColor: isSelected ? "#0A84FF" : "rgba(24, 24, 27, 0.06)",
-				opacity: pressed ? 0.82 : 1,
-				transform: [{ scale: pressed ? 0.98 : 1 }],
-			})}
+			scaleTo={0.97}
+			style={{
+				alignItems: "center",
+				backgroundColor: isSelected ? palette.ink : palette.surface,
+				borderRadius: radius.pill,
+				flexDirection: "row",
+				height: 34,
+				paddingHorizontal: 16,
+			}}
 		>
-			<Text
-				style={{ color: isSelected ? "#FFFFFF" : "#18181B" }}
-				type="body-sm"
-				weight="semibold"
+			<AppText
+				style={{
+					color: isSelected ? palette.onPrimary : palette.ink,
+					fontWeight: "500",
+				}}
+				variant="subhead"
 			>
 				{label}
-			</Text>
-		</Pressable>
+			</AppText>
+		</PressableScale>
 	);
 }
 
@@ -332,34 +356,17 @@ function InlineTextField({
 	value: string;
 }) {
 	return (
-		<TextField className="gap-2">
-			<Label>
-				<Label.Text>{label}</Label.Text>
-			</Label>
-			<Input
-				autoCapitalize={autoCapitalize}
-				className={
-					isInvalid
-						? "h-12 border border-danger bg-surface px-4"
-						: "h-12 border border-border bg-surface px-4"
-				}
-				keyboardType={keyboardType}
-				onChangeText={onChangeText}
-				placeholder={placeholder}
-				value={value}
-				variant="secondary"
-			/>
-			{isInvalid && errorText ? (
-				<Text className="text-danger" type="body-xs">
-					{errorText}
-				</Text>
-			) : null}
-			{!(isInvalid && errorText) && helperText ? (
-				<Text color="muted" type="body-xs">
-					{helperText}
-				</Text>
-			) : null}
-		</TextField>
+		<TripTextField
+			autoCapitalize={autoCapitalize}
+			errorText={errorText}
+			helperText={helperText}
+			isInvalid={isInvalid}
+			keyboardType={keyboardType}
+			label={label}
+			onChangeText={onChangeText}
+			placeholder={placeholder}
+			value={value}
+		/>
 	);
 }
 
@@ -379,6 +386,7 @@ function CreateFlowShell({
 	title: string;
 }) {
 	const insets = useSafeAreaInsets();
+	const { palette } = useUITheme();
 
 	return (
 		<Container
@@ -386,38 +394,49 @@ function CreateFlowShell({
 			includeBottomInset={false}
 			isScrollable={false}
 		>
-			<View className="flex-1">
+			<View style={{ backgroundColor: palette.canvas, flex: 1 }}>
 				<View
-					className="bg-background px-5 pb-3"
-					style={{ paddingTop: Math.max(insets.top + 6, 20) }}
+					style={{
+						backgroundColor: palette.canvas,
+						paddingBottom: 12,
+						paddingHorizontal: 20,
+						paddingTop: Math.max(insets.top + 6, 20),
+					}}
 				>
 					<NavigationBackButton onPress={onBack} />
 				</View>
 				<ScrollView
-					className="flex-1"
 					contentContainerStyle={{
-						gap: 26,
+						gap: 24,
 						paddingBottom: 32,
 						paddingHorizontal: 20,
 						paddingTop: 8,
 					}}
+					keyboardDismissMode="interactive"
 					keyboardShouldPersistTaps="handled"
 					showsVerticalScrollIndicator={false}
+					style={{ flex: 1 }}
 				>
 					<ProgressSegments step={step} />
-					<View className="gap-3">
-						<Text.Heading className="text-5xl leading-14" type="h1">
+					<View style={{ gap: 8 }}>
+						<AppText accessibilityRole="header" variant="title">
 							{title}
-						</Text.Heading>
-						<Text.Paragraph className="max-w-80 leading-6" color="muted">
+						</AppText>
+						<AppText style={{ maxWidth: 320 }} tone="secondary">
 							{helper}
-						</Text.Paragraph>
+						</AppText>
 					</View>
-					<View className="gap-4">{children}</View>
+					<Reveal key={step}>
+						<View style={{ gap: 16 }}>{children}</View>
+					</Reveal>
 				</ScrollView>
 				<View
-					className="bg-background px-5 pt-3"
-					style={{ paddingBottom: Math.max(insets.bottom + 8, 18) }}
+					style={{
+						backgroundColor: palette.canvas,
+						paddingBottom: Math.max(insets.bottom + 8, 18),
+						paddingHorizontal: 20,
+						paddingTop: 12,
+					}}
 				>
 					{footer}
 				</View>
@@ -449,7 +468,7 @@ function DestinationStep({
 	state: TripCreateFlowState;
 }) {
 	return (
-		<View className="gap-5">
+		<View style={{ gap: 20 }}>
 			<LocationSuggestionField
 				errorText={errorMessage ?? undefined}
 				isInvalid={Boolean(errorMessage)}
@@ -459,11 +478,11 @@ function DestinationStep({
 				searchLocationSuggestions={searchLocationSuggestions}
 				value={state.destination}
 			/>
-			<View className="gap-3">
-				<Text color="muted" type="body-xs" weight="semibold">
+			<View style={{ gap: 12 }}>
+				<AppText tone="secondary" variant="eyebrow">
 					SUGGESTED FOR YOU
-				</Text>
-				<View className="flex-row flex-wrap gap-2">
+				</AppText>
+				<View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
 					{destinationSuggestions.map((destination) => (
 						<ChoiceChip
 							isSelected={state.destination === destination}
@@ -496,7 +515,7 @@ function DatesStep({
 	};
 
 	return (
-		<View className="gap-5">
+		<View style={{ gap: 20 }}>
 			<DateRangePickerField
 				errorText={errorMessage ?? undefined}
 				helperText="Dates set the number of days in your workspace."
@@ -509,11 +528,11 @@ function DatesStep({
 				}}
 				value={range}
 			/>
-			<View className="gap-3">
-				<Text color="muted" type="body-xs" weight="semibold">
+			<View style={{ gap: 12 }}>
+				<AppText tone="secondary" variant="eyebrow">
 					DATES NOT DECIDED YET
-				</Text>
-				<View className="flex-row flex-wrap gap-2">
+				</AppText>
+				<View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
 					{durationPreferenceOptions.map((option) => (
 						<ChoiceChip
 							isSelected={state.durationPreference === option}
@@ -568,8 +587,8 @@ function TravelersStep({
 	};
 
 	return (
-		<View className="gap-5">
-			<View className="flex-row flex-wrap gap-2">
+		<View style={{ gap: 20 }}>
+			<View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
 				{travelerTypeOptions.map((option) => (
 					<ChoiceChip
 						isSelected={state.travelerType === option}
@@ -580,16 +599,16 @@ function TravelersStep({
 				))}
 			</View>
 			{hasFixedTravelerCount ? (
-				<View className="gap-1">
-					<Text type="body-sm" weight="semibold">
+				<View style={{ gap: 4 }}>
+					<AppText bold variant="subhead">
 						{fixedTravelerCount}{" "}
 						{fixedTravelerCount === 1 ? "traveler" : "travelers"}
-					</Text>
-					<Text color="muted" type="body-sm">
+					</AppText>
+					<AppText tone="secondary" variant="subhead">
 						{state.travelerType === "solo"
 							? "Solo trips are set to 1 traveler."
 							: "Couple trips are set to 2 travelers."}
-					</Text>
+					</AppText>
 				</View>
 			) : (
 				<InlineTextField
@@ -621,12 +640,12 @@ function StylePaceStep({
 	state: TripCreateFlowState;
 }) {
 	return (
-		<View className="gap-6">
-			<View className="gap-3">
-				<Text color="muted" type="body-xs" weight="semibold">
+		<View style={{ gap: 24 }}>
+			<View style={{ gap: 12 }}>
+				<AppText tone="secondary" variant="eyebrow">
 					PICK ONE OR MORE
-				</Text>
-				<View className="flex-row flex-wrap gap-2">
+				</AppText>
+				<View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
 					{tripStyleOptions.map((option) => (
 						<ChoiceChip
 							isSelected={state.styles.includes(option)}
@@ -637,16 +656,20 @@ function StylePaceStep({
 					))}
 				</View>
 				{errorMessage ? (
-					<Text className="text-danger" type="body-xs">
+					<AppText
+						accessibilityLiveRegion="polite"
+						tone="danger"
+						variant="footnote"
+					>
 						{errorMessage}
-					</Text>
+					</AppText>
 				) : null}
 			</View>
-			<View className="gap-3">
-				<Text color="muted" type="body-xs" weight="semibold">
+			<View style={{ gap: 12 }}>
+				<AppText tone="secondary" variant="eyebrow">
 					DAILY PACE
-				</Text>
-				<View className="gap-2">
+				</AppText>
+				<View style={{ gap: 8 }}>
 					{paceOptions.map((option) => (
 						<OptionCard
 							description={paceDetails[option]}
@@ -676,8 +699,8 @@ function BudgetStep({
 	state: TripCreateFlowState;
 }) {
 	return (
-		<View className="gap-5">
-			<View className="gap-2">
+		<View style={{ gap: 20 }}>
+			<View style={{ gap: 8 }}>
 				<InlineTextField
 					errorText={errorMessage ?? undefined}
 					helperText="Enter the total amount you want to track for this trip."
@@ -689,11 +712,11 @@ function BudgetStep({
 					value={state.budgetAmount}
 				/>
 			</View>
-			<View className="gap-3">
-				<Text color="muted" type="body-xs" weight="semibold">
+			<View style={{ gap: 12 }}>
+				<AppText tone="secondary" variant="eyebrow">
 					BUDGET TYPE
-				</Text>
-				<View className="flex-row flex-wrap gap-2">
+				</AppText>
+				<View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
 					{budgetScopeOptions.map((option) => (
 						<ChoiceChip
 							isSelected={state.budgetScope === option}
@@ -704,11 +727,11 @@ function BudgetStep({
 					))}
 				</View>
 			</View>
-			<View className="gap-3">
-				<Text color="muted" type="body-xs" weight="semibold">
+			<View style={{ gap: 12 }}>
+				<AppText tone="secondary" variant="eyebrow">
 					STRICTNESS
-				</Text>
-				<View className="flex-row flex-wrap gap-2">
+				</AppText>
+				<View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
 					{budgetStrictnessOptions.map((option) => (
 						<ChoiceChip
 							isSelected={state.budgetStrictness === option}
@@ -724,34 +747,42 @@ function BudgetStep({
 }
 
 function ReviewStep({ state }: { state: TripCreateFlowState }) {
+	const { palette } = useUITheme();
 	const rows = getCreateTripReviewRows(state);
 
 	return (
-		<Surface className="gap-2 rounded-[30px] border border-border bg-surface p-5">
+		<Card padding="md">
 			{rows.map((row, index) => (
 				<View
-					className={`flex-row items-start justify-between gap-4 py-3 ${
-						index === rows.length - 1 ? "" : "border-border border-b"
-					}`}
 					key={row.label}
+					style={{
+						alignItems: "flex-start",
+						borderBottomColor: palette.separator,
+						borderBottomWidth: index === rows.length - 1 ? 0 : 1,
+						flexDirection: "row",
+						gap: 16,
+						justifyContent: "space-between",
+						paddingVertical: 12,
+					}}
 				>
-					<Text color="muted" type="body-sm">
+					<AppText tone="secondary" variant="subhead">
 						{row.label}
-					</Text>
-					<Text
-						className="max-w-56 text-right"
-						type="body-sm"
-						weight="semibold"
+					</AppText>
+					<AppText
+						bold
+						style={{ flexShrink: 1, maxWidth: 224, textAlign: "right" }}
+						variant="subhead"
 					>
 						{row.value}
-					</Text>
+					</AppText>
 				</View>
 			))}
-		</Surface>
+		</Card>
 	);
 }
 
 function GeneratingBrandMark() {
+	const { palette } = useUITheme();
 	const pulse = useSharedValue(0);
 
 	useEffect(() => {
@@ -777,31 +808,43 @@ function GeneratingBrandMark() {
 	});
 
 	return (
-		<View className="h-[72px] w-[72px] items-center justify-center">
-			<Animated.View
-				className="absolute h-[72px] w-[72px] rounded-full"
-				style={[{ backgroundColor: "#0A84FF" }, outerRingStyle]}
-			/>
-			<Animated.View
-				className="absolute h-[72px] w-[72px] rounded-full"
-				style={[{ backgroundColor: "#0A84FF" }, innerRingStyle]}
-			/>
+		<View
+			style={{
+				alignItems: "center",
+				height: 72,
+				justifyContent: "center",
+				width: 72,
+			}}
+		>
+			<Animated.View style={[ring(palette.accent), outerRingStyle]} />
+			<Animated.View style={[ring(palette.accent), innerRingStyle]} />
 			<View
-				className="h-12 w-12 items-center justify-center rounded-full border border-border bg-surface"
 				style={{
-					shadowColor: "#0A84FF",
-					shadowOffset: { height: 8, width: 0 },
-					shadowOpacity: 0.18,
-					shadowRadius: 18,
+					alignItems: "center",
+					backgroundColor: palette.surface,
+					borderRadius: radius.pill,
+					height: 48,
+					justifyContent: "center",
+					width: 48,
 				}}
 			>
-				<Ionicons color="#0A84FF" name="map-outline" size={24} />
+				<Ionicons color={palette.accent} name="map-outline" size={24} />
 			</View>
 		</View>
 	);
 }
 
+const ring = (backgroundColor: string) =>
+	({
+		backgroundColor,
+		borderRadius: radius.pill,
+		height: 72,
+		position: "absolute",
+		width: 72,
+	}) as const;
+
 function GenerationProgressBar({ progress }: { progress: number }) {
+	const { palette } = useUITheme();
 	const width = useSharedValue(0);
 
 	useEffect(() => {
@@ -819,12 +862,23 @@ function GenerationProgressBar({ progress }: { progress: number }) {
 
 	return (
 		<View
-			className="h-2 w-full overflow-hidden rounded-full"
-			style={{ backgroundColor: "#E4E7EC" }}
+			style={{
+				backgroundColor: palette.fill,
+				borderRadius: radius.pill,
+				height: 6,
+				overflow: "hidden",
+				width: "100%",
+			}}
 		>
 			<Animated.View
-				className="h-full rounded-full"
-				style={[{ backgroundColor: "#0A84FF" }, fillStyle]}
+				style={[
+					{
+						backgroundColor: palette.accent,
+						borderRadius: radius.pill,
+						height: "100%",
+					},
+					fillStyle,
+				]}
 			/>
 		</View>
 	);
@@ -843,6 +897,7 @@ function GenerationStepRow({
 	label: string;
 	status: GenerationStepStatus;
 }) {
+	const { palette } = useUITheme();
 	const reveal = useSharedValue(0);
 
 	useEffect(() => {
@@ -860,42 +915,52 @@ function GenerationStepRow({
 	}));
 
 	const isPending = status === "pending";
-	let chip: ReactNode = <Ionicons color="#A1A1AA" name={icon} size={16} />;
+	let chip: ReactNode = (
+		<Ionicons color={palette.inkTertiary} name={icon} size={16} />
+	);
 
 	if (status === "active") {
-		chip = <Spinner size="sm" />;
+		chip = <ActivityIndicator color={palette.accent} size="small" />;
 	} else if (status === "complete") {
-		chip = <Ionicons color="#0A84FF" name="checkmark" size={16} />;
+		chip = <Ionicons color={palette.accent} name="checkmark" size={16} />;
 	}
 
 	return (
-		<Animated.View style={rowStyle}>
-			<Surface
-				className="flex-row items-center gap-3 rounded-[22px] border bg-surface p-3.5"
+		<Animated.View accessibilityLabel={`${label}, ${status}`} style={rowStyle}>
+			<Card
+				padding="md"
+				radius={radius.field}
 				style={{
-					borderColor:
-						status === "active" ? "#0A84FF" : "rgba(24, 24, 27, 0.08)",
+					alignItems: "center",
+					flexDirection: "row",
+					gap: 12,
 					opacity: isPending ? 0.55 : 1,
 				}}
 			>
 				<View
-					className="h-8 w-8 items-center justify-center rounded-full"
-					style={{ backgroundColor: isPending ? "#F4F4F5" : "#EAF2FF" }}
+					style={{
+						alignItems: "center",
+						backgroundColor: palette.fill,
+						borderRadius: radius.pill,
+						height: 32,
+						justifyContent: "center",
+						width: 32,
+					}}
 				>
 					{chip}
 				</View>
-				<Text
-					className="flex-1"
-					color={isPending ? "muted" : undefined}
-					type="body-sm"
-					weight="semibold"
+				<AppText
+					bold
+					style={{ flex: 1 }}
+					tone={isPending ? "secondary" : "ink"}
+					variant="subhead"
 				>
 					{label}
-				</Text>
+				</AppText>
 				{status === "complete" ? (
-					<Ionicons color="#0A84FF" name="checkmark-circle" size={18} />
+					<Ionicons color={palette.success} name="checkmark-circle" size={18} />
 				) : null}
-			</Surface>
+			</Card>
 		</Animated.View>
 	);
 }
@@ -934,27 +999,30 @@ function GeneratingScreen() {
 	return (
 		<Container className="bg-background" isScrollable={false}>
 			<View
-				className="flex-1 justify-center gap-9 px-6"
 				style={{
+					flex: 1,
+					gap: 36,
+					justifyContent: "center",
 					paddingBottom: Math.max(insets.bottom + 24, 36),
+					paddingHorizontal: 24,
 					paddingTop: Math.max(insets.top + 24, 44),
 				}}
 			>
 				<Reveal>
-					<View className="gap-6">
+					<View style={{ gap: 24 }}>
 						<GeneratingBrandMark />
-						<View className="gap-3">
-							<Text.Heading className="text-5xl leading-14" type="h1">
+						<View style={{ gap: 8 }}>
+							<AppText accessibilityRole="header" variant="title">
 								Building your starter trip
-							</Text.Heading>
-							<Text.Paragraph className="max-w-80 leading-6" color="muted">
+							</AppText>
+							<AppText style={{ maxWidth: 320 }} tone="secondary">
 								Your answers are being saved into an editable workspace.
-							</Text.Paragraph>
+							</AppText>
 						</View>
 						<GenerationProgressBar progress={progress} />
 					</View>
 				</Reveal>
-				<View className="gap-2.5">
+				<View style={{ gap: 10 }}>
 					{generationSteps.map((step, index) => (
 						<GenerationStepRow
 							icon={step.icon}
@@ -971,6 +1039,7 @@ function GeneratingScreen() {
 }
 
 function StarterSuccessBadge() {
+	const { palette } = useUITheme();
 	const scale = useSharedValue(0.6);
 	const opacity = useSharedValue(0);
 	const halo = useSharedValue(0);
@@ -980,10 +1049,8 @@ function StarterSuccessBadge() {
 			duration: 420,
 			easing: Easing.out(Easing.cubic),
 		});
-		scale.value = withTiming(1, {
-			duration: 720,
-			easing: Easing.out(Easing.back(1.6)),
-		});
+		scale.value = withSpring(1, motion.spring.surface);
+		haptic("success");
 		halo.value = withRepeat(
 			withTiming(1, { duration: 2600, easing: Easing.inOut(Easing.ease) }),
 			-1,
@@ -1007,16 +1074,40 @@ function StarterSuccessBadge() {
 	}));
 
 	return (
-		<View className="h-14 w-14 items-center justify-center">
+		<View
+			style={{
+				alignItems: "center",
+				height: 56,
+				justifyContent: "center",
+				width: 56,
+			}}
+		>
 			<Animated.View
-				className="absolute h-14 w-14 rounded-full"
-				style={[{ backgroundColor: "#0A84FF" }, haloStyle]}
+				style={[
+					{
+						backgroundColor: palette.success,
+						borderRadius: radius.pill,
+						height: 56,
+						position: "absolute",
+						width: 56,
+					},
+					haloStyle,
+				]}
 			/>
 			<Animated.View
-				className="h-12 w-12 items-center justify-center rounded-full"
-				style={[{ backgroundColor: "#EAF2FF" }, badgeStyle]}
+				style={[
+					{
+						alignItems: "center",
+						backgroundColor: palette.surface,
+						borderRadius: radius.pill,
+						height: 48,
+						justifyContent: "center",
+						width: 48,
+					},
+					badgeStyle,
+				]}
 			>
-				<Ionicons color="#0A84FF" name="checkmark-sharp" size={26} />
+				<Ionicons color={palette.success} name="checkmark-sharp" size={26} />
 			</Animated.View>
 		</View>
 	);
@@ -1030,14 +1121,14 @@ function StarterPreviewScreen({
 	state: TripCreateFlowState;
 }) {
 	const insets = useSafeAreaInsets();
-	const accentForeground = useThemeColor("accent-foreground");
+	const { palette } = useUITheme();
 	const budgetAmount = parseBudgetAmount(state.budgetAmount);
 	const travelerCount = parseTravelerCount(state.travelerCount) ?? 1;
 	const destination = state.destination || "your trip";
 
 	return (
 		<Container className="bg-background" isScrollable={false}>
-			<View className="flex-1">
+			<View style={{ backgroundColor: palette.canvas, flex: 1 }}>
 				<ScrollView
 					contentContainerStyle={{
 						gap: 24,
@@ -1049,36 +1140,36 @@ function StarterPreviewScreen({
 				>
 					<StarterSuccessBadge />
 					<Reveal delayMs={120}>
-						<View className="gap-2.5">
-							<Text.Heading className="text-5xl leading-14" type="h1">
+						<View style={{ gap: 10 }}>
+							<AppText accessibilityRole="header" variant="title">
 								Your starter trip is ready
-							</Text.Heading>
-							<Text.Paragraph className="leading-6" color="muted">
+							</AppText>
+							<AppText tone="secondary">
 								Open the workspace to fine-tune the manual plan for{" "}
 								{destination}.
-							</Text.Paragraph>
+							</AppText>
 						</View>
 					</Reveal>
-					<Reveal delayMs={260}>
-						<View className="gap-3">
-							<Text type="body" weight="bold">
+					<Reveal delayMs={220}>
+						<View style={{ gap: 12 }}>
+							<AppText variant="headline">
 								{state.destination || "New trip"} setup
-							</Text>
-							<View className="flex-row gap-3">
+							</AppText>
+							<View style={{ flexDirection: "row", gap: 12 }}>
 								<PreviewMetric
-									accent="#0A84FF"
+									accent="accent"
 									icon="people-outline"
 									label="Travelers"
 									value={travelerCount.toString()}
 								/>
 								<PreviewMetric
-									accent="#059669"
+									accent="success"
 									icon="speedometer-outline"
 									label="Pace"
 									value={getTripCreateOptionLabel("pace", state.pace)}
 								/>
 								<PreviewMetric
-									accent="#E97816"
+									accent="warning"
 									icon="wallet-outline"
 									label="Budget"
 									value={
@@ -1088,51 +1179,65 @@ function StarterPreviewScreen({
 							</View>
 						</View>
 					</Reveal>
-					<Reveal delayMs={400}>
-						<View className="gap-3">
-							<Text type="body" weight="bold">
-								Setup checklist
-							</Text>
+					<Reveal delayMs={320}>
+						<View style={{ gap: 12 }}>
+							<AppText variant="headline">Setup checklist</AppText>
 							{starterInsights.map((insight) => (
-								<Surface
-									className="flex-row items-center gap-3 rounded-3xl border border-border bg-surface px-4 py-3.5"
+								<Card
 									key={insight.text}
+									padding="md"
+									style={{
+										alignItems: "center",
+										flexDirection: "row",
+										gap: 12,
+									}}
 								>
 									<View
-										className="h-9 w-9 items-center justify-center rounded-full"
-										style={{ backgroundColor: `${insight.accent}18` }}
+										style={{
+											alignItems: "center",
+											backgroundColor: palette.fill,
+											borderRadius: radius.pill,
+											height: 36,
+											justifyContent: "center",
+											width: 36,
+										}}
 									>
 										<Ionicons
-											color={insight.accent}
+											color={palette[insight.accent]}
 											name={insight.icon}
 											size={18}
 										/>
 									</View>
-									<Text
-										className="flex-1 leading-5"
-										color="muted"
-										type="body-sm"
+									<AppText
+										style={{ flex: 1 }}
+										tone="secondary"
+										variant="subhead"
 									>
 										{insight.text}
-									</Text>
-								</Surface>
+									</AppText>
+								</Card>
 							))}
 						</View>
 					</Reveal>
 				</ScrollView>
-				<Reveal delayMs={520}>
+				<Reveal delayMs={420}>
 					<View
-						className="absolute right-0 bottom-0 left-0 bg-background px-6"
-						style={{ paddingBottom: 8 }}
+						style={{
+							backgroundColor: palette.canvas,
+							bottom: 0,
+							left: 0,
+							paddingBottom: Math.max(insets.bottom, 8),
+							paddingHorizontal: 20,
+							paddingTop: 8,
+							position: "absolute",
+							right: 0,
+						}}
 					>
-						<Button className="h-[54px] gap-2 rounded-full" onPress={onOpen}>
-							<Button.Label className="text-[17px]">Open trip</Button.Label>
-							<Ionicons
-								color={accentForeground}
-								name="arrow-forward"
-								size={18}
-							/>
-						</Button>
+						<PrimaryButton
+							icon="arrow-forward"
+							label="Open trip"
+							onPress={onOpen}
+						/>
 					</View>
 				</Reveal>
 			</View>
@@ -1146,28 +1251,36 @@ function PreviewMetric({
 	label,
 	value,
 }: {
-	accent: string;
+	accent: AccentKey;
 	icon: IconName;
 	label: string;
 	value: string;
 }) {
+	const { palette } = useUITheme();
+
 	return (
-		<Surface className="min-w-0 flex-1 gap-2 rounded-3xl border border-border bg-surface p-4">
+		<Card padding="md" style={{ flex: 1, gap: 8, minWidth: 0 }}>
 			<View
-				className="h-8 w-8 items-center justify-center rounded-full"
-				style={{ backgroundColor: `${accent}18` }}
+				style={{
+					alignItems: "center",
+					backgroundColor: palette.fill,
+					borderRadius: radius.pill,
+					height: 32,
+					justifyContent: "center",
+					width: 32,
+				}}
 			>
-				<Ionicons color={accent} name={icon} size={16} />
+				<Ionicons color={palette[accent]} name={icon} size={16} />
 			</View>
-			<View className="gap-0.5">
-				<Text color="muted" type="body-xs" weight="semibold">
+			<View style={{ gap: 2 }}>
+				<AppText tone="secondary" variant="footnote">
 					{label}
-				</Text>
-				<Text type="body-sm" weight="bold">
+				</AppText>
+				<AppText bold numberOfLines={1} variant="subhead">
 					{value}
-				</Text>
+				</AppText>
 			</View>
-		</Surface>
+		</Card>
 	);
 }
 
@@ -1377,12 +1490,12 @@ export function ManualTripCreateScreen() {
 	return (
 		<CreateFlowShell
 			footer={
-				<View className="gap-2">
-					<Button isDisabled={isCreating} onPress={handleContinue} size="lg">
-						{isCreating ? <Spinner size="sm" /> : null}
-						<Button.Label>{primaryLabel}</Button.Label>
-					</Button>
-				</View>
+				<PrimaryButton
+					disabled={isCreating}
+					isPending={isCreating}
+					label={primaryLabel}
+					onPress={handleContinue}
+				/>
 			}
 			helper={helper}
 			onBack={handleBack}

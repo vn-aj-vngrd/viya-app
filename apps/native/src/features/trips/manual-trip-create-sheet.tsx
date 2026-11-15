@@ -2,18 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
 import { useAction, useMutation } from "convex/react";
-import {
-	BottomSheet,
-	Button,
-	CloseButton,
-	Input,
-	Label,
-	Spinner,
-	Text,
-	TextArea,
-	TextField,
-	useThemeColor,
-} from "heroui-native";
+import { BottomSheet } from "heroui-native";
 import type { ComponentProps } from "react";
 import { useCallback, useState } from "react";
 import { ScrollView, useWindowDimensions, View } from "react-native";
@@ -27,8 +16,18 @@ import {
 	getStartOfToday,
 } from "@/src/components/date/date-picker-field";
 
+import {
+	AppText,
+	haptic,
+	PressableScale,
+	PrimaryButton,
+	radius,
+	SheetHeader,
+	useUITheme,
+} from "@/src/components/ui";
 import { LocationSuggestionField } from "./location-suggestion-field";
 import { fetchTripCoverImageUrl } from "./trip-cover-image";
+import { TripTextField } from "./trip-text-field";
 
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 const travelStyleOptions = [
@@ -196,25 +195,17 @@ function SheetField({
 	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
 
 	return (
-		<TextField className="gap-2">
-			<Label>
-				<Label.Text>
-					{label}
-					{isRequired ? <Text className="text-danger"> *</Text> : null}
-				</Label.Text>
-			</Label>
-			<Input
-				autoCapitalize={autoCapitalize}
-				className="h-12 border border-border bg-surface px-4"
-				keyboardType={keyboardType}
-				onBlur={onBlur}
-				onChangeText={onChangeText}
-				onFocus={onFocus}
-				placeholder={placeholder}
-				value={value}
-				variant="secondary"
-			/>
-		</TextField>
+		<TripTextField
+			autoCapitalize={autoCapitalize}
+			isRequired={isRequired}
+			keyboardType={keyboardType}
+			label={label}
+			onBlur={onBlur}
+			onChangeText={onChangeText}
+			onFocus={onFocus}
+			placeholder={placeholder}
+			value={value}
+		/>
 	);
 }
 
@@ -234,23 +225,16 @@ function SheetTextAreaField({
 	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
 
 	return (
-		<TextField className="gap-2">
-			<Label>
-				<Label.Text>
-					{label}
-					{isRequired ? <Text className="text-danger"> *</Text> : null}
-				</Label.Text>
-			</Label>
-			<TextArea
-				className="min-h-16 rounded-[18px] border border-border bg-surface px-4 py-3"
-				onBlur={onBlur}
-				onChangeText={onChangeText}
-				onFocus={onFocus}
-				placeholder={placeholder}
-				value={value}
-				variant="secondary"
-			/>
-		</TextField>
+		<TripTextField
+			isRequired={isRequired}
+			label={label}
+			multiline
+			onBlur={onBlur}
+			onChangeText={onChangeText}
+			onFocus={onFocus}
+			placeholder={placeholder}
+			value={value}
+		/>
 	);
 }
 
@@ -320,33 +304,50 @@ function OptionRow<Value extends string>({
 	options: readonly Value[];
 	value: Value | "";
 }) {
+	const { palette } = useUITheme();
+
 	return (
-		<TextField className="gap-2">
-			<Label>
-				<Label.Text>{label}</Label.Text>
-			</Label>
-			<View className="flex-row flex-wrap gap-2">
+		<View style={{ gap: 8 }}>
+			<AppText bold variant="subhead">
+				{label}
+			</AppText>
+			<View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
 				{options.map((option) => {
 					const isSelected = option === value;
+					const foreground = isSelected ? palette.onPrimary : palette.ink;
 
 					return (
-						<Button
+						<PressableScale
+							accessibilityLabel={getOptionLabel(option)}
+							accessibilityRole="button"
+							accessibilityState={{ selected: isSelected }}
+							haptic="selection"
+							hitSlop={{ bottom: 5, top: 5 }}
 							key={option}
 							onPress={() => onChange(option)}
-							size="sm"
-							variant={isSelected ? "primary" : "secondary"}
+							scaleTo={0.97}
+							style={{
+								alignItems: "center",
+								backgroundColor: isSelected ? palette.ink : palette.surface,
+								borderRadius: radius.pill,
+								flexDirection: "row",
+								gap: 6,
+								height: 34,
+								paddingHorizontal: 12,
+							}}
 						>
-							<Ionicons
-								color={isSelected ? "#FFFFFF" : "#71717A"}
-								name={icons[option]}
-								size={15}
-							/>
-							<Button.Label>{getOptionLabel(option)}</Button.Label>
-						</Button>
+							<Ionicons color={foreground} name={icons[option]} size={15} />
+							<AppText
+								style={{ color: foreground, fontWeight: "500" }}
+								variant="subhead"
+							>
+								{getOptionLabel(option)}
+							</AppText>
+						</PressableScale>
 					);
 				})}
 			</View>
-		</TextField>
+		</View>
 	);
 }
 
@@ -357,7 +358,7 @@ export function ManualTripCreateSheet({
 }: ManualTripCreateSheetProps) {
 	const insets = useSafeAreaInsets();
 	const { height } = useWindowDimensions();
-	const foregroundColor = useThemeColor("foreground");
+	const { palette } = useUITheme();
 	const createTrip = useMutation(api.trips.createTrip);
 	const runLocationSuggestionSearch = useAction(
 		api.locations.searchLocationSuggestions
@@ -394,6 +395,7 @@ export function ManualTripCreateSheet({
 		const formError = getFormError(form);
 
 		if (formError) {
+			haptic("warning");
 			setErrorMessage(formError);
 			return;
 		}
@@ -416,10 +418,12 @@ export function ManualTripCreateSheet({
 				title: tripTitle,
 				travelStyle: resolvedTravelStyle,
 			});
+			haptic("success");
 			setForm(initialFormState);
 			onOpenChange(false);
 			onCreated(result.tripId);
 		} catch (error) {
+			haptic("error");
 			setErrorMessage(
 				error instanceof Error ? error.message : "Could not create this trip."
 			);
@@ -433,28 +437,24 @@ export function ManualTripCreateSheet({
 			<BottomSheet.Portal>
 				<BottomSheet.Overlay />
 				<BottomSheet.Content
-					backgroundClassName="rounded-t-[36px] bg-background"
+					backgroundClassName="rounded-t-[32px] bg-background"
 					enablePanDownToClose={true}
 					snapPoints={["88%"]}
 				>
 					<View
-						className="gap-4 px-5 pt-2"
-						style={{ paddingBottom: Math.max(insets.bottom, 18) }}
+						style={{
+							backgroundColor: palette.canvas,
+							gap: 16,
+							paddingBottom: Math.max(insets.bottom, 18),
+							paddingHorizontal: 20,
+							paddingTop: 0,
+						}}
 					>
-						<View className="flex-row items-start justify-between gap-4">
-							<View className="flex-1 gap-1">
-								<BottomSheet.Title>Create trip</BottomSheet.Title>
-								<BottomSheet.Description ellipsizeMode="tail" numberOfLines={1}>
-									Add the trip basics manually.
-								</BottomSheet.Description>
-							</View>
-							<CloseButton
-								accessibilityLabel="Close create trip"
-								className="h-10 w-10 rounded-full bg-surface"
-								iconProps={{ color: foregroundColor, size: 22 }}
-								onPress={() => onOpenChange(false)}
-							/>
-						</View>
+						<SheetHeader
+							onClose={() => onOpenChange(false)}
+							subtitle="Add the trip basics manually."
+							title="Create trip"
+						/>
 
 						<ScrollView
 							contentContainerStyle={{ gap: 16, paddingBottom: 8 }}
@@ -565,16 +565,22 @@ export function ManualTripCreateSheet({
 							/>
 						</ScrollView>
 
-						<View className="gap-2">
+						<View style={{ gap: 8 }}>
 							{errorMessage ? (
-								<Text className="text-danger" type="body-sm">
+								<AppText
+									accessibilityLiveRegion="polite"
+									tone="danger"
+									variant="subhead"
+								>
 									{errorMessage}
-								</Text>
+								</AppText>
 							) : null}
-							<Button isDisabled={isCreating} onPress={handleCreate} size="lg">
-								{isCreating ? <Spinner size="sm" /> : null}
-								<Button.Label>Create trip</Button.Label>
-							</Button>
+							<PrimaryButton
+								disabled={isCreating}
+								isPending={isCreating}
+								label="Create trip"
+								onPress={handleCreate}
+							/>
 						</View>
 					</View>
 				</BottomSheet.Content>

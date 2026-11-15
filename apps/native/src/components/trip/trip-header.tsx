@@ -1,40 +1,49 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { Trip } from "@viya-app/domain";
-import { Chip, Surface, Text, useThemeColor } from "heroui-native";
 import { ImageBackground, View } from "react-native";
+
+import { AppText, Chip, radius, useUITheme } from "@/src/components/ui";
 
 interface TripHeaderProps {
 	trip: Trip;
 }
 
 export function TripHeader({ trip }: TripHeaderProps) {
-	const linkColor = useThemeColor("link");
+	const { palette } = useUITheme();
 
 	return (
-		<Surface className="overflow-hidden rounded-lg" variant="secondary">
+		<View
+			style={{
+				backgroundColor: palette.surface,
+				borderRadius: radius.card,
+				overflow: "hidden",
+			}}
+		>
 			<ImageBackground
-				className="min-h-56 justify-end bg-content2"
 				imageStyle={{ opacity: 0.42 }}
 				source={{ uri: trip.coverImageUrl }}
+				style={{
+					backgroundColor: palette.fill,
+					justifyContent: "flex-end",
+					minHeight: 224,
+				}}
 			>
-				<View className="gap-3 p-5">
-					<Chip size="sm" variant="secondary">
-						<Chip.Label>{trip.status.toUpperCase()}</Chip.Label>
-					</Chip>
-					<View>
-						<Text.Heading className="text-4xl" type="h1" weight="semibold">
-							{trip.title}
-						</Text.Heading>
-						<View className="mt-2 flex-row items-center gap-2">
-							<Ionicons color={linkColor} name="location" size={16} />
-							<Text type="body">{trip.destination}</Text>
+				<View style={{ gap: 12, padding: 20 }}>
+					<Chip label={trip.status.toUpperCase()} />
+					<View style={{ gap: 8 }}>
+						<AppText variant="title">{trip.title}</AppText>
+						<View
+							style={{ alignItems: "center", flexDirection: "row", gap: 8 }}
+						>
+							<Ionicons color={palette.accent} name="location" size={16} />
+							<AppText variant="callout">{trip.destination}</AppText>
 						</View>
 					</View>
-					<Text.Paragraph className="leading-6" color="muted" type="body-sm">
+					<AppText tone="secondary" variant="subhead">
 						{trip.summary}
-					</Text.Paragraph>
+					</AppText>
 				</View>
 			</ImageBackground>
-		</Surface>
+		</View>
 	);
 }

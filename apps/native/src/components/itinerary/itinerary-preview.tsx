@@ -1,51 +1,68 @@
 import type { ItineraryItem } from "@viya-app/domain";
-import { Surface, Text } from "heroui-native";
 import { View } from "react-native";
+import {
+	AppText,
+	Card,
+	radius,
+	spacing,
+	useUITheme,
+} from "@/src/components/ui";
 
 interface ItineraryPreviewProps {
 	items: ItineraryItem[];
 }
 
 export function ItineraryPreview({ items }: ItineraryPreviewProps) {
+	const { palette } = useUITheme();
+
 	return (
-		<Surface className="gap-4 rounded-lg p-4" variant="secondary">
-			<View>
-				<Text
-					className="uppercase"
-					color="muted"
-					type="body-xs"
-					weight="semibold"
-				>
-					Upcoming itinerary
-				</Text>
-				<Text.Paragraph className="mt-1" color="muted" type="body-sm">
-					The first trip blocks Viya is watching.
-				</Text.Paragraph>
-			</View>
-			<View className="gap-3">
-				{items.map((item) => (
-					<View className="flex-row gap-3" key={item.id}>
-						<View className="w-14">
-							<Text type="body-sm" weight="semibold">
-								{item.startTime}
-							</Text>
-							<Text color="muted" type="body-xs">
-								{item.endTime}
-							</Text>
-						</View>
-						<View className="flex-1 border-border border-l pl-3">
-							<Text weight="semibold">{item.title}</Text>
-							<Text.Paragraph
-								className="mt-1 leading-5"
-								color="muted"
-								type="body-sm"
+		<Card>
+			<View style={{ gap: spacing.lg }}>
+				<View style={{ gap: 2 }}>
+					<AppText
+						accessibilityRole="header"
+						tone="secondary"
+						variant="eyebrow"
+					>
+						Upcoming itinerary
+					</AppText>
+					<AppText tone="secondary" variant="subhead">
+						The first trip blocks Viya is watching.
+					</AppText>
+				</View>
+				<View style={{ gap: spacing.md }}>
+					{items.map((item) => (
+						<View
+							key={item.id}
+							style={{ flexDirection: "row", gap: spacing.md }}
+						>
+							<View style={{ width: 56 }}>
+								<AppText bold={true} variant="footnote">
+									{item.startTime}
+								</AppText>
+								<AppText tone="tertiary" variant="footnote">
+									{item.endTime}
+								</AppText>
+							</View>
+							<View
+								style={{
+									borderLeftColor: palette.separator,
+									borderLeftWidth: 2,
+									borderRadius: radius.pill,
+									flex: 1,
+									gap: 2,
+									paddingLeft: spacing.md,
+								}}
 							>
-								{item.aiReason}
-							</Text.Paragraph>
+								<AppText variant="headline">{item.title}</AppText>
+								<AppText tone="secondary" variant="subhead">
+									{item.aiReason}
+								</AppText>
+							</View>
 						</View>
-					</View>
-				))}
+					))}
+				</View>
 			</View>
-		</Surface>
+		</Card>
 	);
 }

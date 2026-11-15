@@ -1,20 +1,21 @@
 import { Ionicons } from "@expo/vector-icons";
-import {
-	Input,
-	Label,
-	Spinner,
-	Text,
-	TextField,
-	useThemeColor,
-} from "heroui-native";
 import type { ComponentProps, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
-import { Pressable, View } from "react-native";
+import { ActivityIndicator, type TextInput, View } from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
+import {
+	AppText,
+	haptic,
+	PressableScale,
+	radius,
+	useUITheme,
+} from "@/src/components/ui";
 import {
 	getLocationSuggestionPanelState,
 	type LocationSuggestionStatus,
 } from "./location-suggestion-field-utils";
+import { TripTextField } from "./trip-text-field";
 
 interface LocationSuggestion {
 	countryCode?: string;
@@ -42,10 +43,10 @@ interface LocationSuggestionFieldProps {
 }
 
 type InputBlurEvent = Parameters<
-	NonNullable<ComponentProps<typeof Input>["onBlur"]>
+	NonNullable<ComponentProps<typeof TextInput>["onBlur"]>
 >[0];
 type InputFocusEvent = Parameters<
-	NonNullable<ComponentProps<typeof Input>["onFocus"]>
+	NonNullable<ComponentProps<typeof TextInput>["onFocus"]>
 >[0];
 
 export function LocationSuggestionField({
@@ -61,7 +62,7 @@ export function LocationSuggestionField({
 	value,
 }: LocationSuggestionFieldProps) {
 	const bottomSheetHandlers = useCompatibleBottomSheetAwareHandlers();
-	const iconColor = useThemeColor("field-foreground");
+	const { palette } = useUITheme();
 	const [isFocused, setIsFocused] = useState(false);
 	const [selectedSuggestionValue, setSelectedSuggestionValue] = useState<
 		string | null
@@ -79,9 +80,6 @@ export function LocationSuggestionField({
 		suggestionCount: suggestions.length,
 		value,
 	});
-	const inputClassName = isInvalid
-		? "h-12 border border-danger bg-surface px-4"
-		: "h-12 border border-border bg-surface px-4";
 
 	useEffect(() => {
 		if (!panelState.canSearch) {
@@ -154,6 +152,7 @@ export function LocationSuggestionField({
 	};
 
 	const handleSuggestionPress = (suggestion: LocationSuggestion) => {
+		haptic("selection");
 		setSelectedSuggestionValue(suggestion.value);
 		setSuggestions([]);
 		setIsFocused(false);
@@ -162,122 +161,154 @@ export function LocationSuggestionField({
 	};
 
 	return (
-		<TextField className="gap-2">
-			<Label>
-				<Label.Text>
-					{label}
-					{isRequired ? <Text className="text-danger"> *</Text> : null}
-				</Label.Text>
-			</Label>
-			<View className="gap-2">
-				<Input
-					autoCapitalize="words"
-					className={inputClassName}
-					onBlur={handleBlur}
-					onChangeText={handleChangeText}
-					onFocus={handleFocus}
-					placeholder={placeholder}
-					value={value}
-					variant="secondary"
-				/>
-				{isInvalid && errorText ? (
-					<Text className="text-danger" type="body-xs">
-						{errorText}
-					</Text>
-				) : null}
-				{!(isInvalid && errorText) && helperText ? (
-					<Text color="muted" type="body-sm">
-						{helperText}
-					</Text>
-				) : null}
-				{panelState.shouldShowPanel ? (
-					<View
-						className="overflow-hidden rounded-[18px] border border-border bg-surface"
-						style={{ boxShadow: "0 12px 26px rgba(15, 23, 42, 0.08)" }}
-					>
-						{panelState.message === "loading" ? (
-							<LocationSuggestionMessage
-								icon={<Spinner size="sm" />}
-								text="Finding matching destinations..."
-							/>
-						) : null}
-						{panelState.message === "error" ? (
-							<LocationSuggestionMessage
-								icon={
-									<Ionicons
-										color="#71717A"
-										name="alert-circle-outline"
-										size={18}
-									/>
-								}
-								text="Suggestions are unavailable. You can keep this destination."
-							/>
-						) : null}
-						{panelState.message === "empty" ? (
-							<LocationSuggestionMessage
-								icon={
-									<Ionicons color="#71717A" name="search-outline" size={18} />
-								}
-								text="No close matches yet. Keep typing or use your text."
-							/>
-						) : null}
-						{suggestions.map((suggestion, index) => (
-							<Pressable
-								accessibilityLabel={`Use ${suggestion.value}`}
-								accessibilityRole="button"
-								className={`min-h-16 flex-row items-center gap-3 px-4 py-3 ${
-									index === 0 ? "" : "border-border border-t"
-								}`}
-								key={suggestion.id}
-								onPress={() => handleSuggestionPress(suggestion)}
-								style={({ pressed }) => ({
-									backgroundColor: pressed
-										? "rgba(10, 132, 255, 0.06)"
-										: "#FFFFFF",
-								})}
-							>
-								<View className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary">
-									<Ionicons
-										color={iconColor}
-										name="location-outline"
-										size={18}
-									/>
-								</View>
-								<View className="min-w-0 flex-1 gap-0.5">
-									<Text numberOfLines={1} type="body-sm" weight="semibold">
-										{suggestion.label}
-									</Text>
-									{suggestion.details ? (
-										<Text color="muted" numberOfLines={1} type="body-sm">
-											{suggestion.details}
-										</Text>
-									) : null}
-								</View>
-								{suggestion.countryCode ? (
-									<View className="rounded-full bg-surface-secondary px-2 py-1">
-										<Text color="muted" type="body-xs" weight="semibold">
-											{suggestion.countryCode}
-										</Text>
-									</View>
+		<View style={{ gap: 8 }}>
+			<TripTextField
+				autoCapitalize="words"
+				errorText={errorText}
+				helperText={helperText}
+				isInvalid={isInvalid}
+				isRequired={isRequired}
+				label={label}
+				onBlur={handleBlur}
+				onChangeText={handleChangeText}
+				onFocus={handleFocus}
+				placeholder={placeholder}
+				value={value}
+			/>
+			{panelState.shouldShowPanel ? (
+				<Animated.View
+					entering={FadeIn.duration(160)}
+					style={{
+						backgroundColor: palette.surface,
+						borderColor: palette.hairline,
+						borderCurve: "continuous",
+						borderRadius: radius.card,
+						borderWidth: 1,
+						overflow: "hidden",
+					}}
+				>
+					{panelState.message === "loading" ? (
+						<LocationSuggestionMessage
+							icon={
+								<ActivityIndicator color={palette.inkSecondary} size="small" />
+							}
+							text="Finding matching destinations..."
+						/>
+					) : null}
+					{panelState.message === "error" ? (
+						<LocationSuggestionMessage
+							icon={
+								<Ionicons
+									color={palette.inkSecondary}
+									name="alert-circle-outline"
+									size={18}
+								/>
+							}
+							text="Suggestions are unavailable. You can keep this destination."
+						/>
+					) : null}
+					{panelState.message === "empty" ? (
+						<LocationSuggestionMessage
+							icon={
+								<Ionicons
+									color={palette.inkSecondary}
+									name="search-outline"
+									size={18}
+								/>
+							}
+							text="No close matches yet. Keep typing or use your text."
+						/>
+					) : null}
+					{suggestions.map((suggestion, index) => (
+						<PressableScale
+							accessibilityLabel={`Use ${suggestion.value}`}
+							accessibilityRole="button"
+							haptic="none"
+							key={suggestion.id}
+							onPress={() => handleSuggestionPress(suggestion)}
+							scaleTo={0.99}
+							style={{
+								alignItems: "center",
+								borderTopColor: palette.separator,
+								borderTopWidth: index === 0 ? 0 : 1,
+								flexDirection: "row",
+								gap: 12,
+								minHeight: 56,
+								paddingHorizontal: 16,
+								paddingVertical: 10,
+							}}
+						>
+							<View style={iconTile(palette.fill)}>
+								<Ionicons
+									color={palette.inkSecondary}
+									name="location-outline"
+									size={18}
+								/>
+							</View>
+							<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+								<AppText bold numberOfLines={1} variant="subhead">
+									{suggestion.label}
+								</AppText>
+								{suggestion.details ? (
+									<AppText
+										numberOfLines={1}
+										tone="secondary"
+										variant="footnote"
+									>
+										{suggestion.details}
+									</AppText>
 								) : null}
-								<Ionicons color="#A1A1AA" name="chevron-forward" size={16} />
-							</Pressable>
-						))}
-						{suggestions.length > 0 ? (
-							<Text
-								className="border-border border-t px-4 py-2"
-								color="muted"
-								type="body-xs"
-							>
-								Geoapify suggestions
-							</Text>
-						) : null}
-					</View>
-				) : null}
-			</View>
-		</TextField>
+							</View>
+							{suggestion.countryCode ? (
+								<View
+									style={{
+										backgroundColor: palette.fill,
+										borderRadius: radius.pill,
+										paddingHorizontal: 8,
+										paddingVertical: 3,
+									}}
+								>
+									<AppText bold tone="secondary" variant="footnote">
+										{suggestion.countryCode}
+									</AppText>
+								</View>
+							) : null}
+							<Ionicons
+								color={palette.inkTertiary}
+								name="chevron-forward"
+								size={16}
+							/>
+						</PressableScale>
+					))}
+					{suggestions.length > 0 ? (
+						<AppText
+							style={{
+								borderTopColor: palette.separator,
+								borderTopWidth: 1,
+								paddingHorizontal: 16,
+								paddingVertical: 8,
+							}}
+							tone="tertiary"
+							variant="footnote"
+						>
+							Geoapify suggestions
+						</AppText>
+					) : null}
+				</Animated.View>
+			) : null}
+		</View>
 	);
 }
+
+const iconTile = (backgroundColor: string) =>
+	({
+		alignItems: "center",
+		backgroundColor,
+		borderRadius: radius.pill,
+		height: 36,
+		justifyContent: "center",
+		width: 36,
+	}) as const;
 
 function LocationSuggestionMessage({
 	icon,
@@ -286,14 +317,22 @@ function LocationSuggestionMessage({
 	icon: ReactNode;
 	text: string;
 }) {
+	const { palette } = useUITheme();
+
 	return (
-		<View className="flex-row items-center gap-3 px-4 py-3">
-			<View className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary">
-				{icon}
-			</View>
-			<Text className="flex-1" color="muted" type="body-sm">
+		<View
+			style={{
+				alignItems: "center",
+				flexDirection: "row",
+				gap: 12,
+				paddingHorizontal: 16,
+				paddingVertical: 12,
+			}}
+		>
+			<View style={iconTile(palette.fill)}>{icon}</View>
+			<AppText style={{ flex: 1 }} tone="secondary" variant="subhead">
 				{text}
-			</Text>
+			</AppText>
 		</View>
 	);
 }

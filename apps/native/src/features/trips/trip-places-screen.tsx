@@ -4,35 +4,49 @@ import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import type { Href } from "expo-router";
 import { Link } from "expo-router";
-import {
-	BottomSheet,
-	Button,
-	Chip,
-	CloseButton,
-	Input,
-	Label,
-	Menu,
-	Spinner,
-	Surface,
-	Text,
-	TextArea,
-	TextField,
-} from "heroui-native";
+import { Menu } from "heroui-native";
 import { useState } from "react";
-import { Linking, Pressable, ScrollView, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Container } from "@/components/container";
-import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
-import { EmptyState } from "@/src/components/empty-state";
+import { Linking, View } from "react-native";
+import {
+	ActionPill,
+	ChoiceChips,
+	FormField,
+	FormSheet,
+	FormTextArea,
+	GroupLabel,
+	IconAction,
+	IconBadge,
+	InlineError,
+	MenuAction,
+	MenuDivider,
+	MenuItemContent,
+	MenuPanel,
+	MetaTag,
+	ModuleLoading,
+	ModuleMissing,
+	ModuleScroll,
+	OverflowTrigger,
+	Reveal,
+} from "@/src/components/itinerary/trip-module-ui";
 import { NavigationIconButton } from "@/src/components/navigation/navigation-icon-button";
-import { ScreenLoadingState } from "@/src/components/screen-loading-state";
+import {
+	AppText,
+	Card,
+	EmptyState,
+	haptic,
+	ListGroup,
+	ListRow,
+	radius,
+	spacing,
+	useFeedback,
+	useUITheme,
+} from "@/src/components/ui";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 import {
 	getTripMapSearchUrl,
 	hasTripMapSearchTarget,
 } from "./trip-map-link-utils";
 import { TripModuleScreenFrame } from "./trip-module-floating-bar";
-import { TripModuleManualEntryCard } from "./trip-module-manual-entry-card";
 import { useTripIdParam } from "./use-trip-id-param";
 
 interface PlaceForm {
@@ -82,96 +96,6 @@ interface RoutePreviewPlace {
 	title: string;
 }
 
-function SheetField({
-	label,
-	onChangeText,
-	placeholder,
-	value,
-}: {
-	label: string;
-	onChangeText: (value: string) => void;
-	placeholder: string;
-	value: string;
-}) {
-	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
-
-	return (
-		<TextField className="gap-2">
-			<Label>
-				<Label.Text>{label}</Label.Text>
-			</Label>
-			<Input
-				className="h-12 border border-border bg-surface px-4"
-				onBlur={onBlur}
-				onChangeText={onChangeText}
-				onFocus={onFocus}
-				placeholder={placeholder}
-				value={value}
-				variant="secondary"
-			/>
-		</TextField>
-	);
-}
-
-function SheetTextArea({
-	label,
-	onChangeText,
-	placeholder,
-	value,
-}: {
-	label: string;
-	onChangeText: (value: string) => void;
-	placeholder: string;
-	value: string;
-}) {
-	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
-
-	return (
-		<TextField className="gap-2">
-			<Label>
-				<Label.Text>{label}</Label.Text>
-			</Label>
-			<TextArea
-				className="min-h-20 rounded-[18px] border border-border bg-surface px-4 py-3"
-				onBlur={onBlur}
-				onChangeText={onChangeText}
-				onFocus={onFocus}
-				placeholder={placeholder}
-				value={value}
-				variant="secondary"
-			/>
-		</TextField>
-	);
-}
-
-function PlaceCategoryPicker({
-	onChange,
-	value,
-}: {
-	onChange: (value: string) => void;
-	value: string;
-}) {
-	return (
-		<View className="gap-2">
-			<Text color="muted" type="body-xs" weight="semibold">
-				CATEGORY
-			</Text>
-			<View className="flex-row flex-wrap gap-2">
-				{placeCategoryOptions.map((category) => (
-					<Button
-						key={category}
-						onPress={() => onChange(category)}
-						size="sm"
-						variant={value === category ? "primary" : "secondary"}
-					>
-						<Button.Label>{formatPlaceCategoryLabel(category)}</Button.Label>
-					</Button>
-				))}
-			</View>
-		</View>
-	);
-}
-
 function PlaceSheet({
 	errorMessage,
 	form,
@@ -191,88 +115,52 @@ function PlaceSheet({
 	onSubmit: () => void;
 	onUpdateForm: (key: keyof PlaceForm, value: string) => void;
 }) {
-	const insets = useSafeAreaInsets();
-
 	return (
-		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
-			<BottomSheet.Portal>
-				<BottomSheet.Overlay />
-				<BottomSheet.Content
-					backgroundClassName="rounded-t-[36px] bg-background"
-					enablePanDownToClose={true}
-					snapPoints={["82%"]}
-				>
-					<View
-						className="gap-4 px-5 pt-2"
-						style={{ paddingBottom: Math.max(insets.bottom, 18) }}
-					>
-						<View className="flex-row items-start justify-between gap-4">
-							<View className="flex-1 gap-1">
-								<BottomSheet.Title>
-									{mode === "edit" ? "Edit place" : "Add place"}
-								</BottomSheet.Title>
-								<BottomSheet.Description>
-									Save a stop before assigning it to a day.
-								</BottomSheet.Description>
-							</View>
-							<CloseButton
-								accessibilityLabel="Close place form"
-								className="h-10 w-10 rounded-full bg-surface"
-								onPress={() => onOpenChange(false)}
-							/>
-						</View>
-
-						<ScrollView
-							contentContainerStyle={{ gap: 14, paddingBottom: 8 }}
-							keyboardShouldPersistTaps="handled"
-							showsVerticalScrollIndicator={false}
-							style={{ maxHeight: 480 }}
-						>
-							<SheetField
-								label="Name"
-								onChangeText={(value) => onUpdateForm("title", value)}
-								placeholder="Coffee stop"
-								value={form.title}
-							/>
-							<SheetField
-								label="Location"
-								onChangeText={(value) => onUpdateForm("locationName", value)}
-								placeholder="Place, area, or landmark"
-								value={form.locationName}
-							/>
-							<PlaceCategoryPicker
-								onChange={(value) => onUpdateForm("category", value)}
-								value={form.category}
-							/>
-							<SheetField
-								label="Address"
-								onChangeText={(value) => onUpdateForm("address", value)}
-								placeholder="Optional"
-								value={form.address}
-							/>
-							<SheetTextArea
-								label="Notes"
-								onChangeText={(value) => onUpdateForm("description", value)}
-								placeholder="Why save this place?"
-								value={form.description}
-							/>
-						</ScrollView>
-
-						{errorMessage ? (
-							<Text className="text-danger" type="body-sm">
-								{errorMessage}
-							</Text>
-						) : null}
-						<Button isDisabled={isSaving} onPress={onSubmit} size="lg">
-							{isSaving ? <Spinner size="sm" /> : null}
-							<Button.Label>
-								{mode === "edit" ? "Save place" : "Add place"}
-							</Button.Label>
-						</Button>
-					</View>
-				</BottomSheet.Content>
-			</BottomSheet.Portal>
-		</BottomSheet>
+		<FormSheet
+			closeLabel="Close place form"
+			errorMessage={errorMessage}
+			isOpen={isOpen}
+			isPending={isSaving}
+			maxHeight={480}
+			onOpenChange={onOpenChange}
+			onSubmit={onSubmit}
+			snapPoint="82%"
+			submitLabel={mode === "edit" ? "Save place" : "Add place"}
+			subtitle="Save a stop before assigning it to a day."
+			title={mode === "edit" ? "Edit place" : "Add place"}
+		>
+			<FormField
+				label="Name"
+				onChangeText={(value) => onUpdateForm("title", value)}
+				placeholder="Coffee stop"
+				value={form.title}
+			/>
+			<FormField
+				label="Location"
+				onChangeText={(value) => onUpdateForm("locationName", value)}
+				placeholder="Place, area, or landmark"
+				value={form.locationName}
+			/>
+			<ChoiceChips
+				formatLabel={formatPlaceCategoryLabel}
+				label="Category"
+				onChange={(value) => onUpdateForm("category", value)}
+				options={placeCategoryOptions}
+				value={form.category}
+			/>
+			<FormField
+				label="Address"
+				onChangeText={(value) => onUpdateForm("address", value)}
+				placeholder="Optional"
+				value={form.address}
+			/>
+			<FormTextArea
+				label="Notes"
+				onChangeText={(value) => onUpdateForm("description", value)}
+				placeholder="Why save this place?"
+				value={form.description}
+			/>
+		</FormSheet>
 	);
 }
 
@@ -308,116 +196,73 @@ function PlaceAssignmentSheet({
 	onOpenChange: (isOpen: boolean) => void;
 	place: Doc<"savedPlaces"> | null;
 }) {
-	const insets = useSafeAreaInsets();
+	const { palette } = useUITheme();
 	const assignedDayLabel = place
 		? getDayAssignmentLabel(days, place.assignedDayId)
 		: "Unassigned";
 
 	return (
-		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
-			<BottomSheet.Portal>
-				<BottomSheet.Overlay />
-				<BottomSheet.Content
-					backgroundClassName="rounded-t-[36px] bg-background"
-					enablePanDownToClose={true}
-					snapPoints={["64%"]}
-				>
-					<View
-						className="gap-4 px-5 pt-2"
-						style={{ paddingBottom: Math.max(insets.bottom, 18) }}
-					>
-						<View className="flex-row items-start justify-between gap-4">
-							<View className="min-w-0 flex-1 gap-1">
-								<BottomSheet.Title>Assign to day</BottomSheet.Title>
-								<BottomSheet.Description numberOfLines={2}>
-									{place
-										? `${place.title} is currently ${assignedDayLabel.toLowerCase()}.`
-										: "Choose a saved place before assigning a day."}
-								</BottomSheet.Description>
-							</View>
-							<CloseButton
-								accessibilityLabel="Close day assignment"
-								className="h-10 w-10 rounded-full bg-surface"
-								onPress={() => onOpenChange(false)}
+		<FormSheet
+			closeLabel="Close day assignment"
+			errorMessage={errorMessage}
+			isOpen={isOpen}
+			maxHeight={360}
+			onOpenChange={onOpenChange}
+			snapPoint="64%"
+			subtitle={
+				place
+					? `${place.title} is currently ${assignedDayLabel.toLowerCase()}.`
+					: "Choose a saved place before assigning a day."
+			}
+			title="Assign to day"
+		>
+			{days.length > 0 ? (
+				<ListGroup>
+					{days.map((day) => {
+						const isSelected = place?.assignedDayId === day._id;
+
+						return (
+							<ListRow
+								accessibilityLabel={`Day ${day.dayNumber} · ${day.title}`}
+								key={day._id}
+								leading={
+									<Ionicons
+										color={isSelected ? palette.success : palette.inkTertiary}
+										name={isSelected ? "checkmark-circle" : "calendar-outline"}
+										size={22}
+									/>
+								}
+								onPress={isSaving ? undefined : () => onAssignDay(day._id)}
+								showChevron={false}
+								subtitle={day.title}
+								title={`Day ${day.dayNumber}`}
 							/>
-						</View>
-
-						{days.length > 0 ? (
-							<ScrollView
-								contentContainerStyle={{ gap: 10, paddingBottom: 4 }}
-								showsVerticalScrollIndicator={false}
-								style={{ maxHeight: 360 }}
-							>
-								{days.map((day) => {
-									const isSelected = place?.assignedDayId === day._id;
-
-									return (
-										<Button
-											className="justify-start rounded-[22px] border border-border bg-surface px-4 py-3"
-											isDisabled={isSaving}
-											key={day._id}
-											onPress={() => onAssignDay(day._id)}
-											size="lg"
-											variant={isSelected ? "primary" : "secondary"}
-										>
-											<Ionicons
-												color={isSelected ? "#FFFFFF" : "#34C759"}
-												name={
-													isSelected ? "checkmark-circle" : "calendar-outline"
-												}
-												size={18}
-											/>
-											<Button.Label>
-												{`Day ${day.dayNumber} · ${day.title}`}
-											</Button.Label>
-										</Button>
-									);
-								})}
-							</ScrollView>
-						) : (
-							<View className="gap-2 rounded-[24px] bg-surface-secondary p-4">
-								<View className="h-10 w-10 items-center justify-center rounded-full bg-surface-secondary">
-									<Ionicons color="#34C759" name="calendar-outline" size={18} />
-								</View>
-								<Text type="body-sm" weight="bold">
-									Add itinerary days first
-								</Text>
-								<Text color="muted" type="body-sm">
-									Places can be assigned once the itinerary has at least one
-									day.
-								</Text>
-								<Link asChild href={itineraryHref}>
-									<Button size="sm" variant="secondary">
-										<Ionicons
-											color="#0A84FF"
-											name="calendar-outline"
-											size={16}
-										/>
-										<Button.Label>Plan itinerary days</Button.Label>
-									</Button>
-								</Link>
-							</View>
-						)}
-
-						{errorMessage ? (
-							<Text className="text-danger" type="body-sm">
-								{errorMessage}
-							</Text>
-						) : null}
-
-						<Button
-							isDisabled={isSaving || !place?.assignedDayId}
-							onPress={() => onAssignDay()}
-							size="lg"
-							variant="tertiary"
-						>
-							{isSaving ? <Spinner size="sm" /> : null}
-							<Button.Label>Remove day</Button.Label>
-						</Button>
+						);
+					})}
+				</ListGroup>
+			) : (
+				<Card padding="md">
+					<View style={{ alignItems: "flex-start", gap: spacing.sm }}>
+						<IconBadge icon="calendar-outline" tone="success" />
+						<AppText variant="headline">Add itinerary days first</AppText>
+						<AppText tone="secondary" variant="subhead">
+							Places can be assigned once the itinerary has at least one day.
+						</AppText>
+						<Link asChild href={itineraryHref}>
+							<ActionPill icon="calendar-outline" label="Plan itinerary days" />
+						</Link>
 					</View>
-				</BottomSheet.Content>
-			</BottomSheet.Portal>
-		</BottomSheet>
+				</Card>
+			)}
+			{place?.assignedDayId ? (
+				<ActionPill
+					icon="remove-circle-outline"
+					isPending={isSaving}
+					label="Remove day"
+					onPress={() => onAssignDay()}
+				/>
+			) : null}
+		</FormSheet>
 	);
 }
 
@@ -429,22 +274,272 @@ function RouteBoardActions({
 	onAddPlace: () => void;
 }) {
 	return (
-		<View className="flex-row flex-wrap gap-2">
-			<Button className="flex-1" onPress={onAddPlace} size="sm">
-				<Ionicons color="#FFFFFF" name="add-circle-outline" size={16} />
-				<Button.Label>Add route place</Button.Label>
-			</Button>
+		<View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
+			<ActionPill
+				icon="add-circle-outline"
+				label="Add route place"
+				onPress={onAddPlace}
+				variant="primary"
+			/>
 			<Link asChild href={itineraryHref}>
-				<Button className="flex-1" size="sm" variant="secondary">
-					<Ionicons color="#0A84FF" name="calendar-outline" size={16} />
-					<Button.Label>Open route itinerary</Button.Label>
-				</Button>
+				<ActionPill icon="calendar-outline" label="Open route itinerary" />
 			</Link>
 		</View>
 	);
 }
 
+function RouteBoard({
+	itineraryHref,
+	onAddPlace,
+	onOpenMaps,
+	places,
+	routeStats,
+}: {
+	itineraryHref: Href;
+	onAddPlace: () => void;
+	onOpenMaps: (place: RoutePreviewPlace) => void;
+	places: RoutePreviewPlace[];
+	routeStats: {
+		geocodedPlaceCount: number;
+		placeCount: number;
+		savedPlaceCount: number;
+	};
+}) {
+	const { palette } = useUITheme();
+
+	return (
+		<Card>
+			<View style={{ gap: spacing.lg }}>
+				<View
+					style={{
+						alignItems: "center",
+						flexDirection: "row",
+						gap: spacing.md,
+					}}
+				>
+					<IconBadge icon="navigate-outline" tone="success" />
+					<View style={{ flex: 1, gap: 2 }}>
+						<AppText accessibilityRole="header" variant="headline">
+							Route board
+						</AppText>
+						<AppText numberOfLines={1} tone="secondary" variant="footnote">
+							Saved and planned stops
+						</AppText>
+					</View>
+					<MetaTag label={`${routeStats.placeCount} total`} />
+				</View>
+
+				{places.length > 0 ? (
+					<View style={{ gap: spacing.xs }}>
+						{places.map((place, index) => (
+							<View
+								key={`${place.sourceLabel}-${place.id}`}
+								style={{
+									alignItems: "center",
+									flexDirection: "row",
+									gap: spacing.md,
+									minHeight: 52,
+								}}
+							>
+								<View
+									style={{
+										alignItems: "center",
+										backgroundColor: palette.fill,
+										borderRadius: radius.pill,
+										height: 28,
+										justifyContent: "center",
+										width: 28,
+									}}
+								>
+									<AppText bold={true} tone="success" variant="footnote">
+										{index + 1}
+									</AppText>
+								</View>
+								<View style={{ flex: 1, gap: 1, minWidth: 0 }}>
+									<AppText numberOfLines={1} variant="callout">
+										{place.title}
+									</AppText>
+									<AppText
+										numberOfLines={1}
+										tone="secondary"
+										variant="footnote"
+									>
+										{place.locationName} ·{" "}
+										{formatPlaceCategoryLabel(place.category)} ·{" "}
+										{place.sourceLabel}
+									</AppText>
+								</View>
+								{hasTripMapSearchTarget({
+									address: place.address,
+									latitude: place.latitude,
+									locationName: place.locationName,
+									longitude: place.longitude,
+								}) ? (
+									<IconAction
+										icon="map-outline"
+										label={`Open ${place.title} in Maps`}
+										onPress={() => onOpenMaps(place)}
+									/>
+								) : null}
+							</View>
+						))}
+					</View>
+				) : (
+					<View
+						style={{
+							alignItems: "center",
+							gap: spacing.sm,
+							paddingVertical: 20,
+						}}
+					>
+						<Ionicons
+							color={palette.inkTertiary}
+							name="location-outline"
+							size={28}
+						/>
+						<AppText tone="secondary" variant="subhead">
+							Add places to build route context.
+						</AppText>
+					</View>
+				)}
+
+				<View
+					style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}
+				>
+					<MetaTag label={`${routeStats.placeCount} places`} />
+					<MetaTag label={`${routeStats.savedPlaceCount} saved`} />
+					<MetaTag label={`${routeStats.geocodedPlaceCount} geocoded`} />
+				</View>
+				<RouteBoardActions
+					itineraryHref={itineraryHref}
+					onAddPlace={onAddPlace}
+				/>
+			</View>
+		</Card>
+	);
+}
+
+function PlaceSection({
+	deletingPlaceId,
+	itineraryHref,
+	itineraryDays,
+	onAssignPlace,
+	onDeletePlace,
+	onEditPlace,
+	onOpenMaps,
+	places,
+	title,
+}: {
+	deletingPlaceId: Id<"savedPlaces"> | null;
+	itineraryHref: Href;
+	itineraryDays: Doc<"itineraryDays">[];
+	onAssignPlace: (place: Doc<"savedPlaces">) => void;
+	onDeletePlace: (placeId: Id<"savedPlaces">) => void;
+	onEditPlace: (place: Doc<"savedPlaces">) => void;
+	onOpenMaps: (place: Doc<"savedPlaces">) => void;
+	places: Doc<"savedPlaces">[];
+	title: string;
+}) {
+	return (
+		<View style={{ gap: spacing.sm }}>
+			<GroupLabel>{title.toUpperCase()}</GroupLabel>
+			{places.map((place, index) => (
+				<Reveal index={index} key={place._id}>
+					<Card padding="md">
+						<View
+							style={{
+								alignItems: "flex-start",
+								flexDirection: "row",
+								gap: spacing.md,
+							}}
+						>
+							<IconBadge icon="location-outline" tone="success" />
+							<View style={{ flex: 1, gap: spacing.xs, minWidth: 0 }}>
+								<AppText numberOfLines={1} variant="headline">
+									{place.title}
+								</AppText>
+								<AppText numberOfLines={2} tone="secondary" variant="subhead">
+									{place.locationName} ·{" "}
+									{formatPlaceCategoryLabel(place.category)}
+								</AppText>
+								<MetaTag
+									icon="calendar-outline"
+									label={getDayAssignmentLabel(
+										itineraryDays,
+										place.assignedDayId
+									)}
+									tone={place.assignedDayId ? "accent" : "neutral"}
+								/>
+								{place.description ? (
+									<AppText tone="secondary" variant="footnote">
+										{place.description}
+									</AppText>
+								) : null}
+								<View style={{ paddingTop: spacing.xs }}>
+									<ActionPill
+										label={place.assignedDayId ? "Move day" : "Add to day"}
+										onPress={() => onAssignPlace(place)}
+										variant="primary"
+									/>
+								</View>
+							</View>
+							<Menu>
+								<OverflowTrigger
+									disabled={deletingPlaceId === place._id}
+									label="Place options"
+								/>
+								<MenuPanel width={220}>
+									{hasTripMapSearchTarget({
+										address: place.address,
+										latitude: place.latitude,
+										locationName: place.locationName,
+										longitude: place.longitude,
+									}) ? (
+										<MenuAction
+											icon="map-outline"
+											label="Open in Maps"
+											onPress={() => onOpenMaps(place)}
+										/>
+									) : null}
+									{place.assignedDayId ? (
+										<Link asChild href={itineraryHref}>
+											<Menu.Item
+												accessibilityLabel="Open itinerary"
+												className="rounded-[14px] px-2.5"
+												isAnimatedStyleActive={false}
+											>
+												<MenuItemContent
+													icon="calendar-outline"
+													label="Open itinerary"
+												/>
+											</Menu.Item>
+										</Link>
+									) : null}
+									<MenuAction
+										icon="create-outline"
+										label="Edit place"
+										onPress={() => onEditPlace(place)}
+									/>
+									<MenuDivider />
+									<MenuAction
+										danger={true}
+										disabled={deletingPlaceId === place._id}
+										icon="trash-outline"
+										label="Delete place"
+										onPress={() => onDeletePlace(place._id)}
+									/>
+								</MenuPanel>
+							</Menu>
+						</View>
+					</Card>
+				</Reveal>
+			))}
+		</View>
+	);
+}
+
 export function TripPlacesScreen() {
+	const { confirm } = useFeedback();
 	const tripId = useTripIdParam();
 	const places = useQuery(
 		api.places.listTripPlaces,
@@ -504,13 +599,10 @@ export function TripPlacesScreen() {
 
 	if (!tripId) {
 		return (
-			<Container className="px-4 pb-28">
-				<EmptyState
-					description="Open a saved trip before managing places."
-					icon="map-outline"
-					title="Trip not found"
-				/>
-			</Container>
+			<ModuleMissing
+				description="Open a saved trip before managing places."
+				icon="map-outline"
+			/>
 		);
 	}
 
@@ -545,10 +637,12 @@ export function TripPlacesScreen() {
 					tripId,
 				});
 			}
+			haptic("success");
 			setForm(initialPlaceForm);
 			setEditingPlaceId(null);
 			setIsPlaceSheetOpen(false);
 		} catch (error) {
+			haptic("error");
 			setPlaceErrorMessage(
 				error instanceof Error ? error.message : "Could not save place."
 			);
@@ -558,6 +652,15 @@ export function TripPlacesScreen() {
 	};
 
 	const handleDeletePlace = async (placeId: Id<"savedPlaces">) => {
+		const confirmed = await confirm({
+			confirmLabel: "Delete place",
+			destructive: true,
+			message: "This saved place will be removed from the trip.",
+			title: "Delete this place?",
+		});
+		if (!confirmed) {
+			return;
+		}
 		setDeletingPlaceId(placeId);
 		try {
 			await deleteSavedPlace({ placeId });
@@ -625,7 +728,7 @@ export function TripPlacesScreen() {
 	};
 
 	if (places === undefined || itinerary === undefined) {
-		return <ScreenLoadingState />;
+		return <ModuleLoading title="Loading places" />;
 	}
 
 	const assigningPlace =
@@ -652,6 +755,8 @@ export function TripPlacesScreen() {
 			title: place.title,
 		})),
 	].slice(0, 4);
+	const hasNoPlaces =
+		places.savedPlaces.length === 0 && places.itineraryPlaces.length === 0;
 
 	return (
 		<TripModuleScreenFrame
@@ -665,453 +770,155 @@ export function TripPlacesScreen() {
 			}
 			tripId={tripId}
 		>
-			<Container
-				className="px-4 pb-28"
-				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
-			>
-				<View className="gap-4 pb-4">
-					<TripModuleManualEntryCard
-						description="Save places, neighborhoods, addresses, and notes before assigning them to itinerary days."
-						moduleLabel="places"
-						onPrimaryPress={openCreateSheet}
-						primaryActionIcon="map-outline"
-						primaryActionLabel="Add place"
-					/>
-
-					<View className="gap-4 rounded-[30px] bg-surface-secondary p-4">
-						<View className="min-h-44 gap-4">
-							<View className="flex-row items-start justify-between gap-3">
-								<View className="min-w-0 flex-1 flex-row items-center gap-3">
-									<View className="h-10 w-10 items-center justify-center rounded-full bg-surface-secondary">
-										<Ionicons
-											color="#34C759"
-											name="navigate-outline"
-											size={20}
-										/>
-									</View>
-									<View className="min-w-0 flex-1 gap-1">
-										<Text type="body-sm" weight="bold">
-											Route board
-										</Text>
-										<Text color="muted" numberOfLines={1} type="body-xs">
-											Saved and planned stops
-										</Text>
-									</View>
-								</View>
-								<Chip size="sm" variant="secondary">
-									<Chip.Label>{places.routeStats.placeCount} total</Chip.Label>
-								</Chip>
-							</View>
-
-							{routePreviewPlaces.length > 0 ? (
-								<View className="gap-2">
-									{routePreviewPlaces.map((place, index) => (
-										<View
-											className="flex-row items-center gap-3 rounded-[18px] bg-surface px-3 py-2"
-											key={`${place.sourceLabel}-${place.id}`}
-										>
-											<View className="h-7 w-7 items-center justify-center rounded-full bg-surface-secondary">
-												<Text
-													style={{ color: "#34C759" }}
-													type="body-xs"
-													weight="bold"
-												>
-													{index + 1}
-												</Text>
-											</View>
-											<View className="min-w-0 flex-1 gap-0.5">
-												<Text numberOfLines={1} type="body-xs" weight="bold">
-													{place.title}
-												</Text>
-												<Text color="muted" numberOfLines={1} type="body-xs">
-													{place.locationName} ·{" "}
-													{formatPlaceCategoryLabel(place.category)}
-												</Text>
-											</View>
-											<Chip size="sm" variant="secondary">
-												<Chip.Label>{place.sourceLabel}</Chip.Label>
-											</Chip>
-											{hasTripMapSearchTarget({
-												address: place.address,
-												latitude: place.latitude,
-												locationName: place.locationName,
-												longitude: place.longitude,
-											}) ? (
-												<Button
-													accessibilityLabel={`Open ${place.title} in Maps`}
-													onPress={() => {
-														handleOpenMaps(place).catch(() => undefined);
-													}}
-													size="sm"
-													variant="secondary"
-												>
-													<Ionicons
-														color="#34C759"
-														name="map-outline"
-														size={14}
-													/>
-												</Button>
-											) : null}
-										</View>
-									))}
-								</View>
-							) : (
-								<View className="flex-1 items-center justify-center gap-2 py-6">
-									<Ionicons color="#34C759" name="location-outline" size={26} />
-									<Text color="muted" type="body-sm">
-										Add places to build route context.
-									</Text>
-								</View>
-							)}
-						</View>
-						<View className="flex-row flex-wrap gap-2">
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>{places.routeStats.placeCount} places</Chip.Label>
-							</Chip>
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>
-									{places.routeStats.savedPlaceCount} saved
-								</Chip.Label>
-							</Chip>
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>
-									{places.routeStats.geocodedPlaceCount} geocoded
-								</Chip.Label>
-							</Chip>
-						</View>
-						<RouteBoardActions
-							itineraryHref={VIYA_ROUTES.tripItinerary(tripId)}
-							onAddPlace={openCreateSheet}
-						/>
-					</View>
-					{mapErrorMessage ? (
-						<Text className="px-1 text-danger" type="body-sm">
-							{mapErrorMessage}
-						</Text>
-					) : null}
-
-					{places.savedPlaces.length === 0 &&
-					places.itineraryPlaces.length === 0 ? (
-						<EmptyState
-							action={{
-								label: "Add place",
-								onPress: openCreateSheet,
-							}}
-							description="Add saved places or itinerary items to build trip map context."
-							icon="map-outline"
-							title="No places yet"
-						/>
-					) : (
-						<View className="gap-4">
-							{places.savedPlaces.length > 0 ? (
-								<PlaceSection
-									deletingPlaceId={deletingPlaceId}
-									itineraryDays={itinerary.days}
-									itineraryHref={VIYA_ROUTES.tripItinerary(tripId)}
-									onAssignPlace={openAssignmentSheet}
-									onDeletePlace={(placeId) => {
-										handleDeletePlace(placeId).catch(() => undefined);
-									}}
-									onEditPlace={openEditSheet}
-									onOpenMaps={(place) => {
-										handleOpenMaps({
-											address: place.address,
-											latitude: place.latitude,
-											locationName: place.locationName,
-											longitude: place.longitude,
-											title: place.title,
-										}).catch(() => undefined);
-									}}
-									places={places.savedPlaces}
-									title="Saved places"
-								/>
-							) : null}
-
-							{places.itineraryPlaces.length > 0 ? (
-								<View className="gap-3">
-									<Text color="muted" type="body-xs" weight="semibold">
-										ITINERARY STOPS
-									</Text>
-									{places.itineraryPlaces.map((place) => (
-										<View
-											className="gap-2 rounded-[24px] bg-surface-secondary p-4"
-											key={place.id}
-										>
-											<Text type="body-sm" weight="bold">
-												{place.title}
-											</Text>
-											<Text color="muted" type="body-xs">
-												{place.locationName} · {place.category}
-											</Text>
-											{place.description ? (
-												<Text.Paragraph color="muted" type="body-sm">
-													{place.description}
-												</Text.Paragraph>
-											) : null}
-											{hasTripMapSearchTarget({
-												address: place.address,
-												latitude: place.latitude,
-												locationName: place.locationName,
-												longitude: place.longitude,
-											}) ? (
-												<Button
-													accessibilityLabel={`Open ${place.title} in Maps`}
-													onPress={() => {
-														handleOpenMaps({
-															address: place.address,
-															latitude: place.latitude,
-															locationName: place.locationName,
-															longitude: place.longitude,
-															title: place.title,
-														}).catch(() => undefined);
-													}}
-													size="sm"
-													variant="secondary"
-												>
-													<Ionicons
-														color="#34C759"
-														name="map-outline"
-														size={16}
-													/>
-													<Button.Label>Open Maps</Button.Label>
-												</Button>
-											) : null}
-											<Link asChild href={VIYA_ROUTES.tripItinerary(tripId)}>
-												<Button size="sm" variant="secondary">
-													<Ionicons
-														color="#0A84FF"
-														name="calendar-outline"
-														size={16}
-													/>
-													<Button.Label>Open itinerary</Button.Label>
-												</Button>
-											</Link>
-										</View>
-									))}
-								</View>
-							) : null}
-						</View>
-					)}
-				</View>
-				<PlaceSheet
-					errorMessage={placeErrorMessage}
-					form={form}
-					isOpen={isPlaceSheetOpen}
-					isSaving={isSaving}
-					mode={editingPlaceId ? "edit" : "create"}
-					onOpenChange={(isOpen) => {
-						setIsPlaceSheetOpen(isOpen);
-						if (!isOpen) {
-							setEditingPlaceId(null);
-							setPlaceErrorMessage(null);
-							setForm(initialPlaceForm);
-						}
-					}}
-					onSubmit={handleSavePlace}
-					onUpdateForm={updateForm}
-				/>
-				<PlaceAssignmentSheet
-					days={itinerary.days}
-					errorMessage={placeErrorMessage}
-					isOpen={isAssignmentSheetOpen}
-					isSaving={isAssigningDay}
+			<ModuleScroll>
+				<RouteBoard
 					itineraryHref={VIYA_ROUTES.tripItinerary(tripId)}
-					onAssignDay={(dayId) => {
-						handleAssignPlaceToDay(dayId).catch(() => undefined);
+					onAddPlace={openCreateSheet}
+					onOpenMaps={(place) => {
+						handleOpenMaps(place).catch(() => undefined);
 					}}
-					onOpenChange={(isOpen) => {
-						setIsAssignmentSheetOpen(isOpen);
-						if (!isOpen) {
-							setAssigningPlaceId(null);
-							setPlaceErrorMessage(null);
-						}
-					}}
-					place={assigningPlace}
+					places={routePreviewPlaces}
+					routeStats={places.routeStats}
 				/>
-			</Container>
-		</TripModuleScreenFrame>
-	);
-}
+				<InlineError message={mapErrorMessage} />
 
-function PlaceSection({
-	deletingPlaceId,
-	itineraryHref,
-	itineraryDays,
-	onAssignPlace,
-	onDeletePlace,
-	onEditPlace,
-	onOpenMaps,
-	places,
-	title,
-}: {
-	deletingPlaceId: Id<"savedPlaces"> | null;
-	itineraryHref: Href;
-	itineraryDays: Doc<"itineraryDays">[];
-	onAssignPlace: (place: Doc<"savedPlaces">) => void;
-	onDeletePlace: (placeId: Id<"savedPlaces">) => void;
-	onEditPlace: (place: Doc<"savedPlaces">) => void;
-	onOpenMaps: (place: Doc<"savedPlaces">) => void;
-	places: Doc<"savedPlaces">[];
-	title: string;
-}) {
-	return (
-		<View className="gap-3">
-			<Text color="muted" type="body-xs" weight="semibold">
-				{title.toUpperCase()}
-			</Text>
-			{places.map((place) => (
-				<Surface
-					className="gap-3 rounded-[24px] border border-border bg-surface p-4"
-					key={place._id}
-				>
-					<View className="flex-row items-start gap-3">
-						<View className="h-10 w-10 items-center justify-center rounded-full bg-surface-secondary">
-							<Ionicons color="#34C759" name="location-outline" size={18} />
-						</View>
-						<View className="min-w-0 flex-1 gap-1">
-							<Text numberOfLines={1} type="body-sm" weight="bold">
-								{place.title}
-							</Text>
-							<Text color="muted" numberOfLines={2} type="body-xs">
-								{place.locationName} · {place.category}
-							</Text>
-							<View className="flex-row flex-wrap gap-2 pt-1">
-								<Chip size="sm" variant="secondary">
-									<Chip.Label>
-										{getDayAssignmentLabel(itineraryDays, place.assignedDayId)}
-									</Chip.Label>
-								</Chip>
-							</View>
-							{place.description ? (
-								<Text.Paragraph color="muted" type="body-sm">
-									{place.description}
-								</Text.Paragraph>
-							) : null}
-							<View className="flex-row flex-wrap gap-2 pt-1">
-								<Button
-									onPress={() => onAssignPlace(place)}
-									size="sm"
-									variant="primary"
-								>
-									<Button.Label>
-										{place.assignedDayId ? "Move day" : "Add to day"}
-									</Button.Label>
-								</Button>
-							</View>
-						</View>
-						<Menu>
-							<Menu.Trigger asChild={true}>
-								<Pressable
-									accessibilityLabel="Place options"
-									accessibilityRole="button"
-									className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary"
-									style={({ pressed }) => ({
-										transform: [{ scale: pressed ? 0.94 : 1 }],
-									})}
-								>
-									<Ionicons
-										color="#71717A"
-										name="ellipsis-horizontal"
-										size={17}
-									/>
-								</Pressable>
-							</Menu.Trigger>
-							<Menu.Portal>
-								<Menu.Overlay />
-								<Menu.Content
-									align="end"
-									className="rounded-[24px] border border-border bg-surface p-2"
-									offset={8}
-									placement="bottom"
-									presentation="popover"
-									width={220}
-								>
-									{hasTripMapSearchTarget({
+				{hasNoPlaces ? (
+					<EmptyState
+						action={{
+							label: "Add place",
+							onPress: openCreateSheet,
+						}}
+						description="Add saved places or itinerary items to build trip map context."
+						icon="map-outline"
+						title="No places yet"
+					/>
+				) : (
+					<View style={{ gap: spacing.xl }}>
+						{places.savedPlaces.length > 0 ? (
+							<PlaceSection
+								deletingPlaceId={deletingPlaceId}
+								itineraryDays={itinerary.days}
+								itineraryHref={VIYA_ROUTES.tripItinerary(tripId)}
+								onAssignPlace={openAssignmentSheet}
+								onDeletePlace={(placeId) => {
+									handleDeletePlace(placeId).catch(() => undefined);
+								}}
+								onEditPlace={openEditSheet}
+								onOpenMaps={(place) => {
+									handleOpenMaps({
 										address: place.address,
 										latitude: place.latitude,
 										locationName: place.locationName,
 										longitude: place.longitude,
-									}) ? (
-										<Menu.Item
-											accessibilityLabel="Open in Maps"
-											className="flex-row items-center gap-3 rounded-[18px] p-2.5"
-											isAnimatedStyleActive={false}
-											onPress={() => onOpenMaps(place)}
-										>
-											<View className="h-8 w-8 items-center justify-center rounded-full bg-surface-secondary">
-												<Ionicons
-													color="#34C759"
-													name="map-outline"
-													size={16}
-												/>
-											</View>
-											<Menu.ItemTitle className="font-semibold text-sm">
-												Open in Maps
-											</Menu.ItemTitle>
-										</Menu.Item>
-									) : null}
-									{place.assignedDayId ? (
-										<Link asChild href={itineraryHref}>
-											<Menu.Item
-												accessibilityLabel="Open itinerary"
-												className="flex-row items-center gap-3 rounded-[18px] p-2.5"
-												isAnimatedStyleActive={false}
-											>
-												<View className="h-8 w-8 items-center justify-center rounded-full bg-surface-secondary">
-													<Ionicons
-														color="#0A84FF"
-														name="calendar-outline"
-														size={16}
-													/>
+										title: place.title,
+									}).catch(() => undefined);
+								}}
+								places={places.savedPlaces}
+								title="Saved places"
+							/>
+						) : null}
+
+						{places.itineraryPlaces.length > 0 ? (
+							<View style={{ gap: spacing.sm }}>
+								<GroupLabel>ITINERARY STOPS</GroupLabel>
+								{places.itineraryPlaces.map((place, index) => (
+									<Reveal index={index} key={place.id}>
+										<Card padding="md">
+											<View style={{ gap: spacing.sm }}>
+												<View style={{ gap: 2 }}>
+													<AppText variant="headline">{place.title}</AppText>
+													<AppText tone="secondary" variant="subhead">
+														{place.locationName} ·{" "}
+														{formatPlaceCategoryLabel(place.category)}
+													</AppText>
 												</View>
-												<Menu.ItemTitle className="font-semibold text-sm">
-													Open itinerary
-												</Menu.ItemTitle>
-											</Menu.Item>
-										</Link>
-									) : null}
-									<Menu.Item
-										accessibilityLabel="Edit place"
-										className="flex-row items-center gap-3 rounded-[18px] p-2.5"
-										isAnimatedStyleActive={false}
-										onPress={() => onEditPlace(place)}
-									>
-										<View className="h-8 w-8 items-center justify-center rounded-full bg-surface-secondary">
-											<Ionicons
-												color="#0A84FF"
-												name="create-outline"
-												size={16}
-											/>
-										</View>
-										<Menu.ItemTitle className="font-semibold text-sm">
-											Edit place
-										</Menu.ItemTitle>
-									</Menu.Item>
-									<View className="mx-2 my-1 h-px bg-border" />
-									<Menu.Item
-										accessibilityLabel="Delete place"
-										className="flex-row items-center gap-3 rounded-[18px] p-2.5"
-										isAnimatedStyleActive={false}
-										isDisabled={deletingPlaceId === place._id}
-										onPress={() => onDeletePlace(place._id)}
-									>
-										<View className="h-8 w-8 items-center justify-center rounded-full bg-danger/10">
-											<Ionicons
-												color="#FF3B30"
-												name="trash-outline"
-												size={16}
-											/>
-										</View>
-										<Menu.ItemTitle className="font-semibold text-danger text-sm">
-											Delete place
-										</Menu.ItemTitle>
-									</Menu.Item>
-								</Menu.Content>
-							</Menu.Portal>
-						</Menu>
+												{place.description ? (
+													<AppText tone="secondary" variant="footnote">
+														{place.description}
+													</AppText>
+												) : null}
+												<View
+													style={{
+														flexDirection: "row",
+														flexWrap: "wrap",
+														gap: spacing.sm,
+													}}
+												>
+													{hasTripMapSearchTarget({
+														address: place.address,
+														latitude: place.latitude,
+														locationName: place.locationName,
+														longitude: place.longitude,
+													}) ? (
+														<ActionPill
+															accessibilityLabel={`Open ${place.title} in Maps`}
+															icon="map-outline"
+															label="Open Maps"
+															onPress={() => {
+																handleOpenMaps({
+																	address: place.address,
+																	latitude: place.latitude,
+																	locationName: place.locationName,
+																	longitude: place.longitude,
+																	title: place.title,
+																}).catch(() => undefined);
+															}}
+														/>
+													) : null}
+													<Link
+														asChild
+														href={VIYA_ROUTES.tripItinerary(tripId)}
+													>
+														<ActionPill
+															icon="calendar-outline"
+															label="Open itinerary"
+														/>
+													</Link>
+												</View>
+											</View>
+										</Card>
+									</Reveal>
+								))}
+							</View>
+						) : null}
 					</View>
-				</Surface>
-			))}
-		</View>
+				)}
+			</ModuleScroll>
+			<PlaceSheet
+				errorMessage={placeErrorMessage}
+				form={form}
+				isOpen={isPlaceSheetOpen}
+				isSaving={isSaving}
+				mode={editingPlaceId ? "edit" : "create"}
+				onOpenChange={(isOpen) => {
+					setIsPlaceSheetOpen(isOpen);
+					if (!isOpen) {
+						setEditingPlaceId(null);
+						setPlaceErrorMessage(null);
+						setForm(initialPlaceForm);
+					}
+				}}
+				onSubmit={handleSavePlace}
+				onUpdateForm={updateForm}
+			/>
+			<PlaceAssignmentSheet
+				days={itinerary.days}
+				errorMessage={placeErrorMessage}
+				isOpen={isAssignmentSheetOpen}
+				isSaving={isAssigningDay}
+				itineraryHref={VIYA_ROUTES.tripItinerary(tripId)}
+				onAssignDay={(dayId) => {
+					handleAssignPlaceToDay(dayId).catch(() => undefined);
+				}}
+				onOpenChange={(isOpen) => {
+					setIsAssignmentSheetOpen(isOpen);
+					if (!isOpen) {
+						setAssigningPlaceId(null);
+						setPlaceErrorMessage(null);
+					}
+				}}
+				place={assigningPlace}
+			/>
+		</TripModuleScreenFrame>
 	);
 }

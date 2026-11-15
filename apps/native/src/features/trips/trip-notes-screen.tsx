@@ -1,32 +1,41 @@
-import { Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import { type Href, Link } from "expo-router";
-import {
-	BottomSheet,
-	Button,
-	Chip,
-	CloseButton,
-	Input,
-	Label,
-	Menu,
-	Spinner,
-	Surface,
-	Text,
-	TextArea,
-	TextField,
-} from "heroui-native";
+import { Menu } from "heroui-native";
 import { useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { View } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { Container } from "@/components/container";
-import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
-import { EmptyState } from "@/src/components/empty-state";
 import { NavigationIconButton } from "@/src/components/navigation/navigation-icon-button";
-import { ScreenLoadingState } from "@/src/components/screen-loading-state";
+import {
+	AppText,
+	Card,
+	Chip,
+	EmptyState,
+	LoadingState,
+	PrimaryButton,
+	radius,
+	SecondaryButton,
+	SectionHeader,
+	spacing,
+	useFeedback,
+	useUITheme,
+} from "@/src/components/ui";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 import { TripModuleScreenFrame } from "./trip-module-floating-bar";
+import {
+	ChoiceChips,
+	FormSheet,
+	MenuDivider,
+	MenuIcon,
+	MenuTrigger,
+	menuContentClassName,
+	menuItemClassName,
+	SheetField,
+	SheetTextArea,
+	TagRow,
+} from "./trip-module-form-kit";
 import { TripModuleManualEntryCard } from "./trip-module-manual-entry-card";
 import {
 	getCompactRelatedLabel,
@@ -127,68 +136,6 @@ const getNoteRelatedHref = ({
 	}
 };
 
-function SheetField({
-	label,
-	onChangeText,
-	placeholder,
-	value,
-}: {
-	label: string;
-	onChangeText: (value: string) => void;
-	placeholder: string;
-	value: string;
-}) {
-	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
-
-	return (
-		<TextField className="gap-2">
-			<Label>
-				<Label.Text>{label}</Label.Text>
-			</Label>
-			<Input
-				className="h-12 border border-border bg-surface px-4"
-				onBlur={onBlur}
-				onChangeText={onChangeText}
-				onFocus={onFocus}
-				placeholder={placeholder}
-				value={value}
-				variant="secondary"
-			/>
-		</TextField>
-	);
-}
-
-function SheetTextArea({
-	label,
-	onChangeText,
-	placeholder,
-	value,
-}: {
-	label: string;
-	onChangeText: (value: string) => void;
-	placeholder: string;
-	value: string;
-}) {
-	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
-
-	return (
-		<TextField className="gap-2">
-			<Label>
-				<Label.Text>{label}</Label.Text>
-			</Label>
-			<TextArea
-				className="min-h-28 rounded-[18px] border border-border bg-surface px-4 py-3"
-				onBlur={onBlur}
-				onChangeText={onChangeText}
-				onFocus={onFocus}
-				placeholder={placeholder}
-				value={value}
-				variant="secondary"
-			/>
-		</TextField>
-	);
-}
-
 function NoteCategoryPicker({
 	onChange,
 	value,
@@ -197,23 +144,16 @@ function NoteCategoryPicker({
 	value: string;
 }) {
 	return (
-		<View className="gap-2">
-			<Text color="muted" type="body-xs" weight="semibold">
-				CATEGORY
-			</Text>
-			<View className="flex-row flex-wrap gap-2">
-				{noteCategoryOptions.map((category) => (
-					<Button
-						key={category}
-						onPress={() => onChange(category)}
-						size="sm"
-						variant={value === category ? "primary" : "secondary"}
-					>
-						<Button.Label>{formatNoteCategoryLabel(category)}</Button.Label>
-					</Button>
-				))}
-			</View>
-		</View>
+		<ChoiceChips label="Category">
+			{noteCategoryOptions.map((category) => (
+				<Chip
+					key={category}
+					label={formatNoteCategoryLabel(category)}
+					onPress={() => onChange(category)}
+					selected={value === category}
+				/>
+			))}
+		</ChoiceChips>
 	);
 }
 
@@ -229,33 +169,22 @@ function NoteRelatedEntityPicker({
 	const visibleOptions = options.slice(0, 12);
 
 	return (
-		<View className="gap-2">
-			<Text color="muted" type="body-xs" weight="semibold">
-				LINK TO TRIP ITEM
-			</Text>
-			<View className="flex-row flex-wrap gap-2">
-				<Button
-					onPress={() => onChange("")}
-					size="sm"
-					variant={value ? "secondary" : "primary"}
-				>
-					<Button.Label>None</Button.Label>
-				</Button>
+		<View style={{ gap: spacing.sm }}>
+			<ChoiceChips label="Link to trip item">
+				<Chip label="None" onPress={() => onChange("")} selected={!value} />
 				{visibleOptions.map((option) => (
-					<Button
+					<Chip
 						key={option.key}
+						label={getCompactRelatedLabel(option.label)}
 						onPress={() => onChange(option.key)}
-						size="sm"
-						variant={value === option.key ? "primary" : "secondary"}
-					>
-						<Button.Label>{getCompactRelatedLabel(option.label)}</Button.Label>
-					</Button>
+						selected={value === option.key}
+					/>
 				))}
-			</View>
+			</ChoiceChips>
 			{options.length > visibleOptions.length ? (
-				<Text color="muted" type="body-xs">
+				<AppText tone="tertiary" variant="footnote">
 					Showing the most relevant {visibleOptions.length} trip items.
-				</Text>
+				</AppText>
 			) : null}
 		</View>
 	);
@@ -282,79 +211,40 @@ function NoteSheet({
 	onUpdateForm: (key: keyof NoteForm, value: string) => void;
 	relatedEntityOptions: TripRelatedEntityOption[];
 }) {
-	const insets = useSafeAreaInsets();
-
 	return (
-		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
-			<BottomSheet.Portal>
-				<BottomSheet.Overlay />
-				<BottomSheet.Content
-					backgroundClassName="rounded-t-[36px] bg-background"
-					enablePanDownToClose={true}
-					snapPoints={["76%"]}
-				>
-					<View
-						className="gap-4 px-5 pt-2"
-						style={{ paddingBottom: Math.max(insets.bottom, 18) }}
-					>
-						<View className="flex-row items-start justify-between gap-4">
-							<View className="flex-1 gap-1">
-								<BottomSheet.Title>
-									{mode === "edit" ? "Edit trip note" : "Add trip note"}
-								</BottomSheet.Title>
-								<BottomSheet.Description>
-									Save decisions, constraints, reminders, and shared context.
-								</BottomSheet.Description>
-							</View>
-							<CloseButton
-								accessibilityLabel="Close trip note form"
-								className="h-10 w-10 rounded-full bg-surface"
-								onPress={() => onOpenChange(false)}
-							/>
-						</View>
-						<ScrollView
-							contentContainerStyle={{ gap: 14, paddingBottom: 8 }}
-							keyboardShouldPersistTaps="handled"
-							showsVerticalScrollIndicator={false}
-							style={{ maxHeight: 460 }}
-						>
-							<SheetField
-								label="Title"
-								onChangeText={(value) => onUpdateForm("title", value)}
-								placeholder="Visa reminder"
-								value={form.title}
-							/>
-							<NoteCategoryPicker
-								onChange={(value) => onUpdateForm("category", value)}
-								value={form.category}
-							/>
-							<NoteRelatedEntityPicker
-								onChange={(value) => onUpdateForm("relatedEntityKey", value)}
-								options={relatedEntityOptions}
-								value={form.relatedEntityKey}
-							/>
-							<SheetTextArea
-								label="Note"
-								onChangeText={(value) => onUpdateForm("body", value)}
-								placeholder="What should the group remember?"
-								value={form.body}
-							/>
-						</ScrollView>
-						{errorMessage ? (
-							<Text className="text-danger" type="body-sm">
-								{errorMessage}
-							</Text>
-						) : null}
-						<Button isDisabled={isSaving} onPress={onSubmit} size="lg">
-							{isSaving ? <Spinner size="sm" /> : null}
-							<Button.Label>
-								{mode === "edit" ? "Save note" : "Add note"}
-							</Button.Label>
-						</Button>
-					</View>
-				</BottomSheet.Content>
-			</BottomSheet.Portal>
-		</BottomSheet>
+		<FormSheet
+			description="Save decisions, constraints, reminders, and shared context."
+			errorMessage={errorMessage}
+			isOpen={isOpen}
+			isSaving={isSaving}
+			onOpenChange={onOpenChange}
+			onSubmit={onSubmit}
+			saveLabel={mode === "edit" ? "Save note" : "Add note"}
+			snapPoint="76%"
+			title={mode === "edit" ? "Edit trip note" : "Add trip note"}
+		>
+			<SheetField
+				label="Title"
+				onChangeText={(value) => onUpdateForm("title", value)}
+				placeholder="Visa reminder"
+				value={form.title}
+			/>
+			<NoteCategoryPicker
+				onChange={(value) => onUpdateForm("category", value)}
+				value={form.category}
+			/>
+			<NoteRelatedEntityPicker
+				onChange={(value) => onUpdateForm("relatedEntityKey", value)}
+				options={relatedEntityOptions}
+				value={form.relatedEntityKey}
+			/>
+			<SheetTextArea
+				label="Note"
+				onChangeText={(value) => onUpdateForm("body", value)}
+				placeholder="What should the group remember?"
+				value={form.body}
+			/>
+		</FormSheet>
 	);
 }
 
@@ -374,90 +264,85 @@ function NoteCard({
 	relatedEntityLabel: string | null;
 }) {
 	return (
-		<Surface className="gap-3 rounded-[28px] border border-border bg-surface p-5">
-			<View className="flex-row items-start gap-3">
-				<View className="min-w-0 flex-1 gap-3">
-					<View className="flex-row flex-wrap gap-2">
-						<Chip size="sm" variant="secondary">
-							<Chip.Label>{formatNoteCategoryLabel(note.category)}</Chip.Label>
-						</Chip>
-						{relatedEntityLabel ? (
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>{relatedEntityLabel}</Chip.Label>
-							</Chip>
+		<Animated.View
+			entering={FadeInDown.duration(220)}
+			style={{ opacity: isPending ? 0.6 : 1 }}
+		>
+			<Card padding="md">
+				<View
+					style={{
+						alignItems: "flex-start",
+						flexDirection: "row",
+						gap: spacing.md,
+					}}
+				>
+					<View style={{ flex: 1, gap: spacing.sm, minWidth: 0 }}>
+						<TagRow
+							labels={[
+								formatNoteCategoryLabel(note.category),
+								...(relatedEntityLabel ? [relatedEntityLabel] : []),
+							]}
+						/>
+						<AppText variant="headline">{note.title}</AppText>
+						<AppText tone="secondary" variant="subhead">
+							{note.body}
+						</AppText>
+						{relatedEntityHref ? (
+							<Link asChild href={relatedEntityHref}>
+								<SecondaryButton
+									fullWidth={false}
+									icon="open-outline"
+									label="Open linked item"
+									onPress={() => undefined}
+									variant="plain"
+								/>
+							</Link>
 						) : null}
 					</View>
-					<Text type="body" weight="bold">
-						{note.title}
-					</Text>
-					<Text.Paragraph color="muted" type="body-sm">
-						{note.body}
-					</Text.Paragraph>
-					{relatedEntityHref ? (
-						<Link asChild href={relatedEntityHref}>
-							<Button className="self-start" size="sm" variant="secondary">
-								<Ionicons color="#0A84FF" name="open-outline" size={15} />
-								<Button.Label>Open linked item</Button.Label>
-							</Button>
-						</Link>
-					) : null}
+					<Menu>
+						<Menu.Trigger asChild={true}>
+							<MenuTrigger label="Note options" />
+						</Menu.Trigger>
+						<Menu.Portal>
+							<Menu.Overlay />
+							<Menu.Content
+								align="end"
+								className={menuContentClassName}
+								offset={8}
+								placement="bottom"
+								presentation="popover"
+								width={200}
+							>
+								<Menu.Item
+									accessibilityLabel="Edit note"
+									className={menuItemClassName}
+									isAnimatedStyleActive={false}
+									onPress={onEdit}
+								>
+									<MenuIcon name="create-outline" />
+									<Menu.ItemTitle className="text-base">
+										Edit note
+									</Menu.ItemTitle>
+								</Menu.Item>
+								<MenuDivider />
+								<Menu.Item
+									accessibilityLabel="Delete note"
+									className={menuItemClassName}
+									isAnimatedStyleActive={false}
+									isDisabled={isPending}
+									onPress={onDelete}
+								>
+									<MenuIcon destructive={true} name="trash-outline" />
+									<Menu.ItemTitle className="text-base text-danger">
+										Delete note
+									</Menu.ItemTitle>
+								</Menu.Item>
+							</Menu.Content>
+						</Menu.Portal>
+					</Menu>
 				</View>
-				<Menu>
-					<Menu.Trigger asChild={true}>
-						<Pressable
-							accessibilityLabel="Note options"
-							accessibilityRole="button"
-							className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary"
-							style={({ pressed }) => ({
-								transform: [{ scale: pressed ? 0.94 : 1 }],
-							})}
-						>
-							<Ionicons color="#71717A" name="ellipsis-horizontal" size={17} />
-						</Pressable>
-					</Menu.Trigger>
-					<Menu.Portal>
-						<Menu.Overlay />
-						<Menu.Content
-							align="end"
-							className="rounded-[24px] border border-border bg-surface p-2"
-							offset={8}
-							placement="bottom"
-							presentation="popover"
-							width={200}
-						>
-							<Menu.Item
-								accessibilityLabel="Edit note"
-								className="flex-row items-center gap-3 rounded-[18px] p-2.5"
-								isAnimatedStyleActive={false}
-								onPress={onEdit}
-							>
-								<View className="h-8 w-8 items-center justify-center rounded-full bg-surface-secondary">
-									<Ionicons color="#0A84FF" name="create-outline" size={16} />
-								</View>
-								<Menu.ItemTitle className="font-semibold text-sm">
-									Edit note
-								</Menu.ItemTitle>
-							</Menu.Item>
-							<View className="mx-2 my-1 h-px bg-border" />
-							<Menu.Item
-								accessibilityLabel="Delete note"
-								className="flex-row items-center gap-3 rounded-[18px] p-2.5"
-								isAnimatedStyleActive={false}
-								isDisabled={isPending}
-								onPress={onDelete}
-							>
-								<View className="h-8 w-8 items-center justify-center rounded-full bg-danger/10">
-									<Ionicons color="#FF3B30" name="trash-outline" size={16} />
-								</View>
-								<Menu.ItemTitle className="font-semibold text-danger text-sm">
-									Delete note
-								</Menu.ItemTitle>
-							</Menu.Item>
-						</Menu.Content>
-					</Menu.Portal>
-				</Menu>
-			</View>
-		</Surface>
+			</Card>
+		</Animated.View>
 	);
 }
 
@@ -470,6 +355,7 @@ export function TripNotesScreen() {
 	const createTripNote = useMutation(api.notes.createTripNote);
 	const updateTripNote = useMutation(api.notes.updateTripNote);
 	const deleteTripNote = useMutation(api.notes.deleteTripNote);
+	const { confirm } = useFeedback();
 	const [form, setForm] = useState<NoteForm>(initialNoteForm);
 	const [editingNoteId, setEditingNoteId] = useState<Id<"tripNotes"> | null>(
 		null
@@ -593,7 +479,7 @@ export function TripNotesScreen() {
 	}
 
 	if (workspace === undefined) {
-		return <ScreenLoadingState />;
+		return <LoadingState title="Loading notes" />;
 	}
 
 	const notes = workspace.notes;
@@ -621,6 +507,18 @@ export function TripNotesScreen() {
 			})
 		: null;
 
+	const confirmDeleteNote = async (note: Doc<"tripNotes">) => {
+		const confirmed = await confirm({
+			confirmLabel: "Delete",
+			destructive: true,
+			message: "This note will be removed from the trip.",
+			title: `Delete ${note.title}?`,
+		});
+		if (confirmed) {
+			await handleDeleteNote(note._id);
+		}
+	};
+
 	return (
 		<TripModuleScreenFrame
 			activeTab="notes"
@@ -637,7 +535,7 @@ export function TripNotesScreen() {
 				className="px-4 pb-28"
 				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
 			>
-				<View className="gap-4 pb-4">
+				<View style={{ gap: spacing.lg, paddingBottom: spacing.lg }}>
 					<TripModuleManualEntryCard
 						description="Write decisions, constraints, reminders, and group context directly into the trip workspace."
 						moduleLabel="notes"
@@ -646,116 +544,33 @@ export function TripNotesScreen() {
 						primaryActionLabel="Add note"
 					/>
 
-					<View className="gap-4 rounded-[30px] bg-surface-secondary p-4">
-						<View className="flex-row items-start justify-between gap-3">
-							<View className="min-w-0 flex-1 gap-1">
-								<Text.Heading type="h5" weight="semibold">
-									Decision notebook
-								</Text.Heading>
-								<Text color="muted" type="body-sm">
-									Keep decisions, constraints, and reminders close to planning.
-								</Text>
-							</View>
-							<View className="h-11 w-11 items-center justify-center rounded-full bg-surface-secondary">
-								<Ionicons
-									color="#FF9500"
-									name="document-text-outline"
-									size={20}
-								/>
-							</View>
+					<Card>
+						<View style={{ gap: spacing.lg }}>
+							<SectionHeader eyebrow="Decision notebook" title="Trip context" />
+							<AppText tone="secondary" variant="subhead">
+								Keep decisions, constraints, and reminders close to planning.
+							</AppText>
+							<TagRow
+								labels={[
+									`${notes.length} notes`,
+									`${categoryCount} categories`,
+									`${actionNoteCount} action notes`,
+									`${linkedNoteCount} linked`,
+								]}
+							/>
+							<LatestNoteSummary
+								latestNote={latestNote}
+								latestNoteRelatedHref={latestNoteRelatedHref}
+								latestNoteRelatedLabel={latestNoteRelatedLabel}
+								onCreate={openCreateSheet}
+								onReview={() => {
+									if (latestNote) {
+										openEditSheet(latestNote);
+									}
+								}}
+							/>
 						</View>
-						<View className="flex-row flex-wrap gap-2">
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>{notes.length} notes</Chip.Label>
-							</Chip>
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>{categoryCount} categories</Chip.Label>
-							</Chip>
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>{actionNoteCount} action notes</Chip.Label>
-							</Chip>
-							<Chip size="sm" variant="secondary">
-								<Chip.Label>{linkedNoteCount} linked</Chip.Label>
-							</Chip>
-						</View>
-						<View className="gap-3 rounded-[24px] bg-surface p-4">
-							<View className="flex-row items-center gap-3">
-								<View className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary">
-									<Ionicons color="#FF9500" name="bookmark-outline" size={18} />
-								</View>
-								<View className="min-w-0 flex-1 gap-1">
-									<Text color="muted" type="body-xs" weight="semibold">
-										LATEST CONTEXT
-									</Text>
-									<Text numberOfLines={1} type="body-sm" weight="bold">
-										{latestNote?.title ?? "No context captured yet"}
-									</Text>
-								</View>
-							</View>
-							<Text.Paragraph color="muted" type="body-sm">
-								{latestNote
-									? latestNote.body
-									: "Add the first trip note to preserve group decisions, constraints, or reminders."}
-							</Text.Paragraph>
-							{latestNote ? (
-								<View className="gap-3">
-									<View className="flex-row flex-wrap gap-2">
-										<Chip size="sm" variant="secondary">
-											<Chip.Label>
-												{formatNoteCategoryLabel(latestNote.category)}
-											</Chip.Label>
-										</Chip>
-										{latestNoteRelatedLabel ? (
-											<Chip size="sm" variant="secondary">
-												<Chip.Label>{latestNoteRelatedLabel}</Chip.Label>
-											</Chip>
-										) : null}
-									</View>
-									<View className="flex-row flex-wrap gap-2">
-										<Button
-											className="flex-1"
-											onPress={() => openEditSheet(latestNote)}
-											size="sm"
-											variant="secondary"
-										>
-											<Ionicons
-												color="#0A84FF"
-												name="create-outline"
-												size={15}
-											/>
-											<Button.Label>Review latest</Button.Label>
-										</Button>
-										{latestNoteRelatedHref ? (
-											<Link asChild href={latestNoteRelatedHref}>
-												<Button
-													className="flex-1"
-													size="sm"
-													variant="secondary"
-												>
-													<Ionicons
-														color="#0A84FF"
-														name="open-outline"
-														size={15}
-													/>
-													<Button.Label>Open latest link</Button.Label>
-												</Button>
-											</Link>
-										) : null}
-									</View>
-								</View>
-							) : (
-								<Button
-									className="self-start"
-									onPress={openCreateSheet}
-									size="sm"
-									variant="secondary"
-								>
-									<Ionicons color="#0A84FF" name="add-outline" size={15} />
-									<Button.Label>Add first note</Button.Label>
-								</Button>
-							)}
-						</View>
-					</View>
+					</Card>
 
 					{notes.length === 0 ? (
 						<EmptyState
@@ -768,14 +583,14 @@ export function TripNotesScreen() {
 							title="No notes yet"
 						/>
 					) : (
-						<View className="gap-3">
+						<View style={{ gap: spacing.md }}>
 							{notes.map((note) => (
 								<NoteCard
 									isPending={pendingNoteId === note._id}
 									key={note._id}
 									note={note}
 									onDelete={() => {
-										handleDeleteNote(note._id).catch(() => undefined);
+										confirmDeleteNote(note).catch(() => undefined);
 									}}
 									onEdit={() => openEditSheet(note)}
 									relatedEntityHref={getNoteRelatedHref({
@@ -813,5 +628,78 @@ export function TripNotesScreen() {
 				/>
 			</Container>
 		</TripModuleScreenFrame>
+	);
+}
+
+function LatestNoteSummary({
+	latestNote,
+	latestNoteRelatedHref,
+	latestNoteRelatedLabel,
+	onCreate,
+	onReview,
+}: {
+	latestNote: Doc<"tripNotes"> | null;
+	latestNoteRelatedHref: Href | null;
+	latestNoteRelatedLabel: string | null;
+	onCreate: () => void;
+	onReview: () => void;
+}) {
+	const { palette } = useUITheme();
+
+	return (
+		<View
+			style={{
+				backgroundColor: palette.fill,
+				borderRadius: radius.group,
+				gap: spacing.md,
+				padding: spacing.lg,
+			}}
+		>
+			<View style={{ gap: 2 }}>
+				<AppText tone="secondary" variant="eyebrow">
+					Latest context
+				</AppText>
+				<AppText numberOfLines={1} variant="headline">
+					{latestNote?.title ?? "No context captured yet"}
+				</AppText>
+			</View>
+			<AppText tone="secondary" variant="subhead">
+				{latestNote
+					? latestNote.body
+					: "Add the first trip note to preserve group decisions, constraints, or reminders."}
+			</AppText>
+			{latestNote ? (
+				<View style={{ gap: spacing.md }}>
+					<TagRow
+						labels={[
+							formatNoteCategoryLabel(latestNote.category),
+							...(latestNoteRelatedLabel ? [latestNoteRelatedLabel] : []),
+						]}
+					/>
+					<SecondaryButton
+						icon="create-outline"
+						label="Review latest"
+						onPress={onReview}
+					/>
+					{latestNoteRelatedHref ? (
+						<Link asChild href={latestNoteRelatedHref}>
+							<SecondaryButton
+								icon="open-outline"
+								label="Open latest link"
+								onPress={() => undefined}
+								variant="plain"
+							/>
+						</Link>
+					) : null}
+				</View>
+			) : (
+				<PrimaryButton
+					fullWidth={false}
+					icon="add-outline"
+					label="Add first note"
+					onPress={onCreate}
+				/>
+			)}
+		</View>
 	);
 }

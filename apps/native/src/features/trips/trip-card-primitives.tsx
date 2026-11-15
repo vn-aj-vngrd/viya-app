@@ -1,50 +1,79 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Text } from "heroui-native";
 import type { ReactNode } from "react";
 import { View } from "react-native";
 
+import { AppText, radius, useUITheme } from "@/src/components/ui";
 import { formatDestinationLabel } from "@/src/features/trips/trip-dashboard-utils";
 
-const accentColor = "#0A84FF";
-const successColor = "#1CCB68";
-
 export function TripRouteLine({ destination }: { destination: string }) {
+	const { palette } = useUITheme();
 	const destinationLabel = formatDestinationLabel(destination);
 
 	return (
-		<View className="gap-0.5">
-			<View className="flex-row items-center">
-				<View className="items-start">
-					<View className="h-1.5 w-1.5 rounded-full bg-accent" />
-				</View>
-				<View className="min-w-[72px] flex-1 flex-row items-center px-2.5">
-					<View className="h-px flex-1 bg-border" />
-					<View className="h-8 w-8 items-center justify-center rounded-full bg-accent-soft">
-						<Ionicons color={accentColor} name="airplane" size={16} />
-					</View>
-					<View className="h-px flex-1 bg-border" />
-				</View>
-				<View className="items-end">
-					<View className="h-1.5 w-1.5 rounded-full bg-border" />
-				</View>
-			</View>
-			<View className="flex-row items-start">
-				<View className="w-[92px] items-start">
-					<Text numberOfLines={1} type="body-xs" weight="bold">
-						HOME
-					</Text>
-				</View>
-				<View className="flex-1" />
-				<View className="w-[92px] items-end">
-					<Text
-						numberOfLines={1}
-						style={{ textAlign: "right" }}
-						type="body-xs"
-						weight="bold"
+		<View style={{ gap: 2 }}>
+			<View style={{ alignItems: "center", flexDirection: "row" }}>
+				<View
+					style={{
+						backgroundColor: palette.accent,
+						borderRadius: radius.pill,
+						height: 6,
+						width: 6,
+					}}
+				/>
+				<View
+					style={{
+						alignItems: "center",
+						flex: 1,
+						flexDirection: "row",
+						minWidth: 72,
+						paddingHorizontal: 10,
+					}}
+				>
+					<View
+						style={{ backgroundColor: palette.separator, flex: 1, height: 1 }}
+					/>
+					<View
+						style={{
+							alignItems: "center",
+							backgroundColor: palette.fill,
+							borderRadius: radius.pill,
+							height: 32,
+							justifyContent: "center",
+							width: 32,
+						}}
 					>
-						{destinationLabel}
-					</Text>
+						<Ionicons color={palette.accent} name="airplane" size={16} />
+					</View>
+					<View
+						style={{ backgroundColor: palette.separator, flex: 1, height: 1 }}
+					/>
 				</View>
+				<View
+					style={{
+						backgroundColor: palette.inkTertiary,
+						borderRadius: radius.pill,
+						height: 6,
+						width: 6,
+					}}
+				/>
+			</View>
+			<View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+				<AppText
+					bold
+					numberOfLines={1}
+					style={{ width: 92 }}
+					variant="footnote"
+				>
+					HOME
+				</AppText>
+				<AppText
+					bold
+					numberOfLines={1}
+					style={{ textAlign: "right", width: 92 }}
+					variant="footnote"
+				>
+					{destinationLabel}
+				</AppText>
 			</View>
 		</View>
 	);
@@ -58,15 +87,14 @@ export function TripCardTitleRow({
 	title: string;
 }) {
 	return (
-		<View className="flex-row items-start gap-3">
-			<Text
-				className="min-w-0 flex-1"
+		<View style={{ alignItems: "flex-start", flexDirection: "row", gap: 12 }}>
+			<AppText
 				numberOfLines={2}
-				type="body"
-				weight="bold"
+				style={{ flex: 1, minWidth: 0 }}
+				variant="headline"
 			>
 				{title}
-			</Text>
+			</AppText>
 			{statusSlot}
 		</View>
 	);
@@ -80,19 +108,26 @@ export function TripCardMetaRow({
 	right?: string;
 }) {
 	return (
-		<View className="flex-row items-center justify-between gap-3">
-			<Text
-				className="min-w-0 flex-1"
-				color="muted"
+		<View
+			style={{
+				alignItems: "center",
+				flexDirection: "row",
+				gap: 12,
+				justifyContent: "space-between",
+			}}
+		>
+			<AppText
 				numberOfLines={1}
-				type="body-sm"
+				style={{ flex: 1, minWidth: 0 }}
+				tone="secondary"
+				variant="subhead"
 			>
 				{left}
-			</Text>
+			</AppText>
 			{right ? (
-				<Text color="muted" numberOfLines={1} type="body-sm">
+				<AppText numberOfLines={1} tone="secondary" variant="subhead">
 					{right}
-				</Text>
+				</AppText>
 			) : null}
 		</View>
 	);
@@ -113,42 +148,53 @@ export function TripMetricBlock({
 	tone?: "accent" | "success";
 	value: string;
 }) {
-	const fillColor = tone === "success" ? successColor : accentColor;
-	const trackColor =
-		tone === "success"
-			? "rgba(28, 203, 104, 0.12)"
-			: "rgba(10, 132, 255, 0.12)";
+	const { palette } = useUITheme();
+	const fillColor = tone === "success" ? palette.success : palette.accent;
 	const boundedProgress =
 		progress === undefined ? undefined : Math.min(100, Math.max(0, progress));
 
 	return (
-		<View className="min-w-0 flex-1 gap-1.5" style={{ alignItems: align }}>
-			<Text color="muted" numberOfLines={1} type="body-xs" weight="semibold">
+		<View style={{ alignItems: align, flex: 1, gap: 6, minWidth: 0 }}>
+			<AppText bold numberOfLines={1} tone="secondary" variant="footnote">
 				{label}
-			</Text>
+			</AppText>
 			{boundedProgress === undefined ? null : (
 				<View
-					className="h-1.5 w-full overflow-hidden rounded-full"
-					style={{ backgroundColor: trackColor }}
+					accessibilityRole="progressbar"
+					accessibilityValue={{ max: 100, min: 0, now: boundedProgress }}
+					style={{
+						backgroundColor: palette.fill,
+						borderRadius: radius.pill,
+						height: 6,
+						overflow: "hidden",
+						width: "100%",
+					}}
 				>
 					<View
-						className="h-full rounded-full"
-						style={{ backgroundColor: fillColor, width: `${boundedProgress}%` }}
+						style={{
+							backgroundColor: fillColor,
+							borderRadius: radius.pill,
+							height: "100%",
+							width: `${boundedProgress}%`,
+						}}
 					/>
 				</View>
 			)}
 			<View
-				className="min-w-0 flex-row items-baseline gap-2"
 				style={{
+					alignItems: "baseline",
+					flexDirection: "row",
+					gap: 8,
 					justifyContent: align === "flex-end" ? "flex-end" : "flex-start",
+					minWidth: 0,
 				}}
 			>
-				<Text numberOfLines={1} type="body-sm" weight="bold">
+				<AppText bold numberOfLines={1} variant="subhead">
 					{value}
-				</Text>
-				<Text color="muted" numberOfLines={1} type="body-xs">
+				</AppText>
+				<AppText numberOfLines={1} tone="secondary" variant="footnote">
 					{detail}
-				</Text>
+				</AppText>
 			</View>
 		</View>
 	);

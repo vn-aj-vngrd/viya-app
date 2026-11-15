@@ -4,28 +4,41 @@ import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
 import { getBudgetWalletSummary } from "@viya-app/domain";
 import { useMutation, useQuery } from "convex/react";
 import { Link } from "expo-router";
-import {
-	BottomSheet,
-	Button,
-	CloseButton,
-	Input,
-	Label,
-	Menu,
-	Spinner,
-	Text,
-	TextField,
-} from "heroui-native";
+import { BottomSheet, Input, Label, Menu, TextField } from "heroui-native";
 import type { ReactNode } from "react";
-import { useMemo, useState } from "react";
-import { Linking, Pressable, ScrollView, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Linking, ScrollView, StyleSheet, View } from "react-native";
+import Animated, {
+	FadeIn,
+	FadeInDown,
+	useAnimatedStyle,
+	useSharedValue,
+	withSpring,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Container } from "@/components/container";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
-import { EmptyState } from "@/src/components/empty-state";
 import { NavigationIconButton } from "@/src/components/navigation/navigation-icon-button";
 import { ScreenLoadingState } from "@/src/components/screen-loading-state";
+import {
+	AppText,
+	Card,
+	Chip,
+	EmptyState,
+	GlassIconButton,
+	ListGroup,
+	motion,
+	type Palette,
+	PressableScale,
+	PrimaryButton,
+	radius,
+	SecondaryButton,
+	spacing,
+	useUITheme,
+} from "@/src/components/ui";
 import { VIYA_ROUTES } from "@/src/constants/routes";
+import { PillAction } from "@/src/features/bookings/pill-action";
 import {
 	formatMoney,
 	formatStatus,
@@ -34,8 +47,6 @@ import { TripModuleScreenFrame } from "@/src/features/trips/trip-module-floating
 import { useTripIdParam } from "@/src/features/trips/use-trip-id-param";
 
 const dateMs = 86_400_000;
-const budgetAccentColor = "#0AA5B5";
-const budgetAccentTrack = "rgba(10, 165, 181, 0.16)";
 const expenseCategories = [
 	"food",
 	"transport",
@@ -127,6 +138,16 @@ const getBudgetStatusLabel = ({
 	return "On track";
 };
 
+const getBudgetStatusColor = (status: string, palette: Palette) => {
+	if (status === "Over budget") {
+		return palette.danger;
+	}
+	if (status === "Watch spend") {
+		return palette.warning;
+	}
+	return status === "On track" ? palette.success : palette.inkTertiary;
+};
+
 const getBudgetProgress = ({
 	budgetAmount,
 	totalTrackedSpend,
@@ -153,31 +174,48 @@ function BudgetSnapshotStat({
 	value: string;
 }) {
 	return (
-		<View className="min-w-0 flex-1 gap-1.5" style={{ alignItems: align }}>
-			<Text color="muted" numberOfLines={1} type="body-xs" weight="semibold">
+		<View style={{ alignItems: align, flex: 1, gap: 2, minWidth: 0 }}>
+			<AppText numberOfLines={1} tone="secondary" variant="footnote">
 				{label}
-			</Text>
-			<Text numberOfLines={1} type="body-sm" weight="bold">
+			</AppText>
+			<AppText bold={true} numberOfLines={1} variant="subhead">
 				{value}
-			</Text>
+			</AppText>
 			{detail ? (
-				<Text color="muted" numberOfLines={1} type="body-xs">
+				<AppText numberOfLines={1} tone="tertiary" variant="footnote">
 					{detail}
-				</Text>
+				</AppText>
 			) : null}
 		</View>
 	);
 }
 
-function ProgressBar({ progress }: { progress: number }) {
+function ProgressBar({ color, progress }: { color: string; progress: number }) {
+	const { palette } = useUITheme();
+	const width = useSharedValue(0);
+
+	useEffect(() => {
+		width.value = withSpring(progress, motion.spring.selection);
+	}, [progress, width]);
+
+	const fillStyle = useAnimatedStyle(() => ({ width: `${width.value}%` }));
+
 	return (
 		<View
-			className="h-2 overflow-hidden rounded-full"
-			style={{ backgroundColor: budgetAccentTrack }}
+			accessibilityLabel={`${Math.round(progress)} percent of budget spent`}
+			accessibilityRole="progressbar"
+			style={{
+				backgroundColor: palette.fill,
+				borderRadius: radius.pill,
+				height: 8,
+				overflow: "hidden",
+			}}
 		>
-			<View
-				className="h-full rounded-full"
-				style={{ backgroundColor: budgetAccentColor, width: `${progress}%` }}
+			<Animated.View
+				style={[
+					{ backgroundColor: color, borderRadius: radius.pill, height: "100%" },
+					fillStyle,
+				]}
 			/>
 		</View>
 	);
@@ -204,73 +242,100 @@ function BudgetOverviewCard({
 	remainingAmountLabel: string;
 	totalTrackedSpendLabel: string;
 }) {
+	const { palette } = useUITheme();
+	const statusColor = getBudgetStatusColor(budgetStatus, palette);
+
 	return (
-		<View className="gap-3">
-			<View className="flex-row items-center gap-3">
-				<View className="h-10 w-10 items-center justify-center rounded-full bg-surface-secondary">
-					<Ionicons color={budgetAccentColor} name="wallet-outline" size={20} />
-				</View>
-				<View className="min-w-0 flex-1 gap-1">
-					<Text color="muted" type="body-xs" weight="semibold">
-						BUDGET STATUS
-					</Text>
-					<Text.Heading numberOfLines={1} type="h3" weight="semibold">
-						{remainingAmountLabel}
-					</Text.Heading>
-					<Text color="muted" numberOfLines={1} type="body-xs">
-						{dailySafeSpendLabel} safe daily spend
-					</Text>
-					{foreignSpendLabel ? (
-						<Text color="muted" numberOfLines={1} type="body-xs">
-							{foreignSpendLabel} tracked separately
-						</Text>
-					) : null}
-				</View>
-				<View className="rounded-full border border-border bg-white px-3 py-1.5">
-					<Text
-						numberOfLines={1}
-						style={{ color: budgetAccentColor }}
-						type="body-xs"
-						weight="bold"
+		<Animated.View entering={FadeInDown.springify().damping(20)}>
+			<Card padding="lg" style={{ gap: spacing.lg }}>
+				<View
+					style={{ alignItems: "flex-start", flexDirection: "row", gap: 12 }}
+				>
+					<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+						<AppText tone="secondary" variant="eyebrow">
+							BUDGET STATUS
+						</AppText>
+						<AppText numberOfLines={1} variant="title">
+							{remainingAmountLabel}
+						</AppText>
+						<AppText numberOfLines={1} tone="secondary" variant="footnote">
+							{dailySafeSpendLabel} safe daily spend
+						</AppText>
+						{foreignSpendLabel ? (
+							<AppText numberOfLines={1} tone="secondary" variant="footnote">
+								{foreignSpendLabel} tracked separately
+							</AppText>
+						) : null}
+					</View>
+					<View
+						style={{
+							alignItems: "center",
+							backgroundColor: palette.fill,
+							borderRadius: radius.pill,
+							flexDirection: "row",
+							gap: 6,
+							paddingHorizontal: 10,
+							paddingVertical: 6,
+						}}
 					>
-						{budgetStatus}
-					</Text>
+						<View
+							style={{
+								backgroundColor: statusColor,
+								borderRadius: radius.pill,
+								height: 8,
+								width: 8,
+							}}
+						/>
+						<AppText bold={true} numberOfLines={1} variant="footnote">
+							{budgetStatus}
+						</AppText>
+					</View>
 				</View>
-			</View>
 
-			<View className="gap-2">
-				<ProgressBar progress={progress} />
-				<View className="flex-row justify-between gap-3">
-					<Text color="muted" type="body-xs">
-						{totalTrackedSpendLabel} spent
-					</Text>
-					<Text color="muted" type="body-xs">
-						{plannedBudgetLabel} budget
-					</Text>
+				<View style={{ gap: spacing.sm }}>
+					<ProgressBar color={statusColor} progress={progress} />
+					<View
+						style={{ flexDirection: "row", justifyContent: "space-between" }}
+					>
+						<AppText tone="secondary" variant="footnote">
+							{totalTrackedSpendLabel} spent
+						</AppText>
+						<AppText tone="secondary" variant="footnote">
+							{plannedBudgetLabel} budget
+						</AppText>
+					</View>
 				</View>
-			</View>
 
-			<View className="flex-row items-stretch gap-4 pt-2">
-				<BudgetSnapshotStat
-					detail="Logged"
-					label="Spent"
-					value={totalTrackedSpendLabel}
-				/>
-				<View className="w-px self-stretch bg-border" />
-				<BudgetSnapshotStat label="Daily" value={dailySafeSpendLabel} />
-				<View className="w-px self-stretch bg-border" />
-				<BudgetSnapshotStat
-					align="flex-end"
-					label="Budget"
-					value={plannedBudgetLabel}
-				/>
-			</View>
+				<View
+					style={{
+						alignItems: "stretch",
+						borderTopColor: palette.separator,
+						borderTopWidth: StyleSheet.hairlineWidth,
+						flexDirection: "row",
+						gap: spacing.lg,
+						paddingTop: spacing.md,
+					}}
+				>
+					<BudgetSnapshotStat
+						detail="Logged"
+						label="Spent"
+						value={totalTrackedSpendLabel}
+					/>
+					<BudgetSnapshotStat label="Daily" value={dailySafeSpendLabel} />
+					<BudgetSnapshotStat
+						align="flex-end"
+						label="Budget"
+						value={plannedBudgetLabel}
+					/>
+				</View>
 
-			<Button onPress={onOpenBudgetEditor} size="sm" variant="secondary">
-				<Ionicons color={budgetAccentColor} name="create-outline" size={15} />
-				<Button.Label>{budgetActionLabel}</Button.Label>
-			</Button>
-		</View>
+				<SecondaryButton
+					icon="create-outline"
+					label={budgetActionLabel}
+					onPress={onOpenBudgetEditor}
+				/>
+			</Card>
+		</Animated.View>
 	);
 }
 
@@ -289,16 +354,14 @@ function CategoryPicker({
 	value: ExpenseCategory;
 }) {
 	return (
-		<View className="flex-row flex-wrap gap-2">
+		<View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
 			{expenseCategories.map((category) => (
-				<Button
+				<Chip
 					key={category}
+					label={formatStatus(category)}
 					onPress={() => onChange(category)}
-					size="sm"
-					variant={category === value ? "primary" : "secondary"}
-				>
-					<Button.Label>{formatStatus(category)}</Button.Label>
-				</Button>
+					selected={category === value}
+				/>
 			))}
 		</View>
 	);
@@ -339,34 +402,40 @@ function LinkPicker<TId extends string>({
 	value: TId | "";
 }) {
 	return (
-		<View className="gap-2">
-			<Text color="muted" type="body-xs" weight="semibold">
-				{label.toUpperCase()}
-			</Text>
-			<View className="flex-row flex-wrap gap-2">
-				<Button
+		<View style={{ gap: spacing.sm }}>
+			<AppText tone="secondary" variant="eyebrow">
+				{label}
+			</AppText>
+			<View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
+				<Chip
+					label={emptyLabel}
 					onPress={() => onChange("")}
-					size="sm"
-					variant={value ? "secondary" : "primary"}
-				>
-					<Button.Label>{emptyLabel}</Button.Label>
-				</Button>
+					selected={!value}
+				/>
 				{options.map((option) => (
-					<Button
+					<Chip
 						key={option.id}
+						label={`${option.label} · ${option.detail}`}
 						onPress={() => onChange(option.id)}
-						size="sm"
-						variant={value === option.id ? "primary" : "secondary"}
-					>
-						<Button.Label>
-							{option.label} · {option.detail}
-						</Button.Label>
-					</Button>
+						selected={value === option.id}
+					/>
 				))}
 			</View>
 		</View>
 	);
 }
+
+function FormError({ message }: { message: string }) {
+	return (
+		<Animated.View entering={FadeIn.duration(motion.duration.normal)}>
+			<AppText accessibilityRole="alert" tone="danger" variant="subhead">
+				{message}
+			</AppText>
+		</Animated.View>
+	);
+}
+
+const fieldClassName = "h-12 border-0 bg-surface px-4";
 
 function BudgetEditorSheet({
 	actionLabel,
@@ -390,37 +459,52 @@ function BudgetEditorSheet({
 	onUpdateBudgetDraft: (value: string) => void;
 }) {
 	const insets = useSafeAreaInsets();
+	const { palette } = useUITheme();
 
 	return (
 		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
 			<BottomSheet.Portal>
 				<BottomSheet.Overlay />
 				<BottomSheet.Content
-					backgroundClassName="rounded-t-[36px] bg-background"
+					backgroundClassName="bg-background"
+					backgroundStyle={{
+						backgroundColor: palette.canvas,
+						borderTopLeftRadius: radius.sheet,
+						borderTopRightRadius: radius.sheet,
+					}}
 					enablePanDownToClose={true}
 					snapPoints={["48%"]}
 				>
 					<View
-						className="gap-4 px-5 pt-2"
-						style={{ paddingBottom: Math.max(insets.bottom, 18) }}
+						style={{
+							gap: spacing.lg,
+							paddingBottom: Math.max(insets.bottom, spacing.lg),
+							paddingHorizontal: spacing.screen,
+						}}
 					>
-						<View className="flex-row items-start justify-between gap-4">
-							<View className="flex-1 gap-1">
+						<View
+							style={{
+								alignItems: "flex-start",
+								flexDirection: "row",
+								gap: spacing.lg,
+							}}
+						>
+							<View style={{ flex: 1, gap: 2 }}>
 								<BottomSheet.Title>{actionLabel}</BottomSheet.Title>
 								<BottomSheet.Description>
 									Set the total amount you want to spend on this trip.
 								</BottomSheet.Description>
 							</View>
-							<CloseButton
+							<GlassIconButton
 								accessibilityLabel="Close budget form"
-								className="h-10 w-10 rounded-full bg-surface"
+								icon="close"
 								onPress={() => onOpenChange(false)}
 							/>
 						</View>
 						<SheetField label="Total budget">
 							{({ onBlur, onFocus }) => (
 								<Input
-									className="h-12 border border-border bg-surface px-4"
+									className={fieldClassName}
 									keyboardType="numeric"
 									onBlur={onBlur}
 									onChangeText={onUpdateBudgetDraft}
@@ -432,14 +516,14 @@ function BudgetEditorSheet({
 							)}
 						</SheetField>
 						{budgetErrorMessage ? (
-							<Text className="text-danger" type="body-sm">
-								{budgetErrorMessage}
-							</Text>
+							<FormError message={budgetErrorMessage} />
 						) : null}
-						<Button isDisabled={isSavingBudget} onPress={onSave} size="lg">
-							{isSavingBudget ? <Spinner size="sm" /> : null}
-							<Button.Label>Save budget</Button.Label>
-						</Button>
+						<PrimaryButton
+							disabled={isSavingBudget}
+							isPending={isSavingBudget}
+							label="Save budget"
+							onPress={onSave}
+						/>
 					</View>
 				</BottomSheet.Content>
 			</BottomSheet.Portal>
@@ -471,28 +555,39 @@ function ExpenseFormSheet({
 	receiptOptions: { detail: string; id: Id<"vaultItems">; label: string }[];
 }) {
 	const insets = useSafeAreaInsets();
+	const { palette } = useUITheme();
 
 	return (
 		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
 			<BottomSheet.Portal>
 				<BottomSheet.Overlay />
 				<BottomSheet.Content
-					backgroundClassName="rounded-t-[36px] bg-background"
+					backgroundClassName="bg-background"
+					backgroundStyle={{
+						backgroundColor: palette.canvas,
+						borderTopLeftRadius: radius.sheet,
+						borderTopRightRadius: radius.sheet,
+					}}
 					enablePanDownToClose={true}
 					snapPoints={["86%"]}
 				>
 					<ScrollView
 						contentContainerStyle={{
-							gap: 16,
-							paddingBottom: Math.max(insets.bottom, 18),
-							paddingHorizontal: 20,
-							paddingTop: 8,
+							gap: spacing.lg,
+							paddingBottom: Math.max(insets.bottom, spacing.lg),
+							paddingHorizontal: spacing.screen,
 						}}
 						keyboardShouldPersistTaps="handled"
 						showsVerticalScrollIndicator={false}
 					>
-						<View className="flex-row items-start justify-between gap-4">
-							<View className="flex-1 gap-1">
+						<View
+							style={{
+								alignItems: "flex-start",
+								flexDirection: "row",
+								gap: spacing.lg,
+							}}
+						>
+							<View style={{ flex: 1, gap: 2 }}>
 								<BottomSheet.Title>
 									{editingExpenseId ? "Edit expense" : "Add expense"}
 								</BottomSheet.Title>
@@ -500,16 +595,16 @@ function ExpenseFormSheet({
 									Log manual spend and link booking or receipt proof.
 								</BottomSheet.Description>
 							</View>
-							<CloseButton
+							<GlassIconButton
 								accessibilityLabel="Close expense form"
-								className="h-10 w-10 rounded-full bg-surface"
+								icon="close"
 								onPress={() => onOpenChange(false)}
 							/>
 						</View>
 						<SheetField label="Title">
 							{({ onBlur, onFocus }) => (
 								<Input
-									className="h-12 border border-border bg-surface px-4"
+									className={fieldClassName}
 									onBlur={onBlur}
 									onChangeText={(title) => onUpdateForm({ title })}
 									onFocus={onFocus}
@@ -519,12 +614,12 @@ function ExpenseFormSheet({
 								/>
 							)}
 						</SheetField>
-						<View className="flex-row flex-wrap gap-3">
-							<View className="min-w-0 flex-1">
+						<View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+							<View style={{ flex: 1, minWidth: 0 }}>
 								<SheetField label="Amount">
 									{({ onBlur, onFocus }) => (
 										<Input
-											className="h-12 border border-border bg-surface px-4"
+											className={fieldClassName}
 											keyboardType="numeric"
 											onBlur={onBlur}
 											onChangeText={(amount) => onUpdateForm({ amount })}
@@ -536,11 +631,11 @@ function ExpenseFormSheet({
 									)}
 								</SheetField>
 							</View>
-							<View className="min-w-0 flex-1">
+							<View style={{ flex: 1, minWidth: 0 }}>
 								<SheetField label="Date">
 									{({ onBlur, onFocus }) => (
 										<Input
-											className="h-12 border border-border bg-surface px-4"
+											className={fieldClassName}
 											onBlur={onBlur}
 											onChangeText={(spentAt) => onUpdateForm({ spentAt })}
 											onFocus={onFocus}
@@ -552,10 +647,10 @@ function ExpenseFormSheet({
 								</SheetField>
 							</View>
 						</View>
-						<View className="gap-2">
-							<Text color="muted" type="body-xs" weight="semibold">
+						<View style={{ gap: spacing.sm }}>
+							<AppText tone="secondary" variant="eyebrow">
 								CATEGORY
-							</Text>
+							</AppText>
 							<CategoryPicker
 								onChange={(category) => onUpdateForm({ category })}
 								value={expenseForm.category}
@@ -578,7 +673,7 @@ function ExpenseFormSheet({
 						<SheetField label="Notes">
 							{({ onBlur, onFocus }) => (
 								<Input
-									className="h-12 border border-border bg-surface px-4"
+									className={fieldClassName}
 									onBlur={onBlur}
 									onChangeText={(notes) => onUpdateForm({ notes })}
 									onFocus={onFocus}
@@ -589,16 +684,14 @@ function ExpenseFormSheet({
 							)}
 						</SheetField>
 						{expenseErrorMessage ? (
-							<Text className="text-danger" type="body-sm">
-								{expenseErrorMessage}
-							</Text>
+							<FormError message={expenseErrorMessage} />
 						) : null}
-						<Button isDisabled={isAddingExpense} onPress={onSave} size="lg">
-							{isAddingExpense ? <Spinner size="sm" /> : null}
-							<Button.Label>
-								{editingExpenseId ? "Save expense" : "Add expense"}
-							</Button.Label>
-						</Button>
+						<PrimaryButton
+							disabled={isAddingExpense}
+							isPending={isAddingExpense}
+							label={editingExpenseId ? "Save expense" : "Add expense"}
+							onPress={onSave}
+						/>
 					</ScrollView>
 				</BottomSheet.Content>
 			</BottomSheet.Portal>
@@ -631,99 +724,122 @@ function ExpenseRow({
 	receiptUrl?: string | null;
 	tripId: Id<"trips">;
 }) {
+	const { palette } = useUITheme();
 	const isDeletingThis = deletingExpenseId === expense._id;
 
 	return (
-		<View className="flex-row items-start gap-3 border-border border-b px-4 py-3.5">
-			<View className="h-10 w-10 items-center justify-center rounded-full bg-surface-secondary">
-				<Ionicons color={budgetAccentColor} name="receipt-outline" size={18} />
+		<View
+			style={{
+				alignItems: "flex-start",
+				flexDirection: "row",
+				gap: spacing.md,
+				opacity: isDeletingThis ? 0.5 : 1,
+				paddingHorizontal: spacing.lg,
+				paddingVertical: spacing.md,
+			}}
+		>
+			<View
+				style={{
+					alignItems: "center",
+					backgroundColor: palette.fill,
+					borderRadius: radius.pill,
+					height: 36,
+					justifyContent: "center",
+					width: 36,
+				}}
+			>
+				<Ionicons color={palette.accent} name="receipt-outline" size={17} />
 			</View>
-			<View className="min-w-0 flex-1 gap-0.5">
-				<View className="flex-row items-start justify-between gap-3">
-					<View className="min-w-0 flex-1">
-						<Text numberOfLines={1} type="body-sm" weight="semibold">
+			<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+				<View
+					style={{
+						alignItems: "flex-start",
+						flexDirection: "row",
+						gap: spacing.md,
+					}}
+				>
+					<View style={{ flex: 1, minWidth: 0 }}>
+						<AppText bold={true} numberOfLines={1}>
 							{expense.title}
-						</Text>
-						<Text color="muted" numberOfLines={1} type="body-xs">
+						</AppText>
+						<AppText numberOfLines={1} tone="secondary" variant="footnote">
 							{formatStatus(expense.category)} · {expense.spentAt}
-						</Text>
+						</AppText>
 					</View>
-					<View className="flex-row items-center gap-2">
-						<Text type="body-sm" weight="semibold">
-							{formatMoney(expense.amount, expense.currency)}
-						</Text>
-						<Menu>
-							<Menu.Trigger asChild={true}>
-								<Pressable
-									accessibilityLabel="Expense options"
-									accessibilityRole="button"
-									accessibilityState={{ disabled: isDeletingThis }}
-									className="h-8 w-8 items-center justify-center rounded-full bg-surface-secondary"
-									disabled={isDeletingThis}
-									style={({ pressed }) => ({
-										opacity: isDeletingThis ? 0.5 : 1,
-										transform: [{ scale: pressed ? 0.94 : 1 }],
-									})}
+					<AppText bold={true} variant="subhead">
+						{formatMoney(expense.amount, expense.currency)}
+					</AppText>
+					<Menu>
+						<Menu.Trigger asChild={true}>
+							<PressableScale
+								accessibilityLabel="Expense options"
+								accessibilityRole="button"
+								accessibilityState={{ disabled: isDeletingThis }}
+								disabled={isDeletingThis}
+								haptic="selection"
+								hitSlop={8}
+								scaleTo={0.92}
+								style={{
+									alignItems: "center",
+									height: 32,
+									justifyContent: "center",
+									marginTop: -4,
+									width: 32,
+								}}
+							>
+								<Ionicons
+									color={palette.inkTertiary}
+									name="ellipsis-horizontal"
+									size={18}
+								/>
+							</PressableScale>
+						</Menu.Trigger>
+						<Menu.Portal>
+							<Menu.Overlay />
+							<Menu.Content
+								align="end"
+								className="rounded-[20px] bg-surface p-2"
+								offset={8}
+								placement="bottom"
+								presentation="popover"
+								width={200}
+							>
+								<Menu.Item
+									accessibilityLabel="Edit expense"
+									className="min-h-11 flex-row items-center gap-3 rounded-[14px] p-2.5"
+									isAnimatedStyleActive={false}
+									onPress={() => onEdit(expense)}
 								>
 									<Ionicons
-										color="#71717A"
-										name="ellipsis-horizontal"
-										size={16}
+										color={palette.accent}
+										name="create-outline"
+										size={18}
 									/>
-								</Pressable>
-							</Menu.Trigger>
-							<Menu.Portal>
-								<Menu.Overlay />
-								<Menu.Content
-									align="end"
-									className="rounded-[24px] border border-border bg-surface p-2"
-									offset={8}
-									placement="bottom"
-									presentation="popover"
-									width={200}
+									<Menu.ItemTitle className="font-semibold text-sm">
+										Edit
+									</Menu.ItemTitle>
+								</Menu.Item>
+								<Menu.Item
+									accessibilityLabel="Delete expense"
+									className="min-h-11 flex-row items-center gap-3 rounded-[14px] p-2.5"
+									isAnimatedStyleActive={false}
+									onPress={() => onDelete(expense._id)}
 								>
-									<Menu.Item
-										accessibilityLabel="Edit expense"
-										className="flex-row items-center gap-3 rounded-[18px] p-2.5"
-										isAnimatedStyleActive={false}
-										onPress={() => onEdit(expense)}
-									>
-										<View className="h-8 w-8 items-center justify-center rounded-full bg-surface-secondary">
-											<Ionicons
-												color={budgetAccentColor}
-												name="create-outline"
-												size={16}
-											/>
-										</View>
-										<Menu.ItemTitle className="font-semibold text-sm">
-											Edit
-										</Menu.ItemTitle>
-									</Menu.Item>
-									<View className="mx-2 my-1 h-px bg-border" />
-									<Menu.Item
-										accessibilityLabel="Delete expense"
-										className="flex-row items-center gap-3 rounded-[18px] p-2.5"
-										isAnimatedStyleActive={false}
-										onPress={() => onDelete(expense._id)}
-									>
-										<View className="h-8 w-8 items-center justify-center rounded-full bg-danger/10">
-											<Ionicons
-												color="#FF3B30"
-												name="trash-outline"
-												size={16}
-											/>
-										</View>
-										<Menu.ItemTitle className="font-semibold text-danger text-sm">
-											Delete
-										</Menu.ItemTitle>
-									</Menu.Item>
-								</Menu.Content>
-							</Menu.Portal>
-						</Menu>
-					</View>
+									<Ionicons
+										color={palette.danger}
+										name="trash-outline"
+										size={18}
+									/>
+									<Menu.ItemTitle className="font-semibold text-danger text-sm">
+										Delete
+									</Menu.ItemTitle>
+								</Menu.Item>
+							</Menu.Content>
+						</Menu.Portal>
+					</Menu>
 				</View>
 				{expense.bookingId || expense.vaultItemId ? (
-					<Text color="muted" numberOfLines={1} type="body-xs">
+					<AppText numberOfLines={1} tone="secondary" variant="footnote">
 						{[
 							expense.bookingId ? `Booking ${bookingLabel ?? "linked"}` : null,
 							expense.vaultItemId
@@ -732,35 +848,28 @@ function ExpenseRow({
 						]
 							.filter(Boolean)
 							.join(" · ")}
-					</Text>
+					</AppText>
 				) : null}
 				{expense.bookingId || receiptUrl ? (
-					<View className="flex-row flex-wrap gap-2 pt-1">
+					<View
+						style={{
+							flexDirection: "row",
+							flexWrap: "wrap",
+							gap: spacing.sm,
+							paddingTop: spacing.xs,
+						}}
+					>
 						{expense.bookingId ? (
 							<Link asChild href={VIYA_ROUTES.tripBookings(tripId)}>
-								<Button size="sm" variant="secondary">
-									<Ionicons
-										color={budgetAccentColor}
-										name="ticket-outline"
-										size={15}
-									/>
-									<Button.Label>Open booking</Button.Label>
-								</Button>
+								<PillAction icon="ticket-outline" label="Open booking" />
 							</Link>
 						) : null}
 						{receiptUrl ? (
-							<Button
+							<PillAction
+								icon="document-attach-outline"
+								label="Open receipt"
 								onPress={() => onOpenReceipt(receiptUrl)}
-								size="sm"
-								variant="secondary"
-							>
-								<Ionicons
-									color={budgetAccentColor}
-									name="document-attach-outline"
-									size={15}
-								/>
-								<Button.Label>Open receipt</Button.Label>
-							</Button>
+							/>
 						) : null}
 					</View>
 				) : null}
@@ -824,7 +933,7 @@ export function TripBudgetScreen() {
 
 	if (!tripId) {
 		return (
-			<Container className="px-4 pb-28">
+			<Container className="pb-28">
 				<EmptyState
 					description="Open a saved trip before reviewing budget."
 					icon="wallet-outline"
@@ -1067,44 +1176,33 @@ export function TripBudgetScreen() {
 						)}
 					/>
 
-					<View className="gap-3">
-						<Text
-							className="px-1"
-							color="muted"
-							type="body-xs"
-							weight="semibold"
+					<View style={{ gap: spacing.sm }}>
+						<AppText
+							accessibilityRole="header"
+							style={{ paddingHorizontal: spacing.lg }}
+							tone="secondary"
+							variant="eyebrow"
 						>
 							ALL EXPENSES
-						</Text>
+						</AppText>
 						{receiptOpenErrorMessage ? (
-							<Text className="px-1 text-danger" type="body-sm">
-								{receiptOpenErrorMessage}
-							</Text>
+							<FormError message={receiptOpenErrorMessage} />
 						) : null}
-						<View>
-							{budget.expenses.length === 0 ? (
-								<View className="items-center gap-3 p-6">
-									<View className="h-12 w-12 items-center justify-center rounded-full bg-surface-secondary">
-										<Ionicons color="#8E8E93" name="card-outline" size={23} />
-									</View>
-									<Text align="center" color="muted" type="body-sm">
-										Manual expenses will appear here.
-									</Text>
-									<Button
-										onPress={openNewExpenseForm}
-										size="sm"
-										variant="secondary"
-									>
-										<Ionicons
-											color={budgetAccentColor}
-											name="add-outline"
-											size={15}
-										/>
-										<Button.Label>Add first expense</Button.Label>
-									</Button>
-								</View>
-							) : (
-								budget.expenses.map((expense) => {
+						{budget.expenses.length === 0 ? (
+							<Card padding="none">
+								<EmptyState
+									action={{
+										label: "Add first expense",
+										onPress: openNewExpenseForm,
+									}}
+									description="Manual expenses will appear here."
+									icon="card-outline"
+									title="No expenses yet"
+								/>
+							</Card>
+						) : (
+							<ListGroup>
+								{budget.expenses.map((expense) => {
 									const receiptUrl = expense.vaultItemId
 										? receiptUrlById.get(expense.vaultItemId)
 										: null;
@@ -1135,9 +1233,9 @@ export function TripBudgetScreen() {
 											tripId={tripId}
 										/>
 									);
-								})
-							)}
-						</View>
+								})}
+							</ListGroup>
+						)}
 					</View>
 				</ScrollView>
 				<BudgetEditorSheet

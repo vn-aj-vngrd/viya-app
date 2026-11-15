@@ -1,15 +1,17 @@
 import { useAuth } from "@clerk/expo";
 import { Redirect, Stack } from "expo-router";
-import { Spinner } from "heroui-native";
 import { View } from "react-native";
+
+import { LoadingState, useUITheme } from "@/src/components/ui";
 
 export default function AuthRoutesLayout() {
 	const { isLoaded, isSignedIn } = useAuth();
+	const { palette } = useUITheme();
 
 	if (!isLoaded) {
 		return (
-			<View className="flex-1 items-center justify-center bg-background">
-				<Spinner />
+			<View style={{ backgroundColor: palette.canvas, flex: 1 }}>
+				<LoadingState delay={0} title="Loading" />
 			</View>
 		);
 	}
@@ -18,5 +20,13 @@ export default function AuthRoutesLayout() {
 		return <Redirect href="/(app)/(tabs)" />;
 	}
 
-	return <Stack screenOptions={{ headerShown: false }} />;
+	return (
+		<Stack
+			screenOptions={{
+				animation: "fade",
+				contentStyle: { backgroundColor: palette.canvas },
+				headerShown: false,
+			}}
+		/>
+	);
 }

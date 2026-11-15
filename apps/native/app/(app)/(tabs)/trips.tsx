@@ -1,39 +1,53 @@
-import { Feather, Ionicons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Doc } from "@viya-app/backend/convex/_generated/dataModel";
 import { TRIP_STATUSES } from "@viya-app/domain";
 import { usePaginatedQuery } from "convex/react";
-import { LinearGradient } from "expo-linear-gradient";
+import { Image } from "expo-image";
 import { useRouter } from "expo-router";
+import { BottomSheet } from "heroui-native";
 import {
-	BottomSheet,
-	Button,
-	Surface,
-	Text,
-	useThemeColor,
-} from "heroui-native";
-import {
-	type ComponentProps,
 	useCallback,
 	useDeferredValue,
+	useEffect,
 	useMemo,
 	useState,
 } from "react";
 import {
 	FlatList,
-	ImageBackground,
 	type ListRenderItem,
-	Pressable,
 	ScrollView,
 	TextInput,
 	View,
 } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import Animated, {
+	Easing,
+	FadeInDown,
+	useAnimatedStyle,
+	useSharedValue,
+	withRepeat,
+	withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
 
-import { Container } from "@/components/container";
-import { NavigationIconButton } from "@/src/components/navigation/navigation-icon-button";
+import {
+	AppText,
+	Card,
+	EmptyState,
+	GlassIconButton,
+	type IconName,
+	ListGroup,
+	ListRow,
+	metrics,
+	type Palette,
+	PressableScale,
+	radius,
+	ScreenHeader,
+	SheetHeader,
+	spacing,
+	useUITheme,
+} from "@/src/components/ui";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 import { useDestinationImages } from "@/src/features/home/use-destination-images";
 import { isDecorativeDestinationImageUrl } from "@/src/features/trips/trip-cover-image";
@@ -52,19 +66,18 @@ type PrimaryTripFilter = "all" | "completed" | "favorites" | "upcoming";
 type UserFacingTripStatus = (typeof TRIP_STATUSES)[number];
 type StatusTripFilter = `status:${UserFacingTripStatus}`;
 type ActiveTripFilter = Exclude<PrimaryTripFilter, "all"> | StatusTripFilter;
-type FilterIconName = ComponentProps<typeof Feather>["name"];
 
 const tripsPageSize = 8;
 const skeletonRows = ["first", "second", "third"] as const;
 const primaryTripFilters: Array<{
-	icon: FilterIconName;
+	icon: IconName;
 	label: string;
 	value: PrimaryTripFilter;
 }> = [
-	{ icon: "map", label: "All", value: "all" },
-	{ icon: "heart", label: "Favorites", value: "favorites" },
-	{ icon: "calendar", label: "Upcoming", value: "upcoming" },
-	{ icon: "check-circle", label: "Completed", value: "completed" },
+	{ icon: "map-outline", label: "All", value: "all" },
+	{ icon: "heart-outline", label: "Favorites", value: "favorites" },
+	{ icon: "calendar-outline", label: "Upcoming", value: "upcoming" },
+	{ icon: "checkmark-circle-outline", label: "Completed", value: "completed" },
 ];
 const statusFilterOptions = TRIP_STATUSES.map((status) => ({
 	status,
@@ -96,6 +109,11 @@ const shouldShowDestinationLine = (title: string, destination: string) => {
 	return !title.trim().toLowerCase().includes(normalizedDestination);
 };
 
+const TAB_BAR_CLEARANCE = 112;
+const THUMB_SIZE = 84;
+const SEARCH_HEIGHT = 44;
+const SKELETON_PULSE_MS = 900;
+
 function TripsSearchField({
 	onChangeText,
 	value,
@@ -103,61 +121,97 @@ function TripsSearchField({
 	onChangeText: (value: string) => void;
 	value: string;
 }) {
-	const foregroundColor = useThemeColor("foreground");
-	const mutedColor = useThemeColor("muted");
+	const { palette } = useUITheme();
 
 	return (
-		<View className="h-12 flex-row items-center gap-2 rounded-full border border-border bg-surface px-4">
-			<Ionicons color={mutedColor} name="search" size={18} />
+		<View
+			style={{
+				alignItems: "center",
+				backgroundColor: palette.fill,
+				borderRadius: radius.pill,
+				flexDirection: "row",
+				gap: spacing.sm,
+				height: SEARCH_HEIGHT,
+				paddingHorizontal: spacing.lg,
+			}}
+		>
+			<Ionicons color={palette.inkSecondary} name="search" size={17} />
 			<TextInput
 				accessibilityLabel="Search trips"
-				className="flex-1"
+				autoCapitalize="none"
+				autoCorrect={false}
+				clearButtonMode="while-editing"
 				onChangeText={onChangeText}
 				placeholder="Search trips"
-				placeholderTextColor={mutedColor}
+				placeholderTextColor={palette.inkTertiary}
 				returnKeyType="search"
-				style={{
-					color: foregroundColor,
-					fontSize: 15,
-					fontWeight: "500",
-				}}
+				style={{ color: palette.ink, flex: 1, fontSize: 17 }}
 				value={value}
 			/>
 		</View>
 	);
 }
 
+function SkeletonBlock({
+	height,
+	width,
+}: {
+	height: number;
+	width: number | `${number}%`;
+}) {
+	const { palette } = useUITheme();
+	const opacity = useSharedValue(0.55);
+
+	useEffect(() => {
+		opacity.value = withRepeat(
+			withTiming(1, {
+				duration: SKELETON_PULSE_MS,
+				easing: Easing.inOut(Easing.ease),
+			}),
+			-1,
+			true
+		);
+	}, [opacity]);
+
+	const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+
+	return (
+		<Animated.View
+			style={[
+				{
+					backgroundColor: palette.fill,
+					borderRadius: radius.pill,
+					height,
+					width,
+				},
+				animatedStyle,
+			]}
+		/>
+	);
+}
+
 function TripCardSkeleton() {
 	return (
-		<Surface className="rounded-[28px] border border-border bg-surface p-3">
-			<View className="flex-row gap-3.5">
-				<View className="h-[84px] w-[84px] rounded-[18px] bg-surface-secondary" />
-				<View className="min-w-0 flex-1 justify-center gap-2.5 py-0.5">
-					<View className="h-4 w-3/4 rounded-full bg-surface-secondary" />
-					<View className="h-3.5 w-1/2 rounded-full bg-surface-secondary" />
-					<View className="h-3.5 w-2/3 rounded-full bg-surface-secondary" />
+		<Card padding="md" style={{ gap: spacing.md }}>
+			<View style={{ flexDirection: "row", gap: spacing.lg }}>
+				<SkeletonBlock height={THUMB_SIZE} width={THUMB_SIZE} />
+				<View style={{ flex: 1, gap: spacing.md, justifyContent: "center" }}>
+					<SkeletonBlock height={16} width="75%" />
+					<SkeletonBlock height={14} width="50%" />
+					<SkeletonBlock height={14} width="65%" />
 				</View>
 			</View>
-			<View className="mt-3 flex-row items-center justify-between border-border border-t pt-3">
-				<View className="flex-row items-center gap-2.5">
-					<View className="h-[34px] w-[34px] rounded-full bg-surface-secondary" />
-					<View className="gap-1.5">
-						<View className="h-3.5 w-24 rounded-full bg-surface-secondary" />
-						<View className="h-3 w-16 rounded-full bg-surface-secondary" />
-					</View>
-				</View>
-				<View className="items-end gap-1.5">
-					<View className="h-3.5 w-16 rounded-full bg-surface-secondary" />
-					<View className="h-3 w-12 rounded-full bg-surface-secondary" />
-				</View>
-			</View>
-		</Surface>
+		</Card>
 	);
 }
 
 function TripListSkeleton() {
 	return (
-		<View className="gap-3">
+		<View
+			accessibilityLabel="Loading trips"
+			accessibilityRole="progressbar"
+			style={{ gap: spacing.md }}
+		>
 			{skeletonRows.map((row) => (
 				<TripCardSkeleton key={row} />
 			))}
@@ -173,40 +227,18 @@ function TripsEmptyState({
 	onCreatePress: () => void;
 }) {
 	return (
-		<View className="flex-1 items-center justify-center px-8 py-16">
-			<View
-				className={[
-					"h-14 w-14 items-center justify-center rounded-full",
-					hasSearch ? "bg-primary/10" : "",
-				].join(" ")}
-				style={hasSearch ? undefined : { backgroundColor: "#0A84FF" }}
-			>
-				<Ionicons
-					color={hasSearch ? "#0A84FF" : "#FFFFFF"}
-					name={hasSearch ? "search" : "map-outline"}
-					size={24}
-				/>
-			</View>
-			<View className="mt-4 items-center gap-1">
-				<Text type="body" weight="bold">
-					{hasSearch ? "No matching trips" : "No trips yet"}
-				</Text>
-				<Text className="text-center" color="muted" type="body-sm">
-					{hasSearch
-						? "Try a destination, date, or status."
-						: "Start a trip plan and keep every detail in one place."}
-				</Text>
-			</View>
-			{hasSearch ? null : (
-				<Button
-					className="mt-6 h-11 gap-2 rounded-full"
-					onPress={onCreatePress}
-				>
-					<Ionicons color="#FFFFFF" name="add" size={18} />
-					<Button.Label>Create trip</Button.Label>
-				</Button>
-			)}
-		</View>
+		<EmptyState
+			action={
+				hasSearch ? undefined : { label: "Create trip", onPress: onCreatePress }
+			}
+			description={
+				hasSearch
+					? "Try a destination, date, or status."
+					: "Start a trip plan and keep every detail in one place."
+			}
+			icon={hasSearch ? "search" : "map-outline"}
+			title={hasSearch ? "No matching trips" : "No trips yet"}
+		/>
 	);
 }
 
@@ -234,51 +266,51 @@ function getActiveStatusFilter(filters: readonly ActiveTripFilter[]) {
 
 function FilterPill({
 	icon,
-	isIconOnly = false,
 	isSelected,
 	label,
 	onPress,
 	rightIcon,
 }: {
-	icon: FilterIconName;
-	isIconOnly?: boolean;
+	icon: IconName;
 	isSelected: boolean;
 	label: string;
 	onPress: () => void;
-	rightIcon?: FilterIconName;
+	rightIcon?: IconName;
 }) {
-	const foregroundColor = useThemeColor("foreground");
-	const selectedColor = "#0A84FF";
-	const contentColor = isSelected ? selectedColor : foregroundColor;
+	const { palette } = useUITheme();
+	const contentColor = isSelected ? palette.onPrimary : palette.ink;
+	const hitSlop = (metrics.minTarget - metrics.chipHeight) / 2;
 
 	return (
-		<Pressable
+		<PressableScale
 			accessibilityLabel={`Filter trips by ${label}`}
 			accessibilityRole="button"
 			accessibilityState={{ selected: isSelected }}
-			className={[
-				"h-11 flex-row items-center rounded-full border",
-				isIconOnly ? "w-11 justify-center" : "gap-1.5 px-3",
-			].join(" ")}
+			haptic="selection"
+			hitSlop={{ bottom: hitSlop, top: hitSlop }}
 			onPress={onPress}
-			style={({ pressed }) => ({
-				backgroundColor: isSelected ? "rgba(10, 132, 255, 0.13)" : "#FFFFFF",
-				borderColor: isSelected
-					? "rgba(10, 132, 255, 0.24)"
-					: "rgba(24, 24, 27, 0.08)",
-				transform: [{ scale: pressed ? 0.98 : 1 }],
-			})}
+			scaleTo={0.97}
+			style={{
+				alignItems: "center",
+				backgroundColor: isSelected ? palette.ink : palette.surface,
+				borderRadius: radius.pill,
+				flexDirection: "row",
+				gap: 6,
+				height: metrics.chipHeight,
+				paddingHorizontal: spacing.md,
+			}}
 		>
-			<Feather color={contentColor} name={icon} size={15} />
-			{isIconOnly ? null : (
-				<Text style={{ color: contentColor }} type="body-sm" weight="semibold">
-					{label}
-				</Text>
-			)}
-			{rightIcon && !isIconOnly ? (
-				<Feather color={contentColor} name={rightIcon} size={14} />
+			<Ionicons color={contentColor} name={icon} size={15} />
+			<AppText
+				style={{ color: contentColor, fontWeight: "500" }}
+				variant="subhead"
+			>
+				{label}
+			</AppText>
+			{rightIcon ? (
+				<Ionicons color={contentColor} name={rightIcon} size={13} />
 			) : null}
-		</Pressable>
+		</PressableScale>
 	);
 }
 
@@ -296,35 +328,34 @@ function TripsFilterChips({
 
 	return (
 		<ScrollView
+			contentContainerStyle={{
+				gap: spacing.sm,
+				paddingHorizontal: spacing.screen,
+			}}
 			horizontal={true}
 			keyboardShouldPersistTaps="handled"
 			showsHorizontalScrollIndicator={false}
 		>
-			<View className="flex-row gap-1.5 pr-4">
-				{primaryTripFilters.map((filter) => {
-					const isSelected =
-						activePrimaryFilter === filter.value && activeStatusFilter === null;
-
-					return (
-						<FilterPill
-							icon={filter.icon}
-							isSelected={isSelected}
-							key={filter.value}
-							label={filter.label}
-							onPress={() => {
-								onChange(filter.value === "all" ? [] : [filter.value]);
-							}}
-						/>
-					);
-				})}
+			{primaryTripFilters.map((filter) => (
 				<FilterPill
-					icon="sliders"
-					isSelected={activeStatusFilter !== null}
-					label="Status"
-					onPress={onStatusPress}
-					rightIcon="chevron-down"
+					icon={filter.icon}
+					isSelected={
+						activePrimaryFilter === filter.value && activeStatusFilter === null
+					}
+					key={filter.value}
+					label={filter.label}
+					onPress={() => {
+						onChange(filter.value === "all" ? [] : [filter.value]);
+					}}
 				/>
-			</View>
+			))}
+			<FilterPill
+				icon="options-outline"
+				isSelected={activeStatusFilter !== null}
+				label="Status"
+				onPress={onStatusPress}
+				rightIcon="chevron-down"
+			/>
 		</ScrollView>
 	);
 }
@@ -341,104 +372,71 @@ function StatusFilterSheet({
 	selectedFilter: StatusTripFilter | null;
 }) {
 	const insets = useSafeAreaInsets();
-	const mutedColor = useThemeColor("muted");
+	const { palette } = useUITheme();
+	const checkmark = (
+		<Ionicons color={palette.accent} name="checkmark" size={20} />
+	);
 
 	return (
 		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
 			<BottomSheet.Portal>
 				<BottomSheet.Overlay />
 				<BottomSheet.Content
-					backgroundClassName="rounded-t-[36px] bg-background"
+					backgroundClassName="bg-background"
 					enablePanDownToClose={true}
 				>
+					<SheetHeader
+						onClose={() => onOpenChange(false)}
+						subtitle="Show trips at one specific lifecycle stage."
+						title="Filter by status"
+					/>
 					<View
-						className="gap-5 px-5 pt-2"
-						style={{ paddingBottom: Math.max(insets.bottom, 18) }}
+						style={{
+							padding: spacing.lg,
+							paddingBottom: Math.max(insets.bottom, spacing.lg),
+						}}
 					>
-						<View className="gap-1">
-							<BottomSheet.Title>Filter by status</BottomSheet.Title>
-							<BottomSheet.Description>
-								Show trips at one specific lifecycle stage.
-							</BottomSheet.Description>
-						</View>
-
-						<View className="gap-2">
-							<Pressable
+						<ListGroup>
+							<ListRow
 								accessibilityLabel="Show trips from any status"
-								accessibilityRole="button"
-								accessibilityState={{ selected: selectedFilter === null }}
-								className="min-h-14 flex-row items-center gap-3 rounded-[20px] border border-border bg-surface px-3 py-2.5"
-								onPress={() => onSelect(null)}
-								style={({ pressed }) => ({
-									transform: [{ scale: pressed ? 0.99 : 1 }],
-								})}
-							>
-								<View className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary">
+								leading={
 									<Ionicons
-										color={mutedColor}
+										color={palette.inkSecondary}
 										name="layers-outline"
-										size={18}
+										size={22}
 									/>
-								</View>
-								<View className="min-w-0 flex-1">
-									<Text type="body-sm" weight="bold">
-										Any status
-									</Text>
-									<Text color="muted" numberOfLines={1} type="body-xs">
-										Return to the full trip list.
-									</Text>
-								</View>
-								{selectedFilter === null ? (
-									<Ionicons color="#0A84FF" name="checkmark" size={18} />
-								) : null}
-							</Pressable>
-
+								}
+								onPress={() => onSelect(null)}
+								showChevron={false}
+								subtitle="Return to the full trip list."
+								title="Any status"
+								trailing={selectedFilter === null ? checkmark : undefined}
+							/>
 							{statusFilterOptions.map((option) => {
 								const presentation = getTripStatusPresentation(option.status);
-								const isSelected = selectedFilter === option.value;
 
 								return (
-									<Pressable
+									<ListRow
 										accessibilityLabel={`Show ${presentation.label} trips`}
-										accessibilityRole="button"
-										accessibilityState={{ selected: isSelected }}
-										className="min-h-14 flex-row items-center gap-3 rounded-[20px] border border-border bg-surface px-3 py-2.5"
 										key={option.value}
-										onPress={() => onSelect(option.value)}
-										style={({ pressed }) => ({
-											borderColor: isSelected
-												? "rgba(10, 132, 255, 0.2)"
-												: "rgba(24, 24, 27, 0.08)",
-											transform: [{ scale: pressed ? 0.99 : 1 }],
-										})}
-									>
-										<View
-											className="h-9 w-9 items-center justify-center rounded-full"
-											style={{
-												backgroundColor: presentation.backgroundColor,
-											}}
-										>
+										leading={
 											<Ionicons
 												color={presentation.color}
 												name={presentation.icon}
-												size={18}
+												size={22}
 											/>
-										</View>
-										<View className="min-w-0 flex-1">
-											<Text type="body-sm" weight="bold">
-												{presentation.label}
-											</Text>
-											<Text color="muted" numberOfLines={1} type="body-xs">
-												{presentation.description}
-											</Text>
-										</View>
-										{isSelected ? (
-											<Ionicons color="#0A84FF" name="checkmark" size={18} />
-										) : null}
-									</Pressable>
+										}
+										onPress={() => onSelect(option.value)}
+										showChevron={false}
+										subtitle={presentation.description}
+										title={presentation.label}
+										trailing={
+											selectedFilter === option.value ? checkmark : undefined
+										}
+									/>
 								);
 							})}
-						</View>
+						</ListGroup>
 					</View>
 				</BottomSheet.Content>
 			</BottomSheet.Portal>
@@ -465,20 +463,25 @@ function TripsHeader({
 
 	return (
 		<View
-			className="gap-4 bg-background px-4 pb-3"
-			style={{ paddingTop: Math.max(insets.top, 12) }}
+			style={{
+				gap: spacing.md,
+				paddingBottom: spacing.md,
+				paddingTop: insets.top,
+			}}
 		>
-			<View className="flex-row items-center justify-between gap-4">
-				<Text.Heading type="h2" weight="semibold">
-					Trips
-				</Text.Heading>
-				<NavigationIconButton
-					accessibilityLabel="Create trip"
-					icon="add"
-					onPress={onCreatePress}
-				/>
+			<ScreenHeader
+				title="Trips"
+				trailing={
+					<GlassIconButton
+						accessibilityLabel="Create trip"
+						icon="add"
+						onPress={onCreatePress}
+					/>
+				}
+			/>
+			<View style={{ paddingHorizontal: spacing.screen }}>
+				<TripsSearchField onChangeText={onSearchChange} value={search} />
 			</View>
-			<TripsSearchField onChangeText={onSearchChange} value={search} />
 			<TripsFilterChips
 				onChange={onFilterChange}
 				onStatusPress={onStatusPress}
@@ -488,22 +491,6 @@ function TripsHeader({
 	);
 }
 
-const tripGradientPalettes = [
-	{ chip: "rgba(255, 255, 255, 0.22)", colors: ["#5AB0FF", "#0A6CFF"] },
-	{ chip: "rgba(255, 255, 255, 0.22)", colors: ["#3FD27E", "#16A34A"] },
-	{ chip: "rgba(255, 255, 255, 0.24)", colors: ["#FFB259", "#F97316"] },
-	{ chip: "rgba(255, 255, 255, 0.22)", colors: ["#C68BF0", "#8E44AD"] },
-	{ chip: "rgba(255, 255, 255, 0.24)", colors: ["#34D6D6", "#0A9CA8"] },
-] as const;
-
-const getTripGradientPalette = (destination: string) => {
-	const charCodeTotal = destination
-		.split("")
-		.reduce((total, character) => total + character.charCodeAt(0), 0);
-
-	return tripGradientPalettes[charCodeTotal % tripGradientPalettes.length];
-};
-
 function TripThumbnail({
 	replacementCoverImageUrl,
 	trip,
@@ -511,7 +498,7 @@ function TripThumbnail({
 	replacementCoverImageUrl?: string;
 	trip: Trip;
 }) {
-	const palette = getTripGradientPalette(trip.destination);
+	const { palette } = useUITheme();
 	const destinationInitial = (
 		trip.destination.trim().charAt(0) || "V"
 	).toUpperCase();
@@ -519,47 +506,33 @@ function TripThumbnail({
 		? replacementCoverImageUrl
 		: (trip.coverImageUrl ?? replacementCoverImageUrl);
 
-	if (coverImageUrl) {
-		return (
-			<View className="h-[84px] w-[84px] overflow-hidden rounded-[18px] bg-surface-secondary">
-				<ImageBackground
-					accessibilityIgnoresInvertColors={true}
-					className="h-full w-full"
-					imageStyle={{ borderRadius: 18 }}
-					source={{ uri: coverImageUrl }}
-				/>
-				<View
-					className="absolute inset-0 rounded-[18px]"
-					pointerEvents="none"
-					style={{
-						borderColor: "rgba(0, 0, 0, 0.06)",
-						borderWidth: 1,
-					}}
-				/>
-			</View>
-		);
-	}
-
 	return (
-		<LinearGradient
-			colors={palette.colors}
-			end={{ x: 1, y: 1 }}
-			start={{ x: 0, y: 0 }}
+		<View
 			style={{
 				alignItems: "center",
-				borderRadius: 18,
-				height: 84,
+				backgroundColor: palette.fill,
+				borderRadius: radius.field,
+				height: THUMB_SIZE,
 				justifyContent: "center",
-				width: 84,
+				overflow: "hidden",
+				width: THUMB_SIZE,
 			}}
 		>
-			<Text
-				style={{ color: "#FFFFFF", fontSize: 32, lineHeight: 38 }}
-				weight="bold"
-			>
-				{destinationInitial}
-			</Text>
-		</LinearGradient>
+			{coverImageUrl ? (
+				<Image
+					accessibilityIgnoresInvertColors={true}
+					cachePolicy="memory-disk"
+					contentFit="cover"
+					source={{ uri: coverImageUrl }}
+					style={{ height: "100%", width: "100%" }}
+					transition={240}
+				/>
+			) : (
+				<AppText tone="secondary" variant="title">
+					{destinationInitial}
+				</AppText>
+			)}
+		</View>
 	);
 }
 
@@ -569,20 +542,24 @@ const readinessRingRadius = (readinessRingSize - readinessRingStroke) / 2;
 const readinessRingCircumference = 2 * Math.PI * readinessRingRadius;
 const readinessRingCenter = readinessRingSize / 2;
 
-const getReadinessTone = (progress: number, hasCoverage: boolean) => {
+const getReadinessTone = (
+	progress: number,
+	hasCoverage: boolean,
+	palette: Palette
+) => {
 	if (!hasCoverage) {
-		return "#A1A1AA";
+		return palette.inkTertiary;
 	}
 
 	if (progress >= 70) {
-		return "#1CCB68";
+		return palette.success;
 	}
 
 	if (progress >= 40) {
-		return "#FF9F0A";
+		return palette.warning;
 	}
 
-	return "#FF3B30";
+	return palette.danger;
 };
 
 function ReadinessRing({
@@ -592,14 +569,19 @@ function ReadinessRing({
 	hasCoverage: boolean;
 	progress: number;
 }) {
-	const tone = getReadinessTone(progress, hasCoverage);
+	const { palette } = useUITheme();
+	const tone = getReadinessTone(progress, hasCoverage, palette);
 	const boundedProgress = Math.min(100, Math.max(0, Math.round(progress)));
 	const dashOffset = readinessRingCircumference * (1 - boundedProgress / 100);
 
 	return (
 		<View
-			className="items-center justify-center"
-			style={{ height: readinessRingSize, width: readinessRingSize }}
+			style={{
+				alignItems: "center",
+				height: readinessRingSize,
+				justifyContent: "center",
+				width: readinessRingSize,
+			}}
 		>
 			<Svg
 				height={readinessRingSize}
@@ -611,7 +593,7 @@ function ReadinessRing({
 					cy={readinessRingCenter}
 					fill="none"
 					r={readinessRingRadius}
-					stroke="rgba(24, 24, 27, 0.08)"
+					stroke={palette.fill}
 					strokeWidth={readinessRingStroke}
 				/>
 				{hasCoverage ? (
@@ -632,9 +614,12 @@ function ReadinessRing({
 				<Ionicons color={tone} name="checkmark" size={16} />
 			) : null}
 			{hasCoverage && boundedProgress < 100 ? (
-				<Text style={{ color: tone, fontSize: 11 }} weight="bold">
+				<AppText
+					bold={true}
+					style={{ color: tone, fontSize: 11, lineHeight: 14 }}
+				>
 					{boundedProgress}
-				</Text>
+				</AppText>
 			) : null}
 			{hasCoverage ? null : (
 				<Ionicons color={tone} name="sparkles-outline" size={13} />
@@ -674,103 +659,103 @@ function TripRow({
 		trip.destination
 	);
 	const isFavorite = trip.isFavorite ?? false;
+	const { palette } = useUITheme();
 
 	return (
 		<Animated.View
-			entering={FadeInDown.duration(420).delay(
+			entering={FadeInDown.duration(360).delay(
 				Math.min(index, cardEntranceMaxStaggered) * cardEntranceDelayStep
 			)}
 		>
-			<Pressable
+			<Card
 				accessibilityLabel={`Open ${trip.title}`}
-				accessibilityRole="button"
 				onPress={() => onPress(trip)}
-				style={({ pressed }) => ({
-					transform: [{ scale: pressed ? 0.985 : 1 }],
-				})}
+				padding="md"
+				style={{ gap: spacing.md }}
 			>
-				<Surface
-					className="rounded-[28px] border border-border bg-surface p-3"
+				<View style={{ flexDirection: "row", gap: spacing.lg }}>
+					<TripThumbnail
+						replacementCoverImageUrl={replacementCoverImageUrl}
+						trip={trip}
+					/>
+					<View style={{ flex: 1, gap: 2, justifyContent: "center" }}>
+						<View
+							style={{
+								alignItems: "center",
+								flexDirection: "row",
+								gap: spacing.sm,
+							}}
+						>
+							<AppText numberOfLines={1} style={{ flex: 1 }} variant="headline">
+								{trip.title}
+							</AppText>
+							{isFavorite ? (
+								<Ionicons color={palette.accent} name="heart" size={16} />
+							) : null}
+						</View>
+						{showDestinationLine ? (
+							<AppText numberOfLines={1} tone="secondary" variant="subhead">
+								{trip.destination}
+							</AppText>
+						) : null}
+						<AppText numberOfLines={1} tone="secondary" variant="footnote">
+							{tripWindow} · {travelerLabel}
+						</AppText>
+					</View>
+				</View>
+				<View
 					style={{
-						elevation: 2,
-						shadowColor: "#0B1220",
-						shadowOffset: { height: 6, width: 0 },
-						shadowOpacity: 0.06,
-						shadowRadius: 16,
+						alignItems: "center",
+						flexDirection: "row",
+						justifyContent: "space-between",
 					}}
 				>
-					<View className="flex-row gap-3.5">
-						<TripThumbnail
-							replacementCoverImageUrl={replacementCoverImageUrl}
-							trip={trip}
+					<View
+						style={{
+							alignItems: "center",
+							flexDirection: "row",
+							gap: spacing.md,
+						}}
+					>
+						<ReadinessRing
+							hasCoverage={hasReadinessCoverage}
+							progress={readinessDisplay.progress}
 						/>
-						<View className="min-w-0 flex-1 justify-center gap-1.5 py-0.5">
-							<View className="flex-row items-center gap-2">
-								<Text
-									className="min-w-0 flex-1"
-									numberOfLines={1}
-									type="body"
-									weight="bold"
-								>
-									{trip.title}
-								</Text>
-								{isFavorite ? (
-									<View className="h-7 w-7 items-center justify-center rounded-full bg-primary/10">
-										<Ionicons color="#0A84FF" name="heart" size={15} />
-									</View>
-								) : null}
-							</View>
-							{showDestinationLine ? (
-								<Text
-									color="muted"
-									numberOfLines={1}
-									type="body-sm"
-									weight="semibold"
-								>
-									{trip.destination}
-								</Text>
-							) : null}
-							<Text color="muted" numberOfLines={1} type="body-xs">
-								{tripWindow} · {travelerLabel}
-							</Text>
+						<View>
+							<AppText bold={true} numberOfLines={1} variant="subhead">
+								{readinessDisplay.detail}
+							</AppText>
+							<AppText tone="secondary" variant="footnote">
+								Readiness
+							</AppText>
 						</View>
 					</View>
-					<View className="mt-3 flex-row items-center justify-between border-border border-t pt-3">
-						<View className="flex-row items-center gap-2.5">
-							<ReadinessRing
-								hasCoverage={hasReadinessCoverage}
-								progress={readinessDisplay.progress}
-							/>
-							<View className="gap-0.5">
-								<Text numberOfLines={1} type="body-sm" weight="bold">
-									{readinessDisplay.detail}
-								</Text>
-								<Text color="muted" type="body-xs">
-									Readiness
-								</Text>
-							</View>
-						</View>
-						<View className="items-end gap-0.5">
-							<Text
-								color={hasBudget ? undefined : "muted"}
-								numberOfLines={1}
-								type="body-sm"
-								weight="bold"
-							>
-								{budgetLabel}
-							</Text>
-							<Text color="muted" type="body-xs">
-								Budget
-							</Text>
-						</View>
+					<View style={{ alignItems: "flex-end" }}>
+						<AppText
+							bold={true}
+							numberOfLines={1}
+							tone={hasBudget ? "ink" : "secondary"}
+							variant="subhead"
+						>
+							{budgetLabel}
+						</AppText>
+						<AppText tone="secondary" variant="footnote">
+							Budget
+						</AppText>
 					</View>
-				</Surface>
-			</Pressable>
+				</View>
+			</Card>
 		</Animated.View>
 	);
 }
+
+function TripSeparator() {
+	return <View style={{ height: spacing.md }} />;
+}
+
 export default function TripsScreen() {
 	const router = useRouter();
+	const { palette } = useUITheme();
 	const [search, setSearch] = useState("");
 	const [filters, setFilters] = useState<ActiveTripFilter[]>([]);
 	const [isStatusSheetOpen, setIsStatusSheetOpen] = useState(false);
@@ -837,7 +822,7 @@ export default function TripsScreen() {
 	);
 
 	return (
-		<Container includeBottomInset={false} isScrollable={false}>
+		<View style={{ backgroundColor: palette.canvas, flex: 1 }}>
 			<TripsHeader
 				filter={filters}
 				onCreatePress={handleManualTripPress}
@@ -849,13 +834,13 @@ export default function TripsScreen() {
 			<FlatList
 				contentContainerStyle={{
 					flexGrow: 1,
-					paddingBottom: 112,
-					paddingHorizontal: 16,
-					paddingTop: 4,
+					paddingBottom: TAB_BAR_CLEARANCE,
+					paddingHorizontal: spacing.screen,
+					paddingTop: spacing.xs,
 				}}
 				contentInsetAdjustmentBehavior="automatic"
 				data={results}
-				ItemSeparatorComponent={() => <View className="h-3" />}
+				ItemSeparatorComponent={TripSeparator}
 				keyboardShouldPersistTaps="handled"
 				keyExtractor={(item) => item._id}
 				ListEmptyComponent={
@@ -870,7 +855,7 @@ export default function TripsScreen() {
 				}
 				ListFooterComponent={
 					isLoadingMore ? (
-						<View className="pt-3">
+						<View style={{ paddingTop: spacing.md }}>
 							<TripCardSkeleton />
 						</View>
 					) : null
@@ -885,6 +870,6 @@ export default function TripsScreen() {
 				onSelect={handleStatusFilterSelect}
 				selectedFilter={activeStatusFilter}
 			/>
-		</Container>
+		</View>
 	);
 }

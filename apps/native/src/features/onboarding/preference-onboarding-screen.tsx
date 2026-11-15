@@ -24,19 +24,18 @@ import {
 import { useMutation } from "convex/react";
 import { useRouter } from "expo-router";
 import {
-	Button,
-	Input,
-	Spinner,
-	Surface,
-	Text,
-	TextField,
-	useThemeColor,
-} from "heroui-native";
-import { type ComponentProps, useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+	type ComponentProps,
+	type ReactNode,
+	useEffect,
+	useMemo,
+	useState,
+} from "react";
+import { ScrollView, TextInput, View } from "react-native";
 import Animated, {
 	cancelAnimation,
 	Easing,
+	FadeIn,
+	FadeOut,
 	runOnJS,
 	type SharedValue,
 	useAnimatedStyle,
@@ -44,8 +43,19 @@ import Animated, {
 	withDelay,
 	withTiming,
 } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Container } from "@/components/container";
+import {
+	AppText,
+	Card,
+	haptic,
+	PressableScale,
+	PrimaryButton,
+	radius,
+	SecondaryButton,
+	spacing,
+	useUITheme,
+} from "@/src/components/ui";
 import { ViyaMark } from "@/src/components/viya-mark";
 
 interface PreferenceFormState {
@@ -156,31 +166,31 @@ const optionGroups = {
 
 const setupPreviewCards = [
 	{
-		accent: "#0A84FF",
+		accent: "accent",
 		description: "Relaxed, balanced, packed, or adventurous.",
 		icon: "sparkles-outline",
 		title: "Trip vibe",
 	},
 	{
-		accent: "#059669",
+		accent: "success",
 		description: "How full each day should feel.",
 		icon: "speedometer-outline",
 		title: "Daily pace",
 	},
 	{
-		accent: "#E97816",
+		accent: "warning",
 		description: "Value, mid-range, or premium comfort.",
 		icon: "wallet-outline",
 		title: "Budget feel",
 	},
 	{
-		accent: "#DB2777",
+		accent: "danger",
 		description: "Food, group style, and helpful notes.",
 		icon: "heart-outline",
 		title: "Travel needs",
 	},
 ] as const satisfies readonly {
-	accent: string;
+	accent: "accent" | "danger" | "success" | "warning";
 	description: string;
 	icon: SetupPreviewIconName;
 	title: string;
@@ -203,21 +213,52 @@ const getQuestionAtIndex = (index: number): Question =>
 	questions[index] ?? (questions[0] as Question);
 
 function ProgressSegments({ activeIndex }: { activeIndex: number }) {
-	return (
-		<View className="flex-row gap-1.5">
-			{questions.map((question, index) => {
-				const isComplete = index <= activeIndex;
+	const { palette } = useUITheme();
 
-				return (
-					<View
-						className="h-2 flex-1 rounded-full"
-						key={question.key}
-						style={{
-							backgroundColor: isComplete ? "#0A84FF" : "#E4E7EC",
-						}}
-					/>
-				);
-			})}
+	return (
+		<View
+			accessibilityLabel={`Step ${activeIndex + 1} of ${questions.length}`}
+			accessibilityRole="progressbar"
+			style={{ flexDirection: "row", gap: spacing.xs }}
+		>
+			{questions.map((question, index) => (
+				<View
+					key={question.key}
+					style={{
+						backgroundColor: index <= activeIndex ? palette.ink : palette.fill,
+						borderRadius: radius.pill,
+						flex: 1,
+						height: 4,
+					}}
+				/>
+			))}
+		</View>
+	);
+}
+
+function ScreenFrame({
+	children,
+	style,
+}: {
+	children: ReactNode;
+	style?: ComponentProps<typeof View>["style"];
+}) {
+	const { palette } = useUITheme();
+	const insets = useSafeAreaInsets();
+
+	return (
+		<View
+			style={[
+				{
+					backgroundColor: palette.canvas,
+					flex: 1,
+					paddingBottom: insets.bottom,
+					paddingTop: insets.top,
+				},
+				style,
+			]}
+		>
+			{children}
 		</View>
 	);
 }
@@ -328,54 +369,52 @@ function BrandIntroScreen({
 	}));
 
 	return (
-		<Container className="bg-background" isScrollable={false}>
+		<ScreenFrame>
 			<Animated.View
-				className="flex-1 justify-between px-7 pt-12 pb-8"
-				style={screenStyle}
+				style={[
+					{
+						flex: 1,
+						justifyContent: "space-between",
+						paddingBottom: spacing.xl,
+						paddingHorizontal: spacing.screen + spacing.xs,
+						paddingTop: spacing["3xl"],
+					},
+					screenStyle,
+				]}
 			>
-				<View className="flex-1 justify-center gap-9">
+				<View
+					style={{ flex: 1, gap: spacing["2xl"], justifyContent: "center" }}
+				>
 					<Animated.View style={brandStyle}>
 						<ViyaMark size={58} />
 					</Animated.View>
 
-					<View className="gap-2">
+					<View style={{ gap: spacing.sm }}>
 						<Animated.View style={welcomeStyle}>
-							<Text.Heading
-								className="text-6xl leading-16"
-								type="h1"
-								weight="semibold"
+							<AppText
+								accessibilityRole="header"
+								style={{ fontSize: 52, lineHeight: 58 }}
+								variant="largeTitle"
 							>
 								Welcome.
-							</Text.Heading>
+							</AppText>
 						</Animated.View>
 						<Animated.View style={greetingStyle}>
-							<Text.Heading
-								className="text-4xl leading-10.5"
-								type="h2"
-								weight="semibold"
-							>
-								Hi {name},
-							</Text.Heading>
+							<AppText variant="title">Hi {name},</AppText>
 						</Animated.View>
 						<Animated.View style={messageStyle}>
-							<Text.Paragraph
-								className="max-w-72.5 leading-6"
-								color="muted"
-								type="body"
-							>
-								Thanks for being with Viya!
-							</Text.Paragraph>
+							<AppText tone="secondary">Thanks for being with Viya!</AppText>
 						</Animated.View>
 					</View>
 				</View>
 
 				<Animated.View style={memberStyle}>
-					<Text color="muted" type="h4">
+					<AppText tone="secondary" variant="subhead">
 						{memberSince}
-					</Text>
+					</AppText>
 				</Animated.View>
 			</Animated.View>
-		</Container>
+		</ScreenFrame>
 	);
 }
 
@@ -385,28 +424,37 @@ function SetupPreviewCard({
 	icon,
 	title,
 }: {
-	accent: string;
+	accent: "accent" | "danger" | "success" | "warning";
 	description: string;
 	icon: SetupPreviewIconName;
 	title: string;
 }) {
+	const { palette } = useUITheme();
+	const color = palette[accent];
+
 	return (
-		<Surface className="w-[48%] gap-3 rounded-3xl border border-border bg-surface p-4">
+		<Card padding="md" style={{ gap: spacing.md, width: "48.5%" }}>
 			<View
-				className="h-10 w-10 items-center justify-center rounded-full"
-				style={{ backgroundColor: `${accent}18` }}
+				style={{
+					alignItems: "center",
+					backgroundColor: palette.fill,
+					borderRadius: radius.pill,
+					height: 40,
+					justifyContent: "center",
+					width: 40,
+				}}
 			>
-				<Ionicons color={accent} name={icon} size={18} />
+				<Ionicons color={color} name={icon} size={20} />
 			</View>
-			<View className="gap-1">
-				<Text type="body-sm" weight="semibold">
+			<View style={{ gap: spacing.xs }}>
+				<AppText bold={true} variant="subhead">
 					{title}
-				</Text>
-				<Text.Paragraph color="muted" type="body-xs">
+				</AppText>
+				<AppText tone="secondary" variant="footnote">
 					{description}
-				</Text.Paragraph>
+				</AppText>
 			</View>
-		</Surface>
+		</Card>
 	);
 }
 
@@ -421,7 +469,6 @@ function useRevealAnimatedStyle(progress: SharedValue<number>) {
 }
 
 function WelcomeIntroScreen({ onContinue }: { onContinue: () => void }) {
-	const accentForeground = useThemeColor("accent-foreground");
 	const contentProgress = useSharedValue(0);
 	const controlsProgress = useSharedValue(0);
 	const previewProgress = useSharedValue(0);
@@ -457,27 +504,45 @@ function WelcomeIntroScreen({ onContinue }: { onContinue: () => void }) {
 	}));
 
 	return (
-		<Container className="bg-background" isScrollable={false}>
+		<ScreenFrame>
 			<Animated.View
-				className="flex-1 justify-between px-6 pt-8 pb-5"
-				style={screenStyle}
+				style={[
+					{
+						flex: 1,
+						justifyContent: "space-between",
+						paddingBottom: spacing.lg,
+						paddingHorizontal: spacing.screen,
+						paddingTop: spacing.xl,
+					},
+					screenStyle,
+				]}
 			>
-				<View className="gap-7">
-					<Animated.View className="gap-3 pt-16" style={contentStyle}>
-						<Text.Heading className="text-5xl leading-14" type="h1">
-							Tell us how you like to travel.
-						</Text.Heading>
-						<Text.Paragraph className="max-w-77.5 leading-6" color="muted">
-							Answer eight quick questions so your home and trip suggestions
-							match your pace, budget, interests, and needs.
-						</Text.Paragraph>
-					</Animated.View>
-				</View>
+				<Animated.View
+					style={[
+						{ gap: spacing.md, paddingTop: spacing["3xl"] },
+						contentStyle,
+					]}
+				>
+					<AppText accessibilityRole="header" variant="largeTitle">
+						Tell us how you like to travel.
+					</AppText>
+					<AppText style={{ maxWidth: 320 }} tone="secondary">
+						Answer eight quick questions so your home and trip suggestions match
+						your pace, budget, interests, and needs.
+					</AppText>
+				</Animated.View>
 
-				<View className="gap-4">
+				<View style={{ gap: spacing.lg }}>
 					<Animated.View
-						className="flex-row flex-wrap justify-between gap-y-3"
-						style={previewStyle}
+						style={[
+							{
+								flexDirection: "row",
+								flexWrap: "wrap",
+								justifyContent: "space-between",
+								rowGap: spacing.md,
+							},
+							previewStyle,
+						]}
 					>
 						{setupPreviewCards.map((card) => (
 							<SetupPreviewCard
@@ -490,21 +555,15 @@ function WelcomeIntroScreen({ onContinue }: { onContinue: () => void }) {
 						))}
 					</Animated.View>
 					<Animated.View style={controlsStyle}>
-						<Button
-							className="h-[54px] gap-2 rounded-full"
+						<PrimaryButton
+							icon="arrow-forward"
+							label="Continue"
 							onPress={onContinue}
-						>
-							<Button.Label className="text-[17px]">Continue</Button.Label>
-							<Ionicons
-								color={accentForeground}
-								name="arrow-forward"
-								size={18}
-							/>
-						</Button>
+						/>
 					</Animated.View>
 				</View>
 			</Animated.View>
-		</Container>
+		</ScreenFrame>
 	);
 }
 
@@ -529,6 +588,7 @@ function PreferenceOptionButton({
 	) => void;
 	option: PreferenceOption;
 }) {
+	const { palette } = useUITheme();
 	const optionProgress = useSharedValue(0);
 
 	useEffect(() => {
@@ -556,9 +616,13 @@ function PreferenceOptionButton({
 
 	return (
 		<Animated.View style={optionStyle}>
-			<Pressable
-				accessibilityRole="button"
-				className="rounded-3xl"
+			<PressableScale
+				accessibilityLabel={option.label}
+				accessibilityRole={
+					currentQuestion.mode === "multi" ? "checkbox" : "radio"
+				}
+				accessibilityState={{ selected: isSelected }}
+				haptic="selection"
 				onPress={() => {
 					if (currentQuestion.mode === "multi") {
 						onMultiToggle(
@@ -573,41 +637,50 @@ function PreferenceOptionButton({
 						option.value as PreferenceFormState[SingleQuestionKey]
 					);
 				}}
+				scaleTo={0.98}
+				style={{
+					alignItems: "center",
+					backgroundColor: palette.surface,
+					borderColor: isSelected ? palette.accent : "transparent",
+					borderRadius: radius.card,
+					borderWidth: 1.5,
+					flexDirection: "row",
+					gap: spacing.md,
+					minHeight: 64,
+					padding: spacing.lg,
+				}}
 			>
-				<Surface
-					className="flex-row items-center gap-3 rounded-3xl border bg-surface p-4"
+				<View
 					style={{
-						borderColor: isSelected ? "#0A84FF" : "rgba(24, 24, 27, 0.08)",
+						alignItems: "center",
+						backgroundColor: isSelected ? palette.accent : palette.fill,
+						borderRadius: radius.pill,
+						height: 28,
+						justifyContent: "center",
+						width: 28,
 					}}
 				>
-					<View
-						className="h-9 w-9 items-center justify-center rounded-full"
-						style={{
-							backgroundColor: isSelected ? "#EAF2FF" : "#F4F4F5",
-						}}
-					>
-						<Ionicons
-							color={isSelected ? "#0A84FF" : "#71717A"}
-							name={isSelected ? "checkmark" : "ellipse-outline"}
-							size={18}
-						/>
-					</View>
-					<View className="flex-1 gap-1">
-						<Text type="body-sm" weight="semibold">
-							{option.label}
-						</Text>
-						<Text.Paragraph color="muted" type="body-xs">
-							{option.description}
-						</Text.Paragraph>
-					</View>
-				</Surface>
-			</Pressable>
+					<Ionicons
+						color={isSelected ? "#FFFFFF" : palette.inkTertiary}
+						name={isSelected ? "checkmark" : "ellipse-outline"}
+						size={isSelected ? 18 : 16}
+					/>
+				</View>
+				<View style={{ flex: 1, gap: spacing.xs }}>
+					<AppText bold={true}>{option.label}</AppText>
+					<AppText tone="secondary" variant="footnote">
+						{option.description}
+					</AppText>
+				</View>
+			</PressableScale>
 		</Animated.View>
 	);
 }
 
 export function PreferenceOnboardingScreen() {
 	const router = useRouter();
+	const { palette } = useUITheme();
+	const insets = useSafeAreaInsets();
 	const { user } = useUser();
 	const savePreferences = useMutation(api.preferences.upsertCurrentPreferences);
 	const [introStage, setIntroStage] = useState<IntroStage>("brand");
@@ -756,106 +829,139 @@ export function PreferenceOnboardingScreen() {
 	}
 
 	return (
-		<Container isScrollable={false}>
-			<View className="flex-1">
-				<ScrollView
-					contentContainerStyle={{
-						gap: 20,
-						paddingBottom: 28,
-						paddingHorizontal: 20,
-						paddingTop: 20,
-					}}
-					contentInsetAdjustmentBehavior="automatic"
-					keyboardShouldPersistTaps="handled"
-					showsVerticalScrollIndicator={false}
-				>
-					<View className="gap-4">
-						<Text color="muted" type="body-sm" weight="medium">
-							Step {currentIndex + 1} of {questions.length}
-						</Text>
+		<View
+			style={{
+				backgroundColor: palette.canvas,
+				flex: 1,
+				paddingTop: insets.top,
+			}}
+		>
+			<ScrollView
+				contentContainerStyle={{
+					gap: spacing.section,
+					paddingBottom: spacing.section,
+					paddingHorizontal: spacing.screen,
+					paddingTop: spacing.screen,
+				}}
+				contentInsetAdjustmentBehavior="automatic"
+				keyboardShouldPersistTaps="handled"
+				showsVerticalScrollIndicator={false}
+			>
+				<View style={{ gap: spacing.lg }}>
+					<AppText tone="secondary" variant="subhead">
+						Step {currentIndex + 1} of {questions.length}
+					</AppText>
 
-						<ProgressSegments activeIndex={currentIndex} />
+					<ProgressSegments activeIndex={currentIndex} />
 
-						<View className="gap-2">
-							<Text.Heading type="h3" weight="semibold">
-								{currentQuestion.title}
-							</Text.Heading>
-							<Text.Paragraph color="muted" type="body-sm">
-								{currentQuestion.subtitle}
-							</Text.Paragraph>
-						</View>
+					<View style={{ gap: spacing.sm }}>
+						<AppText accessibilityRole="header" variant="title">
+							{currentQuestion.title}
+						</AppText>
+						<AppText tone="secondary" variant="subhead">
+							{currentQuestion.subtitle}
+						</AppText>
 					</View>
+				</View>
 
-					<View className="gap-3">
-						{options.map((option, index) => {
-							const fieldValue = formState[currentQuestion.key];
-							const isSelected = Array.isArray(fieldValue)
-								? (fieldValue as readonly string[]).includes(option.value)
-								: fieldValue === option.value;
+				<View style={{ gap: spacing.md }}>
+					{options.map((option, index) => {
+						const fieldValue = formState[currentQuestion.key];
+						const isSelected = Array.isArray(fieldValue)
+							? (fieldValue as readonly string[]).includes(option.value)
+							: fieldValue === option.value;
 
-							return (
-								<PreferenceOptionButton
-									currentQuestion={currentQuestion}
-									index={index}
-									isSelected={isSelected}
-									key={`${currentQuestion.key}-${option.value}`}
-									onMultiToggle={handleMultiToggle}
-									onSingleSelect={handleSingleSelect}
-									option={option}
-								/>
-							);
-						})}
-					</View>
+						return (
+							<PreferenceOptionButton
+								currentQuestion={currentQuestion}
+								index={index}
+								isSelected={isSelected}
+								key={`${currentQuestion.key}-${option.value}`}
+								onMultiToggle={handleMultiToggle}
+								onSingleSelect={handleSingleSelect}
+								option={option}
+							/>
+						);
+					})}
+				</View>
 
-					{currentQuestion.key === "specialNeeds" &&
-					selectedSpecialNeeds.length > 0 ? (
-						<View className="gap-2">
-							<Text color="muted" type="body-xs" weight="semibold">
-								OPTIONAL NOTE
-							</Text>
-							<TextField>
-								<Input
-									onChangeText={(value) =>
-										setFormState((currentFormState) => ({
-											...currentFormState,
-											specialNeedsNote: value,
-										}))
-									}
-									placeholder="Add a short note if useful"
-									value={formState.specialNeedsNote}
-								/>
-							</TextField>
-						</View>
-					) : null}
-				</ScrollView>
+				{currentQuestion.key === "specialNeeds" &&
+				selectedSpecialNeeds.length > 0 ? (
+					<Animated.View
+						entering={FadeIn.duration(200)}
+						exiting={FadeOut.duration(150)}
+						style={{ gap: spacing.sm }}
+					>
+						<AppText tone="secondary" variant="eyebrow">
+							Optional note
+						</AppText>
+						<TextInput
+							accessibilityLabel="Optional note"
+							onChangeText={(value) =>
+								setFormState((currentFormState) => ({
+									...currentFormState,
+									specialNeedsNote: value,
+								}))
+							}
+							placeholder="Add a short note if useful"
+							placeholderTextColor={palette.inkTertiary}
+							style={{
+								backgroundColor: palette.surface,
+								borderRadius: radius.field,
+								color: palette.ink,
+								fontSize: 17,
+								height: 50,
+								paddingHorizontal: spacing.lg,
+							}}
+							value={formState.specialNeedsNote}
+						/>
+					</Animated.View>
+				) : null}
+			</ScrollView>
 
-				<View className="gap-3 border-border border-t bg-background px-5 py-4">
-					{errorMessage ? (
-						<Text className="text-danger" type="body-sm">
+			<View
+				style={{
+					backgroundColor: palette.canvas,
+					gap: spacing.md,
+					paddingBottom: Math.max(insets.bottom, spacing.lg),
+					paddingHorizontal: spacing.screen,
+					paddingTop: spacing.md,
+				}}
+			>
+				{errorMessage ? (
+					<Animated.View entering={FadeIn.duration(200)}>
+						<AppText
+							accessibilityLiveRegion="polite"
+							accessibilityRole="alert"
+							tone="danger"
+							variant="subhead"
+						>
 							{errorMessage}
-						</Text>
-					) : null}
+						</AppText>
+					</Animated.View>
+				) : null}
 
-					<View className="flex-row gap-3">
-						<Button
-							className="flex-1"
-							isDisabled={currentIndex === 0 || isSaving}
+				<View style={{ flexDirection: "row", gap: spacing.md }}>
+					<View style={{ flex: 1 }}>
+						<SecondaryButton
+							disabled={currentIndex === 0 || isSaving}
+							label="Back"
 							onPress={handleBackPress}
-							variant="secondary"
-						>
-							<Button.Label>Back</Button.Label>
-						</Button>
-						<Button
-							className="flex-1"
-							isDisabled={!canContinue || isSaving}
-							onPress={handleContinuePress}
-						>
-							{isSaving ? <Spinner color="#FFFFFF" size="sm" /> : null}
-							<Button.Label>{continueButtonLabel}</Button.Label>
-						</Button>
+						/>
+					</View>
+					<View style={{ flex: 1 }}>
+						<PrimaryButton
+							disabled={!canContinue}
+							isPending={isSaving}
+							label={continueButtonLabel}
+							onPress={() => {
+								haptic("light");
+								handleContinuePress();
+							}}
+						/>
 					</View>
 				</View>
 			</View>
-		</Container>
+		</View>
 	);
 }

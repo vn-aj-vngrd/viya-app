@@ -1,27 +1,30 @@
 import { Ionicons } from "@expo/vector-icons";
 import { PRIORITY_LABELS, type Priority } from "@viya-app/domain";
 import { type Href, Link } from "expo-router";
-import { Button, Surface, Text } from "heroui-native";
-import type { ComponentProps } from "react";
 import { View } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 
-type IoniconName = ComponentProps<typeof Ionicons>["name"];
+import {
+	AppText,
+	Card,
+	type IconName,
+	radius,
+	spacing,
+	useUITheme,
+} from "@/src/components/ui";
+import { PillAction } from "@/src/features/bookings/pill-action";
 
 interface ReadinessCategoryCardProps {
-	accentBackgroundColor: string;
-	accentColor: string;
 	categoryHref: Href | null;
 	detail: string;
 	highestPriority: Priority | null;
-	icon: IoniconName;
+	icon: IconName;
 	label: string;
 	openCount: number;
 	score: number;
 }
 
 export function ReadinessCategoryCard({
-	accentBackgroundColor,
-	accentColor,
 	categoryHref,
 	detail,
 	highestPriority,
@@ -30,40 +33,61 @@ export function ReadinessCategoryCard({
 	openCount,
 	score,
 }: ReadinessCategoryCardProps) {
+	const { palette } = useUITheme();
+	let tone = palette.danger;
+	if (score >= 70) {
+		tone = palette.success;
+	} else if (score >= 40) {
+		tone = palette.warning;
+	}
+
 	return (
-		<Surface className="min-w-[47%] flex-1 gap-3 rounded-[24px] border border-border bg-surface p-3.5">
-			<View className="flex-row items-start justify-between gap-2">
+		<Animated.View
+			entering={FadeInDown.springify().damping(20)}
+			style={{ flexBasis: "47%", flexGrow: 1 }}
+		>
+			<Card padding="md" style={{ flex: 1, gap: spacing.md }}>
 				<View
-					className="h-9 w-9 items-center justify-center rounded-full"
-					style={{ backgroundColor: accentBackgroundColor }}
+					style={{
+						alignItems: "center",
+						flexDirection: "row",
+						justifyContent: "space-between",
+					}}
 				>
-					<Ionicons color={accentColor} name={icon} size={17} />
+					<Ionicons color={palette.accent} name={icon} size={22} />
+					<View
+						style={{
+							backgroundColor: palette.fill,
+							borderRadius: radius.pill,
+							paddingHorizontal: 10,
+							paddingVertical: 4,
+						}}
+					>
+						<AppText bold={true} style={{ color: tone }} variant="footnote">
+							{score}%
+						</AppText>
+					</View>
 				</View>
-				<View className="rounded-full border border-border bg-white px-2.5 py-1">
-					<Text style={{ color: accentColor }} type="body-xs" weight="semibold">
-						{score}%
-					</Text>
+				<View style={{ gap: 2 }}>
+					<AppText bold={true} numberOfLines={1}>
+						{label}
+					</AppText>
+					<AppText numberOfLines={2} tone="secondary" variant="footnote">
+						{detail}
+					</AppText>
 				</View>
-			</View>
-			<View className="gap-1">
-				<Text numberOfLines={1} type="body" weight="semibold">
-					{label}
-				</Text>
-				<Text color="muted" numberOfLines={2} type="body-xs">
-					{detail}
-				</Text>
-			</View>
-			<Text color="muted" numberOfLines={1} type="body-xs">
-				{openCount} open -{" "}
-				{highestPriority ? PRIORITY_LABELS[highestPriority] : "Clear"}
-			</Text>
-			{categoryHref ? (
-				<Link asChild href={categoryHref}>
-					<Button size="sm" variant="secondary">
-						<Button.Label>Open module</Button.Label>
-					</Button>
-				</Link>
-			) : null}
-		</Surface>
+				<AppText numberOfLines={1} tone="tertiary" variant="footnote">
+					{openCount} open ·{" "}
+					{highestPriority ? PRIORITY_LABELS[highestPriority] : "Clear"}
+				</AppText>
+				{categoryHref ? (
+					<View style={{ alignItems: "flex-start" }}>
+						<Link asChild href={categoryHref}>
+							<PillAction label="Open module" />
+						</Link>
+					</View>
+				) : null}
+			</Card>
+		</Animated.View>
 	);
 }

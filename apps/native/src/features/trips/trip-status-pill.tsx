@@ -1,16 +1,27 @@
 import { getTripStatusLabel, type TripStatus } from "@viya-app/domain";
-import { Text } from "heroui-native";
 import type { ComponentProps } from "react";
 import { View } from "react-native";
+
+import { AppText, radius, useUITheme } from "@/src/components/ui";
 
 type TripStatusIcon = ComponentProps<
 	typeof import("@expo/vector-icons").Ionicons
 >["name"];
 
+interface TripStatusPresentation {
+	backgroundColor: string;
+	color: string;
+	description: string;
+	icon: TripStatusIcon;
+	label: string;
+}
+
+// Static presentation consumed by list screens (needs a non-hook lookup).
+// Colors are translucent tints so they read in both light and dark mode.
 const tripStatusPresentation = {
 	archived: {
-		backgroundColor: "rgba(113, 113, 122, 0.12)",
-		color: "#52525B",
+		backgroundColor: "rgba(113, 113, 122, 0.14)",
+		color: "#71717A",
 		description: "Hidden from active planning without deleting history.",
 		icon: "archive-outline",
 		label: getTripStatusLabel("archived"),
@@ -23,62 +34,57 @@ const tripStatusPresentation = {
 		label: getTripStatusLabel("completed"),
 	},
 	planning: {
-		backgroundColor: "rgba(10, 132, 255, 0.12)",
+		backgroundColor: "rgba(10, 132, 255, 0.14)",
 		color: "#0A84FF",
 		description: "Trip basics, budget, and itinerary are being shaped.",
 		icon: "map-outline",
 		label: getTripStatusLabel("planning"),
 	},
 	traveling: {
-		backgroundColor: "rgba(50, 173, 230, 0.14)",
-		color: "#007AFF",
+		backgroundColor: "rgba(50, 173, 230, 0.16)",
+		color: "#32ADE6",
 		description: "Day-of guidance and trip context are front and center.",
 		icon: "navigate-outline",
 		label: getTripStatusLabel("traveling"),
 	},
-} as const satisfies Record<
-	TripStatus,
-	{
-		backgroundColor: string;
-		color: string;
-		description: string;
-		icon: TripStatusIcon;
-		label: string;
-	}
->;
+} as const satisfies Record<TripStatus, TripStatusPresentation>;
 
-export const getTripStatusPresentation = (status: string) =>
-	tripStatusPresentation[status as TripStatus] ??
-	({
-		backgroundColor: "rgba(24, 24, 27, 0.04)",
-		color: "#18181B",
+export const getTripStatusPresentation = (
+	status: string
+): TripStatusPresentation =>
+	tripStatusPresentation[status as TripStatus] ?? {
+		backgroundColor: "rgba(113, 113, 122, 0.14)",
+		color: "#71717A",
 		description: "Custom trip status.",
 		icon: "ellipse-outline",
 		label: status,
-	} satisfies {
-		backgroundColor: string;
-		color: string;
-		description: string;
-		icon: TripStatusIcon;
-		label: string;
-	});
+	};
 
 export function TripStatusPill({ status }: { status: string }) {
+	const { palette } = useUITheme();
 	const presentation = getTripStatusPresentation(status);
+	const known = status in tripStatusPresentation;
 
 	return (
 		<View
-			className="rounded-full px-2.5 py-1"
-			style={{ backgroundColor: presentation.backgroundColor }}
+			accessibilityLabel={`Status ${presentation.label}`}
+			style={{
+				backgroundColor: known ? presentation.backgroundColor : palette.fill,
+				borderRadius: radius.pill,
+				paddingHorizontal: 10,
+				paddingVertical: 4,
+			}}
 		>
-			<Text
+			<AppText
 				numberOfLines={1}
-				style={{ color: presentation.color }}
-				type="body-xs"
-				weight="semibold"
+				style={{
+					color: known ? presentation.color : palette.inkSecondary,
+					fontWeight: "600",
+				}}
+				variant="footnote"
 			>
 				{presentation.label}
-			</Text>
+			</AppText>
 		</View>
 	);
 }

@@ -29,30 +29,32 @@ import {
 	launchImageLibraryAsync,
 } from "expo-image-picker";
 import { useRouter } from "expo-router";
-import {
-	BottomSheet,
-	Button,
-	CloseButton,
-	Input,
-	Label,
-	ListGroup,
-	Separator,
-	Spinner,
-	Text,
-	TextField,
-	useThemeColor,
-} from "heroui-native";
+import { BottomSheet } from "heroui-native";
 import type { ComponentProps, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
-import { Image, Pressable, ScrollView, View } from "react-native";
+import { ActivityIndicator, Image, TextInput, View } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Container } from "@/components/container";
 import {
 	type ThemePreference,
 	useAppTheme,
 } from "@/contexts/app-theme-context";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
+import {
+	AppText,
+	CollapsingScreen,
+	GlassIconButton,
+	ListGroup,
+	ListRow,
+	PressableScale,
+	PrimaryButton,
+	radius,
+	SecondaryButton,
+	SheetHeader,
+	spacing,
+	useUITheme,
+} from "@/src/components/ui";
 
 interface AccountRowProps {
 	description?: string;
@@ -128,7 +130,8 @@ const themeOptions = [
 	value: ThemePreference;
 }[];
 
-const optionSeparatorClassName = "mx-4";
+const TAB_BAR_CLEARANCE = 112;
+const FIELD_HEIGHT = 50;
 const photoPickerSheetDismissDelayMs = 320;
 
 const travelPreferenceGroups = [
@@ -253,20 +256,6 @@ const getAvatarImageUrl = (
 	localAvatarUri?: string | null,
 	remoteAvatarUrl?: string
 ) => localAvatarUri || remoteAvatarUrl;
-
-const getAvatarActionOpacity = ({
-	isLoading,
-	pressed,
-}: {
-	isLoading: boolean;
-	pressed: boolean;
-}) => {
-	if (isLoading) {
-		return 0.72;
-	}
-
-	return pressed ? 0.7 : 1;
-};
 
 const getAppearanceDescription = ({
 	currentTheme,
@@ -407,6 +396,7 @@ function ProfileAvatar({
 	name: string;
 	size?: number;
 }) {
+	const { palette } = useUITheme();
 	const borderRadius = size / 2;
 
 	if (imageUrl) {
@@ -421,12 +411,21 @@ function ProfileAvatar({
 
 	return (
 		<View
-			className="items-center justify-center bg-foreground"
-			style={{ borderRadius, height: size, width: size }}
+			style={{
+				alignItems: "center",
+				backgroundColor: palette.ink,
+				borderRadius,
+				height: size,
+				justifyContent: "center",
+				width: size,
+			}}
 		>
-			<Text className="text-white" type="body-sm" weight="semibold">
+			<AppText
+				bold={true}
+				style={{ color: palette.onPrimary, fontSize: size * 0.36 }}
+			>
 				{getInitials(name)}
-			</Text>
+			</AppText>
 		</View>
 	);
 }
@@ -438,14 +437,7 @@ function AccountSection({
 	children: ReactNode;
 	title: string;
 }) {
-	return (
-		<View className="gap-2">
-			<Text className="ml-2" color="muted" type="body-xs" weight="medium">
-				{title}
-			</Text>
-			<ListGroup>{children}</ListGroup>
-		</View>
-	);
+	return <ListGroup header={title}>{children}</ListGroup>;
 }
 
 function AccountRow({
@@ -459,50 +451,28 @@ function AccountRow({
 	title,
 	tone = "default",
 }: AccountRowProps) {
-	const [dangerColor, foregroundColor, mutedColor] = useThemeColor([
-		"danger",
-		"foreground",
-		"muted",
-	]);
+	const { palette } = useUITheme();
 	const isDanger = tone === "danger";
-	const iconColor = isDanger ? dangerColor : foregroundColor;
+	const iconColor = isDanger ? palette.danger : palette.inkSecondary;
 	const detailText = rightText ?? description;
 
 	return (
-		<ListGroup.Item
-			accessibilityRole={onPress ? "button" : undefined}
-			className="px-4 py-4"
-			disabled={isDisabled}
-			onPress={onPress}
-		>
-			<ListGroup.ItemPrefix>
-				<View className="h-8 w-8 items-center justify-center">
+		<ListRow
+			destructive={isDanger}
+			leading={
+				<View style={{ alignItems: "center", width: 28 }}>
 					{isLoading ? (
-						<Spinner color={iconColor} size="sm" />
+						<ActivityIndicator color={iconColor} />
 					) : (
-						<Feather color={iconColor} name={icon} size={19} />
+						<Feather color={iconColor} name={icon} size={20} />
 					)}
 				</View>
-			</ListGroup.ItemPrefix>
-			<ListGroup.ItemContent className="min-w-0">
-				<ListGroup.ItemTitle
-					className={isDanger ? "text-danger" : undefined}
-					numberOfLines={1}
-				>
-					{title}
-				</ListGroup.ItemTitle>
-			</ListGroup.ItemContent>
-			{detailText ? (
-				<ListGroup.ItemSuffix style={{ maxWidth: "58%" }}>
-					<Text color="muted" numberOfLines={1} type="body-sm">
-						{detailText}
-					</Text>
-				</ListGroup.ItemSuffix>
-			) : null}
-			{showChevron ? (
-				<ListGroup.ItemSuffix iconProps={{ color: mutedColor, size: 18 }} />
-			) : null}
-		</ListGroup.Item>
+			}
+			onPress={isDisabled ? undefined : onPress}
+			showChevron={showChevron && !isDisabled}
+			title={title}
+			value={detailText}
+		/>
 	);
 }
 
@@ -516,15 +486,25 @@ function ProfileIdentityHeader({
 	primaryEmail: string;
 }) {
 	return (
-		<View className="items-center gap-2 pt-3 pb-2">
-			<ProfileAvatar imageUrl={imageUrl} name={displayName} size={72} />
-			<View className="items-center gap-0.5">
-				<Text.Heading className="text-center" type="h4" weight="semibold">
+		<View
+			style={{
+				alignItems: "center",
+				gap: spacing.md,
+				paddingVertical: spacing.sm,
+			}}
+		>
+			<ProfileAvatar imageUrl={imageUrl} name={displayName} size={80} />
+			<View style={{ alignItems: "center", gap: 2 }}>
+				<AppText style={{ textAlign: "center" }} variant="heading">
 					{displayName}
-				</Text.Heading>
-				<Text className="text-center" color="muted" type="body-sm">
+				</AppText>
+				<AppText
+					style={{ textAlign: "center" }}
+					tone="secondary"
+					variant="subhead"
+				>
 					{primaryEmail}
-				</Text>
+				</AppText>
 			</View>
 		</View>
 	);
@@ -547,34 +527,42 @@ function PersonalInfoField({
 	placeholder: string;
 	value: string;
 }) {
+	const { palette } = useUITheme();
 	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
 
 	return (
-		<TextField className="gap-2">
-			<Label>
-				<Label.Text>{label}</Label.Text>
-			</Label>
-			<Input
+		<View style={{ gap: spacing.sm }}>
+			<AppText tone="secondary" variant="footnote">
+				{label}
+			</AppText>
+			<TextInput
+				accessibilityLabel={label}
 				autoCapitalize="words"
-				className={
-					isInvalid
-						? "h-12 border border-danger bg-surface px-4"
-						: "h-12 border border-border bg-surface px-4"
-				}
-				isDisabled={isDisabled}
+				editable={!isDisabled}
 				onBlur={onBlur}
 				onChangeText={onChangeText}
 				onFocus={onFocus}
 				placeholder={placeholder}
+				placeholderTextColor={palette.inkTertiary}
+				style={{
+					backgroundColor: palette.surface,
+					borderColor: isInvalid ? palette.danger : "transparent",
+					borderRadius: radius.field,
+					borderWidth: isInvalid ? 1 : 0,
+					color: palette.ink,
+					fontSize: 17,
+					height: FIELD_HEIGHT,
+					opacity: isDisabled ? 0.6 : 1,
+					paddingHorizontal: spacing.lg,
+				}}
 				value={value}
-				variant="secondary"
 			/>
 			{isInvalid && errorText ? (
-				<Text className="text-danger" type="body-xs">
+				<AppText tone="danger" variant="footnote">
 					{errorText}
-				</Text>
+				</AppText>
 			) : null}
-		</TextField>
+		</View>
 	);
 }
 
@@ -589,53 +577,69 @@ function AvatarUpdateRow({
 	isLoading: boolean;
 	onPress: () => void;
 }) {
+	const { palette } = useUITheme();
+
 	return (
-		<View className="items-center gap-2 py-2">
-			<Pressable
-				accessibilityLabel="Change profile photo"
-				accessibilityRole="button"
-				className="items-center"
-				disabled={isLoading}
-				onPress={onPress}
-				style={({ pressed }) => ({
-					opacity: isLoading ? 0.72 : 1,
-					transform: [{ scale: pressed ? 0.98 : 1 }],
-				})}
-			>
-				<View className="relative">
-					<View className="rounded-full border-4 border-background">
-						<ProfileAvatar imageUrl={imageUrl} name={displayName} size={92} />
-					</View>
-					<View className="absolute -right-1 -bottom-1 h-9 w-9 items-center justify-center rounded-full border-4 border-background bg-surface">
-						{isLoading ? (
-							<Spinner color="#0A84FF" size="sm" />
-						) : (
-							<Feather color="#0A84FF" name="camera" size={16} />
-						)}
-					</View>
-				</View>
-			</Pressable>
-			<Pressable
+		<View style={{ alignItems: "center", gap: spacing.sm }}>
+			<PressableScale
 				accessibilityLabel="Change profile photo"
 				accessibilityRole="button"
 				disabled={isLoading}
 				onPress={onPress}
-				style={({ pressed }) => ({
-					opacity: getAvatarActionOpacity({ isLoading, pressed }),
-				})}
+				style={{ opacity: isLoading ? 0.72 : 1 }}
 			>
-				<Text
-					className="text-center text-primary"
-					type="body-sm"
-					weight="semibold"
+				<ProfileAvatar imageUrl={imageUrl} name={displayName} size={92} />
+				<View
+					style={{
+						alignItems: "center",
+						backgroundColor: palette.surface,
+						borderColor: palette.canvas,
+						borderRadius: radius.pill,
+						borderWidth: 3,
+						bottom: -4,
+						height: 36,
+						justifyContent: "center",
+						position: "absolute",
+						right: -4,
+						width: 36,
+					}}
 				>
-					{isLoading ? "Updating photo..." : "Change profile photo"}
-				</Text>
-			</Pressable>
-			<Text className="text-center" color="muted" type="body-xs">
+					{isLoading ? (
+						<ActivityIndicator color={palette.accent} />
+					) : (
+						<Feather color={palette.accent} name="camera" size={16} />
+					)}
+				</View>
+			</PressableScale>
+			<AppText tone="accent" variant="subhead">
+				{isLoading ? "Updating photo..." : "Change profile photo"}
+			</AppText>
+			<AppText tone="secondary" variant="footnote">
 				Choose a square photo for best results.
-			</Text>
+			</AppText>
 		</View>
+	);
+}
+
+function SelectionIndicator({
+	isSaving,
+	isSelected,
+}: {
+	isSaving?: boolean;
+	isSelected: boolean;
+}) {
+	const { palette } = useUITheme();
+
+	if (isSaving) {
+		return <ActivityIndicator color={palette.accent} />;
+	}
+
+	return (
+		<Feather
+			color={isSelected ? palette.accent : palette.inkTertiary}
+			name={isSelected ? "check-circle" : "circle"}
+			size={20}
+		/>
 	);
 }
 
@@ -648,34 +652,22 @@ function ThemeOptionRow({
 	onPress: () => void;
 	option: (typeof themeOptions)[number];
 }) {
-	const [foregroundColor, mutedColor] = useThemeColor(["foreground", "muted"]);
+	const { palette } = useUITheme();
 
 	return (
-		<ListGroup.Item
-			accessibilityRole="button"
-			accessibilityState={{ selected: isSelected }}
-			className="px-4 py-3"
-			onPress={onPress}
-		>
-			<ListGroup.ItemPrefix>
-				<View className="h-8 w-8 items-center justify-center">
-					<Feather color={foregroundColor} name={option.icon} size={19} />
+		<ListRow
+			accessibilityLabel={option.title}
+			leading={
+				<View style={{ alignItems: "center", width: 28 }}>
+					<Feather color={palette.inkSecondary} name={option.icon} size={20} />
 				</View>
-			</ListGroup.ItemPrefix>
-			<ListGroup.ItemContent>
-				<ListGroup.ItemTitle>{option.title}</ListGroup.ItemTitle>
-				<ListGroup.ItemDescription>
-					{option.description}
-				</ListGroup.ItemDescription>
-			</ListGroup.ItemContent>
-			<ListGroup.ItemSuffix>
-				<Feather
-					color={isSelected ? "#0A84FF" : mutedColor}
-					name={isSelected ? "check-circle" : "circle"}
-					size={19}
-				/>
-			</ListGroup.ItemSuffix>
-		</ListGroup.Item>
+			}
+			onPress={onPress}
+			showChevron={false}
+			subtitle={option.description}
+			title={option.title}
+			trailing={<SelectionIndicator isSelected={isSelected} />}
+		/>
 	);
 }
 
@@ -690,34 +682,60 @@ function TravelPreferenceOptionRow({
 	onPress: () => void;
 	option: TravelPreferenceOption;
 }) {
-	const mutedColor = useThemeColor("muted");
+	return (
+		<ListRow
+			accessibilityLabel={option.label}
+			onPress={isSaving ? undefined : onPress}
+			showChevron={false}
+			subtitle={option.description}
+			title={option.label}
+			trailing={
+				<SelectionIndicator isSaving={isSaving} isSelected={isSelected} />
+			}
+		/>
+	);
+}
+
+function ProfileSheet({
+	children,
+	isOpen,
+	onOpenChange,
+	subtitle,
+	title,
+}: {
+	children: ReactNode;
+	isOpen: boolean;
+	onOpenChange: (isOpen: boolean) => void;
+	subtitle?: string;
+	title: string;
+}) {
+	const insets = useSafeAreaInsets();
 
 	return (
-		<ListGroup.Item
-			accessibilityRole="button"
-			accessibilityState={{ selected: isSelected }}
-			className="px-4 py-3"
-			disabled={isSaving}
-			onPress={onPress}
-		>
-			<ListGroup.ItemContent>
-				<ListGroup.ItemTitle>{option.label}</ListGroup.ItemTitle>
-				<ListGroup.ItemDescription>
-					{option.description}
-				</ListGroup.ItemDescription>
-			</ListGroup.ItemContent>
-			<ListGroup.ItemSuffix>
-				{isSaving ? (
-					<Spinner color="#0A84FF" size="sm" />
-				) : (
-					<Feather
-						color={isSelected ? "#0A84FF" : mutedColor}
-						name={isSelected ? "check-circle" : "circle"}
-						size={19}
+		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
+			<BottomSheet.Portal>
+				<BottomSheet.Overlay />
+				<BottomSheet.Content
+					backgroundClassName="bg-background"
+					enablePanDownToClose={true}
+				>
+					<SheetHeader
+						onClose={() => onOpenChange(false)}
+						subtitle={subtitle}
+						title={title}
 					/>
-				)}
-			</ListGroup.ItemSuffix>
-		</ListGroup.Item>
+					<View
+						style={{
+							gap: spacing.lg,
+							padding: spacing.lg,
+							paddingBottom: Math.max(insets.bottom, spacing.lg),
+						}}
+					>
+						{children}
+					</View>
+				</BottomSheet.Content>
+			</BottomSheet.Portal>
+		</BottomSheet>
 	);
 }
 
@@ -876,70 +894,38 @@ function usePersonalInfoSheetOpenChange({
 }
 
 function SignOutConfirmationSheet({
-	bottomInset,
-	foregroundColor,
 	isOpen,
 	isSigningOut,
 	onConfirmPress,
 	onOpenChange,
 }: {
-	bottomInset: number;
-	foregroundColor: string;
 	isOpen: boolean;
 	isSigningOut: boolean;
 	onConfirmPress: () => void;
 	onOpenChange: (isOpen: boolean) => void;
 }) {
 	return (
-		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
-			<BottomSheet.Portal>
-				<BottomSheet.Overlay />
-				<BottomSheet.Content
-					backgroundClassName="rounded-t-[36px] bg-background"
-					enablePanDownToClose={true}
-				>
-					<View
-						className="gap-5 px-5 pt-2"
-						style={{ paddingBottom: Math.max(bottomInset, 18) }}
-					>
-						<View className="flex-row items-start justify-between gap-4">
-							<View className="flex-1 gap-1">
-								<BottomSheet.Title>Sign out?</BottomSheet.Title>
-								<BottomSheet.Description>
-									You will need to sign in again to use Viya on this device.
-								</BottomSheet.Description>
-							</View>
-							<CloseButton
-								accessibilityLabel="Close sign out confirmation"
-								className="h-10 w-10 rounded-full bg-surface"
-								iconProps={{ color: foregroundColor, size: 22 }}
-								onPress={() => onOpenChange(false)}
-							/>
-						</View>
-
-						<View className="gap-3">
-							<Button
-								isDisabled={isSigningOut}
-								onPress={onConfirmPress}
-								variant="danger"
-							>
-								{isSigningOut ? <Spinner color="#FFFFFF" size="sm" /> : null}
-								<Button.Label>
-									{isSigningOut ? "Signing out..." : "Sign out"}
-								</Button.Label>
-							</Button>
-							<Button
-								isDisabled={isSigningOut}
-								onPress={() => onOpenChange(false)}
-								variant="secondary"
-							>
-								<Button.Label>Cancel</Button.Label>
-							</Button>
-						</View>
-					</View>
-				</BottomSheet.Content>
-			</BottomSheet.Portal>
-		</BottomSheet>
+		<ProfileSheet
+			isOpen={isOpen}
+			onOpenChange={onOpenChange}
+			subtitle="You will need to sign in again on this device."
+			title="Sign out?"
+		>
+			<View style={{ gap: spacing.md }}>
+				<PrimaryButton
+					destructive={true}
+					disabled={isSigningOut}
+					isPending={isSigningOut}
+					label="Sign out"
+					onPress={onConfirmPress}
+				/>
+				<SecondaryButton
+					disabled={isSigningOut}
+					label="Cancel"
+					onPress={() => onOpenChange(false)}
+				/>
+			</View>
+		</ProfileSheet>
 	);
 }
 
@@ -947,12 +933,10 @@ export default function ProfileScreen() {
 	const { signOut } = useClerk();
 	const { user } = useUser();
 	const router = useRouter();
-	const insets = useSafeAreaInsets();
 	const currentPreferences = useQuery(api.preferences.getCurrentPreferences);
 	const ensureCurrentUser = useMutation(api.users.ensureCurrentUser);
 	const savePreferences = useMutation(api.preferences.upsertCurrentPreferences);
 	const { currentTheme, setTheme, themePreference } = useAppTheme();
-	const foregroundColor = useThemeColor("foreground");
 	const [activeTravelPreferenceKey, setActiveTravelPreferenceKey] =
 		useState<TravelPreferenceKey | null>(null);
 	const [isAppearanceSheetOpen, setIsAppearanceSheetOpen] = useState(false);
@@ -1155,33 +1139,50 @@ export default function ProfileScreen() {
 		await persistTravelPreferences(nextPreferences, key);
 	};
 
-	return (
-		<Container includeBottomInset={false} isScrollable={false}>
-			<View
-				className="gap-4 bg-background px-4 pb-3"
-				style={{ paddingTop: Math.max(insets.top, 12) }}
-			>
-				<View className="flex-row items-center justify-between gap-4">
-					<Text.Heading type="h2" weight="semibold">
-						Profile
-					</Text.Heading>
-					<View className="h-11 w-11" />
-				</View>
-			</View>
+	const preferenceSelectionRows = activeTravelPreferenceGroup
+		? activeTravelPreferenceGroup.options.map((option) => {
+				const selectedValue =
+					resolvedTravelPreferences[activeTravelPreferenceGroup.key];
+				const isSelected = Array.isArray(selectedValue)
+					? (selectedValue as readonly string[]).includes(option.value)
+					: selectedValue === option.value;
 
-			<ScrollView
+				return (
+					<TravelPreferenceOptionRow
+						isSaving={savingPreferenceKey === activeTravelPreferenceGroup.key}
+						isSelected={isSelected}
+						key={option.value}
+						onPress={() =>
+							activeTravelPreferenceGroup.mode === "multi"
+								? handleMultiTravelPreferencePress(
+										activeTravelPreferenceGroup.key as MultiTravelPreferenceKey,
+										option.value
+									)
+								: handleSingleTravelPreferencePress(
+										activeTravelPreferenceGroup.key as SingleTravelPreferenceKey,
+										option.value
+									)
+						}
+						option={option}
+					/>
+				);
+			})
+		: [];
+
+	return (
+		<>
+			<CollapsingScreen
 				contentContainerStyle={{
-					flexGrow: 1,
-					gap: 20,
-					paddingBottom: 112,
-					paddingHorizontal: 16,
-					paddingTop: 4,
+					gap: spacing.section,
+					paddingBottom: TAB_BAR_CLEARANCE,
+					paddingHorizontal: spacing.screen,
 				}}
-				contentInsetAdjustmentBehavior="automatic"
-				keyboardShouldPersistTaps="handled"
-				showsVerticalScrollIndicator={false}
+				title="Profile"
 			>
-				<View className="gap-5" style={{ alignSelf: "stretch" }}>
+				<Animated.View
+					entering={FadeInDown.duration(260)}
+					style={{ gap: spacing.section }}
+				>
 					<ProfileIdentityHeader
 						displayName={displayName}
 						imageUrl={user?.imageUrl}
@@ -1204,7 +1205,6 @@ export default function ProfileScreen() {
 							onPress={() => setIsAppearanceSheetOpen(true)}
 							title="Appearance"
 						/>
-						<Separator className={optionSeparatorClassName} />
 						<AccountRow
 							description={preferenceSummary}
 							icon="map"
@@ -1224,281 +1224,140 @@ export default function ProfileScreen() {
 							tone="danger"
 						/>
 					</ListGroup>
-				</View>
-			</ScrollView>
-			<BottomSheet
+				</Animated.View>
+			</CollapsingScreen>
+
+			<ProfileSheet
 				isOpen={isAppearanceSheetOpen}
 				onOpenChange={setIsAppearanceSheetOpen}
+				subtitle="Choose how Viya should look on this device."
+				title="Appearance"
 			>
-				<BottomSheet.Portal>
-					<BottomSheet.Overlay />
-					<BottomSheet.Content
-						backgroundClassName="rounded-t-[36px] bg-background"
-						enablePanDownToClose={true}
-					>
-						<View
-							className="gap-5 px-5 pt-2"
-							style={{ paddingBottom: Math.max(insets.bottom, 18) }}
-						>
-							<View className="flex-row items-start justify-between gap-4">
-								<View className="flex-1 gap-1">
-									<BottomSheet.Title>Appearance</BottomSheet.Title>
-									<BottomSheet.Description>
-										Choose how Viya should look on this device.
-									</BottomSheet.Description>
-								</View>
-								<CloseButton
-									accessibilityLabel="Close appearance"
-									className="h-10 w-10 rounded-full bg-surface"
-									iconProps={{ color: foregroundColor, size: 22 }}
-									onPress={() => setIsAppearanceSheetOpen(false)}
-								/>
-							</View>
+				<AccountSection title="Theme">
+					{themeOptions.map((option) => (
+						<ThemeOptionRow
+							isSelected={themePreference === option.value}
+							key={option.value}
+							onPress={() => {
+								setTheme(option.value).catch(() => undefined);
+							}}
+							option={option}
+						/>
+					))}
+				</AccountSection>
+			</ProfileSheet>
 
-							<AccountSection title="Theme">
-								{themeOptions.map((option, index) => (
-									<View key={option.value}>
-										<ThemeOptionRow
-											isSelected={themePreference === option.value}
-											onPress={() => {
-												setTheme(option.value).catch(() => undefined);
-											}}
-											option={option}
-										/>
-										{index < themeOptions.length - 1 ? (
-											<Separator className={optionSeparatorClassName} />
-										) : null}
-									</View>
-								))}
-							</AccountSection>
-						</View>
-					</BottomSheet.Content>
-				</BottomSheet.Portal>
-			</BottomSheet>
-			<BottomSheet
+			<ProfileSheet
 				isOpen={isTravelSheetOpen}
 				onOpenChange={handleTravelSheetOpenChange}
+				subtitle={
+					activeTravelPreferenceGroup
+						? "Choose the option Viya should remember."
+						: "Manage the defaults Viya uses for trip ideas."
+				}
+				title={activeTravelPreferenceGroup?.title ?? "Travel preferences"}
 			>
-				<BottomSheet.Portal>
-					<BottomSheet.Overlay />
-					<BottomSheet.Content
-						backgroundClassName="rounded-t-[36px] bg-background"
-						enablePanDownToClose={true}
-					>
-						<View
-							className="gap-5 px-5 pt-2"
-							style={{ paddingBottom: Math.max(insets.bottom, 18) }}
-						>
-							<View className="flex-row items-start justify-between gap-4">
-								<View className="min-w-0 flex-1 gap-1">
-									<View className="flex-row items-center gap-2">
-										{activeTravelPreferenceGroup ? (
-											<Pressable
-												accessibilityLabel="Back to travel preferences"
-												accessibilityRole="button"
-												className="h-8 w-8 items-center justify-center rounded-full bg-surface"
-												onPress={() => setActiveTravelPreferenceKey(null)}
-											>
-												<Feather
-													color={foregroundColor}
-													name="chevron-left"
-													size={20}
-												/>
-											</Pressable>
-										) : null}
-										<BottomSheet.Title>
-											{activeTravelPreferenceGroup?.title ??
-												"Travel preferences"}
-										</BottomSheet.Title>
-									</View>
-									<BottomSheet.Description>
-										{activeTravelPreferenceGroup
-											? "Choose the option Viya should remember."
-											: "Manage the defaults Viya uses for trip ideas."}
-									</BottomSheet.Description>
-								</View>
-								<CloseButton
-									accessibilityLabel="Close travel preferences"
-									className="h-10 w-10 rounded-full bg-surface"
-									iconProps={{ color: foregroundColor, size: 22 }}
-									onPress={() => handleTravelSheetOpenChange(false)}
-								/>
-							</View>
+				{activeTravelPreferenceGroup ? (
+					<View style={{ alignItems: "flex-start" }}>
+						<GlassIconButton
+							accessibilityLabel="Back to travel preferences"
+							icon="chevron-back"
+							onPress={() => setActiveTravelPreferenceKey(null)}
+						/>
+					</View>
+				) : null}
 
-							{travelPreferenceError ? (
-								<Text className="text-danger" type="body-sm">
-									{travelPreferenceError}
-								</Text>
-							) : null}
+				{travelPreferenceError ? (
+					<AppText tone="danger" variant="subhead">
+						{travelPreferenceError}
+					</AppText>
+				) : null}
 
-							{activeTravelPreferenceGroup ? (
-								<AccountSection title={activeTravelPreferenceGroup.title}>
-									{activeTravelPreferenceGroup.options.map((option, index) => {
-										const selectedValue =
-											resolvedTravelPreferences[
-												activeTravelPreferenceGroup.key
-											];
-										const isSelected = Array.isArray(selectedValue)
-											? (selectedValue as readonly string[]).includes(
-													option.value
-												)
-											: selectedValue === option.value;
-										const isSaving =
-											savingPreferenceKey === activeTravelPreferenceGroup.key;
+				{activeTravelPreferenceGroup ? (
+					<AccountSection title={activeTravelPreferenceGroup.title}>
+						{preferenceSelectionRows}
+					</AccountSection>
+				) : (
+					<View style={{ gap: spacing.section }}>
+						{travelPreferenceCategories.map((category) => (
+							<AccountSection key={category} title={category}>
+								{travelPreferenceGroups
+									.filter((group) => group.category === category)
+									.map((group) => (
+										<AccountRow
+											icon={group.icon}
+											key={group.key}
+											onPress={() => setActiveTravelPreferenceKey(group.key)}
+											rightText={getTravelPreferenceDisplayValue({
+												group,
+												preferences: resolvedTravelPreferences,
+											})}
+											title={group.title}
+										/>
+									))}
+							</AccountSection>
+						))}
+					</View>
+				)}
+			</ProfileSheet>
 
-										return (
-											<View key={option.value}>
-												<TravelPreferenceOptionRow
-													isSaving={isSaving}
-													isSelected={isSelected}
-													onPress={() =>
-														activeTravelPreferenceGroup.mode === "multi"
-															? handleMultiTravelPreferencePress(
-																	activeTravelPreferenceGroup.key as MultiTravelPreferenceKey,
-																	option.value
-																)
-															: handleSingleTravelPreferencePress(
-																	activeTravelPreferenceGroup.key as SingleTravelPreferenceKey,
-																	option.value
-																)
-													}
-													option={option}
-												/>
-												{index <
-												activeTravelPreferenceGroup.options.length - 1 ? (
-													<Separator className={optionSeparatorClassName} />
-												) : null}
-											</View>
-										);
-									})}
-								</AccountSection>
-							) : (
-								<View className="gap-5">
-									{travelPreferenceCategories.map((category) => {
-										const groups = travelPreferenceGroups.filter(
-											(group) => group.category === category
-										);
-
-										return (
-											<AccountSection key={category} title={category}>
-												{groups.map((group, index) => (
-													<View key={group.key}>
-														<AccountRow
-															icon={group.icon}
-															onPress={() =>
-																setActiveTravelPreferenceKey(group.key)
-															}
-															rightText={getTravelPreferenceDisplayValue({
-																group,
-																preferences: resolvedTravelPreferences,
-															})}
-															title={group.title}
-														/>
-														{index < groups.length - 1 ? (
-															<Separator className={optionSeparatorClassName} />
-														) : null}
-													</View>
-												))}
-											</AccountSection>
-										);
-									})}
-								</View>
-							)}
-						</View>
-					</BottomSheet.Content>
-				</BottomSheet.Portal>
-			</BottomSheet>
 			<SignOutConfirmationSheet
-				bottomInset={insets.bottom}
-				foregroundColor={foregroundColor}
 				isOpen={isSignOutSheetOpen}
 				isSigningOut={isSigningOut}
 				onConfirmPress={handleSignOutPress}
 				onOpenChange={setIsSignOutSheetOpen}
 			/>
-			<BottomSheet
+
+			<ProfileSheet
 				isOpen={isPersonalInfoSheetOpen}
 				onOpenChange={handlePersonalInfoSheetOpenChange}
+				subtitle="Update your photo and name in Viya."
+				title="Personal information"
 			>
-				<BottomSheet.Portal>
-					<BottomSheet.Overlay />
-					<BottomSheet.Content
-						backgroundClassName="rounded-t-[36px] bg-background"
-						enablePanDownToClose={true}
-					>
-						<View
-							className="gap-4 px-5 pt-2"
-							style={{ paddingBottom: Math.max(insets.bottom, 18) }}
-						>
-							<View className="flex-row items-center justify-between gap-4">
-								<View className="flex-1 gap-1">
-									<BottomSheet.Title>Personal information</BottomSheet.Title>
-									<BottomSheet.Description>
-										Update your photo and name in Viya.
-									</BottomSheet.Description>
-								</View>
-								<CloseButton
-									accessibilityLabel="Close personal information"
-									className="h-10 w-10 rounded-full bg-surface"
-									iconProps={{ color: foregroundColor, size: 22 }}
-									onPress={() => handlePersonalInfoSheetOpenChange(false)}
-								/>
-							</View>
+				<AvatarUpdateRow
+					displayName={displayName}
+					imageUrl={draftAvatarImageUrl}
+					isLoading={isUpdatingAvatar || isSavingPersonalInfo}
+					onPress={handleAvatarUpdatePress}
+				/>
+				<PersonalInfoField
+					errorText={nameFieldError ?? undefined}
+					isDisabled={isSavingPersonalInfo}
+					isInvalid={Boolean(nameFieldError)}
+					label="First name"
+					onChangeText={(value) => {
+						setFirstName(value);
+						setNameFieldError(null);
+					}}
+					placeholder="First name"
+					value={firstName}
+				/>
+				<PersonalInfoField
+					errorText={nameFieldError ?? undefined}
+					isDisabled={isSavingPersonalInfo}
+					isInvalid={Boolean(nameFieldError)}
+					label="Last name"
+					onChangeText={(value) => {
+						setLastName(value);
+						setNameFieldError(null);
+					}}
+					placeholder="Last name"
+					value={lastName}
+				/>
 
-							<View className="gap-4">
-								<AvatarUpdateRow
-									displayName={displayName}
-									imageUrl={draftAvatarImageUrl}
-									isLoading={isUpdatingAvatar || isSavingPersonalInfo}
-									onPress={handleAvatarUpdatePress}
-								/>
-								<PersonalInfoField
-									errorText={nameFieldError ?? undefined}
-									isDisabled={isSavingPersonalInfo}
-									isInvalid={Boolean(nameFieldError)}
-									label="First name"
-									onChangeText={(value) => {
-										setFirstName(value);
-										setNameFieldError(null);
-									}}
-									placeholder="First name"
-									value={firstName}
-								/>
-								<PersonalInfoField
-									errorText={nameFieldError ?? undefined}
-									isDisabled={isSavingPersonalInfo}
-									isInvalid={Boolean(nameFieldError)}
-									label="Last name"
-									onChangeText={(value) => {
-										setLastName(value);
-										setNameFieldError(null);
-									}}
-									placeholder="Last name"
-									value={lastName}
-								/>
-							</View>
+				{personalInfoError ? (
+					<AppText tone="danger" variant="subhead">
+						{personalInfoError}
+					</AppText>
+				) : null}
 
-							{personalInfoError ? (
-								<Text className="text-danger" type="body-sm">
-									{personalInfoError}
-								</Text>
-							) : null}
-
-							<Button
-								isDisabled={isSavingPersonalInfo || !user}
-								onPress={handlePersonalInfoSavePress}
-							>
-								{isSavingPersonalInfo ? (
-									<Spinner color="#FFFFFF" size="sm" />
-								) : null}
-								<Button.Label>
-									{isSavingPersonalInfo ? "Saving..." : "Save changes"}
-								</Button.Label>
-							</Button>
-						</View>
-					</BottomSheet.Content>
-				</BottomSheet.Portal>
-			</BottomSheet>
-		</Container>
+				<PrimaryButton
+					disabled={!user}
+					isPending={isSavingPersonalInfo}
+					label="Save changes"
+					onPress={handlePersonalInfoSavePress}
+				/>
+			</ProfileSheet>
+		</>
 	);
 }

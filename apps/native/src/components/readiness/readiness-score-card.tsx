@@ -2,8 +2,10 @@ import {
 	READINESS_CATEGORY_LABELS,
 	type ReadinessScore,
 } from "@viya-app/domain";
-import { Surface, Text } from "heroui-native";
 import { View } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
+
+import { AppText, Card, radius, useUITheme } from "@/src/components/ui";
 
 interface ReadinessScoreCardProps {
 	readiness: ReadinessScore;
@@ -17,44 +19,72 @@ const visibleCategories = [
 ] as const;
 
 export function ReadinessScoreCard({ readiness }: ReadinessScoreCardProps) {
+	const { palette } = useUITheme();
+
 	return (
-		<Surface className="gap-4 rounded-lg p-4" variant="secondary">
-			<View className="flex-row items-end justify-between">
-				<View>
-					<Text
-						className="uppercase"
-						color="muted"
-						type="body-xs"
-						weight="semibold"
-					>
-						Readiness
-					</Text>
-					<Text.Paragraph className="mt-1" color="muted" type="body-sm">
-						{readiness.summary}
-					</Text.Paragraph>
-				</View>
-				<Text.Heading className="text-5xl" type="h1" weight="semibold">
-					{readiness.overallScore}
-				</Text.Heading>
-			</View>
-			<View className="gap-3">
-				{visibleCategories.map((category) => (
-					<View className="gap-1" key={category}>
-						<View className="flex-row justify-between">
-							<Text type="body-sm">{READINESS_CATEGORY_LABELS[category]}</Text>
-							<Text type="body-sm" weight="semibold">
-								{readiness.categoryScores[category]}%
-							</Text>
-						</View>
-						<View className="h-2 overflow-hidden rounded-full bg-content3">
-							<View
-								className="h-full rounded-full bg-primary"
-								style={{ width: `${readiness.categoryScores[category]}%` }}
-							/>
-						</View>
+		<Animated.View entering={FadeInDown.duration(220)}>
+			<Card style={{ gap: 16 }}>
+				<View
+					style={{
+						alignItems: "flex-end",
+						flexDirection: "row",
+						gap: 12,
+						justifyContent: "space-between",
+					}}
+				>
+					<View style={{ flex: 1, gap: 4 }}>
+						<AppText tone="secondary" variant="eyebrow">
+							Readiness
+						</AppText>
+						<AppText tone="secondary" variant="subhead">
+							{readiness.summary}
+						</AppText>
 					</View>
-				))}
-			</View>
-		</Surface>
+					<AppText variant="largeTitle">{readiness.overallScore}</AppText>
+				</View>
+				<View style={{ gap: 12 }}>
+					{visibleCategories.map((category) => {
+						const score = readiness.categoryScores[category];
+
+						return (
+							<View key={category} style={{ gap: 4 }}>
+								<View
+									style={{
+										flexDirection: "row",
+										justifyContent: "space-between",
+									}}
+								>
+									<AppText variant="subhead">
+										{READINESS_CATEGORY_LABELS[category]}
+									</AppText>
+									<AppText bold variant="subhead">
+										{score}%
+									</AppText>
+								</View>
+								<View
+									accessibilityRole="progressbar"
+									accessibilityValue={{ max: 100, min: 0, now: score }}
+									style={{
+										backgroundColor: palette.fill,
+										borderRadius: radius.pill,
+										height: 6,
+										overflow: "hidden",
+									}}
+								>
+									<View
+										style={{
+											backgroundColor: palette.accent,
+											borderRadius: radius.pill,
+											height: "100%",
+											width: `${score}%`,
+										}}
+									/>
+								</View>
+							</View>
+						);
+					})}
+				</View>
+			</Card>
+		</Animated.View>
 	);
 }
