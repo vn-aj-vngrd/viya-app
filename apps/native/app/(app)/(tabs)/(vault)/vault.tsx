@@ -72,7 +72,24 @@ export default function VaultTabScreen() {
 	}
 
 	return (
-		<ScreenShell title="Vault" titleMode="large">
+		<ScreenShell
+			actions={[
+				{
+					icon: "add",
+					items: sortedTrips.slice(0, 6).map((trip) => ({
+						icon: "file-tray-full-outline" as const,
+						key: trip._id,
+						onPress: () => router.push(VIYA_ROUTES.tripVault(trip._id)),
+						title: `Add to ${trip.title}`,
+					})),
+					key: "add",
+					label: "Add a file",
+					type: "menu",
+				},
+			]}
+			title="Vault"
+			titleMode="large"
+		>
 			<ListGroup header="By trip">
 				{sortedTrips.map((trip) => {
 					const files = countsByTrip.get(trip._id)?.files ?? 0;

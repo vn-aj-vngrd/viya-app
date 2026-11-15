@@ -106,7 +106,33 @@ export default function DiscoverScreen() {
 	const ideas = suggestions.exploreIdeas.slice(0, MAX_IDEA_ROWS);
 
 	return (
-		<ScreenShell inset={false} title={TITLE} titleMode="large">
+		<ScreenShell
+			actions={[
+				{
+					icon: "add",
+					items: [
+						{
+							icon: "sparkles",
+							key: "plan",
+							onPress: () => askViya("Help me plan a trip"),
+							title: "Plan with Viya",
+						},
+						{
+							icon: "add",
+							key: "new",
+							onPress: () => router.push(VIYA_ROUTES.newTrip),
+							title: "New trip",
+						},
+					],
+					key: "add",
+					label: "Add",
+					type: "menu",
+				},
+			]}
+			inset={false}
+			title={TITLE}
+			titleMode="large"
+		>
 			<View style={{ gap: spacing["2xl"] }}>
 				{isFirstRun ? (
 					<FirstRunBlock onPlan={askViya} suggestions={suggestions} />
