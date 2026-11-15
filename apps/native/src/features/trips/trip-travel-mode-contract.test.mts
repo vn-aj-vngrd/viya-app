@@ -6,7 +6,7 @@ const rootPath = resolve(import.meta.dirname, "../../../../..");
 const quickExpenseCategoryMapPattern =
 	/const quickExpenseCategoryByItineraryCategory/;
 const quickExpenseContextPattern =
-	/const quickExpenseContext = getQuickExpenseContext\(now, workspace\.bookings\)/;
+	/const quickExpenseContext = getQuickExpenseContext\(\s*heroEntry,\s*workspace\.bookings\s*\)/;
 const quickExpenseBookingPatchPattern =
 	/\.\.\.\(quickExpenseContext\.bookingId\s*\? \{ bookingId: quickExpenseContext\.bookingId \}\s*: \{\}\)/;
 const quickExpenseCategoryPattern = /category: quickExpenseContext\.category/;
@@ -15,11 +15,12 @@ const quickExpenseBookingLabelPattern =
 const travelDocumentUrlPattern = /url: item\.url/;
 const travelDocumentOpenHandlerPattern = /handleOpenTravelDocument/;
 const travelDocumentLinkingPattern = /Linking\.openURL\(url\)/;
-const travelDocumentActionPattern = /actionLabel=\{[^}]*"Open file"/;
+const travelDocumentActionPattern = /header="Documents"/;
 const bookingProofLookupPattern = /vaultItemById\.get\(booking\.vaultItemId\)/;
-const bookingProofActionPattern = /actionLabel=\{proofUrl \? "Open proof"/;
-const riskModuleHrefPattern = /actionHref=\{VIYA_ROUTES\.tripRisks\(tripId\)\}/;
-const riskModuleActionPattern = /actionLabel="Open risk"/;
+const bookingProofActionPattern = /header="Tickets"/;
+const riskModuleHrefPattern =
+	/router\.push\(VIYA_ROUTES\.tripRisks\(tripId\)\)/;
+const riskModuleActionPattern = /urgent risk/;
 
 const readWorkspaceFile = (path: string) =>
 	readFileSync(resolve(rootPath, path), "utf8");

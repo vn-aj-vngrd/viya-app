@@ -13,10 +13,10 @@ describe("trip itinerary next stop actions contract", () => {
 			"apps/native/src/features/trips/trip-itinerary-screen.tsx"
 		);
 
-		expect(source).toContain("NextTimelineItemSummary");
-		expect(source).toContain("Review next stop");
-		expect(source).toContain("Open next Maps");
-		expect(source).toContain("Open next booking");
-		expect(source).toContain("openEditItemSheet(nextTimelineItem)");
+		expect(source).toContain("showStopActionMenu");
+		expect(source).toContain("Edit stop");
+		expect(source).toContain("Open Maps");
+		expect(source).toContain("Open booking");
+		expect(source).toContain("onEdit: () => openEditItem(item)");
 	});
 });

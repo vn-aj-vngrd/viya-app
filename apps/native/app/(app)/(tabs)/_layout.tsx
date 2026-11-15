@@ -1,79 +1,75 @@
-import { Feather } from "@expo/vector-icons";
-import { Tabs } from "expo-router";
-import type { ComponentProps } from "react";
-import type { ColorValue } from "react-native";
-import { FloatingTabBar } from "@/src/components/navigation/floating-tab-bar";
+import { NativeTabs } from "expo-router/unstable-native-tabs";
+import { Platform } from "react-native";
+
 import { useUITheme } from "@/src/components/ui";
+import { rememberContentTab } from "@/src/features/viya/ask-viya-launch";
 
-type TabIconName = ComponentProps<typeof Feather>["name"];
-
-interface FloatingTabIconProps {
-	color: ColorValue;
-	focused: boolean;
-	name: TabIconName;
-}
-
-function FloatingTabIcon({ color, focused, name }: FloatingTabIconProps) {
-	return <Feather color={color} name={name} size={focused ? 21 : 20} />;
-}
-
-function FloatingAiIcon({ color }: Pick<FloatingTabIconProps, "color">) {
-	return <Feather color={color} name="message-circle" size={24} />;
-}
+export const unstable_settings = { initialRouteName: "(discover)" };
 
 export default function TabLayout() {
 	const { palette } = useUITheme();
 
 	return (
-		<Tabs
-			screenOptions={{
-				headerShown: false,
-				sceneStyle: { backgroundColor: palette.canvas },
-				tabBarShowLabel: false,
-			}}
-			tabBar={(props) => <FloatingTabBar {...props} />}
+		<NativeTabs
+			backgroundColor={Platform.OS === "android" ? palette.surface : undefined}
+			labelVisibilityMode="unlabeled"
+			minimizeBehavior="onScrollDown"
+			screenListeners={({ route }) => ({
+				focus: () => rememberContentTab(route.name),
+			})}
+			tintColor={palette.accent}
 		>
-			<Tabs.Screen
-				name="index"
-				options={{
-					title: "Home",
-					tabBarIcon: ({ color, focused }) => (
-						<FloatingTabIcon color={color} focused={focused} name="home" />
-					),
-				}}
-			/>
-			<Tabs.Screen
-				name="trips"
-				options={{
-					title: "Trips",
-					tabBarIcon: ({ color, focused }) => (
-						<FloatingTabIcon color={color} focused={focused} name="map" />
-					),
-				}}
-			/>
-			<Tabs.Screen
+			<NativeTabs.Trigger
+				name="(discover)"
+				unstable_nativeProps={{ tabBarItemAccessibilityLabel: "Discover" }}
+			>
+				<NativeTabs.Trigger.Icon
+					md="explore"
+					sf={{ default: "safari", selected: "safari.fill" }}
+				/>
+				<NativeTabs.Trigger.Label hidden={true} />
+			</NativeTabs.Trigger>
+			<NativeTabs.Trigger
+				name="(trips)"
+				unstable_nativeProps={{ tabBarItemAccessibilityLabel: "Trips" }}
+			>
+				<NativeTabs.Trigger.Icon
+					md="luggage"
+					sf={{ default: "suitcase", selected: "suitcase.fill" }}
+				/>
+				<NativeTabs.Trigger.Label hidden={true} />
+			</NativeTabs.Trigger>
+			<NativeTabs.Trigger
+				name="(vault)"
+				unstable_nativeProps={{ tabBarItemAccessibilityLabel: "Vault" }}
+			>
+				<NativeTabs.Trigger.Icon
+					md="wallet"
+					sf={{ default: "wallet.pass", selected: "wallet.pass.fill" }}
+				/>
+				<NativeTabs.Trigger.Label hidden={true} />
+			</NativeTabs.Trigger>
+			<NativeTabs.Trigger
+				name="(profile)"
+				unstable_nativeProps={{ tabBarItemAccessibilityLabel: "Profile" }}
+			>
+				<NativeTabs.Trigger.Icon
+					md="account_circle"
+					sf={{
+						default: "person.crop.circle",
+						selected: "person.crop.circle.fill",
+					}}
+				/>
+				<NativeTabs.Trigger.Label hidden={true} />
+			</NativeTabs.Trigger>
+			<NativeTabs.Trigger
 				name="viya"
-				options={{
-					title: "Ask Viya",
-					tabBarIcon: ({ color }) => <FloatingAiIcon color={color} />,
-				}}
-			/>
-			<Tabs.Screen
-				name="profile"
-				options={{
-					title: "Profile",
-					tabBarIcon: ({ color, focused }) => (
-						<FloatingTabIcon color={color} focused={focused} name="user" />
-					),
-				}}
-			/>
-			<Tabs.Screen
-				name="moments"
-				options={{
-					href: null,
-				}}
-			/>
-			<Tabs.Screen name="vault" options={{ href: null }} />
-		</Tabs>
+				role="search"
+				unstable_nativeProps={{ tabBarItemAccessibilityLabel: "Ask Viya" }}
+			>
+				<NativeTabs.Trigger.Icon md="auto_awesome" sf="sparkles" />
+				<NativeTabs.Trigger.Label hidden={true} />
+			</NativeTabs.Trigger>
+		</NativeTabs>
 	);
 }

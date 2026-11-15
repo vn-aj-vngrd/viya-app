@@ -1,3 +1,5 @@
+import { isBookingSecured } from "./trip-metrics";
+
 interface BookingLike {
 	_id?: string;
 	id?: string;
@@ -6,8 +8,8 @@ interface BookingLike {
 }
 
 export const getBookingProgress = (bookings: readonly BookingLike[]) => {
-	const confirmed = bookings.filter(
-		(booking) => booking.status === "confirmed"
+	const confirmed = bookings.filter((booking) =>
+		isBookingSecured(booking.status)
 	).length;
 
 	return {

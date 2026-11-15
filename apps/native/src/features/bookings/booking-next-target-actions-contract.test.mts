@@ -13,11 +13,11 @@ describe("booking next target actions contract", () => {
 			"apps/native/src/features/bookings/booking-hub-screen.tsx"
 		);
 
-		expect(source).toContain("NextBookingTargetSummary");
-		expect(source).toContain("Review next target");
-		expect(source).toContain("Open next Maps");
-		expect(source).toContain("Open next itinerary");
-		expect(source).toContain("Open next proof");
-		expect(source).toContain("openEditSheet(nextBooking)");
+		expect(source).toContain("SwipeRow");
+		expect(source).toContain("Booked");
+		expect(source).toContain("Open in Maps");
+		expect(source).toContain("Open itinerary");
+		expect(source).toContain("Open proof");
+		expect(source).toContain("openEditSheet(booking)");
 	});
 });

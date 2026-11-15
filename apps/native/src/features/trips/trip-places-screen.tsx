@@ -1,53 +1,31 @@
-import { Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
-import type { Href } from "expo-router";
-import { Link } from "expo-router";
-import { Menu } from "heroui-native";
 import { useState } from "react";
-import { Linking, View } from "react-native";
+import { Linking } from "react-native";
 import {
-	ActionPill,
 	ChoiceChips,
-	FormField,
+	EmptyPrimary,
+	FieldRow,
+	FormGroup,
 	FormSheet,
-	FormTextArea,
-	GroupLabel,
-	IconAction,
-	IconBadge,
 	InlineError,
-	MenuAction,
-	MenuDivider,
-	MenuItemContent,
-	MenuPanel,
-	MetaTag,
-	ModuleLoading,
-	ModuleMissing,
-	ModuleScroll,
-	OverflowTrigger,
-	Reveal,
+	NotesRow,
+	SwipeRow,
 } from "@/src/components/itinerary/trip-module-ui";
-import { NavigationIconButton } from "@/src/components/navigation/navigation-icon-button";
 import {
-	AppText,
-	Card,
-	EmptyState,
 	haptic,
+	Icon,
 	ListGroup,
 	ListRow,
-	radius,
-	spacing,
 	useFeedback,
 	useUITheme,
 } from "@/src/components/ui";
-import { VIYA_ROUTES } from "@/src/constants/routes";
+import { formatEnumLabel, formatShortDate } from "@/src/lib/format";
 import {
 	getTripMapSearchUrl,
 	hasTripMapSearchTarget,
 } from "./trip-map-link-utils";
-import { TripModuleScreenFrame } from "./trip-module-floating-bar";
-import { useTripIdParam } from "./use-trip-id-param";
 
 interface PlaceForm {
 	address: string;
@@ -77,470 +55,37 @@ const placeCategoryOptions = [
 	"backup",
 ] as const;
 
-const formatPlaceCategoryLabel = (value: string) =>
-	value
-		.replaceAll("_", " ")
-		.split(" ")
-		.filter(Boolean)
-		.map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
-		.join(" ");
-
-interface RoutePreviewPlace {
-	address?: string;
-	category: string;
-	id: string;
-	latitude?: number;
-	locationName: string;
-	longitude?: number;
-	sourceLabel: string;
-	title: string;
-}
-
-function PlaceSheet({
-	errorMessage,
-	form,
-	isOpen,
-	isSaving,
-	mode,
-	onOpenChange,
-	onSubmit,
-	onUpdateForm,
-}: {
-	errorMessage: string | null;
-	form: PlaceForm;
-	isOpen: boolean;
-	isSaving: boolean;
-	mode: "create" | "edit";
-	onOpenChange: (isOpen: boolean) => void;
-	onSubmit: () => void;
-	onUpdateForm: (key: keyof PlaceForm, value: string) => void;
-}) {
-	return (
-		<FormSheet
-			closeLabel="Close place form"
-			errorMessage={errorMessage}
-			isOpen={isOpen}
-			isPending={isSaving}
-			maxHeight={480}
-			onOpenChange={onOpenChange}
-			onSubmit={onSubmit}
-			snapPoint="82%"
-			submitLabel={mode === "edit" ? "Save place" : "Add place"}
-			subtitle="Save a stop before assigning it to a day."
-			title={mode === "edit" ? "Edit place" : "Add place"}
-		>
-			<FormField
-				label="Name"
-				onChangeText={(value) => onUpdateForm("title", value)}
-				placeholder="Coffee stop"
-				value={form.title}
-			/>
-			<FormField
-				label="Location"
-				onChangeText={(value) => onUpdateForm("locationName", value)}
-				placeholder="Place, area, or landmark"
-				value={form.locationName}
-			/>
-			<ChoiceChips
-				formatLabel={formatPlaceCategoryLabel}
-				label="Category"
-				onChange={(value) => onUpdateForm("category", value)}
-				options={placeCategoryOptions}
-				value={form.category}
-			/>
-			<FormField
-				label="Address"
-				onChangeText={(value) => onUpdateForm("address", value)}
-				placeholder="Optional"
-				value={form.address}
-			/>
-			<FormTextArea
-				label="Notes"
-				onChangeText={(value) => onUpdateForm("description", value)}
-				placeholder="Why save this place?"
-				value={form.description}
-			/>
-		</FormSheet>
-	);
-}
-
-function getDayAssignmentLabel(
+const getDayAssignmentLabel = (
 	days: Doc<"itineraryDays">[],
 	dayId?: Id<"itineraryDays">
-) {
+) => {
 	const day = days.find((itineraryDay) => itineraryDay._id === dayId);
 
 	if (!day) {
-		return "Unassigned";
+		return "Not on a day yet";
 	}
 
-	return `Day ${day.dayNumber}`;
-}
+	return day.date
+		? `Day ${day.dayNumber} · ${formatShortDate(day.date)}`
+		: `Day ${day.dayNumber}`;
+};
 
-function PlaceAssignmentSheet({
-	days,
-	errorMessage,
-	isOpen,
-	isSaving,
-	itineraryHref,
-	onAssignDay,
-	onOpenChange,
-	place,
-}: {
-	days: Doc<"itineraryDays">[];
-	errorMessage: string | null;
-	isOpen: boolean;
-	isSaving: boolean;
-	itineraryHref: Href;
-	onAssignDay: (dayId?: Id<"itineraryDays">) => void;
-	onOpenChange: (isOpen: boolean) => void;
-	place: Doc<"savedPlaces"> | null;
-}) {
-	const { palette } = useUITheme();
-	const assignedDayLabel = place
-		? getDayAssignmentLabel(days, place.assignedDayId)
-		: "Unassigned";
+const hasMapTarget = (place: {
+	address?: string;
+	latitude?: number;
+	locationName?: string;
+	longitude?: number;
+}) =>
+	hasTripMapSearchTarget({
+		address: place.address,
+		latitude: place.latitude,
+		locationName: place.locationName,
+		longitude: place.longitude,
+	});
 
-	return (
-		<FormSheet
-			closeLabel="Close day assignment"
-			errorMessage={errorMessage}
-			isOpen={isOpen}
-			maxHeight={360}
-			onOpenChange={onOpenChange}
-			snapPoint="64%"
-			subtitle={
-				place
-					? `${place.title} is currently ${assignedDayLabel.toLowerCase()}.`
-					: "Choose a saved place before assigning a day."
-			}
-			title="Assign to day"
-		>
-			{days.length > 0 ? (
-				<ListGroup>
-					{days.map((day) => {
-						const isSelected = place?.assignedDayId === day._id;
-
-						return (
-							<ListRow
-								accessibilityLabel={`Day ${day.dayNumber} · ${day.title}`}
-								key={day._id}
-								leading={
-									<Ionicons
-										color={isSelected ? palette.success : palette.inkTertiary}
-										name={isSelected ? "checkmark-circle" : "calendar-outline"}
-										size={22}
-									/>
-								}
-								onPress={isSaving ? undefined : () => onAssignDay(day._id)}
-								showChevron={false}
-								subtitle={day.title}
-								title={`Day ${day.dayNumber}`}
-							/>
-						);
-					})}
-				</ListGroup>
-			) : (
-				<Card padding="md">
-					<View style={{ alignItems: "flex-start", gap: spacing.sm }}>
-						<IconBadge icon="calendar-outline" tone="success" />
-						<AppText variant="headline">Add itinerary days first</AppText>
-						<AppText tone="secondary" variant="subhead">
-							Places can be assigned once the itinerary has at least one day.
-						</AppText>
-						<Link asChild href={itineraryHref}>
-							<ActionPill icon="calendar-outline" label="Plan itinerary days" />
-						</Link>
-					</View>
-				</Card>
-			)}
-			{place?.assignedDayId ? (
-				<ActionPill
-					icon="remove-circle-outline"
-					isPending={isSaving}
-					label="Remove day"
-					onPress={() => onAssignDay()}
-				/>
-			) : null}
-		</FormSheet>
-	);
-}
-
-function RouteBoardActions({
-	itineraryHref,
-	onAddPlace,
-}: {
-	itineraryHref: Href;
-	onAddPlace: () => void;
-}) {
-	return (
-		<View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
-			<ActionPill
-				icon="add-circle-outline"
-				label="Add route place"
-				onPress={onAddPlace}
-				variant="primary"
-			/>
-			<Link asChild href={itineraryHref}>
-				<ActionPill icon="calendar-outline" label="Open route itinerary" />
-			</Link>
-		</View>
-	);
-}
-
-function RouteBoard({
-	itineraryHref,
-	onAddPlace,
-	onOpenMaps,
-	places,
-	routeStats,
-}: {
-	itineraryHref: Href;
-	onAddPlace: () => void;
-	onOpenMaps: (place: RoutePreviewPlace) => void;
-	places: RoutePreviewPlace[];
-	routeStats: {
-		geocodedPlaceCount: number;
-		placeCount: number;
-		savedPlaceCount: number;
-	};
-}) {
-	const { palette } = useUITheme();
-
-	return (
-		<Card>
-			<View style={{ gap: spacing.lg }}>
-				<View
-					style={{
-						alignItems: "center",
-						flexDirection: "row",
-						gap: spacing.md,
-					}}
-				>
-					<IconBadge icon="navigate-outline" tone="success" />
-					<View style={{ flex: 1, gap: 2 }}>
-						<AppText accessibilityRole="header" variant="headline">
-							Route board
-						</AppText>
-						<AppText numberOfLines={1} tone="secondary" variant="footnote">
-							Saved and planned stops
-						</AppText>
-					</View>
-					<MetaTag label={`${routeStats.placeCount} total`} />
-				</View>
-
-				{places.length > 0 ? (
-					<View style={{ gap: spacing.xs }}>
-						{places.map((place, index) => (
-							<View
-								key={`${place.sourceLabel}-${place.id}`}
-								style={{
-									alignItems: "center",
-									flexDirection: "row",
-									gap: spacing.md,
-									minHeight: 52,
-								}}
-							>
-								<View
-									style={{
-										alignItems: "center",
-										backgroundColor: palette.fill,
-										borderRadius: radius.pill,
-										height: 28,
-										justifyContent: "center",
-										width: 28,
-									}}
-								>
-									<AppText bold={true} tone="success" variant="footnote">
-										{index + 1}
-									</AppText>
-								</View>
-								<View style={{ flex: 1, gap: 1, minWidth: 0 }}>
-									<AppText numberOfLines={1} variant="callout">
-										{place.title}
-									</AppText>
-									<AppText
-										numberOfLines={1}
-										tone="secondary"
-										variant="footnote"
-									>
-										{place.locationName} ·{" "}
-										{formatPlaceCategoryLabel(place.category)} ·{" "}
-										{place.sourceLabel}
-									</AppText>
-								</View>
-								{hasTripMapSearchTarget({
-									address: place.address,
-									latitude: place.latitude,
-									locationName: place.locationName,
-									longitude: place.longitude,
-								}) ? (
-									<IconAction
-										icon="map-outline"
-										label={`Open ${place.title} in Maps`}
-										onPress={() => onOpenMaps(place)}
-									/>
-								) : null}
-							</View>
-						))}
-					</View>
-				) : (
-					<View
-						style={{
-							alignItems: "center",
-							gap: spacing.sm,
-							paddingVertical: 20,
-						}}
-					>
-						<Ionicons
-							color={palette.inkTertiary}
-							name="location-outline"
-							size={28}
-						/>
-						<AppText tone="secondary" variant="subhead">
-							Add places to build route context.
-						</AppText>
-					</View>
-				)}
-
-				<View
-					style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}
-				>
-					<MetaTag label={`${routeStats.placeCount} places`} />
-					<MetaTag label={`${routeStats.savedPlaceCount} saved`} />
-					<MetaTag label={`${routeStats.geocodedPlaceCount} geocoded`} />
-				</View>
-				<RouteBoardActions
-					itineraryHref={itineraryHref}
-					onAddPlace={onAddPlace}
-				/>
-			</View>
-		</Card>
-	);
-}
-
-function PlaceSection({
-	deletingPlaceId,
-	itineraryHref,
-	itineraryDays,
-	onAssignPlace,
-	onDeletePlace,
-	onEditPlace,
-	onOpenMaps,
-	places,
-	title,
-}: {
-	deletingPlaceId: Id<"savedPlaces"> | null;
-	itineraryHref: Href;
-	itineraryDays: Doc<"itineraryDays">[];
-	onAssignPlace: (place: Doc<"savedPlaces">) => void;
-	onDeletePlace: (placeId: Id<"savedPlaces">) => void;
-	onEditPlace: (place: Doc<"savedPlaces">) => void;
-	onOpenMaps: (place: Doc<"savedPlaces">) => void;
-	places: Doc<"savedPlaces">[];
-	title: string;
-}) {
-	return (
-		<View style={{ gap: spacing.sm }}>
-			<GroupLabel>{title.toUpperCase()}</GroupLabel>
-			{places.map((place, index) => (
-				<Reveal index={index} key={place._id}>
-					<Card padding="md">
-						<View
-							style={{
-								alignItems: "flex-start",
-								flexDirection: "row",
-								gap: spacing.md,
-							}}
-						>
-							<IconBadge icon="location-outline" tone="success" />
-							<View style={{ flex: 1, gap: spacing.xs, minWidth: 0 }}>
-								<AppText numberOfLines={1} variant="headline">
-									{place.title}
-								</AppText>
-								<AppText numberOfLines={2} tone="secondary" variant="subhead">
-									{place.locationName} ·{" "}
-									{formatPlaceCategoryLabel(place.category)}
-								</AppText>
-								<MetaTag
-									icon="calendar-outline"
-									label={getDayAssignmentLabel(
-										itineraryDays,
-										place.assignedDayId
-									)}
-									tone={place.assignedDayId ? "accent" : "neutral"}
-								/>
-								{place.description ? (
-									<AppText tone="secondary" variant="footnote">
-										{place.description}
-									</AppText>
-								) : null}
-								<View style={{ paddingTop: spacing.xs }}>
-									<ActionPill
-										label={place.assignedDayId ? "Move day" : "Add to day"}
-										onPress={() => onAssignPlace(place)}
-										variant="primary"
-									/>
-								</View>
-							</View>
-							<Menu>
-								<OverflowTrigger
-									disabled={deletingPlaceId === place._id}
-									label="Place options"
-								/>
-								<MenuPanel width={220}>
-									{hasTripMapSearchTarget({
-										address: place.address,
-										latitude: place.latitude,
-										locationName: place.locationName,
-										longitude: place.longitude,
-									}) ? (
-										<MenuAction
-											icon="map-outline"
-											label="Open in Maps"
-											onPress={() => onOpenMaps(place)}
-										/>
-									) : null}
-									{place.assignedDayId ? (
-										<Link asChild href={itineraryHref}>
-											<Menu.Item
-												accessibilityLabel="Open itinerary"
-												className="rounded-[14px] px-2.5"
-												isAnimatedStyleActive={false}
-											>
-												<MenuItemContent
-													icon="calendar-outline"
-													label="Open itinerary"
-												/>
-											</Menu.Item>
-										</Link>
-									) : null}
-									<MenuAction
-										icon="create-outline"
-										label="Edit place"
-										onPress={() => onEditPlace(place)}
-									/>
-									<MenuDivider />
-									<MenuAction
-										danger={true}
-										disabled={deletingPlaceId === place._id}
-										icon="trash-outline"
-										label="Delete place"
-										onPress={() => onDeletePlace(place._id)}
-									/>
-								</MenuPanel>
-							</Menu>
-						</View>
-					</Card>
-				</Reveal>
-			))}
-		</View>
-	);
-}
-
-export function TripPlacesScreen() {
+/** All state and mutations for saved places; screens render it with the pieces below. */
+export function usePlacesController(tripId: Id<"trips"> | null) {
 	const { confirm } = useFeedback();
-	const tripId = useTripIdParam();
 	const places = useQuery(
 		api.places.listTripPlaces,
 		tripId ? { tripId } : "skip"
@@ -556,32 +101,33 @@ export function TripPlacesScreen() {
 	const [form, setForm] = useState<PlaceForm>(initialPlaceForm);
 	const [editingPlaceId, setEditingPlaceId] =
 		useState<Id<"savedPlaces"> | null>(null);
-	const [assigningPlaceId, setAssigningPlaceId] =
-		useState<Id<"savedPlaces"> | null>(null);
-	const [isPlaceSheetOpen, setIsPlaceSheetOpen] = useState(false);
-	const [isAssignmentSheetOpen, setIsAssignmentSheetOpen] = useState(false);
-	const [isSaving, setIsSaving] = useState(false);
-	const [isAssigningDay, setIsAssigningDay] = useState(false);
-	const [deletingPlaceId, setDeletingPlaceId] =
-		useState<Id<"savedPlaces"> | null>(null);
-	const [placeErrorMessage, setPlaceErrorMessage] = useState<string | null>(
+	const [detailPlaceId, setDetailPlaceId] = useState<Id<"savedPlaces"> | null>(
 		null
 	);
+	const [isFormOpen, setIsFormOpen] = useState(false);
+	const [isDetailOpen, setIsDetailOpen] = useState(false);
+	const [isSaving, setIsSaving] = useState(false);
+	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [mapErrorMessage, setMapErrorMessage] = useState<string | null>(null);
 
+	const savedPlaces = places?.savedPlaces ?? [];
+	const days = itinerary?.days ?? [];
+	const detailPlace =
+		savedPlaces.find((place) => place._id === detailPlaceId) ?? null;
+
 	const updateForm = (key: keyof PlaceForm, value: string) => {
-		setPlaceErrorMessage(null);
-		setForm((currentForm) => ({ ...currentForm, [key]: value }));
+		setErrorMessage(null);
+		setForm((current) => ({ ...current, [key]: value }));
 	};
-	const openCreateSheet = () => {
+	const openCreate = () => {
 		setEditingPlaceId(null);
-		setPlaceErrorMessage(null);
+		setErrorMessage(null);
 		setForm(initialPlaceForm);
-		setIsPlaceSheetOpen(true);
+		setIsFormOpen(true);
 	};
-	const openEditSheet = (place: Doc<"savedPlaces">) => {
+	const openEdit = (place: Doc<"savedPlaces">) => {
 		setEditingPlaceId(place._id);
-		setPlaceErrorMessage(null);
+		setErrorMessage(null);
 		setForm({
 			address: place.address ?? "",
 			category: place.category,
@@ -589,36 +135,42 @@ export function TripPlacesScreen() {
 			locationName: place.locationName,
 			title: place.title,
 		});
-		setIsPlaceSheetOpen(true);
+		setIsDetailOpen(false);
+		setIsFormOpen(true);
 	};
-	const openAssignmentSheet = (place: Doc<"savedPlaces">) => {
-		setAssigningPlaceId(place._id);
-		setPlaceErrorMessage(null);
-		setIsAssignmentSheetOpen(true);
+	const openDetail = (place: Doc<"savedPlaces">) => {
+		setDetailPlaceId(place._id);
+		setErrorMessage(null);
+		setIsDetailOpen(true);
+	};
+	const closeForm = (isOpen: boolean) => {
+		setIsFormOpen(isOpen);
+		if (!isOpen) {
+			setEditingPlaceId(null);
+			setErrorMessage(null);
+			setForm(initialPlaceForm);
+		}
+	};
+	const closeDetail = (isOpen: boolean) => {
+		setIsDetailOpen(isOpen);
+		if (!isOpen) {
+			setErrorMessage(null);
+		}
 	};
 
-	if (!tripId) {
-		return (
-			<ModuleMissing
-				description="Open a saved trip before managing places."
-				icon="map-outline"
-			/>
-		);
-	}
-
-	const handleSavePlace = async () => {
+	const save = async () => {
 		const title = form.title.trim();
 		const locationName = form.locationName.trim();
 
-		if (!(title && locationName)) {
-			setPlaceErrorMessage("Add a place name and location.");
+		if (!(tripId && title && locationName)) {
+			setErrorMessage("Add a name and a location.");
 			return;
 		}
 
-		setPlaceErrorMessage(null);
+		setErrorMessage(null);
 		setIsSaving(true);
 		try {
-			const placePatch = {
+			const patch = {
 				address: form.address.trim() || undefined,
 				category: form.category.trim() || "place",
 				description: form.description.trim() || undefined,
@@ -627,84 +179,65 @@ export function TripPlacesScreen() {
 			};
 
 			if (editingPlaceId) {
-				await updateSavedPlace({
-					...placePatch,
-					placeId: editingPlaceId,
-				});
+				await updateSavedPlace({ ...patch, placeId: editingPlaceId });
 			} else {
-				await createSavedPlace({
-					...placePatch,
-					tripId,
-				});
+				await createSavedPlace({ ...patch, tripId });
 			}
 			haptic("success");
-			setForm(initialPlaceForm);
-			setEditingPlaceId(null);
-			setIsPlaceSheetOpen(false);
+			closeForm(false);
 		} catch (error) {
 			haptic("error");
-			setPlaceErrorMessage(
-				error instanceof Error ? error.message : "Could not save place."
+			setErrorMessage(
+				error instanceof Error ? error.message : "Could not save the place."
 			);
 		} finally {
 			setIsSaving(false);
 		}
 	};
 
-	const handleDeletePlace = async (placeId: Id<"savedPlaces">) => {
+	const remove = async (place: Doc<"savedPlaces">) => {
+		setIsDetailOpen(false);
 		const confirmed = await confirm({
 			confirmLabel: "Delete place",
 			destructive: true,
-			message: "This saved place will be removed from the trip.",
-			title: "Delete this place?",
+			message: `${place.title} will be removed from this trip.`,
+			title: "Delete place?",
 		});
 		if (!confirmed) {
 			return;
 		}
-		setDeletingPlaceId(placeId);
 		try {
-			await deleteSavedPlace({ placeId });
+			await deleteSavedPlace({ placeId: place._id });
+			haptic("warning");
 		} catch (error) {
-			setPlaceErrorMessage(
-				error instanceof Error ? error.message : "Could not delete place."
+			setMapErrorMessage(
+				error instanceof Error ? error.message : "Could not delete the place."
 			);
-		} finally {
-			setDeletingPlaceId(null);
 		}
 	};
-	const handleAssignPlaceToDay = async (dayId?: Id<"itineraryDays">) => {
-		if (!assigningPlaceId) {
-			setPlaceErrorMessage("Choose a place before assigning a day.");
-			return;
-		}
 
-		setPlaceErrorMessage(null);
-		setIsAssigningDay(true);
+	const assign = async (
+		place: Doc<"savedPlaces">,
+		dayId?: Id<"itineraryDays">
+	) => {
+		setErrorMessage(null);
 		try {
 			await assignPlaceToDay(
 				dayId
-					? { assignedDayId: dayId, placeId: assigningPlaceId }
-					: { placeId: assigningPlaceId }
+					? { assignedDayId: dayId, placeId: place._id }
+					: { placeId: place._id }
 			);
-			setIsAssignmentSheetOpen(false);
-			setAssigningPlaceId(null);
+			haptic("success");
+			setIsDetailOpen(false);
 		} catch (error) {
-			setPlaceErrorMessage(
-				error instanceof Error
-					? error.message
-					: "Could not assign place to day."
+			haptic("error");
+			setErrorMessage(
+				error instanceof Error ? error.message : "Could not update the day."
 			);
-		} finally {
-			setIsAssigningDay(false);
 		}
 	};
-	const handleOpenMaps = async ({
-		address,
-		latitude,
-		locationName,
-		longitude,
-		title,
-	}: {
+
+	const openMaps = async (target: {
 		address?: string;
 		latitude?: number;
 		locationName?: string;
@@ -715,210 +248,309 @@ export function TripPlacesScreen() {
 		try {
 			await Linking.openURL(
 				getTripMapSearchUrl({
-					address,
-					label: title,
-					latitude,
-					locationName,
-					longitude,
+					address: target.address,
+					label: target.title,
+					latitude: target.latitude,
+					locationName: target.locationName,
+					longitude: target.longitude,
 				})
 			);
 		} catch {
-			setMapErrorMessage("Could not open Maps for this place.");
+			setMapErrorMessage("Could not open Maps.");
 		}
 	};
 
-	if (places === undefined || itinerary === undefined) {
-		return <ModuleLoading title="Loading places" />;
+	return {
+		assign,
+		closeDetail,
+		closeForm,
+		days,
+		detailPlace,
+		editingPlaceId,
+		errorMessage,
+		form,
+		isDetailOpen,
+		isFormOpen,
+		isLoading: places === undefined || itinerary === undefined,
+		isSaving,
+		itineraryPlaces: places?.itineraryPlaces ?? [],
+		mapErrorMessage,
+		openCreate,
+		openDetail,
+		openEdit,
+		openMaps,
+		remove,
+		save,
+		savedPlaces,
+		updateForm,
+	};
+}
+
+export type PlacesController = ReturnType<typeof usePlacesController>;
+
+function PlaceRow({
+	controller,
+	place,
+}: {
+	controller: PlacesController;
+	place: Doc<"savedPlaces">;
+}) {
+	return (
+		<SwipeRow
+			trailing={{
+				icon: "trash-outline",
+				label: "Delete",
+				onPress: () => {
+					controller.remove(place).catch(() => undefined);
+				},
+				tone: "danger",
+			}}
+		>
+			<ListRow
+				accessibilityLabel={`${place.title}, ${getDayAssignmentLabel(controller.days, place.assignedDayId)}`}
+				onPress={() => controller.openDetail(place)}
+				subtitle={`${place.locationName} · ${formatEnumLabel(place.category)}`}
+				title={place.title}
+				value={
+					place.assignedDayId
+						? getDayAssignmentLabel(controller.days, place.assignedDayId)
+						: undefined
+				}
+			/>
+		</SwipeRow>
+	);
+}
+
+/** Unplanned first, then planned, then stops that already live in the itinerary. */
+export function PlacesContent({
+	controller,
+}: {
+	controller: PlacesController;
+}) {
+	const unplanned = controller.savedPlaces.filter(
+		(place) => !place.assignedDayId
+	);
+	const planned = controller.savedPlaces.filter((place) => place.assignedDayId);
+
+	if (
+		controller.savedPlaces.length === 0 &&
+		controller.itineraryPlaces.length === 0
+	) {
+		return (
+			<EmptyPrimary
+				actionLabel="Add place"
+				description="Save places you want to visit, then assign them to a day."
+				onPress={controller.openCreate}
+				title="No places yet"
+			/>
+		);
 	}
 
-	const assigningPlace =
-		places.savedPlaces.find((place) => place._id === assigningPlaceId) ?? null;
-	const routePreviewPlaces: RoutePreviewPlace[] = [
-		...places.savedPlaces.map((place) => ({
-			address: place.address,
-			category: place.category,
-			id: place._id,
-			latitude: place.latitude,
-			locationName: place.locationName,
-			longitude: place.longitude,
-			sourceLabel: "Saved",
-			title: place.title,
-		})),
-		...places.itineraryPlaces.map((place) => ({
-			address: place.address,
-			category: place.category,
-			id: place.id,
-			latitude: place.latitude,
-			locationName: place.locationName,
-			longitude: place.longitude,
-			sourceLabel: "Plan",
-			title: place.title,
-		})),
-	].slice(0, 4);
-	const hasNoPlaces =
-		places.savedPlaces.length === 0 && places.itineraryPlaces.length === 0;
+	return (
+		<>
+			<InlineError message={controller.mapErrorMessage} />
+			{unplanned.length > 0 ? (
+				<ListGroup
+					footer="Assign each to a day to add it to your plan."
+					header="Not on a day yet"
+				>
+					{unplanned.map((place) => (
+						<PlaceRow controller={controller} key={place._id} place={place} />
+					))}
+				</ListGroup>
+			) : null}
+			{planned.length > 0 ? (
+				<ListGroup header="On a day">
+					{planned.map((place) => (
+						<PlaceRow controller={controller} key={place._id} place={place} />
+					))}
+				</ListGroup>
+			) : null}
+			{controller.itineraryPlaces.length > 0 ? (
+				<ListGroup header="Stops with a location">
+					{controller.itineraryPlaces.map((place) => (
+						<ListRow
+							accessibilityLabel={
+								hasMapTarget(place)
+									? `Open ${place.title} in Maps`
+									: place.title
+							}
+							key={place.id}
+							onPress={
+								hasMapTarget(place)
+									? () => {
+											controller.openMaps(place).catch(() => undefined);
+										}
+									: undefined
+							}
+							showChevron={false}
+							subtitle={[
+								place.locationName,
+								controller.days.find((day) => day._id === place.assignedDayId)
+									? `Day ${controller.days.find((day) => day._id === place.assignedDayId)?.dayNumber}`
+									: null,
+							]
+								.filter(Boolean)
+								.join(" · ")}
+							title={place.title}
+							trailing={
+								hasMapTarget(place) ? (
+									<Icon name="map-outline" size={18} tone="secondary" />
+								) : undefined
+							}
+						/>
+					))}
+				</ListGroup>
+			) : null}
+		</>
+	);
+}
+
+function DayCheck({ isSelected }: { isSelected: boolean }) {
+	const { palette } = useUITheme();
+
+	return isSelected ? (
+		<Icon color={palette.accent} name="checkmark" size={18} weight="semibold" />
+	) : null;
+}
+
+/** Add/edit form and the place detail sheet (assign to day, maps, edit, delete). */
+export function PlacesSheets({ controller }: { controller: PlacesController }) {
+	const place = controller.detailPlace;
 
 	return (
-		<TripModuleScreenFrame
-			activeTab="places"
-			headerAction={
-				<NavigationIconButton
-					accessibilityLabel="Add place"
-					icon="add"
-					onPress={openCreateSheet}
-				/>
-			}
-			tripId={tripId}
-		>
-			<ModuleScroll>
-				<RouteBoard
-					itineraryHref={VIYA_ROUTES.tripItinerary(tripId)}
-					onAddPlace={openCreateSheet}
-					onOpenMaps={(place) => {
-						handleOpenMaps(place).catch(() => undefined);
-					}}
-					places={routePreviewPlaces}
-					routeStats={places.routeStats}
-				/>
-				<InlineError message={mapErrorMessage} />
-
-				{hasNoPlaces ? (
-					<EmptyState
-						action={{
-							label: "Add place",
-							onPress: openCreateSheet,
-						}}
-						description="Add saved places or itinerary items to build trip map context."
-						icon="map-outline"
-						title="No places yet"
+		<>
+			<FormSheet
+				errorMessage={controller.errorMessage}
+				isOpen={controller.isFormOpen}
+				isPending={controller.isSaving}
+				onOpenChange={controller.closeForm}
+				onSubmit={() => {
+					controller.save().catch(() => undefined);
+				}}
+				submitLabel="Save"
+				title={controller.editingPlaceId ? "Edit place" : "Add place"}
+			>
+				<FormGroup>
+					<FieldRow
+						label="Name"
+						onChangeText={(value) => controller.updateForm("title", value)}
+						placeholder="Coffee stop"
+						value={controller.form.title}
 					/>
-				) : (
-					<View style={{ gap: spacing.xl }}>
-						{places.savedPlaces.length > 0 ? (
-							<PlaceSection
-								deletingPlaceId={deletingPlaceId}
-								itineraryDays={itinerary.days}
-								itineraryHref={VIYA_ROUTES.tripItinerary(tripId)}
-								onAssignPlace={openAssignmentSheet}
-								onDeletePlace={(placeId) => {
-									handleDeletePlace(placeId).catch(() => undefined);
-								}}
-								onEditPlace={openEditSheet}
-								onOpenMaps={(place) => {
-									handleOpenMaps({
-										address: place.address,
-										latitude: place.latitude,
-										locationName: place.locationName,
-										longitude: place.longitude,
-										title: place.title,
-									}).catch(() => undefined);
-								}}
-								places={places.savedPlaces}
-								title="Saved places"
-							/>
-						) : null}
+					<FieldRow
+						label="Location"
+						onChangeText={(value) =>
+							controller.updateForm("locationName", value)
+						}
+						placeholder="Area or landmark"
+						value={controller.form.locationName}
+					/>
+					<FieldRow
+						label="Address"
+						onChangeText={(value) => controller.updateForm("address", value)}
+						placeholder="Optional"
+						value={controller.form.address}
+					/>
+				</FormGroup>
+				<ChoiceChips
+					formatLabel={formatEnumLabel}
+					label="Category"
+					onChange={(value) => controller.updateForm("category", value)}
+					options={placeCategoryOptions}
+					value={controller.form.category}
+				/>
+				<FormGroup header="Notes">
+					<NotesRow
+						label="Notes"
+						onChangeText={(value) =>
+							controller.updateForm("description", value)
+						}
+						placeholder="Why save this place?"
+						value={controller.form.description}
+					/>
+				</FormGroup>
+			</FormSheet>
 
-						{places.itineraryPlaces.length > 0 ? (
-							<View style={{ gap: spacing.sm }}>
-								<GroupLabel>ITINERARY STOPS</GroupLabel>
-								{places.itineraryPlaces.map((place, index) => (
-									<Reveal index={index} key={place.id}>
-										<Card padding="md">
-											<View style={{ gap: spacing.sm }}>
-												<View style={{ gap: 2 }}>
-													<AppText variant="headline">{place.title}</AppText>
-													<AppText tone="secondary" variant="subhead">
-														{place.locationName} ·{" "}
-														{formatPlaceCategoryLabel(place.category)}
-													</AppText>
-												</View>
-												{place.description ? (
-													<AppText tone="secondary" variant="footnote">
-														{place.description}
-													</AppText>
-												) : null}
-												<View
-													style={{
-														flexDirection: "row",
-														flexWrap: "wrap",
-														gap: spacing.sm,
-													}}
-												>
-													{hasTripMapSearchTarget({
-														address: place.address,
-														latitude: place.latitude,
-														locationName: place.locationName,
-														longitude: place.longitude,
-													}) ? (
-														<ActionPill
-															accessibilityLabel={`Open ${place.title} in Maps`}
-															icon="map-outline"
-															label="Open Maps"
-															onPress={() => {
-																handleOpenMaps({
-																	address: place.address,
-																	latitude: place.latitude,
-																	locationName: place.locationName,
-																	longitude: place.longitude,
-																	title: place.title,
-																}).catch(() => undefined);
-															}}
-														/>
-													) : null}
-													<Link
-														asChild
-														href={VIYA_ROUTES.tripItinerary(tripId)}
-													>
-														<ActionPill
-															icon="calendar-outline"
-															label="Open itinerary"
-														/>
-													</Link>
-												</View>
-											</View>
-										</Card>
-									</Reveal>
+			<FormSheet
+				errorMessage={controller.errorMessage}
+				isOpen={controller.isDetailOpen && Boolean(place)}
+				onOpenChange={controller.closeDetail}
+				subtitle={place?.locationName}
+				title={place?.title ?? "Place"}
+			>
+				{place ? (
+					<>
+						{controller.days.length > 0 ? (
+							<ListGroup header="Assign to day">
+								{controller.days.map((day) => (
+									<ListRow
+										accessibilityLabel={`Day ${day.dayNumber}, ${day.title}`}
+										key={day._id}
+										onPress={() => {
+											controller.assign(place, day._id).catch(() => undefined);
+										}}
+										showChevron={false}
+										subtitle={day.title}
+										title={
+											day.date
+												? `Day ${day.dayNumber} · ${formatShortDate(day.date)}`
+												: `Day ${day.dayNumber}`
+										}
+										trailing={
+											<DayCheck isSelected={place.assignedDayId === day._id} />
+										}
+									/>
 								))}
-							</View>
-						) : null}
-					</View>
-				)}
-			</ModuleScroll>
-			<PlaceSheet
-				errorMessage={placeErrorMessage}
-				form={form}
-				isOpen={isPlaceSheetOpen}
-				isSaving={isSaving}
-				mode={editingPlaceId ? "edit" : "create"}
-				onOpenChange={(isOpen) => {
-					setIsPlaceSheetOpen(isOpen);
-					if (!isOpen) {
-						setEditingPlaceId(null);
-						setPlaceErrorMessage(null);
-						setForm(initialPlaceForm);
-					}
-				}}
-				onSubmit={handleSavePlace}
-				onUpdateForm={updateForm}
-			/>
-			<PlaceAssignmentSheet
-				days={itinerary.days}
-				errorMessage={placeErrorMessage}
-				isOpen={isAssignmentSheetOpen}
-				isSaving={isAssigningDay}
-				itineraryHref={VIYA_ROUTES.tripItinerary(tripId)}
-				onAssignDay={(dayId) => {
-					handleAssignPlaceToDay(dayId).catch(() => undefined);
-				}}
-				onOpenChange={(isOpen) => {
-					setIsAssignmentSheetOpen(isOpen);
-					if (!isOpen) {
-						setAssigningPlaceId(null);
-						setPlaceErrorMessage(null);
-					}
-				}}
-				place={assigningPlace}
-			/>
-		</TripModuleScreenFrame>
+							</ListGroup>
+						) : (
+							<ListGroup
+								footer="Plan a day in Itinerary, then assign places to it."
+								header="Assign to day"
+							>
+								<ListRow showChevron={false} title="No itinerary days yet" />
+							</ListGroup>
+						)}
+						<ListGroup>
+							{hasMapTarget(place) ? (
+								<ListRow
+									leading={<Icon name="map-outline" size={20} />}
+									onPress={() => {
+										controller.openMaps(place).catch(() => undefined);
+									}}
+									showChevron={false}
+									title="Open Maps"
+								/>
+							) : null}
+							<ListRow
+								leading={<Icon name="create-outline" size={20} />}
+								onPress={() => controller.openEdit(place)}
+								showChevron={false}
+								title="Edit place"
+							/>
+							{place.assignedDayId ? (
+								<ListRow
+									leading={<Icon name="remove-circle-outline" size={20} />}
+									onPress={() => {
+										controller.assign(place).catch(() => undefined);
+									}}
+									showChevron={false}
+									title="Remove from day"
+								/>
+							) : null}
+							<ListRow
+								destructive={true}
+								leading={<Icon name="trash-outline" size={20} tone="danger" />}
+								onPress={() => {
+									controller.remove(place).catch(() => undefined);
+								}}
+								showChevron={false}
+								title="Delete place"
+							/>
+						</ListGroup>
+					</>
+				) : null}
+			</FormSheet>
+		</>
 	);
 }

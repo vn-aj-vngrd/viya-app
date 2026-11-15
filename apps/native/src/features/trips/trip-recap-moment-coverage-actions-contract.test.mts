@@ -8,15 +8,13 @@ const readWorkspaceFile = (path: string) =>
 	readFileSync(resolve(rootPath, path), "utf8");
 
 describe("trip recap moment coverage actions contract", () => {
-	it("keeps recap story coverage and empty memory rows connected to moments", () => {
+	it("keeps the empty recap highlights row connected to moments", () => {
 		const source = readWorkspaceFile(
 			"apps/native/src/features/trips/trip-recap-screen.tsx"
 		);
 
-		expect(source).toContain('actionLabel="Add memory"');
-		expect(source).toContain('actionLabel="Review story coverage"');
-		expect(source).toContain('label="No moments captured yet"');
-		expect(source).toContain('label="Story coverage"');
-		expect(source).toContain("actionHref={VIYA_ROUTES.tripMoments(tripId)}");
+		expect(source).toContain("No moments yet");
+		expect(source).toContain('header="Highlights"');
+		expect(source).toContain("router.push(VIYA_ROUTES.tripMoments(tripId))");
 	});
 });

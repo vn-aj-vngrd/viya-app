@@ -1,13 +1,9 @@
 import type { ReactNode } from "react";
 import type { ViewStyle } from "react-native";
 import { Pressable, type PressableProps, type StyleProp } from "react-native";
-import Animated, {
-	useAnimatedStyle,
-	useSharedValue,
-	withSpring,
-} from "react-native-reanimated";
-
+import Animated from "react-native-reanimated";
 import { type HapticKind, haptic } from "./haptics";
+import { usePressScale } from "./motion";
 import { motion } from "./tokens";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -18,7 +14,7 @@ export interface PressableScaleProps
 	className?: string;
 	/** Haptic fired on press. Default "light"; use "none" to silence. */
 	haptic?: HapticKind;
-	/** Scale while pressed. Default 0.96. */
+	/** Scale while pressed. Default 0.97. */
 	scaleTo?: number;
 	style?: StyleProp<ViewStyle>;
 }
@@ -38,10 +34,7 @@ export function PressableScale({
 	style,
 	...props
 }: PressableScaleProps) {
-	const scale = useSharedValue(1);
-	const animatedStyle = useAnimatedStyle(() => ({
-		transform: [{ scale: scale.value }],
-	}));
+	const press = usePressScale(scaleTo);
 
 	return (
 		<AnimatedPressable
@@ -53,14 +46,14 @@ export function PressableScale({
 				onPress?.(event);
 			}}
 			onPressIn={(event) => {
-				scale.value = withSpring(scaleTo, motion.spring.press);
+				press.onPressIn();
 				onPressIn?.(event);
 			}}
 			onPressOut={(event) => {
-				scale.value = withSpring(1, motion.spring.press);
+				press.onPressOut();
 				onPressOut?.(event);
 			}}
-			style={[style, animatedStyle]}
+			style={[style, press.animatedStyle]}
 			{...props}
 		>
 			{children}

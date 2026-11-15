@@ -1,14 +1,22 @@
-import { Ionicons } from "@expo/vector-icons";
 import type { ComponentProps, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, type TextInput, View } from "react-native";
-import Animated, { FadeIn } from "react-native-reanimated";
+import {
+	ActivityIndicator,
+	StyleSheet,
+	type TextInput,
+	View,
+} from "react-native";
+import Animated from "react-native-reanimated";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 import {
 	AppText,
+	fadeIn,
 	haptic,
+	Icon,
+	metrics,
 	PressableScale,
 	radius,
+	spacing,
 	useUITheme,
 } from "@/src/components/ui";
 import {
@@ -161,7 +169,7 @@ export function LocationSuggestionField({
 	};
 
 	return (
-		<View style={{ gap: 8 }}>
+		<View style={{ gap: spacing.sm }}>
 			<TripTextField
 				autoCapitalize="words"
 				errorText={errorText}
@@ -177,13 +185,11 @@ export function LocationSuggestionField({
 			/>
 			{panelState.shouldShowPanel ? (
 				<Animated.View
-					entering={FadeIn.duration(160)}
+					entering={fadeIn}
 					style={{
 						backgroundColor: palette.surface,
-						borderColor: palette.hairline,
 						borderCurve: "continuous",
 						borderRadius: radius.card,
-						borderWidth: 1,
 						overflow: "hidden",
 					}}
 				>
@@ -192,31 +198,19 @@ export function LocationSuggestionField({
 							icon={
 								<ActivityIndicator color={palette.inkSecondary} size="small" />
 							}
-							text="Finding matching destinations..."
+							text="Searching places"
 						/>
 					) : null}
 					{panelState.message === "error" ? (
 						<LocationSuggestionMessage
-							icon={
-								<Ionicons
-									color={palette.inkSecondary}
-									name="alert-circle-outline"
-									size={18}
-								/>
-							}
-							text="Suggestions are unavailable. You can keep this destination."
+							icon={<Icon name="alert-circle-outline" tone="secondary" />}
+							text="Suggestions are unavailable. You can keep what you typed."
 						/>
 					) : null}
 					{panelState.message === "empty" ? (
 						<LocationSuggestionMessage
-							icon={
-								<Ionicons
-									color={palette.inkSecondary}
-									name="search-outline"
-									size={18}
-								/>
-							}
-							text="No close matches yet. Keep typing or use your text."
+							icon={<Icon name="search-outline" tone="secondary" />}
+							text="No close matches. Keep typing or use what you typed."
 						/>
 					) : null}
 					{suggestions.map((suggestion, index) => (
@@ -230,23 +224,17 @@ export function LocationSuggestionField({
 							style={{
 								alignItems: "center",
 								borderTopColor: palette.separator,
-								borderTopWidth: index === 0 ? 0 : 1,
+								borderTopWidth: index === 0 ? 0 : StyleSheet.hairlineWidth,
 								flexDirection: "row",
-								gap: 12,
-								minHeight: 56,
-								paddingHorizontal: 16,
-								paddingVertical: 10,
+								gap: spacing.md,
+								minHeight: metrics.rowHeight,
+								paddingHorizontal: spacing.lg,
+								paddingVertical: spacing.sm,
 							}}
 						>
-							<View style={iconTile(palette.fill)}>
-								<Ionicons
-									color={palette.inkSecondary}
-									name="location-outline"
-									size={18}
-								/>
-							</View>
+							<Icon name="location-outline" tone="secondary" />
 							<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-								<AppText bold numberOfLines={1} variant="subhead">
+								<AppText numberOfLines={1} variant="callout">
 									{suggestion.label}
 								</AppText>
 								{suggestion.details ? (
@@ -260,38 +248,24 @@ export function LocationSuggestionField({
 								) : null}
 							</View>
 							{suggestion.countryCode ? (
-								<View
-									style={{
-										backgroundColor: palette.fill,
-										borderRadius: radius.pill,
-										paddingHorizontal: 8,
-										paddingVertical: 3,
-									}}
-								>
-									<AppText bold tone="secondary" variant="footnote">
-										{suggestion.countryCode}
-									</AppText>
-								</View>
+								<AppText tone="tertiary" variant="footnote">
+									{suggestion.countryCode}
+								</AppText>
 							) : null}
-							<Ionicons
-								color={palette.inkTertiary}
-								name="chevron-forward"
-								size={16}
-							/>
 						</PressableScale>
 					))}
 					{suggestions.length > 0 ? (
 						<AppText
 							style={{
 								borderTopColor: palette.separator,
-								borderTopWidth: 1,
-								paddingHorizontal: 16,
-								paddingVertical: 8,
+								borderTopWidth: StyleSheet.hairlineWidth,
+								paddingHorizontal: spacing.lg,
+								paddingVertical: spacing.sm,
 							}}
 							tone="tertiary"
 							variant="footnote"
 						>
-							Geoapify suggestions
+							Suggestions by Geoapify
 						</AppText>
 					) : null}
 				</Animated.View>
@@ -300,16 +274,6 @@ export function LocationSuggestionField({
 	);
 }
 
-const iconTile = (backgroundColor: string) =>
-	({
-		alignItems: "center",
-		backgroundColor,
-		borderRadius: radius.pill,
-		height: 36,
-		justifyContent: "center",
-		width: 36,
-	}) as const;
-
 function LocationSuggestionMessage({
 	icon,
 	text,
@@ -317,19 +281,18 @@ function LocationSuggestionMessage({
 	icon: ReactNode;
 	text: string;
 }) {
-	const { palette } = useUITheme();
-
 	return (
 		<View
 			style={{
 				alignItems: "center",
 				flexDirection: "row",
-				gap: 12,
-				paddingHorizontal: 16,
-				paddingVertical: 12,
+				gap: spacing.md,
+				minHeight: metrics.rowHeight,
+				paddingHorizontal: spacing.lg,
+				paddingVertical: spacing.md,
 			}}
 		>
-			<View style={iconTile(palette.fill)}>{icon}</View>
+			{icon}
 			<AppText style={{ flex: 1 }} tone="secondary" variant="subhead">
 				{text}
 			</AppText>

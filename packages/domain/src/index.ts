@@ -15,6 +15,7 @@ export * from "./schemas/vault";
 export * from "./schemas/wrapped";
 export * from "./trip-companions";
 export * from "./trip-itinerary";
+export * from "./trip-metrics";
 export * from "./trip-modules";
 export * from "./trip-places";
 export * from "./trip-risks";

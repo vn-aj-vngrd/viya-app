@@ -13,11 +13,9 @@ describe("trip budget empty all-expenses action contract", () => {
 			"apps/native/src/features/budget/trip-budget-screen.tsx"
 		);
 
-		expect(source).toContain("ALL EXPENSES");
-		expect(source).toContain("Manual expenses will appear here.");
-		expect(source).toContain("Add first expense");
-		expect(source).toContain("setEditingExpenseId(null)");
-		expect(source).toContain("setExpenseForm(initialExpenseForm())");
-		expect(source).toContain("setExpenseErrorMessage(null)");
+		expect(source).toContain("No expenses logged");
+		expect(source).toContain("No budget or expenses yet");
+		expect(source).toContain("Add expense");
+		expect(source).toContain("openNewExpenseForm");
 	});
 });

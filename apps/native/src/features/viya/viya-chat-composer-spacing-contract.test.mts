@@ -14,9 +14,12 @@ describe("viya chat composer spacing contract", () => {
 		);
 
 		expect(source).toContain("const chatComposerGap = 12");
-		expect(source).toContain("paddingBottom: Math.max(insets.bottom, 16)");
+		expect(source).toContain(
+			"paddingBottom: Math.max(insets.bottom, spacing.sm)"
+		);
 		expect(source).toContain("paddingBottom: chatScrollContentBottomPadding");
-		expect(source).toContain("marginBottom: 0");
+		expect(source).toContain("includeBottomInset={false}");
+		expect(source).not.toContain("isComposerSheetOpen");
 		expect(source).not.toContain("chatScrollShadowBottomBleed");
 	});
 });

@@ -13,10 +13,8 @@ describe("trip companions lead contact contract", () => {
 			"apps/native/src/features/trips/trip-companions-screen.tsx"
 		);
 
-		expect(source).toContain("Review lead");
-		expect(source).toContain("Call lead");
-		expect(source).toContain("Message lead");
-		expect(source).toContain("Email lead");
-		expect(source).toContain("openEditSheet(leadCompanion)");
+		expect(source).toContain("sortedCompanions");
+		expect(source).toContain('b.role === "organizer"');
+		expect(source).toContain("openEditSheet(companion)");
 	});
 });

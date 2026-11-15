@@ -26,6 +26,11 @@ export interface GlassSurfaceProps {
 	style?: StyleProp<ViewStyle>;
 	/** Optional tint (e.g. accent) applied to the glass. */
 	tint?: string;
+	/**
+	 * "regular" (default) for controls; "clear" for floating controls over
+	 * rich media where the content must show through.
+	 */
+	variant?: "clear" | "regular";
 }
 
 /**
@@ -44,6 +49,7 @@ export function GlassSurface({
 	shape = "rounded",
 	style,
 	tint,
+	variant = "regular",
 }: GlassSurfaceProps) {
 	const { isDark, palette, scheme } = useUITheme();
 	const reduceTransparency = useReduceTransparency();
@@ -57,7 +63,7 @@ export function GlassSurface({
 			<GlassView
 				className={className}
 				colorScheme={scheme}
-				glassEffectStyle="regular"
+				glassEffectStyle={variant}
 				isInteractive={interactive}
 				style={[base, style]}
 				tintColor={tint}

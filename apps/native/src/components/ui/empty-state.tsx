@@ -1,12 +1,10 @@
-import { Ionicons } from "@expo/vector-icons";
 import type { ReactNode } from "react";
 import { View } from "react-native";
 
 import { AppText } from "./app-text";
 import { SecondaryButton } from "./buttons";
-import type { IconName } from "./glass-icon-button";
+import { Icon, type IconName } from "./icon";
 import { spacing } from "./tokens";
-import { useUITheme } from "./use-ui-theme";
 
 export interface EmptyStateProps {
 	/** Prefer none: the message should name the control that fills the page. */
@@ -33,8 +31,6 @@ export function EmptyState({
 	title,
 	visual,
 }: EmptyStateProps) {
-	const { palette } = useUITheme();
-
 	return (
 		<View
 			className={className}
@@ -47,7 +43,7 @@ export function EmptyState({
 				paddingVertical: spacing["3xl"],
 			}}
 		>
-			{visual ?? <Ionicons color={palette.inkTertiary} name={icon} size={34} />}
+			{visual ?? <Icon name={icon} size={34} tone="tertiary" weight="light" />}
 			<AppText
 				accessibilityRole="header"
 				style={{ marginTop: spacing.xs, textAlign: "center" }}

@@ -1,7 +1,10 @@
 import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
+import { getNextTrip as getDomainNextTrip } from "@viya-app/domain";
 import type { Href } from "expo-router";
 import type { MenuKey } from "heroui-native";
 import type { StyleProp, ViewStyle } from "react-native";
+
+import { toLocalDateKey } from "@/src/lib/format";
 
 import {
 	ALL_CHAT_MODE_OPTIONS,
@@ -549,7 +552,7 @@ const tripWorkspaceSuggestionByTab = {
 		({
 			accent: "#0A84FF",
 			icon: "calendar-outline",
-			prompt: `Generate or refine the Wanderlog-style itinerary for ${tripLabel}. Use the current trip days, places, meals, transfers, and realistic pacing.`,
+			prompt: `Generate or refine the itinerary for ${tripLabel}. Use the current trip days, places, meals, transfers, and realistic pacing.`,
 			soft: "rgba(10, 132, 255, 0.12)",
 			summary: "Work from this trip's current route.",
 			title: "Refine this itinerary",
@@ -665,19 +668,71 @@ export const getSelectableTripContexts = <
 	trips: readonly TripContext[] | undefined
 ) => trips?.filter((trip) => !trip.isDemo) ?? [];
 
-export const getSelectedTripContext = <
-	TripContext extends { _id: string; isDemo: boolean },
+interface TripFallbackFields {
+	_id: string;
+	endDate?: string | null;
+	isDemo: boolean;
+	startDate?: string | null;
+	status?: string;
+	updatedAt?: number;
+}
+
+// Next trip: the shared domain rule (in progress, then soonest upcoming, then undated).
+export const getNextTrip = <
+	TripItem extends {
+		endDate?: string | null;
+		isDemo?: boolean;
+		startDate?: string | null;
+		status?: string;
+		updatedAt?: number;
+	},
 >(
+	trips: readonly TripItem[] | undefined,
+	todayKey: string
+): TripItem | null => {
+	const list = trips ?? [];
+	const next = getDomainNextTrip(
+		list.map((trip, index) => ({
+			endDate: trip.endDate,
+			index,
+			isDemo: trip.isDemo,
+			startDate: trip.startDate,
+			status: trip.status ?? "planning",
+			updatedAt: trip.updatedAt,
+		})),
+		todayKey
+	);
+
+	return next ? (list[next.index] ?? null) : null;
+};
+
+export const getSelectedTripContext = <TripContext extends TripFallbackFields>(
 	trips: readonly TripContext[] | undefined,
-	selectedTripId: string | null
+	selectedTripId: string | null,
+	todayKey: string = toLocalDateKey()
 ) => {
 	const selectableTrips = getSelectableTripContexts(trips);
+	const selected = selectableTrips.find((trip) => trip._id === selectedTripId);
 
-	return (
-		selectableTrips.find((trip) => trip._id === selectedTripId) ??
-		selectableTrips[0] ??
-		null
-	);
+	if (selected) {
+		return selected;
+	}
+
+	const nextTrip = getNextTrip(selectableTrips, todayKey);
+
+	if (nextTrip) {
+		return nextTrip;
+	}
+
+	let latest: TripContext | null = null;
+
+	for (const trip of selectableTrips) {
+		if (!latest || (trip.updatedAt ?? 0) > (latest.updatedAt ?? 0)) {
+			latest = trip;
+		}
+	}
+
+	return latest;
 };
 
 export const getStoredThreadIdsByContext =

@@ -12,13 +12,10 @@ describe("readiness owner navigation contract", () => {
 		const screenSource = readWorkspaceFile(
 			"apps/native/src/features/readiness/readiness-screen.tsx"
 		);
-		const rowSource = readWorkspaceFile(
-			"apps/native/src/features/readiness/readiness-item-row.tsx"
-		);
 
 		expect(screenSource).toContain("VIYA_ROUTES.tripCompanions");
 		expect(screenSource).toContain("ownerHref");
-		expect(rowSource).toContain("Open owner");
-		expect(rowSource).toContain("Link asChild");
+		expect(screenSource).toContain("Open ${ownerName");
+		expect(screenSource).toContain("Link asChild");
 	});
 });

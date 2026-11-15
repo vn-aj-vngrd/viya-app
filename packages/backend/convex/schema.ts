@@ -135,6 +135,7 @@ export default defineSchema({
 		travelStyle: v.string(),
 		pace: v.string(),
 		groupType: v.string(),
+		travelerCount: v.optional(v.number()),
 		status: v.union(
 			v.literal("planning"),
 			v.literal("traveling"),

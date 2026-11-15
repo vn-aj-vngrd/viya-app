@@ -1,37 +1,99 @@
 import { api } from "@viya-app/backend/convex/_generated/api";
-import { useQuery } from "convex/react";
-import { useMemo, useState } from "react";
-import { View } from "react-native";
+import {
+	getMissingRequiredReadinessCategories,
+	toReadinessItem,
+} from "@viya-app/domain";
+import { useMutation, useQuery } from "convex/react";
+import { useRouter } from "expo-router";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { Container } from "@/components/container";
-import { EmptyState, LoadingState, useUITheme } from "@/src/components/ui";
+import { PrimaryButton, ScreenShell } from "@/src/components/ui";
+import { VIYA_ROUTES } from "@/src/constants/routes";
 
 import {
-	MainModules,
+	TripDraftsSheet,
 	TripHero,
-	TripModuleNavigationBar,
-	TripStickyHeader,
-	TripTabPicker,
+	TripModuleGroups,
+	TripNextUp,
+	TripToday,
+	useTripHeaderActions,
 } from "./trip-dashboard-components";
-import { shouldShowTripDashboardFocusSections } from "./trip-dashboard-layout";
-import { TripTabContent } from "./trip-dashboard-tabs";
-import type { TripTab, TripWorkspace } from "./trip-dashboard-types";
+import type { TripDashboardModel, TripWorkspace } from "./trip-dashboard-types";
 import { createTripDashboardModel } from "./trip-dashboard-utils";
 import { useTripIdParam } from "./use-trip-id-param";
 
-export function TripDashboardScreen({
-	initialTab = "overview",
-}: {
-	initialTab?: TripTab;
-} = {}) {
+function TripDashboardContent({ model }: { model: TripDashboardModel }) {
+	const router = useRouter();
+	const [isDraftsOpen, setIsDraftsOpen] = useState(false);
+	const { actions, openProfileSheet, sheet } = useTripHeaderActions(model);
+	const isTraveling = model.phase === "during";
+
+	return (
+		<ScreenShell
+			actions={actions}
+			footer={
+				isTraveling ? (
+					<PrimaryButton
+						icon="navigate-outline"
+						label="Open Travel Mode"
+						onPress={() =>
+							router.push(VIYA_ROUTES.tripTravelMode(model.tripId))
+						}
+					/>
+				) : undefined
+			}
+			sheets={
+				<>
+					{sheet}
+					<TripDraftsSheet
+						isOpen={isDraftsOpen}
+						model={model}
+						onOpenChange={setIsDraftsOpen}
+					/>
+				</>
+			}
+			title={model.workspace.trip.title}
+			titleMode="large"
+		>
+			<TripHero model={model} onAddDestination={openProfileSheet} />
+			{isTraveling ? <TripToday model={model} /> : <TripNextUp model={model} />}
+			<TripModuleGroups
+				model={model}
+				onOpenDrafts={() => setIsDraftsOpen(true)}
+			/>
+		</ScreenShell>
+	);
+}
+
+export function TripDashboardScreen() {
+	const router = useRouter();
 	const tripId = useTripIdParam();
-	const { palette } = useUITheme();
 	const workspace = useQuery(
 		api.tripWorkspace.getTripWorkspace,
 		tripId ? { tripId } : "skip"
 	);
-	const [activeTab, setActiveTab] = useState<TripTab>(initialTab);
-	const shouldShowFocusSections = shouldShowTripDashboardFocusSections();
+
+	const ensureBaselineReadinessItems = useMutation(
+		api.readiness.ensureBaselineReadinessItems
+	);
+	const baselineRequestedRef = useRef<string | null>(null);
+
+	useEffect(() => {
+		if (!(tripId && workspace) || baselineRequestedRef.current === tripId) {
+			return;
+		}
+
+		const missing = getMissingRequiredReadinessCategories(
+			workspace.readinessItems.map(toReadinessItem)
+		);
+
+		if (missing.length > 0) {
+			baselineRequestedRef.current = tripId;
+			ensureBaselineReadinessItems({ tripId }).catch(() => {
+				baselineRequestedRef.current = null;
+			});
+		}
+	}, [ensureBaselineReadinessItems, tripId, workspace]);
 
 	const model = useMemo(() => {
 		if (!(tripId && workspace)) {
@@ -44,69 +106,32 @@ export function TripDashboardScreen({
 		});
 	}, [tripId, workspace]);
 
-	if (!tripId) {
+	if (!tripId || workspace === null) {
 		return (
-			<Container className="px-4 pb-28">
-				<EmptyState
-					description="Open a saved trip to view its command center."
-					icon="map-outline"
-					title="Trip not found"
-				/>
-			</Container>
-		);
-	}
-
-	if (workspace === null) {
-		return (
-			<Container className="px-4 pb-28">
-				<EmptyState
-					description="This trip was deleted or is no longer available."
-					icon="map-outline"
-					title="Trip not found"
-				/>
-			</Container>
+			<ScreenShell
+				state={{
+					action: {
+						label: "Back to trips",
+						onPress: () => router.replace(VIYA_ROUTES.trips),
+					},
+					description: "This trip was deleted or you no longer have access.",
+					icon: "map-outline",
+					kind: "empty",
+					title: "This trip is no longer available",
+				}}
+				title="Trip"
+			/>
 		);
 	}
 
 	if (workspace === undefined || !model) {
 		return (
-			<Container className="px-4 pb-28">
-				<LoadingState
-					message="Opening your trip workspace."
-					title="Loading trip"
-				/>
-			</Container>
+			<ScreenShell
+				state={{ kind: "loading", title: "Loading trip" }}
+				title="Trip"
+			/>
 		);
 	}
 
-	return (
-		<View style={{ backgroundColor: palette.canvas, flex: 1 }}>
-			<TripStickyHeader model={model} />
-			<Container
-				className="px-4"
-				includeBottomInset={false}
-				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
-			>
-				<View style={{ gap: 12, paddingBottom: 112 }}>
-					<TripHero model={model} />
-					<MainModules model={model} />
-					{shouldShowFocusSections ? (
-						<>
-							<TripTabPicker
-								activeTab={activeTab}
-								model={model}
-								onSelectTab={setActiveTab}
-							/>
-							<TripTabContent
-								activeTab={activeTab}
-								model={model}
-								onSelectTab={setActiveTab}
-							/>
-						</>
-					) : null}
-				</View>
-			</Container>
-			<TripModuleNavigationBar activeTab={activeTab} model={model} />
-		</View>
-	);
+	return <TripDashboardContent model={model} />;
 }

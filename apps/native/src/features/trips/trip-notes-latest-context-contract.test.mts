@@ -13,9 +13,9 @@ describe("trip notes latest context contract", () => {
 			"apps/native/src/features/trips/trip-notes-screen.tsx"
 		);
 
-		expect(source).toContain("latestNoteRelatedHref");
-		expect(source).toContain("Review latest");
-		expect(source).toContain("Open latest link");
-		expect(source).toContain("openEditSheet(latestNote)");
+		expect(source).toContain("editingHref");
+		expect(source).toContain("openEditSheet(note)");
+		expect(source).toContain("Open linked item");
+		expect(source).toContain("router.push(editingHref)");
 	});
 });

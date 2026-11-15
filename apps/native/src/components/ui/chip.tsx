@@ -1,7 +1,5 @@
-import { Ionicons } from "@expo/vector-icons";
-
 import { AppText } from "./app-text";
-import type { IconName } from "./glass-icon-button";
+import { Icon, type IconName } from "./icon";
 import { PressableScale } from "./pressable-scale";
 import { metrics, radius, spacing } from "./tokens";
 import { useUITheme } from "./use-ui-theme";
@@ -39,12 +37,14 @@ export function Chip({ className, icon, label, onPress, selected }: ChipProps) {
 				backgroundColor: selected ? palette.ink : palette.fill,
 				borderRadius: radius.pill,
 				flexDirection: "row",
-				gap: 6,
+				gap: spacing.xs,
 				height: metrics.chipHeight,
 				paddingHorizontal: spacing.md,
 			}}
 		>
-			{icon ? <Ionicons color={foreground} name={icon} size={15} /> : null}
+			{icon ? (
+				<Icon color={foreground} name={icon} size={15} weight="medium" />
+			) : null}
 			<AppText
 				style={{ color: foreground, fontWeight: "500" }}
 				variant="subhead"

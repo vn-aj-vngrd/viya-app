@@ -3,19 +3,20 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const rootPath = resolve(import.meta.dirname, "../../../../..");
-
 const readWorkspaceFile = (path: string) =>
 	readFileSync(resolve(rootPath, path), "utf8");
 
 describe("trip places itinerary navigation contract", () => {
-	it("keeps itinerary-backed places navigable to the itinerary module", () => {
+	it("keeps places inside the itinerary screen as the Places segment", () => {
+		const route = readWorkspaceFile(
+			"apps/native/app/(app)/trips/[tripId]/places.tsx"
+		);
 		const source = readWorkspaceFile(
-			"apps/native/src/features/trips/trip-places-screen.tsx"
+			"apps/native/src/features/trips/trip-itinerary-screen.tsx"
 		);
 
-		expect(source).toContain("VIYA_ROUTES.tripItinerary");
-		expect(source).toContain("itineraryHref");
-		expect(source).toContain("Open itinerary");
-		expect(source).toContain("asChild");
+		expect(route).toContain('initialSegment="places"');
+		expect(source).toContain("PlacesContent");
+		expect(source).toContain("PlacesSheets");
 	});
 });

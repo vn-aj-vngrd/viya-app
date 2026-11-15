@@ -1,3 +1,5 @@
+import { isBookingSecured } from "./trip-metrics";
+
 interface BudgetBookingLike {
 	cost?: number;
 	currency?: string;
@@ -125,7 +127,7 @@ export const getBudgetWalletSummary = ({
 	let plannedCosts = 0;
 
 	for (const booking of bookings) {
-		if (booking.status !== "confirmed") {
+		if (!isBookingSecured(booking.status)) {
 			continue;
 		}
 
@@ -156,9 +158,10 @@ export const getBudgetWalletSummary = ({
 
 	const totalTrackedSpend = confirmedBookingCosts + manualExpenses;
 	const budgetTotal = getPositiveAmount(budgetAmount);
-	const remainingAmount = Math.max(0, budgetTotal - totalTrackedSpend);
+	const leftAmount = Math.max(0, budgetTotal - totalTrackedSpend);
+	const overAmount = Math.max(0, totalTrackedSpend - budgetTotal);
 	const safeSpendDays = Math.max(1, remainingTripDays);
-	const dailySafeSpend = Math.floor(remainingAmount / safeSpendDays);
+	const dailySafeSpend = Math.floor(leftAmount / safeSpendDays);
 	const categoryBreakdown: BudgetCategoryTotal[] = Array.from(
 		categoryTotals.entries()
 	)
@@ -175,9 +178,11 @@ export const getBudgetWalletSummary = ({
 		confirmedBookingCosts,
 		dailySafeSpend,
 		foreignCurrencyTotals: foreignCurrencyBreakdown,
+		leftAmount,
 		manualExpenses,
+		overAmount,
 		plannedCosts,
-		remainingAmount,
+		remainingAmount: leftAmount,
 		totalTrackedSpend,
 	};
 };

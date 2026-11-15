@@ -1,14 +1,45 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(bun install)",
+      "Bash(bun test:*)",
+      "Bash(bun run check:*)",
+      "Bash(bun run check-types:*)",
+      "Bash(bun run fix:*)",
+      "Bash(bun x ultracite:*)",
+      "Bash(bunx ultracite:*)",
+      "Bash(npx ultracite:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx expo start:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(xcrun simctl:*)",
+      "Bash(xcrun devicectl:*)",
+      "Bash(xcodebuild -list:*)",
+      "Bash(xcodebuild -workspace:*)",
+      "Bash(ls:*)",
+      "Bash(rg:*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./apps/*/.env)",
+      "Read(./packages/*/.env.local)"
+    ]
+  },
   "hooks": {
     "PostToolUse": [
       {
+        "matcher": "Write|Edit",
         "hooks": [
           {
-            "command": "bun fix --skip=correctness/noUnusedImports",
-            "type": "command"
+            "type": "command",
+            "command": "f=$(jq -r '.tool_input.file_path // empty'); case \"$f\" in */node_modules/*|*/ios/*|*/_generated/*) exit 0;; *.ts|*.tsx) cd \"$CLAUDE_PROJECT_DIR\" && npx ultracite fix \"$f\" >/dev/null 2>&1;; esac; exit 0"
           }
-        ],
-        "matcher": "Write|Edit"
+        ]
       }
     ]
   }

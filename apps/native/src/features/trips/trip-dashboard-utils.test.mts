@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
 
-import type { TripTab, TripWorkspace } from "./trip-dashboard-types";
+import type { TripWorkspace } from "./trip-dashboard-types";
 import { createTripDashboardModel } from "./trip-dashboard-utils";
 
 const tripId = "trip_123" as Id<"trips">;
@@ -184,49 +184,36 @@ const createWorkspace = (): TripWorkspace => ({
 });
 
 describe("trip dashboard model module coverage", () => {
-	test("exposes every trip module as a dashboard tab", () => {
+	test("counts every module for the dashboard rows", () => {
 		const model = createTripDashboardModel({
 			tripId,
 			workspace: createWorkspace(),
 		});
-		const expectedTabs: TripTab[] = [
-			"overview",
-			"itinerary",
-			"places",
-			"bookings",
-			"documents",
-			"checklist",
-			"budget",
-			"risks",
-			"companions",
-			"notes",
-			"travel",
-			"memories",
-			"recap",
-		];
 
-		expect(model.tabs.map((tab) => tab.id)).toEqual(expectedTabs);
+		expect(model.bookings).toMatchObject({ booked: 1, total: 1 });
+		expect(model.places).toEqual({ saved: 1, unassigned: 1 });
+		expect(model.vault.files).toBe(1);
+		expect(model.risks).toEqual({ open: 1, topTitle: "Tight transfer" });
+		expect(model.travelerCount).toBe(2);
+		expect(model.itinerary.stops).toBe(1);
 	});
 
-	test("counts every editable trip module for dashboard badges", () => {
-		const model = createTripDashboardModel({
-			tripId,
-			workspace: createWorkspace(),
-		});
+	test("counts bookings marked booked externally as booked", () => {
+		const workspace = createWorkspace();
+		workspace.bookings = [
+			{
+				_id: "external_booking",
+				_creationTime: 1,
+				status: "bookedExternally",
+				title: "Ferry",
+				tripId,
+				type: "transport",
+				updatedAt: 1,
+			} as unknown as TripWorkspace["bookings"][number],
+		];
+		const model = createTripDashboardModel({ tripId, workspace });
 
-		expect(model.tabCounts).toMatchObject({
-			bookings: 1,
-			budget: 1,
-			checklist: 1,
-			companions: 1,
-			documents: 2,
-			itinerary: 1,
-			memories: 1,
-			notes: 1,
-			places: 2,
-			risks: 1,
-			travel: 2,
-		});
+		expect(model.bookings).toMatchObject({ booked: 1, total: 1 });
 	});
 
 	test("uses trip days, not pre-trip lead time, for safe daily budget", () => {
@@ -276,70 +263,30 @@ describe("trip dashboard model module coverage", () => {
 
 		const model = createTripDashboardModel({ tripId, workspace });
 
-		expect(model.budget.remaining).toBe(35_800);
-		expect(model.budget.totalTrackedSpend).toBe(54_200);
+		expect(model.budget.left).toBe(35_800);
+		expect(model.budget.spent).toBe(54_200);
 		expect(model.budget.dailySafeSpend).toBe(8950);
 	});
 
-	test("routes recent dashboard activity back to source modules", () => {
+	test("leads Next up with the urgent risk and keeps open risks uncapped", () => {
 		const workspace = createWorkspace();
-		workspace.notes = [];
-		const model = createTripDashboardModel({ tripId, workspace });
-
-		expect(
-			model.recentUpdates.map((update) => ({
-				actionLabel: update.actionLabel,
-				pathname:
-					typeof update.href === "string" ? update.href : update.href.pathname,
-				tab: update.tab,
-			}))
-		).toEqual([
-			{
-				actionLabel: "Open file",
-				pathname: "/(app)/trips/[tripId]/vault",
-				tab: "documents",
-			},
-			{
-				actionLabel: "Open memory",
-				pathname: "/(app)/trips/[tripId]/moments",
-				tab: "memories",
-			},
-			{
-				actionLabel: "Open expense",
-				pathname: "/(app)/trips/[tripId]/budget",
-				tab: "budget",
-			},
-			{
-				actionLabel: "Open booking",
-				pathname: "/(app)/trips/[tripId]/bookings",
-				tab: "bookings",
-			},
-		]);
-	});
-
-	test("keeps travel alert count uncapped while preview stays compact", () => {
-		const workspace = createWorkspace();
+		workspace.trip.startDate = toIsoDate(addDays(new Date(), 10));
+		workspace.trip.endDate = toIsoDate(addDays(new Date(), 13));
 		workspace.risks = Array.from({ length: 6 }, (_, index) => ({
 			_id: `risk_${index}`,
 			_creationTime: index,
-			severity: "medium",
+			severity: "high",
 			status: "open",
 			suggestedAction: "Create a backup plan.",
 			title: `Risk ${index + 1}`,
 			tripId,
 			type: "schedule",
 		})) as unknown as TripWorkspace["risks"];
-		const model = createTripDashboardModel({
-			tripId,
-			workspace,
-		});
+		const model = createTripDashboardModel({ tripId, workspace });
 
-		expect(model.watchOutItems).toHaveLength(4);
-		expect(model.travelAlertCount).toBe(7);
-		expect(model.tabCounts).toMatchObject({
-			risks: 6,
-			travel: 7,
-		});
+		expect(model.risks.open).toBe(6);
+		expect(model.nextAction.description).toContain("High risk");
+		expect(model.nextAction.icon).toBe("warning-outline");
 	});
 
 	test("orders dashboard readiness gaps by shared review urgency", () => {
@@ -391,7 +338,7 @@ describe("trip dashboard model module coverage", () => {
 			"readiness_earlier_high",
 			"readiness_later_high",
 		]);
-		expect(model.readiness.topBlocker).toBe("Upload passport copy");
+		expect(model.openReadinessItems[0]?.title).toBe("Upload passport copy");
 		expect(model.workspace.readinessItems.map((item) => `${item._id}`)).toEqual(
 			[
 				"readiness_earlier_high",

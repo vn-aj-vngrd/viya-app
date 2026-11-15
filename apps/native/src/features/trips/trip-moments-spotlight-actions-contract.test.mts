@@ -13,11 +13,10 @@ describe("trip moments spotlight actions contract", () => {
 			"apps/native/src/features/trips/trip-moments-screen.tsx"
 		);
 
-		expect(source).toContain("SpotlightMomentSummary");
-		expect(source).toContain("spotlightItineraryHref");
-		expect(source).toContain("Review spotlight");
-		expect(source).toContain("Open spotlight Maps");
-		expect(source).toContain("Open spotlight day");
-		expect(source).toContain("openEditSheet(spotlightMoment)");
+		expect(source).toContain("toggleMomentHighlight");
+		expect(source).toContain("Highlight");
+		expect(source).toContain("Open Maps");
+		expect(source).toContain("Open itinerary");
+		expect(source).toContain("openEditSheet(moment)");
 	});
 });

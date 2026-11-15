@@ -1,52 +1,56 @@
-import { Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
-import { getBudgetWalletSummary } from "@viya-app/domain";
+import {
+	getBudgetDayCount,
+	getBudgetWalletSummary,
+	getTripDayCount,
+	isBookingSecured,
+} from "@viya-app/domain";
 import { useMutation, useQuery } from "convex/react";
 import { Link } from "expo-router";
-import { BottomSheet, Input, Label, Menu, TextField } from "heroui-native";
-import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { Linking, ScrollView, StyleSheet, View } from "react-native";
+import { Linking, View } from "react-native";
 import Animated, {
-	FadeIn,
-	FadeInDown,
 	useAnimatedStyle,
 	useSharedValue,
-	withSpring,
 } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-import { Container } from "@/components/container";
-import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
-import { NavigationIconButton } from "@/src/components/navigation/navigation-icon-button";
-import { ScreenLoadingState } from "@/src/components/screen-loading-state";
+import {
+	DatePickerField,
+	formatIsoDate,
+} from "@/src/components/date/date-picker-field";
 import {
 	AppText,
-	Card,
-	Chip,
 	EmptyState,
-	GlassIconButton,
+	haptic,
 	ListGroup,
-	motion,
-	type Palette,
-	PressableScale,
-	PrimaryButton,
+	ListRow,
 	radius,
-	SecondaryButton,
+	ScreenShell,
 	spacing,
+	useFeedback,
+	useLayoutSpring,
 	useUITheme,
 } from "@/src/components/ui";
 import { VIYA_ROUTES } from "@/src/constants/routes";
-import { PillAction } from "@/src/features/bookings/pill-action";
-import {
-	formatMoney,
-	formatStatus,
-} from "@/src/features/trips/trip-dashboard-utils";
-import { TripModuleScreenFrame } from "@/src/features/trips/trip-module-floating-bar";
 import { useTripIdParam } from "@/src/features/trips/use-trip-id-param";
+import {
+	formatCount,
+	formatDay,
+	formatEnumLabel,
+	formatMoney,
+	toLocalDateKey,
+} from "@/src/lib/format";
 
-const dateMs = 86_400_000;
+import {
+	ChoiceRow,
+	FieldGroup,
+	FieldRow,
+	LinkRow,
+	RecordSheet,
+	StatusLabel,
+	SwipeRow,
+} from "../bookings/module-kit";
+
 const expenseCategories = [
 	"food",
 	"transport",
@@ -74,14 +78,18 @@ interface ExpenseLinkPatch {
 	vaultItemId?: Id<"vaultItems">;
 }
 
-const todayIsoDate = () => new Date().toISOString().slice(0, 10);
+interface LinkOption<TId extends string> {
+	detail: string;
+	id: TId;
+	label: string;
+}
 
 const initialExpenseForm = (): ExpenseFormState => ({
 	amount: "",
 	bookingId: "",
 	category: "food",
 	notes: "",
-	spentAt: todayIsoDate(),
+	spentAt: toLocalDateKey(),
 	title: "",
 	vaultItemId: "",
 });
@@ -92,61 +100,6 @@ const getExpenseLinkPatch = (form: ExpenseFormState): ExpenseLinkPatch => ({
 	bookingId: form.bookingId || undefined,
 	vaultItemId: form.vaultItemId || undefined,
 });
-
-const getTripBudgetDayCount = (startDate: string, endDate: string) => {
-	const start = new Date(`${startDate}T00:00:00.000Z`);
-	const end = new Date(`${endDate}T00:00:00.000Z`);
-	const today = new Date(`${todayIsoDate()}T00:00:00.000Z`);
-
-	if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-		return 1;
-	}
-
-	const tripDayCount = Math.max(
-		1,
-		Math.ceil((end.getTime() - start.getTime()) / dateMs) + 1
-	);
-
-	if (today.getTime() < start.getTime()) {
-		return tripDayCount;
-	}
-
-	return Math.max(1, Math.ceil((end.getTime() - today.getTime()) / dateMs) + 1);
-};
-
-const getBudgetStatusLabel = ({
-	budgetAmount,
-	remainingAmount,
-	totalTrackedSpend,
-}: {
-	budgetAmount?: number;
-	remainingAmount: number;
-	totalTrackedSpend: number;
-}) => {
-	if (!budgetAmount) {
-		return "Set budget";
-	}
-
-	if (remainingAmount <= 0) {
-		return "Over budget";
-	}
-
-	if (totalTrackedSpend / budgetAmount >= 0.8) {
-		return "Watch spend";
-	}
-
-	return "On track";
-};
-
-const getBudgetStatusColor = (status: string, palette: Palette) => {
-	if (status === "Over budget") {
-		return palette.danger;
-	}
-	if (status === "Watch spend") {
-		return palette.warning;
-	}
-	return status === "On track" ? palette.success : palette.inkTertiary;
-};
 
 const getBudgetProgress = ({
 	budgetAmount,
@@ -162,41 +115,31 @@ const getBudgetProgress = ({
 	return Math.min(100, Math.max(0, (totalTrackedSpend / budgetAmount) * 100));
 };
 
-function BudgetSnapshotStat({
-	align = "flex-start",
-	detail,
-	label,
-	value,
-}: {
-	align?: "flex-end" | "flex-start";
-	detail?: string;
-	label: string;
-	value: string;
-}) {
-	return (
-		<View style={{ alignItems: align, flex: 1, gap: 2, minWidth: 0 }}>
-			<AppText numberOfLines={1} tone="secondary" variant="footnote">
-				{label}
-			</AppText>
-			<AppText bold={true} numberOfLines={1} variant="subhead">
-				{value}
-			</AppText>
-			{detail ? (
-				<AppText numberOfLines={1} tone="tertiary" variant="footnote">
-					{detail}
-				</AppText>
-			) : null}
-		</View>
-	);
-}
+const formatForeignCurrencyTotals = (
+	totals: Array<{ amount: number; currency: string }>
+) =>
+	totals
+		.map(({ amount, currency }) => formatMoney(amount, currency))
+		.join(", ");
 
-function ProgressBar({ color, progress }: { color: string; progress: number }) {
+const getVaultItemLabel = (
+	item: Pick<Doc<"vaultItems">, "fileName" | "title">
+) => item.title || item.fileName;
+
+function ProgressBar({
+	isOver,
+	progress,
+}: {
+	isOver: boolean;
+	progress: number;
+}) {
 	const { palette } = useUITheme();
+	const spring = useLayoutSpring();
 	const width = useSharedValue(0);
 
 	useEffect(() => {
-		width.value = withSpring(progress, motion.spring.selection);
-	}, [progress, width]);
+		width.value = spring(progress);
+	}, [progress, spring, width]);
 
 	const fillStyle = useAnimatedStyle(() => ({ width: `${width.value}%` }));
 
@@ -207,13 +150,17 @@ function ProgressBar({ color, progress }: { color: string; progress: number }) {
 			style={{
 				backgroundColor: palette.fill,
 				borderRadius: radius.pill,
-				height: 8,
+				height: 6,
 				overflow: "hidden",
 			}}
 		>
 			<Animated.View
 				style={[
-					{ backgroundColor: color, borderRadius: radius.pill, height: "100%" },
+					{
+						backgroundColor: isOver ? palette.danger : palette.accent,
+						borderRadius: radius.pill,
+						height: "100%",
+					},
 					fillStyle,
 				]}
 			/>
@@ -221,130 +168,275 @@ function ProgressBar({ color, progress }: { color: string; progress: number }) {
 	);
 }
 
-function BudgetOverviewCard({
-	budgetActionLabel,
-	budgetStatus,
-	dailySafeSpendLabel,
-	foreignSpendLabel,
-	onOpenBudgetEditor,
-	plannedBudgetLabel,
+/** One large figure, a thin track and a quiet line. No tiles, no ring. */
+function BudgetFigure({
+	budgetAmount,
+	currency,
+	dailySafeSpend,
+	dayCount,
+	hasDates,
+	leftAmount,
+	overAmount,
 	progress,
-	remainingAmountLabel,
-	totalTrackedSpendLabel,
+	totalTrackedSpend,
 }: {
-	budgetActionLabel: string;
-	budgetStatus: string;
-	dailySafeSpendLabel: string;
-	foreignSpendLabel?: string;
-	onOpenBudgetEditor: () => void;
-	plannedBudgetLabel: string;
+	budgetAmount?: number;
+	currency: string;
+	dailySafeSpend: number;
+	dayCount: number;
+	hasDates: boolean;
+	leftAmount: number;
+	overAmount: number;
 	progress: number;
-	remainingAmountLabel: string;
-	totalTrackedSpendLabel: string;
+	totalTrackedSpend: number;
 }) {
-	const { palette } = useUITheme();
-	const statusColor = getBudgetStatusColor(budgetStatus, palette);
+	const isOver = Boolean(budgetAmount) && overAmount > 0;
 
 	return (
-		<Animated.View entering={FadeInDown.springify().damping(20)}>
-			<Card padding="lg" style={{ gap: spacing.lg }}>
-				<View
-					style={{ alignItems: "flex-start", flexDirection: "row", gap: 12 }}
-				>
-					<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-						<AppText tone="secondary" variant="eyebrow">
-							BUDGET STATUS
-						</AppText>
-						<AppText numberOfLines={1} variant="title">
-							{remainingAmountLabel}
-						</AppText>
-						<AppText numberOfLines={1} tone="secondary" variant="footnote">
-							{dailySafeSpendLabel} safe daily spend
-						</AppText>
-						{foreignSpendLabel ? (
-							<AppText numberOfLines={1} tone="secondary" variant="footnote">
-								{foreignSpendLabel} tracked separately
-							</AppText>
-						) : null}
-					</View>
-					<View
-						style={{
-							alignItems: "center",
-							backgroundColor: palette.fill,
-							borderRadius: radius.pill,
-							flexDirection: "row",
-							gap: 6,
-							paddingHorizontal: 10,
-							paddingVertical: 6,
-						}}
-					>
-						<View
-							style={{
-								backgroundColor: statusColor,
-								borderRadius: radius.pill,
-								height: 8,
-								width: 8,
-							}}
-						/>
-						<AppText bold={true} numberOfLines={1} variant="footnote">
-							{budgetStatus}
-						</AppText>
-					</View>
-				</View>
-
-				<View style={{ gap: spacing.sm }}>
-					<ProgressBar color={statusColor} progress={progress} />
-					<View
-						style={{ flexDirection: "row", justifyContent: "space-between" }}
-					>
-						<AppText tone="secondary" variant="footnote">
-							{totalTrackedSpendLabel} spent
-						</AppText>
-						<AppText tone="secondary" variant="footnote">
-							{plannedBudgetLabel} budget
-						</AppText>
-					</View>
-				</View>
-
+		<View style={{ gap: spacing.md }}>
+			<View style={{ gap: spacing.xs }}>
+				<AppText tone="secondary" variant="subhead">
+					Spent
+				</AppText>
 				<View
 					style={{
-						alignItems: "stretch",
-						borderTopColor: palette.separator,
-						borderTopWidth: StyleSheet.hairlineWidth,
+						alignItems: "baseline",
 						flexDirection: "row",
-						gap: spacing.lg,
-						paddingTop: spacing.md,
+						flexWrap: "wrap",
+						gap: spacing.sm,
 					}}
 				>
-					<BudgetSnapshotStat
-						detail="Logged"
-						label="Spent"
-						value={totalTrackedSpendLabel}
-					/>
-					<BudgetSnapshotStat label="Daily" value={dailySafeSpendLabel} />
-					<BudgetSnapshotStat
-						align="flex-end"
-						label="Budget"
-						value={plannedBudgetLabel}
-					/>
+					<AppText variant="title">
+						{formatMoney(totalTrackedSpend, currency)}
+					</AppText>
+					{budgetAmount ? (
+						<AppText tone="secondary" variant="callout">
+							of {formatMoney(budgetAmount, currency)}
+						</AppText>
+					) : null}
 				</View>
-
-				<SecondaryButton
-					icon="create-outline"
-					label={budgetActionLabel}
-					onPress={onOpenBudgetEditor}
-				/>
-			</Card>
-		</Animated.View>
+			</View>
+			{budgetAmount ? (
+				<>
+					<ProgressBar isOver={isOver} progress={progress} />
+					{isOver ? (
+						<StatusLabel
+							icon="alert-circle-outline"
+							label={`Over by ${formatMoney(overAmount, currency)}`}
+							tone="danger"
+						/>
+					) : (
+						<AppText tone="secondary" variant="subhead">
+							{formatMoney(leftAmount, currency)} left
+							{hasDates && dayCount > 0
+								? ` · ${formatMoney(dailySafeSpend, currency)} a day for ${formatCount(dayCount, "day")}`
+								: ""}
+						</AppText>
+					)}
+				</>
+			) : null}
+		</View>
 	);
 }
 
-const formatForeignCurrencyTotals = (
-	totals: Array<{ amount: number; currency: string }>
-) =>
-	totals
-		.map(({ amount, currency }) => formatMoney(amount, currency))
-		.join(" · ");
+function BudgetEditorSheet({
+	budgetDraft,
+	budgetErrorMessage,
+	isOpen,
+	isSavingBudget,
+	onOpenChange,
+	onSave,
+	onUpdateBudgetDraft,
+}: {
+	budgetDraft: string;
+	budgetErrorMessage: string | null;
+	isOpen: boolean;
+	isSavingBudget: boolean;
+	onOpenChange: (isOpen: boolean) => void;
+	onSave: () => void;
+	onUpdateBudgetDraft: (value: string) => void;
+}) {
+	return (
+		<RecordSheet
+			errorMessage={budgetErrorMessage}
+			isOpen={isOpen}
+			isSaving={isSavingBudget}
+			onOpenChange={onOpenChange}
+			onSave={onSave}
+			snapPoints={["48%"]}
+			title="Total budget"
+		>
+			<FieldGroup footer="The most you want to spend on this trip.">
+				<FieldRow
+					keyboardType="decimal-pad"
+					label="Total (₱)"
+					onChangeText={onUpdateBudgetDraft}
+					placeholder="25,000"
+					value={budgetDraft}
+				/>
+			</FieldGroup>
+		</RecordSheet>
+	);
+}
+
+function ExpenseFormSheet({
+	bookingOptions,
+	editingExpense,
+	expenseErrorMessage,
+	expenseForm,
+	isAddingExpense,
+	isOpen,
+	onDelete,
+	onOpenChange,
+	onOpenReceipt,
+	onSave,
+	onUpdateForm,
+	receiptOptions,
+	receiptUrl,
+	tripId,
+}: {
+	bookingOptions: LinkOption<Id<"bookings">>[];
+	editingExpense: Doc<"expenses"> | null;
+	expenseErrorMessage: string | null;
+	expenseForm: ExpenseFormState;
+	isAddingExpense: boolean;
+	isOpen: boolean;
+	onDelete: () => void;
+	onOpenChange: (isOpen: boolean) => void;
+	onOpenReceipt: (url: string) => void;
+	onSave: () => void;
+	onUpdateForm: (patch: Partial<ExpenseFormState>) => void;
+	receiptOptions: LinkOption<Id<"vaultItems">>[];
+	receiptUrl?: string | null;
+	tripId: Id<"trips">;
+}) {
+	const [showMore, setShowMore] = useState(false);
+	const hasLinks = Boolean(expenseForm.bookingId || expenseForm.vaultItemId);
+	const moreVisible = showMore || hasLinks || Boolean(expenseForm.notes);
+
+	useEffect(() => {
+		if (!isOpen) {
+			setShowMore(false);
+		}
+	}, [isOpen]);
+
+	const bookingLabels = new Map<string, string>(
+		bookingOptions.map((option) => [option.id, option.label])
+	);
+	const receiptLabels = new Map<string, string>(
+		receiptOptions.map((option) => [option.id, option.label])
+	);
+
+	return (
+		<RecordSheet
+			errorMessage={expenseErrorMessage}
+			isOpen={isOpen}
+			isSaving={isAddingExpense}
+			onOpenChange={onOpenChange}
+			onSave={onSave}
+			saveLabel={editingExpense ? "Save" : "Add"}
+			title={editingExpense ? "Edit expense" : "Add expense"}
+		>
+			<FieldGroup>
+				<FieldRow
+					label="Title"
+					onChangeText={(title) => onUpdateForm({ title })}
+					placeholder="Lunch, taxi, museum ticket"
+					value={expenseForm.title}
+				/>
+				<FieldRow
+					keyboardType="decimal-pad"
+					label="Amount (₱)"
+					onChangeText={(amount) => onUpdateForm({ amount })}
+					placeholder="1,200"
+					value={expenseForm.amount}
+				/>
+				<DatePickerField
+					formatDate={(date) => formatDay(formatIsoDate(date))}
+					label="Date"
+					onChangeText={(spentAt) => onUpdateForm({ spentAt })}
+					value={expenseForm.spentAt}
+				/>
+				<CategoryPicker
+					onChange={(category) => onUpdateForm({ category })}
+					value={expenseForm.category}
+				/>
+			</FieldGroup>
+
+			{moreVisible ? (
+				<FieldGroup>
+					<ChoiceRow
+						format={(id) =>
+							id === "" ? "None" : (bookingLabels.get(id) ?? id)
+						}
+						label="Booking"
+						onChange={(bookingId) =>
+							onUpdateForm({ bookingId: bookingId as Id<"bookings"> | "" })
+						}
+						options={["", ...bookingOptions.map((option) => option.id)]}
+						value={expenseForm.bookingId}
+					/>
+					<ChoiceRow
+						format={(id) =>
+							id === "" ? "None" : (receiptLabels.get(id) ?? id)
+						}
+						label="Receipt"
+						onChange={(vaultItemId) =>
+							onUpdateForm({
+								vaultItemId: vaultItemId as Id<"vaultItems"> | "",
+							})
+						}
+						options={["", ...receiptOptions.map((option) => option.id)]}
+						value={expenseForm.vaultItemId}
+					/>
+					<FieldRow
+						label="Notes"
+						multiline={true}
+						onChangeText={(notes) => onUpdateForm({ notes })}
+						placeholder="Optional"
+						value={expenseForm.notes}
+					/>
+				</FieldGroup>
+			) : (
+				<ListGroup>
+					<ListRow
+						onPress={() => setShowMore(true)}
+						subtitle="Booking, receipt, notes"
+						title="More"
+					/>
+				</ListGroup>
+			)}
+
+			{editingExpense?.bookingId || receiptUrl ? (
+				<ListGroup>
+					{editingExpense?.bookingId ? (
+						<Link asChild href={VIYA_ROUTES.tripBookings(tripId)}>
+							<LinkRow icon="ticket-outline" label="Open booking" />
+						</Link>
+					) : null}
+					{receiptUrl ? (
+						<LinkRow
+							icon="document-attach-outline"
+							label="Open receipt"
+							onPress={() => onOpenReceipt(receiptUrl)}
+						/>
+					) : null}
+				</ListGroup>
+			) : null}
+
+			{editingExpense ? (
+				<ListGroup>
+					<ListRow
+						destructive={true}
+						onPress={onDelete}
+						showChevron={false}
+						title="Delete expense"
+					/>
+				</ListGroup>
+			) : null}
+		</RecordSheet>
+	);
+}
 
 function CategoryPicker({
 	onChange,
@@ -354,532 +446,103 @@ function CategoryPicker({
 	value: ExpenseCategory;
 }) {
 	return (
-		<View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
-			{expenseCategories.map((category) => (
-				<Chip
-					key={category}
-					label={formatStatus(category)}
-					onPress={() => onChange(category)}
-					selected={category === value}
-				/>
-			))}
-		</View>
+		<ChoiceRow
+			format={formatEnumLabel}
+			label="Category"
+			onChange={onChange}
+			options={expenseCategories}
+			value={value}
+		/>
 	);
 }
 
-function SheetField({
-	children,
-	label,
-}: {
-	children: (
-		handlers: ReturnType<typeof useCompatibleBottomSheetAwareHandlers>
-	) => ReactNode;
-	label: string;
-}) {
-	const handlers = useCompatibleBottomSheetAwareHandlers();
-
-	return (
-		<TextField className="gap-2">
-			<Label>
-				<Label.Text>{label}</Label.Text>
-			</Label>
-			{children(handlers)}
-		</TextField>
+const groupExpensesByDay = (expenses: Doc<"expenses">[]) => {
+	const sorted = [...expenses].sort(
+		(left, right) =>
+			right.spentAt.localeCompare(left.spentAt) ||
+			right._creationTime - left._creationTime
 	);
-}
+	const groups: { day: string; items: Doc<"expenses">[] }[] = [];
 
-function LinkPicker<TId extends string>({
-	emptyLabel,
-	label,
-	onChange,
-	options,
-	value,
-}: {
-	emptyLabel: string;
-	label: string;
-	onChange: (value: TId | "") => void;
-	options: { detail: string; id: TId; label: string }[];
-	value: TId | "";
-}) {
-	return (
-		<View style={{ gap: spacing.sm }}>
-			<AppText tone="secondary" variant="eyebrow">
-				{label}
-			</AppText>
-			<View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
-				<Chip
-					label={emptyLabel}
-					onPress={() => onChange("")}
-					selected={!value}
-				/>
-				{options.map((option) => (
-					<Chip
-						key={option.id}
-						label={`${option.label} · ${option.detail}`}
-						onPress={() => onChange(option.id)}
-						selected={value === option.id}
-					/>
-				))}
-			</View>
-		</View>
-	);
-}
+	for (const expense of sorted) {
+		const last = groups.at(-1);
 
-function FormError({ message }: { message: string }) {
-	return (
-		<Animated.View entering={FadeIn.duration(motion.duration.normal)}>
-			<AppText accessibilityRole="alert" tone="danger" variant="subhead">
-				{message}
-			</AppText>
-		</Animated.View>
-	);
-}
+		if (last && last.day === expense.spentAt) {
+			last.items.push(expense);
+		} else {
+			groups.push({ day: expense.spentAt, items: [expense] });
+		}
+	}
 
-const fieldClassName = "h-12 border-0 bg-surface px-4";
+	return groups;
+};
 
-function BudgetEditorSheet({
-	actionLabel,
-	budgetAmount,
-	budgetDraft,
-	budgetErrorMessage,
-	isOpen,
-	isSavingBudget,
-	onOpenChange,
-	onSave,
-	onUpdateBudgetDraft,
-}: {
-	actionLabel: string;
-	budgetAmount?: number;
-	budgetDraft: string;
-	budgetErrorMessage: string | null;
-	isOpen: boolean;
-	isSavingBudget: boolean;
-	onOpenChange: (isOpen: boolean) => void;
-	onSave: () => void;
-	onUpdateBudgetDraft: (value: string) => void;
-}) {
-	const insets = useSafeAreaInsets();
-	const { palette } = useUITheme();
-
-	return (
-		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
-			<BottomSheet.Portal>
-				<BottomSheet.Overlay />
-				<BottomSheet.Content
-					backgroundClassName="bg-background"
-					backgroundStyle={{
-						backgroundColor: palette.canvas,
-						borderTopLeftRadius: radius.sheet,
-						borderTopRightRadius: radius.sheet,
-					}}
-					enablePanDownToClose={true}
-					snapPoints={["48%"]}
-				>
-					<View
-						style={{
-							gap: spacing.lg,
-							paddingBottom: Math.max(insets.bottom, spacing.lg),
-							paddingHorizontal: spacing.screen,
-						}}
-					>
-						<View
-							style={{
-								alignItems: "flex-start",
-								flexDirection: "row",
-								gap: spacing.lg,
-							}}
-						>
-							<View style={{ flex: 1, gap: 2 }}>
-								<BottomSheet.Title>{actionLabel}</BottomSheet.Title>
-								<BottomSheet.Description>
-									Set the total amount you want to spend on this trip.
-								</BottomSheet.Description>
-							</View>
-							<GlassIconButton
-								accessibilityLabel="Close budget form"
-								icon="close"
-								onPress={() => onOpenChange(false)}
-							/>
-						</View>
-						<SheetField label="Total budget">
-							{({ onBlur, onFocus }) => (
-								<Input
-									className={fieldClassName}
-									keyboardType="numeric"
-									onBlur={onBlur}
-									onChangeText={onUpdateBudgetDraft}
-									onFocus={onFocus}
-									placeholder={budgetAmount?.toString() ?? "25000"}
-									value={budgetDraft}
-									variant="secondary"
-								/>
-							)}
-						</SheetField>
-						{budgetErrorMessage ? (
-							<FormError message={budgetErrorMessage} />
-						) : null}
-						<PrimaryButton
-							disabled={isSavingBudget}
-							isPending={isSavingBudget}
-							label="Save budget"
-							onPress={onSave}
-						/>
-					</View>
-				</BottomSheet.Content>
-			</BottomSheet.Portal>
-		</BottomSheet>
-	);
-}
-
-function ExpenseFormSheet({
-	bookingOptions,
-	editingExpenseId,
-	expenseErrorMessage,
-	expenseForm,
-	isAddingExpense,
-	isOpen,
-	onOpenChange,
-	onSave,
-	onUpdateForm,
-	receiptOptions,
-}: {
-	bookingOptions: { detail: string; id: Id<"bookings">; label: string }[];
-	editingExpenseId: Id<"expenses"> | null;
-	expenseErrorMessage: string | null;
-	expenseForm: ExpenseFormState;
-	isAddingExpense: boolean;
-	isOpen: boolean;
-	onOpenChange: (isOpen: boolean) => void;
-	onSave: () => void;
-	onUpdateForm: (patch: Partial<ExpenseFormState>) => void;
-	receiptOptions: { detail: string; id: Id<"vaultItems">; label: string }[];
-}) {
-	const insets = useSafeAreaInsets();
-	const { palette } = useUITheme();
-
-	return (
-		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
-			<BottomSheet.Portal>
-				<BottomSheet.Overlay />
-				<BottomSheet.Content
-					backgroundClassName="bg-background"
-					backgroundStyle={{
-						backgroundColor: palette.canvas,
-						borderTopLeftRadius: radius.sheet,
-						borderTopRightRadius: radius.sheet,
-					}}
-					enablePanDownToClose={true}
-					snapPoints={["86%"]}
-				>
-					<ScrollView
-						contentContainerStyle={{
-							gap: spacing.lg,
-							paddingBottom: Math.max(insets.bottom, spacing.lg),
-							paddingHorizontal: spacing.screen,
-						}}
-						keyboardShouldPersistTaps="handled"
-						showsVerticalScrollIndicator={false}
-					>
-						<View
-							style={{
-								alignItems: "flex-start",
-								flexDirection: "row",
-								gap: spacing.lg,
-							}}
-						>
-							<View style={{ flex: 1, gap: 2 }}>
-								<BottomSheet.Title>
-									{editingExpenseId ? "Edit expense" : "Add expense"}
-								</BottomSheet.Title>
-								<BottomSheet.Description>
-									Log manual spend and link booking or receipt proof.
-								</BottomSheet.Description>
-							</View>
-							<GlassIconButton
-								accessibilityLabel="Close expense form"
-								icon="close"
-								onPress={() => onOpenChange(false)}
-							/>
-						</View>
-						<SheetField label="Title">
-							{({ onBlur, onFocus }) => (
-								<Input
-									className={fieldClassName}
-									onBlur={onBlur}
-									onChangeText={(title) => onUpdateForm({ title })}
-									onFocus={onFocus}
-									placeholder="Lunch, taxi, museum ticket"
-									value={expenseForm.title}
-									variant="secondary"
-								/>
-							)}
-						</SheetField>
-						<View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-							<View style={{ flex: 1, minWidth: 0 }}>
-								<SheetField label="Amount">
-									{({ onBlur, onFocus }) => (
-										<Input
-											className={fieldClassName}
-											keyboardType="numeric"
-											onBlur={onBlur}
-											onChangeText={(amount) => onUpdateForm({ amount })}
-											onFocus={onFocus}
-											placeholder="1200"
-											value={expenseForm.amount}
-											variant="secondary"
-										/>
-									)}
-								</SheetField>
-							</View>
-							<View style={{ flex: 1, minWidth: 0 }}>
-								<SheetField label="Date">
-									{({ onBlur, onFocus }) => (
-										<Input
-											className={fieldClassName}
-											onBlur={onBlur}
-											onChangeText={(spentAt) => onUpdateForm({ spentAt })}
-											onFocus={onFocus}
-											placeholder="2026-07-10"
-											value={expenseForm.spentAt}
-											variant="secondary"
-										/>
-									)}
-								</SheetField>
-							</View>
-						</View>
-						<View style={{ gap: spacing.sm }}>
-							<AppText tone="secondary" variant="eyebrow">
-								CATEGORY
-							</AppText>
-							<CategoryPicker
-								onChange={(category) => onUpdateForm({ category })}
-								value={expenseForm.category}
-							/>
-						</View>
-						<LinkPicker
-							emptyLabel="No booking"
-							label="Booking"
-							onChange={(bookingId) => onUpdateForm({ bookingId })}
-							options={bookingOptions}
-							value={expenseForm.bookingId}
-						/>
-						<LinkPicker
-							emptyLabel="No receipt"
-							label="Receipt proof"
-							onChange={(vaultItemId) => onUpdateForm({ vaultItemId })}
-							options={receiptOptions}
-							value={expenseForm.vaultItemId}
-						/>
-						<SheetField label="Notes">
-							{({ onBlur, onFocus }) => (
-								<Input
-									className={fieldClassName}
-									onBlur={onBlur}
-									onChangeText={(notes) => onUpdateForm({ notes })}
-									onFocus={onFocus}
-									placeholder="Optional"
-									value={expenseForm.notes}
-									variant="secondary"
-								/>
-							)}
-						</SheetField>
-						{expenseErrorMessage ? (
-							<FormError message={expenseErrorMessage} />
-						) : null}
-						<PrimaryButton
-							disabled={isAddingExpense}
-							isPending={isAddingExpense}
-							label={editingExpenseId ? "Save expense" : "Add expense"}
-							onPress={onSave}
-						/>
-					</ScrollView>
-				</BottomSheet.Content>
-			</BottomSheet.Portal>
-		</BottomSheet>
-	);
-}
-
-const getVaultItemLabel = (
-	item: Pick<Doc<"vaultItems">, "fileName" | "title">
-) => item.title || item.fileName;
-
-function ExpenseRow({
-	bookingLabel,
-	deletingExpenseId,
-	expense,
-	onDelete,
-	onEdit,
-	onOpenReceipt,
-	receiptLabel,
-	receiptUrl,
+function WhereItComesFrom({
+	bookedCount,
+	confirmedBookingCosts,
+	currency,
+	expenseCount,
+	manualExpenses,
+	plannedCosts,
 	tripId,
 }: {
-	bookingLabel?: string;
-	deletingExpenseId: Id<"expenses"> | null;
-	expense: Doc<"expenses">;
-	onDelete: (expenseId: Id<"expenses">) => void;
-	onEdit: (expense: Doc<"expenses">) => void;
-	onOpenReceipt: (url: string) => void;
-	receiptLabel?: string;
-	receiptUrl?: string | null;
+	bookedCount: number;
+	confirmedBookingCosts: number;
+	currency: string;
+	expenseCount: number;
+	manualExpenses: number;
+	plannedCosts: number;
 	tripId: Id<"trips">;
 }) {
-	const { palette } = useUITheme();
-	const isDeletingThis = deletingExpenseId === expense._id;
-
 	return (
-		<View
-			style={{
-				alignItems: "flex-start",
-				flexDirection: "row",
-				gap: spacing.md,
-				opacity: isDeletingThis ? 0.5 : 1,
-				paddingHorizontal: spacing.lg,
-				paddingVertical: spacing.md,
-			}}
-		>
-			<View
-				style={{
-					alignItems: "center",
-					backgroundColor: palette.fill,
-					borderRadius: radius.pill,
-					height: 36,
-					justifyContent: "center",
-					width: 36,
-				}}
-			>
-				<Ionicons color={palette.accent} name="receipt-outline" size={17} />
-			</View>
-			<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-				<View
-					style={{
-						alignItems: "flex-start",
-						flexDirection: "row",
-						gap: spacing.md,
-					}}
-				>
-					<View style={{ flex: 1, minWidth: 0 }}>
-						<AppText bold={true} numberOfLines={1}>
-							{expense.title}
-						</AppText>
-						<AppText numberOfLines={1} tone="secondary" variant="footnote">
-							{formatStatus(expense.category)} · {expense.spentAt}
-						</AppText>
-					</View>
-					<AppText bold={true} variant="subhead">
-						{formatMoney(expense.amount, expense.currency)}
-					</AppText>
-					<Menu>
-						<Menu.Trigger asChild={true}>
-							<PressableScale
-								accessibilityLabel="Expense options"
-								accessibilityRole="button"
-								accessibilityState={{ disabled: isDeletingThis }}
-								disabled={isDeletingThis}
-								haptic="selection"
-								hitSlop={8}
-								scaleTo={0.92}
-								style={{
-									alignItems: "center",
-									height: 32,
-									justifyContent: "center",
-									marginTop: -4,
-									width: 32,
-								}}
-							>
-								<Ionicons
-									color={palette.inkTertiary}
-									name="ellipsis-horizontal"
-									size={18}
-								/>
-							</PressableScale>
-						</Menu.Trigger>
-						<Menu.Portal>
-							<Menu.Overlay />
-							<Menu.Content
-								align="end"
-								className="rounded-[20px] bg-surface p-2"
-								offset={8}
-								placement="bottom"
-								presentation="popover"
-								width={200}
-							>
-								<Menu.Item
-									accessibilityLabel="Edit expense"
-									className="min-h-11 flex-row items-center gap-3 rounded-[14px] p-2.5"
-									isAnimatedStyleActive={false}
-									onPress={() => onEdit(expense)}
-								>
-									<Ionicons
-										color={palette.accent}
-										name="create-outline"
-										size={18}
-									/>
-									<Menu.ItemTitle className="font-semibold text-sm">
-										Edit
-									</Menu.ItemTitle>
-								</Menu.Item>
-								<Menu.Item
-									accessibilityLabel="Delete expense"
-									className="min-h-11 flex-row items-center gap-3 rounded-[14px] p-2.5"
-									isAnimatedStyleActive={false}
-									onPress={() => onDelete(expense._id)}
-								>
-									<Ionicons
-										color={palette.danger}
-										name="trash-outline"
-										size={18}
-									/>
-									<Menu.ItemTitle className="font-semibold text-danger text-sm">
-										Delete
-									</Menu.ItemTitle>
-								</Menu.Item>
-							</Menu.Content>
-						</Menu.Portal>
-					</Menu>
-				</View>
-				{expense.bookingId || expense.vaultItemId ? (
-					<AppText numberOfLines={1} tone="secondary" variant="footnote">
-						{[
-							expense.bookingId ? `Booking ${bookingLabel ?? "linked"}` : null,
-							expense.vaultItemId
-								? `Receipt ${receiptLabel ?? "linked"}`
-								: null,
-						]
-							.filter(Boolean)
-							.join(" · ")}
-					</AppText>
-				) : null}
-				{expense.bookingId || receiptUrl ? (
-					<View
-						style={{
-							flexDirection: "row",
-							flexWrap: "wrap",
-							gap: spacing.sm,
-							paddingTop: spacing.xs,
-						}}
-					>
-						{expense.bookingId ? (
-							<Link asChild href={VIYA_ROUTES.tripBookings(tripId)}>
-								<PillAction icon="ticket-outline" label="Open booking" />
-							</Link>
-						) : null}
-						{receiptUrl ? (
-							<PillAction
-								icon="document-attach-outline"
-								label="Open receipt"
-								onPress={() => onOpenReceipt(receiptUrl)}
-							/>
-						) : null}
-					</View>
-				) : null}
-			</View>
-		</View>
+		<ListGroup header="Where it comes from">
+			<Link asChild href={VIYA_ROUTES.tripBookings(tripId)}>
+				<ListRow
+					subtitle={formatCount(bookedCount, "booking")}
+					title="Booked"
+					value={formatMoney(confirmedBookingCosts, currency)}
+				/>
+			</Link>
+			<ListRow
+				showChevron={false}
+				subtitle={formatCount(expenseCount, "expense")}
+				title="Logged expenses"
+				value={formatMoney(manualExpenses, currency)}
+			/>
+			{plannedCosts > 0 ? (
+				<Link asChild href={VIYA_ROUTES.tripItinerary(tripId)}>
+					<ListRow
+						subtitle="Estimates, not counted in spent"
+						title="Planned in itinerary"
+						value={formatMoney(plannedCosts, currency)}
+					/>
+				</Link>
+			) : null}
+		</ListGroup>
 	);
 }
+
+const getEmptyCopy = (
+	budgetAmount: number | undefined,
+	currency: string,
+	tripDays: number | null
+) => {
+	if (!budgetAmount) {
+		return {
+			description: "Set a total to see what is left each day.",
+			title: "No budget or expenses yet",
+		};
+	}
+
+	return {
+		description: `${formatMoney(budgetAmount, currency)} to spend${tripDays ? ` over ${formatCount(tripDays, "day")}` : ""}.`,
+		title: "No expenses logged",
+	};
+};
 
 export function TripBudgetScreen() {
 	const tripId = useTripIdParam();
+	const { confirm } = useFeedback();
 	const budget = useQuery(
 		api.trips.getTripBudget,
 		tripId ? { tripId } : "skip"
@@ -908,8 +571,6 @@ export function TripBudgetScreen() {
 	>(null);
 	const [isSavingBudget, setIsSavingBudget] = useState(false);
 	const [isAddingExpense, setIsAddingExpense] = useState(false);
-	const [deletingExpenseId, setDeletingExpenseId] =
-		useState<Id<"expenses"> | null>(null);
 	const [isBudgetEditorOpen, setIsBudgetEditorOpen] = useState(false);
 	const [isExpenseFormOpen, setIsExpenseFormOpen] = useState(false);
 
@@ -924,44 +585,39 @@ export function TripBudgetScreen() {
 			budgetCurrency: budget.trip.budgetCurrency,
 			expenses: budget.expenses,
 			itineraryItems: budget.itineraryItems,
-			remainingTripDays: getTripBudgetDayCount(
-				budget.trip.startDate,
-				budget.trip.endDate
-			),
+			remainingTripDays: getBudgetDayCount(budget.trip, toLocalDateKey()),
 		});
 	}, [budget]);
 
 	if (!tripId) {
 		return (
-			<Container className="pb-28">
-				<EmptyState
-					description="Open a saved trip before reviewing budget."
-					icon="wallet-outline"
-					title="Trip not found"
-				/>
-			</Container>
+			<ScreenShell
+				state={{
+					description: "Open a saved trip to see its budget.",
+					icon: "wallet-outline",
+					kind: "empty",
+					title: "Trip not found",
+				}}
+				title="Budget"
+			/>
 		);
 	}
 
 	if (budget === undefined || !summary) {
-		return <ScreenLoadingState />;
+		return (
+			<ScreenShell
+				state={{ kind: "loading", title: "Loading budget" }}
+				title="Budget"
+			/>
+		);
 	}
 
 	const currency = budget.trip.budgetCurrency ?? "PHP";
 	const budgetAmount = budget.trip.budgetAmount;
-	const budgetStatus = getBudgetStatusLabel({
-		budgetAmount,
-		remainingAmount: summary.remainingAmount,
-		totalTrackedSpend: summary.totalTrackedSpend,
-	});
 	const budgetProgress = getBudgetProgress({
 		budgetAmount,
 		totalTrackedSpend: summary.totalTrackedSpend,
 	});
-	const budgetActionLabel = budgetAmount ? "Edit budget" : "Set budget";
-	const plannedBudgetLabel = budgetAmount
-		? formatMoney(budgetAmount, currency)
-		: "Not set";
 	const foreignSpendLabel =
 		summary.foreignCurrencyTotals.length > 0
 			? formatForeignCurrencyTotals(summary.foreignCurrencyTotals)
@@ -971,24 +627,34 @@ export function TripBudgetScreen() {
 			(item) => item.kind === "receipt" || item.kind === "booking"
 		) ?? [];
 	const bookingOptions = budget.bookings.map((booking) => ({
-		detail: `${formatStatus(booking.type)} · ${booking.provider ?? "Provider TBD"}`,
+		detail: `${formatEnumLabel(booking.type)}, ${booking.provider ?? "Provider not set"}`,
 		id: booking._id,
 		label: booking.title,
 	}));
 	const receiptOptions = receiptVaultItems.map((item) => ({
-		detail: formatStatus(item.kind),
+		detail: formatEnumLabel(item.kind),
 		id: item._id,
 		label: getVaultItemLabel(item),
 	}));
 	const bookingLabelById = new Map(
 		bookingOptions.map((option) => [option.id, option.label])
 	);
-	const receiptLabelById = new Map(
-		receiptOptions.map((option) => [option.id, option.label])
-	);
 	const receiptUrlById = new Map(
 		receiptVaultItems.map((item) => [item._id, item.url])
 	);
+	const editingExpense =
+		budget.expenses.find((expense) => expense._id === editingExpenseId) ?? null;
+	const editingReceiptUrl = editingExpense?.vaultItemId
+		? receiptUrlById.get(editingExpense.vaultItemId)
+		: null;
+	const hasExpenses = budget.expenses.length > 0;
+
+	const budgetDayCount = getBudgetDayCount(budget.trip, toLocalDateKey());
+	const tripDays = getTripDayCount(budget.trip.startDate, budget.trip.endDate);
+	const emptyCopy = getEmptyCopy(budgetAmount, currency, tripDays);
+	const bookedCount = budget.bookings.filter((booking) =>
+		isBookingSecured(booking.status)
+	).length;
 
 	const openBudgetEditor = () => {
 		setBudgetErrorMessage(null);
@@ -1019,7 +685,7 @@ export function TripBudgetScreen() {
 	const handleSaveBudget = async () => {
 		const amount = parseAmount(budgetDraft);
 		if (!(Number.isFinite(amount) && amount > 0)) {
-			setBudgetErrorMessage("Budget must be a positive number.");
+			setBudgetErrorMessage("Enter a budget above zero.");
 			return;
 		}
 
@@ -1031,10 +697,11 @@ export function TripBudgetScreen() {
 				budgetCurrency: currency,
 				tripId,
 			});
+			haptic("success");
 			closeBudgetEditor();
 		} catch (error) {
 			setBudgetErrorMessage(
-				error instanceof Error ? error.message : "Could not update budget."
+				error instanceof Error ? error.message : "Could not update the budget."
 			);
 		} finally {
 			setIsSavingBudget(false);
@@ -1045,12 +712,12 @@ export function TripBudgetScreen() {
 		const amount = parseAmount(expenseForm.amount);
 		const title = expenseForm.title.trim();
 		if (!title) {
-			setExpenseErrorMessage("Add an expense title.");
+			setExpenseErrorMessage("Add a title.");
 			return;
 		}
 
 		if (!(Number.isFinite(amount) && amount > 0)) {
-			setExpenseErrorMessage("Expense amount must be positive.");
+			setExpenseErrorMessage("Enter an amount above zero.");
 			return;
 		}
 
@@ -1080,39 +747,44 @@ export function TripBudgetScreen() {
 					tripId,
 				});
 			}
-			setExpenseForm(initialExpenseForm());
-			setEditingExpenseId(null);
-			setIsExpenseFormOpen(false);
+			haptic("success");
+			closeExpenseForm();
 		} catch (error) {
 			setExpenseErrorMessage(
-				error instanceof Error ? error.message : "Could not save expense."
+				error instanceof Error ? error.message : "Could not save the expense."
 			);
 		} finally {
 			setIsAddingExpense(false);
 		}
 	};
 
-	const handleDeleteExpense = async (expenseId: Id<"expenses">) => {
-		setExpenseErrorMessage(null);
-		setDeletingExpenseId(expenseId);
+	const handleDeleteExpense = async (expense: Doc<"expenses">) => {
+		const confirmed = await confirm({
+			confirmLabel: "Delete expense",
+			destructive: true,
+			message: `${expense.title} will be removed from this trip.`,
+			title: "Delete expense",
+		});
+		if (!confirmed) {
+			return;
+		}
+
 		try {
-			await deleteTripExpense({ expenseId });
-			if (editingExpenseId === expenseId) {
-				setEditingExpenseId(null);
-				setExpenseForm(initialExpenseForm());
-				setIsExpenseFormOpen(false);
+			await deleteTripExpense({ expenseId: expense._id });
+			haptic("warning");
+			if (editingExpenseId === expense._id) {
+				closeExpenseForm();
 			}
 		} catch (error) {
-			setExpenseErrorMessage(
-				error instanceof Error ? error.message : "Could not delete expense."
+			setReceiptOpenErrorMessage(
+				error instanceof Error ? error.message : "Could not delete the expense."
 			);
-		} finally {
-			setDeletingExpenseId(null);
 		}
 	};
 
 	const openExpenseForEdit = (expense: Doc<"expenses">) => {
 		setEditingExpenseId(expense._id);
+		setExpenseErrorMessage(null);
 		setExpenseForm({
 			amount: expense.amount.toString(),
 			bookingId: expense.bookingId ?? "",
@@ -1135,153 +807,186 @@ export function TripBudgetScreen() {
 	};
 
 	return (
-		<TripModuleScreenFrame
-			activeTab="budget"
-			headerAction={
-				<NavigationIconButton
-					accessibilityLabel="Add expense"
-					icon="add"
-					onPress={openNewExpenseForm}
-				/>
-			}
-			tripId={tripId}
-		>
-			<Container includeBottomInset={false} isScrollable={false}>
-				<ScrollView
-					contentContainerStyle={{
-						flexGrow: 1,
-						gap: 14,
-						paddingBottom: 112,
-						paddingHorizontal: 16,
-					}}
-					contentInsetAdjustmentBehavior="automatic"
-					keyboardShouldPersistTaps="handled"
-					showsVerticalScrollIndicator={false}
-				>
-					<BudgetOverviewCard
-						budgetActionLabel={budgetActionLabel}
-						budgetStatus={budgetStatus}
-						dailySafeSpendLabel={formatMoney(summary.dailySafeSpend, currency)}
-						foreignSpendLabel={foreignSpendLabel}
-						onOpenBudgetEditor={openBudgetEditor}
-						plannedBudgetLabel={plannedBudgetLabel}
-						progress={budgetProgress}
-						remainingAmountLabel={formatMoney(
-							summary.remainingAmount,
-							currency
-						)}
-						totalTrackedSpendLabel={formatMoney(
-							summary.totalTrackedSpend,
-							currency
-						)}
-					/>
-
-					<View style={{ gap: spacing.sm }}>
-						<AppText
-							accessibilityRole="header"
-							style={{ paddingHorizontal: spacing.lg }}
-							tone="secondary"
-							variant="eyebrow"
-						>
-							ALL EXPENSES
-						</AppText>
-						{receiptOpenErrorMessage ? (
-							<FormError message={receiptOpenErrorMessage} />
-						) : null}
-						{budget.expenses.length === 0 ? (
-							<Card padding="none">
-								<EmptyState
-									action={{
-										label: "Add first expense",
-										onPress: openNewExpenseForm,
-									}}
-									description="Manual expenses will appear here."
-									icon="card-outline"
-									title="No expenses yet"
-								/>
-							</Card>
-						) : (
-							<ListGroup>
-								{budget.expenses.map((expense) => {
-									const receiptUrl = expense.vaultItemId
-										? receiptUrlById.get(expense.vaultItemId)
-										: null;
-
-									return (
-										<ExpenseRow
-											bookingLabel={
-												expense.bookingId
-													? bookingLabelById.get(expense.bookingId)
-													: undefined
-											}
-											deletingExpenseId={deletingExpenseId}
-											expense={expense}
-											key={expense._id}
-											onDelete={(expenseId) => {
-												handleDeleteExpense(expenseId).catch(() => undefined);
-											}}
-											onEdit={openExpenseForEdit}
-											onOpenReceipt={(url) => {
-												handleOpenReceipt(url).catch(() => undefined);
-											}}
-											receiptLabel={
-												expense.vaultItemId
-													? receiptLabelById.get(expense.vaultItemId)
-													: undefined
-											}
-											receiptUrl={receiptUrl}
-											tripId={tripId}
-										/>
-									);
-								})}
-							</ListGroup>
-						)}
-					</View>
-				</ScrollView>
-				<BudgetEditorSheet
-					actionLabel={budgetActionLabel}
+		<>
+			<ScreenShell
+				actions={
+					hasExpenses
+						? [
+								{
+									icon: "add",
+									key: "add",
+									label: "Add expense",
+									onPress: openNewExpenseForm,
+									type: "button",
+								},
+							]
+						: []
+				}
+				title="Budget"
+			>
+				<BudgetFigure
 					budgetAmount={budgetAmount}
-					budgetDraft={budgetDraft}
-					budgetErrorMessage={budgetErrorMessage}
-					isOpen={isBudgetEditorOpen}
-					isSavingBudget={isSavingBudget}
-					onOpenChange={(isOpen) => {
-						if (isOpen) {
-							setIsBudgetEditorOpen(true);
-							return;
-						}
-
-						closeBudgetEditor();
-					}}
-					onSave={() => {
-						handleSaveBudget().catch(() => undefined);
-					}}
-					onUpdateBudgetDraft={setBudgetDraft}
+					currency={currency}
+					dailySafeSpend={summary.dailySafeSpend}
+					dayCount={budgetDayCount}
+					hasDates={Boolean(budget.trip.startDate && budget.trip.endDate)}
+					leftAmount={summary.leftAmount}
+					overAmount={summary.overAmount}
+					progress={budgetProgress}
+					totalTrackedSpend={summary.totalTrackedSpend}
 				/>
-				<ExpenseFormSheet
-					bookingOptions={bookingOptions}
-					editingExpenseId={editingExpenseId}
-					expenseErrorMessage={expenseErrorMessage}
-					expenseForm={expenseForm}
-					isAddingExpense={isAddingExpense}
-					isOpen={isExpenseFormOpen}
-					onOpenChange={(isOpen) => {
-						if (isOpen) {
-							setIsExpenseFormOpen(true);
-							return;
-						}
 
-						closeExpenseForm();
-					}}
-					onSave={() => {
-						handleSaveExpense().catch(() => undefined);
-					}}
-					onUpdateForm={(patch) => {
-						setExpenseForm((current) => ({ ...current, ...patch }));
-					}}
-					receiptOptions={receiptOptions}
+				<ListGroup
+					footer={
+						foreignSpendLabel
+							? `${foreignSpendLabel} tracked separately.`
+							: undefined
+					}
+				>
+					<ListRow
+						onPress={openBudgetEditor}
+						title="Total budget"
+						value={
+							budgetAmount ? formatMoney(budgetAmount, currency) : "Not set"
+						}
+					/>
+				</ListGroup>
+
+				{receiptOpenErrorMessage ? (
+					<AppText accessibilityRole="alert" tone="danger" variant="subhead">
+						{receiptOpenErrorMessage}
+					</AppText>
+				) : null}
+
+				<WhereItComesFrom
+					bookedCount={bookedCount}
+					confirmedBookingCosts={summary.confirmedBookingCosts}
+					currency={currency}
+					expenseCount={budget.expenses.length}
+					manualExpenses={summary.manualExpenses}
+					plannedCosts={summary.plannedCosts}
+					tripId={tripId}
 				/>
-			</Container>
-		</TripModuleScreenFrame>
+
+				{summary.categoryBreakdown.length > 0 ? (
+					<ListGroup header="By category">
+						{summary.categoryBreakdown.map((entry) => (
+							<ListRow
+								key={entry.category}
+								showChevron={false}
+								title={formatEnumLabel(entry.category)}
+								value={formatMoney(entry.amount, currency)}
+							/>
+						))}
+					</ListGroup>
+				) : null}
+
+				{hasExpenses ? (
+					groupExpensesByDay(budget.expenses).map((group) => (
+						<ListGroup
+							header={`${formatDay(group.day) || group.day} · ${formatMoney(
+								group.items.reduce((sum, item) => sum + item.amount, 0),
+								currency
+							)}`}
+							key={group.day}
+						>
+							{group.items.map((expense) => (
+								<SwipeRow
+									key={expense._id}
+									trailing={{
+										icon: "trash-outline",
+										label: "Delete",
+										onPress: () => {
+											handleDeleteExpense(expense).catch(() => undefined);
+										},
+										tone: "danger",
+									}}
+								>
+									<ListRow
+										accessibilityLabel={`${expense.title}, ${formatMoney(expense.amount, expense.currency)}. Edit`}
+										onPress={() => openExpenseForEdit(expense)}
+										showChevron={false}
+										subtitle={[
+											formatEnumLabel(expense.category),
+											expense.bookingId
+												? (bookingLabelById.get(expense.bookingId) ?? "Booking")
+												: null,
+											expense.vaultItemId ? "Receipt" : null,
+										]
+											.filter(Boolean)
+											.join(", ")}
+										title={expense.title}
+										value={formatMoney(expense.amount, expense.currency)}
+									/>
+								</SwipeRow>
+							))}
+						</ListGroup>
+					))
+				) : (
+					<EmptyState
+						action={
+							budgetAmount
+								? { label: "Add expense", onPress: openNewExpenseForm }
+								: { label: "Set budget", onPress: openBudgetEditor }
+						}
+						description={emptyCopy.description}
+						icon="card-outline"
+						title={emptyCopy.title}
+					/>
+				)}
+			</ScreenShell>
+
+			<BudgetEditorSheet
+				budgetDraft={budgetDraft}
+				budgetErrorMessage={budgetErrorMessage}
+				isOpen={isBudgetEditorOpen}
+				isSavingBudget={isSavingBudget}
+				onOpenChange={(isOpen) => {
+					if (isOpen) {
+						setIsBudgetEditorOpen(true);
+						return;
+					}
+
+					closeBudgetEditor();
+				}}
+				onSave={() => {
+					handleSaveBudget().catch(() => undefined);
+				}}
+				onUpdateBudgetDraft={setBudgetDraft}
+			/>
+			<ExpenseFormSheet
+				bookingOptions={bookingOptions}
+				editingExpense={editingExpense}
+				expenseErrorMessage={expenseErrorMessage}
+				expenseForm={expenseForm}
+				isAddingExpense={isAddingExpense}
+				isOpen={isExpenseFormOpen}
+				onDelete={() => {
+					if (editingExpense) {
+						handleDeleteExpense(editingExpense).catch(() => undefined);
+					}
+				}}
+				onOpenChange={(isOpen) => {
+					if (isOpen) {
+						setIsExpenseFormOpen(true);
+						return;
+					}
+
+					closeExpenseForm();
+				}}
+				onOpenReceipt={(url) => {
+					handleOpenReceipt(url).catch(() => undefined);
+				}}
+				onSave={() => {
+					handleSaveExpense().catch(() => undefined);
+				}}
+				onUpdateForm={(patch) => {
+					setExpenseForm((current) => ({ ...current, ...patch }));
+				}}
+				receiptOptions={receiptOptions}
+				receiptUrl={editingReceiptUrl}
+				tripId={tripId}
+			/>
+		</>
 	);
 }

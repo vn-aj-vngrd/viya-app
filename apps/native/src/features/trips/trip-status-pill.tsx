@@ -1,89 +1,116 @@
 import { getTripStatusLabel, type TripStatus } from "@viya-app/domain";
-import type { ComponentProps } from "react";
 import { View } from "react-native";
 
-import { AppText, radius, useUITheme } from "@/src/components/ui";
-
-type TripStatusIcon = ComponentProps<
-	typeof import("@expo/vector-icons").Ionicons
->["name"];
+import {
+	AppText,
+	Icon,
+	type IconName,
+	type IconTone,
+	palettes,
+	spacing,
+} from "@/src/components/ui";
 
 interface TripStatusPresentation {
-	backgroundColor: string;
+	/** Static colour for non-hook lookups (list rows). Prefer `tone`. */
 	color: string;
 	description: string;
-	icon: TripStatusIcon;
+	icon: IconName;
 	label: string;
+	tone: IconTone;
 }
 
-// Static presentation consumed by list screens (needs a non-hook lookup).
-// Colors are translucent tints so they read in both light and dark mode.
+const staticPalette = palettes.light;
+
+// Status is plain text plus a monochrome symbol, never a tinted pill.
 const tripStatusPresentation = {
 	archived: {
-		backgroundColor: "rgba(113, 113, 122, 0.14)",
-		color: "#71717A",
+		color: staticPalette.inkSecondary,
 		description: "Hidden from active planning without deleting history.",
 		icon: "archive-outline",
 		label: getTripStatusLabel("archived"),
+		tone: "secondary",
+	},
+	ended: {
+		color: staticPalette.inkSecondary,
+		description:
+			"The dates have passed. Mark the trip complete to unlock the recap.",
+		icon: "flag-outline",
+		label: "Ended",
+		tone: "secondary",
 	},
 	completed: {
-		backgroundColor: "rgba(191, 90, 242, 0.14)",
-		color: "#AF52DE",
+		color: staticPalette.success,
 		description: "The trip is wrapped and ready to review later.",
 		icon: "checkmark-circle-outline",
 		label: getTripStatusLabel("completed"),
+		tone: "success",
 	},
 	planning: {
-		backgroundColor: "rgba(10, 132, 255, 0.14)",
-		color: "#0A84FF",
+		color: staticPalette.inkSecondary,
 		description: "Trip basics, budget, and itinerary are being shaped.",
 		icon: "map-outline",
 		label: getTripStatusLabel("planning"),
+		tone: "secondary",
 	},
 	traveling: {
-		backgroundColor: "rgba(50, 173, 230, 0.16)",
-		color: "#32ADE6",
+		color: staticPalette.accent,
 		description: "Day-of guidance and trip context are front and center.",
 		icon: "navigate-outline",
 		label: getTripStatusLabel("traveling"),
+		tone: "accent",
 	},
-} as const satisfies Record<TripStatus, TripStatusPresentation>;
+} as const satisfies Record<TripStatus | "ended", TripStatusPresentation>;
 
 export const getTripStatusPresentation = (
 	status: string
 ): TripStatusPresentation =>
-	tripStatusPresentation[status as TripStatus] ?? {
-		backgroundColor: "rgba(113, 113, 122, 0.14)",
-		color: "#71717A",
+	tripStatusPresentation[status as TripStatus | "ended"] ?? {
+		color: staticPalette.inkSecondary,
 		description: "Custom trip status.",
 		icon: "ellipse-outline",
 		label: status,
+		tone: "secondary",
 	};
 
-export function TripStatusPill({ status }: { status: string }) {
-	const { palette } = useUITheme();
+const textToneByIconTone = {
+	accent: "accent",
+	danger: "danger",
+	onPrimary: "onPrimary",
+	primary: "ink",
+	secondary: "secondary",
+	success: "success",
+	tertiary: "tertiary",
+	warning: "warning",
+} as const satisfies Record<IconTone, string>;
+
+/** Trip status as a symbol and a word. No pill, no tint. */
+export function TripStatusText({
+	label,
+	status,
+}: {
+	label?: string;
+	status: string;
+}) {
 	const presentation = getTripStatusPresentation(status);
-	const known = status in tripStatusPresentation;
+	const text = label ?? presentation.label;
 
 	return (
 		<View
-			accessibilityLabel={`Status ${presentation.label}`}
+			accessibilityLabel={`Status ${text}`}
+			accessible
 			style={{
-				backgroundColor: known ? presentation.backgroundColor : palette.fill,
-				borderRadius: radius.pill,
-				paddingHorizontal: 10,
-				paddingVertical: 4,
+				alignItems: "center",
+				flexDirection: "row",
+				gap: spacing.xs,
 			}}
 		>
+			<Icon name={presentation.icon} size={14} tone={presentation.tone} />
 			<AppText
 				numberOfLines={1}
-				style={{
-					color: known ? presentation.color : palette.inkSecondary,
-					fontWeight: "600",
-				}}
-				variant="footnote"
+				tone={textToneByIconTone[presentation.tone]}
+				variant="subhead"
 			>
-				{presentation.label}
+				{text}
 			</AppText>
 		</View>
 	);

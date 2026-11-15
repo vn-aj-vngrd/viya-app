@@ -1,6 +1,7 @@
 import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
 import type { Href } from "expo-router";
 import { VIYA_ROUTES } from "@/src/constants/routes";
+import { formatEnumLabel } from "@/src/lib/format";
 import type { TripWorkspace } from "./trip-dashboard-types";
 
 type RelatedEntityWorkspace = Pick<
@@ -169,14 +170,6 @@ export const getCompactRelatedLabel = (label: string) => {
 
 	return `${label.slice(0, maxLabelLength - 3).trimEnd()}...`;
 };
-
-const formatRelatedTypeLabel = (value: string) =>
-	value
-		.replaceAll("_", " ")
-		.split(" ")
-		.filter(Boolean)
-		.map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
-		.join(" ");
 
 const createRelatedEntityOption = ({
 	detail,
@@ -433,7 +426,7 @@ export const getTripRelatedEntityLabel = (
 	return (
 		relatedEntityLabelByKey.get(key) ??
 		(entity.relatedEntityType
-			? `${formatRelatedTypeLabel(entity.relatedEntityType)} linked`
+			? `${formatEnumLabel(entity.relatedEntityType)} linked`
 			: null)
 	);
 };

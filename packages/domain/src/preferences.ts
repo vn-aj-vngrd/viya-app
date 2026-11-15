@@ -724,8 +724,8 @@ const getHomeSuggestion = (
 	if (preferences.planningStyle === "flagRisks") {
 		return {
 			subtitle:
-				"Use your preferences to spot readiness gaps, timing pressure, and avoidable travel friction.",
-			title: "Check the smartest next risk",
+				"Viya lists booking, document and timing gaps before you pay for anything.",
+			title: "Check what could go wrong",
 			tone: "risk",
 		};
 	}
@@ -736,9 +736,8 @@ const getHomeSuggestion = (
 		hasInterest(preferences, "beaches")
 	) {
 		return {
-			subtitle:
-				"Start with a beach plan that leaves room for rest, sunsets, and flexible meals.",
-			title: "Plan a slower beach escape",
+			subtitle: "Fewer stops a day, time to rest, simple transfers.",
+			title: "Plan a slow beach trip",
 			tone: "calm",
 		};
 	}
@@ -749,8 +748,8 @@ const getHomeSuggestion = (
 	) {
 		return {
 			subtitle:
-				"Stack food stops, hidden gems, and nearby discoveries without losing track of timing.",
-			title: "Build a fast local discovery plan",
+				"Food stops and local spots with realistic travel time between them.",
+			title: "Plan a food-first trip",
 			tone: "active",
 		};
 	}
@@ -758,16 +757,16 @@ const getHomeSuggestion = (
 	if (preferences.budgetPreference === "budget") {
 		return {
 			subtitle:
-				"Compare value-first options and keep transport, meals, and buffers visible.",
-			title: "Find a smarter value route",
+				"Set a total in pesos and see transport, meals and stays against it.",
+			title: "Plan a trip on a budget",
 			tone: "budget",
 		};
 	}
 
 	return {
 		subtitle:
-			"Balance highlights, logistics, rest, and budget before you commit to bookings.",
-		title: "Shape a balanced trip plan",
+			"Tell Viya where, when and who is going. You get a day-by-day draft to edit.",
+		title: "Plan your first trip",
 		tone: "balanced",
 	};
 };

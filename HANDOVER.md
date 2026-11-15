@@ -5,7 +5,7 @@ Premium, minimalist, iOS-native Liquid-Glass-inspired redesign of the whole Viya
 
 ## Done
 - Foundation: `apps/native/src/components/ui` (GlassSurface, PressableScale, GlassIconButton, Primary/SecondaryButton, Chip, Card, SectionHeader, ListGroup/ListRow, CollapsingScreen/ScreenHeader, SheetHeader, EmptyState, LoadingState, FeedbackProvider/useFeedback, AppText, tokens, useUITheme). `expo-glass-effect` and `expo-blur` installed. Light/dark tokens wired through `global.css`. DESIGN.md has a "UI Foundation" section.
-- Floating tab bar is a glass pill with a spring-animated indicator; nav/back buttons are glass.
+- Tab bar is the native `NativeTabs` bar (Liquid Glass, minimize on scroll); nav/back buttons are glass.
 - Restyled on the primitives: auth, onboarding, layouts, modal/not-found, home, trips list, profile, vault/moments tabs, date picker, Viya chat (glass composer, bubbles), trip creation and dashboard, itinerary/places/travel mode, budget/bookings/readiness/risks, vault/moments/notes/companions/recap.
 
 ## Validation (final run)

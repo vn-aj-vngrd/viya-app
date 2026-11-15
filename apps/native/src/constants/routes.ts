@@ -8,12 +8,15 @@ const tripRoute = (tripId: Id<"trips">, leaf = "") =>
 	}) as Href;
 
 export const VIYA_ROUTES = {
-	home: "/(app)/(tabs)",
+	home: "/(app)/(tabs)/(discover)",
 	ai: "/(app)/ai",
 	newTrip: "/(app)/trips/new",
 	preferences: "/(app)/onboarding/preferences",
-	profile: "/(app)/(tabs)/profile",
-	trips: "/(app)/(tabs)/trips",
+	profile: "/(app)/(tabs)/(profile)/profile",
+	profileAppearance: "/(app)/profile/appearance",
+	profileTravel: "/(app)/profile/travel",
+	trips: "/(app)/(tabs)/(trips)/trips",
+	vault: "/(app)/(tabs)/(vault)/vault",
 	viya: "/(app)/(tabs)/viya",
 	tripBookings: (tripId: Id<"trips">) => tripRoute(tripId, "/bookings"),
 	tripBudget: (tripId: Id<"trips">) => tripRoute(tripId, "/budget"),

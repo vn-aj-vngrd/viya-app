@@ -1,41 +1,40 @@
-import { Ionicons } from "@expo/vector-icons";
+import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
+import { getVaultCounts } from "@viya-app/domain";
 import { useAction, useMutation } from "convex/react";
-import { type Href, Link, useRouter } from "expo-router";
-import { BottomSheet, Menu } from "heroui-native";
+import { Image } from "expo-image";
+import { type Href, useRouter } from "expo-router";
 import type { ReactNode } from "react";
 import { useRef, useState } from "react";
-import {
-	ImageBackground,
-	ScrollView,
-	useWindowDimensions,
-	View,
-} from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 import {
-	DateRangePickerField,
+	DateRangeCalendar,
 	type DateRangeValue,
 } from "@/src/components/date/date-picker-field";
-
-import { NavigationBackButton } from "@/src/components/navigation/navigation-back-button";
 import {
+	AppSheet,
 	AppText,
-	Card,
-	GlassSurface,
+	Chip,
 	haptic,
+	Icon,
+	ListGroup,
+	ListRow,
+	metrics,
+	motion,
 	PressableScale,
 	PrimaryButton,
 	radius,
-	SecondaryButton,
 	SheetHeader,
+	type ShellAction,
+	spacing,
+	useFeedback,
 	useUITheme,
 } from "@/src/components/ui";
 import { VIYA_ROUTES } from "@/src/constants/routes";
 import { useDestinationImages } from "@/src/features/home/use-destination-images";
-import { TripMetricBlock } from "@/src/features/trips/trip-card-primitives";
 import { isDecorativeDestinationImageUrl } from "@/src/features/trips/trip-cover-image";
 import {
 	getTripCreateOptionLabel,
@@ -46,30 +45,26 @@ import {
 	travelerTypeOptions,
 	tripStyleOptions,
 } from "@/src/features/trips/trip-create-flow-utils";
-import { getTripModulesSheetListMaxHeight } from "./trip-dashboard-layout";
-import type {
-	DashboardAction,
-	DashboardTab,
-	IoniconName,
-	TripDashboardModel,
-	TripTab,
-} from "./trip-dashboard-types";
-import { formatMoney, getReadinessDisplay } from "./trip-dashboard-utils";
+import { shouldShowDestinationLine } from "@/src/features/trips/trip-row";
+import {
+	formatCount,
+	formatDay,
+	formatMoney,
+	formatShortDate,
+	formatTimeRange,
+	formatTripRange,
+} from "@/src/lib/format";
+import type { TripDashboardModel } from "./trip-dashboard-types";
+import { TripStatusText } from "./trip-status-pill";
 import { TripTextField } from "./trip-text-field";
 
-export const tripFloatingBarBottomInset = 24;
-export const tripFloatingBarGap = 6;
 const viyaButtonNavigationThrottleMs = 800;
+const coverAspectRatio = 16 / 10;
 const profilePaceDetails = {
-	balanced: "3-5 activities per day",
-	light: "2-3 main activities per day",
-	packed: "Maximize the trip",
+	balanced: "3 to 5 activities a day",
+	light: "2 or 3 main activities a day",
+	packed: "Make the most of every day",
 } as const satisfies Record<TripPace, string>;
-const profilePaceIcons = {
-	balanced: "scale-outline",
-	light: "leaf-outline",
-	packed: "flash-outline",
-} as const satisfies Record<TripPace, IoniconName>;
 
 const destinationParentheticalPattern = /\s*\([^)]*\)/g;
 
@@ -122,9 +117,9 @@ const getProfileTripSummary = (form: TripProfileForm) => {
 			? `Destination: ${form.destination.trim()}.`
 			: "Destination: undecided.",
 		form.startDate.trim() && form.endDate.trim()
-			? `Dates: ${form.startDate.trim()} to ${form.endDate.trim()}.`
+			? `Dates: ${formatTripRange(form.startDate.trim(), form.endDate.trim(), { year: "always" })}.`
 			: null,
-		`Travelers: ${getTripCreateOptionLabel("travelerType", selectedTravelerType)}.`,
+		`Travelers: ${getTripCreateOptionLabel("travelerType", selectedTravelerType)}${Number(form.travelerCount) > 0 ? `, ${Number(form.travelerCount)}` : ""}.`,
 		selectedStyles.length > 0
 			? `Style: ${selectedStyles
 					.map((style) => getTripCreateOptionLabel("style", style))
@@ -140,52 +135,6 @@ const getProfileTripSummary = (form: TripProfileForm) => {
 	return details.join(" ");
 };
 
-const tripScreenMeta: Record<TripTab, { icon: IoniconName; label: string }> = {
-	bookings: { icon: "briefcase-outline", label: "Bookings" },
-	budget: { icon: "wallet-outline", label: "Budget" },
-	checklist: { icon: "shield-checkmark-outline", label: "Readiness" },
-	companions: { icon: "people-outline", label: "Companions" },
-	documents: { icon: "folder-open-outline", label: "Vault" },
-	itinerary: { icon: "calendar-outline", label: "Itinerary" },
-	memories: { icon: "images-outline", label: "Memories" },
-	notes: { icon: "document-text-outline", label: "Notes" },
-	overview: { icon: "speedometer-outline", label: "Overview" },
-	places: { icon: "map-outline", label: "Places" },
-	recap: { icon: "share-social-outline", label: "Recap" },
-	risks: { icon: "warning-outline", label: "Risks" },
-	travel: { icon: "navigate-outline", label: "Travel Mode" },
-};
-
-interface ModuleAccent {
-	bg: string;
-	color: string;
-}
-
-const moduleAccents: Record<string, ModuleAccent> = {
-	Bookings: { bg: "rgba(255, 159, 10, 0.12)", color: "#FF9F0A" },
-	Budget: { bg: "rgba(10, 165, 181, 0.12)", color: "#0AA5B5" },
-	Checklist: { bg: "rgba(94, 92, 230, 0.12)", color: "#5E5CE6" },
-	Companions: { bg: "rgba(255, 45, 85, 0.1)", color: "#FF2D55" },
-	Documents: { bg: "rgba(175, 82, 222, 0.12)", color: "#AF52DE" },
-	Itinerary: { bg: "rgba(191, 90, 242, 0.12)", color: "#BF5AF2" },
-	Memories: { bg: "rgba(191, 90, 242, 0.12)", color: "#BF5AF2" },
-	Notes: { bg: "rgba(255, 159, 10, 0.12)", color: "#FF9F0A" },
-	Overview: { bg: "rgba(10, 132, 255, 0.1)", color: "#0A84FF" },
-	Places: { bg: "rgba(52, 199, 89, 0.12)", color: "#34C759" },
-	Readiness: { bg: "rgba(52, 199, 89, 0.12)", color: "#34C759" },
-	Recap: { bg: "rgba(10, 132, 255, 0.1)", color: "#0A84FF" },
-	Risks: { bg: "rgba(255, 59, 48, 0.1)", color: "#FF3B30" },
-	"Travel Mode": { bg: "rgba(0, 122, 255, 0.1)", color: "#007AFF" },
-	Vault: { bg: "rgba(255, 159, 10, 0.12)", color: "#FF9F0A" },
-};
-
-const defaultModuleAccent: ModuleAccent = {
-	bg: "rgba(10, 132, 255, 0.1)",
-	color: "#0A84FF",
-};
-const getModuleAccent = (label: string): ModuleAccent =>
-	moduleAccents[label] ?? defaultModuleAccent;
-
 interface TripProfileForm {
 	budgetAmount: string;
 	destination: string;
@@ -194,15 +143,34 @@ interface TripProfileForm {
 	pace: string;
 	startDate: string;
 	title: string;
+	travelerCount: string;
 	travelStyle: string;
 }
 
+const getProfileForm = (trip: Doc<"trips">): TripProfileForm => ({
+	budgetAmount: trip.budgetAmount?.toString() ?? "",
+	destination: trip.destination,
+	endDate: trip.endDate,
+	groupType: trip.groupType,
+	pace: trip.pace,
+	startDate: trip.startDate,
+	title: trip.title,
+	travelerCount: trip.travelerCount?.toString() ?? "",
+	travelStyle: trip.travelStyle,
+});
+
+// ---------------------------------------------------------------------------
+// Edit trip sheet
+// ---------------------------------------------------------------------------
+
 function SheetField({
+	keyboardType,
 	label,
 	onChangeText,
 	placeholder,
 	value,
 }: {
+	keyboardType?: "default" | "numeric";
 	label: string;
 	onChangeText: (value: string) => void;
 	placeholder: string;
@@ -212,6 +180,7 @@ function SheetField({
 
 	return (
 		<TripTextField
+			keyboardType={keyboardType}
 			label={label}
 			onBlur={onBlur}
 			onChangeText={onChangeText}
@@ -222,136 +191,36 @@ function SheetField({
 	);
 }
 
-function ProfileFormSection({
+function FormBlock({
 	children,
-	subtitle,
+	footer,
 	title,
 }: {
 	children: ReactNode;
-	subtitle?: string;
+	footer?: string;
 	title: string;
 }) {
 	return (
-		<View style={{ gap: 12 }}>
-			<View style={{ gap: 2 }}>
-				<AppText accessibilityRole="header" bold variant="subhead">
-					{title}
-				</AppText>
-				{subtitle ? (
-					<AppText tone="secondary" variant="footnote">
-						{subtitle}
-					</AppText>
-				) : null}
-			</View>
-			{children}
-		</View>
-	);
-}
-
-function ProfileChoiceChip({
-	isSelected,
-	label,
-	onPress,
-}: {
-	isSelected: boolean;
-	label: string;
-	onPress: () => void;
-}) {
-	const { palette } = useUITheme();
-
-	return (
-		<PressableScale
-			accessibilityLabel={label}
-			accessibilityRole="button"
-			accessibilityState={{ selected: isSelected }}
-			haptic="selection"
-			hitSlop={{ bottom: 5, top: 5 }}
-			onPress={onPress}
-			scaleTo={0.97}
-			style={{
-				alignItems: "center",
-				backgroundColor: isSelected ? palette.ink : palette.surface,
-				borderRadius: radius.pill,
-				flexDirection: "row",
-				height: 34,
-				paddingHorizontal: 16,
-			}}
-		>
+		<View style={{ gap: spacing.sm }}>
 			<AppText
-				style={{
-					color: isSelected ? palette.onPrimary : palette.ink,
-					fontWeight: "500",
-				}}
-				variant="subhead"
+				accessibilityRole="header"
+				style={{ paddingHorizontal: spacing.xs }}
+				tone="secondary"
+				variant="footnote"
 			>
-				{label}
+				{title}
 			</AppText>
-		</PressableScale>
-	);
-}
-
-function ProfileOptionCard({
-	description,
-	icon,
-	isSelected,
-	onPress,
-	title,
-}: {
-	description: string;
-	icon: IoniconName;
-	isSelected: boolean;
-	onPress: () => void;
-	title: string;
-}) {
-	const { palette } = useUITheme();
-
-	return (
-		<PressableScale
-			accessibilityLabel={`${title}. ${description}`}
-			accessibilityRole="button"
-			accessibilityState={{ selected: isSelected }}
-			haptic="selection"
-			onPress={onPress}
-			scaleTo={0.98}
-			style={{
-				alignItems: "center",
-				backgroundColor: palette.surface,
-				borderColor: isSelected ? palette.ink : "transparent",
-				borderCurve: "continuous",
-				borderRadius: radius.card,
-				borderWidth: 1.5,
-				flexDirection: "row",
-				gap: 12,
-				minHeight: 64,
-				padding: 16,
-			}}
-		>
-			<View
-				style={{
-					alignItems: "center",
-					backgroundColor: palette.fill,
-					borderRadius: radius.pill,
-					height: 44,
-					justifyContent: "center",
-					width: 44,
-				}}
-			>
-				<Ionicons
-					color={isSelected ? palette.ink : palette.inkSecondary}
-					name={icon}
-					size={20}
-				/>
-			</View>
-			<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-				<AppText variant="headline">{title}</AppText>
-				<AppText tone="secondary" variant="subhead">
-					{description}
+			{children}
+			{footer ? (
+				<AppText
+					style={{ paddingHorizontal: spacing.xs }}
+					tone="secondary"
+					variant="footnote"
+				>
+					{footer}
 				</AppText>
-			</View>
-			{isSelected ? (
-				<Ionicons color={palette.ink} name="checkmark-circle" size={22} />
 			) : null}
-		</PressableScale>
+		</View>
 	);
 }
 
@@ -373,7 +242,7 @@ function TripProfileEditSheet({
 	onUpdateForm: (key: keyof TripProfileForm, value: string) => void;
 }) {
 	const insets = useSafeAreaInsets();
-	const { palette } = useUITheme();
+	const [isDatesOpen, setIsDatesOpen] = useState(false);
 	const dateRange: DateRangeValue = {
 		end: form.endDate,
 		start: form.startDate,
@@ -381,6 +250,12 @@ function TripProfileEditSheet({
 	const selectedTravelerType = getSelectedTravelerType(form.groupType);
 	const selectedStyles = getSelectedTripStyles(form.travelStyle);
 	const selectedPace = getSelectedTripPace(form.pace);
+	const datesValue =
+		form.startDate && form.endDate
+			? formatTripRange(form.startDate, form.endDate, { year: "always" })
+			: "Not set";
+	const showTravelerCount =
+		selectedTravelerType !== "solo" && selectedTravelerType !== "couple";
 
 	const toggleTripStyle = (style: TripStyle) => {
 		const nextStyles = selectedStyles.includes(style)
@@ -394,370 +269,167 @@ function TripProfileEditSheet({
 	};
 
 	return (
-		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
-			<BottomSheet.Portal>
-				<BottomSheet.Overlay />
-				<BottomSheet.Content
-					backgroundClassName="rounded-t-[36px] bg-background"
-					enablePanDownToClose={true}
-					snapPoints={["88%"]}
-				>
-					<View
-						style={{
-							backgroundColor: palette.canvas,
-							gap: 16,
-							paddingBottom: Math.max(insets.bottom, 18),
-							paddingHorizontal: 20,
-						}}
-					>
-						<SheetHeader
-							onClose={() => onOpenChange(false)}
-							subtitle="Update the core trip details used across every module."
-							title="Edit trip profile"
-						/>
-						<ScrollView
-							contentContainerStyle={{ gap: 22, paddingBottom: 8 }}
-							keyboardShouldPersistTaps="handled"
-							showsVerticalScrollIndicator={false}
-							style={{ maxHeight: 560 }}
-						>
-							<ProfileFormSection
-								subtitle="These fields anchor the workspace and trip header."
-								title="Trip identity"
-							>
-								<View className="gap-3">
-									<SheetField
-										label="Title"
-										onChangeText={(value) => onUpdateForm("title", value)}
-										placeholder="Summer getaway"
-										value={form.title}
-									/>
-									<SheetField
-										label="Destination"
-										onChangeText={(value) => onUpdateForm("destination", value)}
-										placeholder="Tokyo, Japan"
-										value={form.destination}
-									/>
-								</View>
-							</ProfileFormSection>
-
-							<ProfileFormSection
-								subtitle="Dates organize itinerary days, bookings, and recaps."
-								title="Schedule"
-							>
-								<DateRangePickerField
-									helperText="Dates set the number of days in this workspace."
-									label="Trip dates"
-									onValueChange={(value) => {
-										onUpdateForm("startDate", value.start);
-										onUpdateForm("endDate", value.end);
-									}}
-									value={dateRange}
-								/>
-							</ProfileFormSection>
-
-							<ProfileFormSection
-								subtitle="Match how this trip should be planned and displayed."
-								title="Travelers"
-							>
-								<View className="flex-row flex-wrap gap-2">
-									{travelerTypeOptions.map((option) => (
-										<ProfileChoiceChip
-											isSelected={selectedTravelerType === option}
-											key={option}
-											label={getTripCreateOptionLabel("travelerType", option)}
-											onPress={() => onUpdateForm("groupType", option)}
-										/>
-									))}
-								</View>
-							</ProfileFormSection>
-
-							<ProfileFormSection
-								subtitle="Pick one or more styles so modules keep the right context."
-								title="Trip style"
-							>
-								<View className="flex-row flex-wrap gap-2">
-									{tripStyleOptions.map((option) => (
-										<ProfileChoiceChip
-											isSelected={selectedStyles.includes(option)}
-											key={option}
-											label={getTripCreateOptionLabel("style", option)}
-											onPress={() => toggleTripStyle(option)}
-										/>
-									))}
-								</View>
-							</ProfileFormSection>
-
-							<ProfileFormSection
-								subtitle="Controls how dense itinerary suggestions should feel."
-								title="Daily pace"
-							>
-								<View className="gap-2">
-									{paceOptions.map((option) => (
-										<ProfileOptionCard
-											description={profilePaceDetails[option]}
-											icon={profilePaceIcons[option]}
-											isSelected={selectedPace === option}
-											key={option}
-											onPress={() => onUpdateForm("pace", option)}
-											title={getTripCreateOptionLabel("pace", option)}
-										/>
-									))}
-								</View>
-							</ProfileFormSection>
-
-							<ProfileFormSection
-								subtitle="The amount tracked by the trip budget wallet."
-								title="Budget"
-							>
-								<SheetField
-									label="Budget amount"
-									onChangeText={(value) => onUpdateForm("budgetAmount", value)}
-									placeholder="25000"
-									value={form.budgetAmount}
-								/>
-							</ProfileFormSection>
-						</ScrollView>
-						{errorMessage ? (
-							<AppText tone="danger" variant="subhead">
-								{errorMessage}
-							</AppText>
-						) : null}
-						<PrimaryButton
-							disabled={isSaving}
-							isPending={isSaving}
-							label="Save profile"
-							onPress={onSubmit}
-						/>
-					</View>
-				</BottomSheet.Content>
-			</BottomSheet.Portal>
-		</BottomSheet>
-	);
-}
-
-function TripDeleteConfirmSheet({
-	errorMessage,
-	isDeleting,
-	isOpen,
-	onConfirm,
-	onOpenChange,
-}: {
-	errorMessage: string | null;
-	isDeleting: boolean;
-	isOpen: boolean;
-	onConfirm: () => void;
-	onOpenChange: (isOpen: boolean) => void;
-}) {
-	const insets = useSafeAreaInsets();
-	const { palette } = useUITheme();
-
-	return (
-		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
-			<BottomSheet.Portal>
-				<BottomSheet.Overlay />
-				<BottomSheet.Content
-					backgroundClassName="rounded-t-[32px] bg-background"
-					enablePanDownToClose={!isDeleting}
-					snapPoints={["38%"]}
-				>
-					<View
-						style={{
-							backgroundColor: palette.canvas,
-							gap: 16,
-							paddingBottom: Math.max(insets.bottom, 18),
-							paddingHorizontal: 20,
-						}}
-					>
-						<SheetHeader
-							onClose={() => {
-								if (!isDeleting) {
-									onOpenChange(false);
-								}
-							}}
-							subtitle="This permanently removes the trip and its saved planning details."
-							title="Delete trip?"
-						/>
-						{errorMessage ? (
-							<AppText
-								accessibilityLiveRegion="polite"
-								tone="danger"
-								variant="subhead"
-							>
-								{errorMessage}
-							</AppText>
-						) : null}
-						<View style={{ gap: 8 }}>
-							<PrimaryButton
-								destructive
-								disabled={isDeleting}
-								isPending={isDeleting}
-								label="Delete"
-								onPress={onConfirm}
-							/>
-							<SecondaryButton
-								disabled={isDeleting}
-								label="Cancel"
-								onPress={() => onOpenChange(false)}
-							/>
-						</View>
-					</View>
-				</BottomSheet.Content>
-			</BottomSheet.Portal>
-		</BottomSheet>
-	);
-}
-
-interface LinkButtonProps {
-	children: string;
-	href: Href;
-	icon?: IoniconName;
-	variant?: "primary" | "secondary" | "ghost";
-}
-
-export function LinkButton({
-	children,
-	href,
-	icon,
-	variant = "secondary",
-}: LinkButtonProps) {
-	const router = useRouter();
-	const { palette } = useUITheme();
-	const isPrimary = variant === "primary";
-	const foreground = isPrimary ? palette.onPrimary : palette.accent;
-
-	return (
-		<PressableScale
-			accessibilityLabel={children}
-			accessibilityRole="link"
-			hitSlop={{ bottom: 5, top: 5 }}
-			onPress={() => router.push(href)}
-			scaleTo={0.97}
-			style={{
-				alignItems: "center",
-				alignSelf: "flex-start",
-				backgroundColor: (() => {
-					if (isPrimary) {
-						return palette.ink;
-					}
-					return variant === "ghost" ? "transparent" : palette.fill;
-				})(),
-				borderRadius: radius.pill,
-				flexDirection: "row",
-				gap: 6,
-				height: 34,
-				paddingHorizontal: 14,
-			}}
-		>
-			{icon ? <Ionicons color={foreground} name={icon} size={16} /> : null}
-			<AppText
-				style={{ color: foreground, fontWeight: "600" }}
-				variant="subhead"
+		<AppSheet isOpen={isOpen} onOpenChange={onOpenChange} snapPoints={["92%"]}>
+			<SheetHeader
+				confirm={{
+					isPending: isSaving,
+					label: "Save",
+					onPress: onSubmit,
+				}}
+				onClose={() => onOpenChange(false)}
+				title="Edit trip"
+			/>
+			<BottomSheetScrollView
+				contentContainerStyle={{
+					gap: spacing.xl,
+					paddingBottom: Math.max(insets.bottom, spacing.lg),
+					paddingHorizontal: spacing.screen,
+					paddingTop: spacing.md,
+				}}
+				keyboardShouldPersistTaps="handled"
+				showsVerticalScrollIndicator={false}
 			>
-				{children}
-			</AppText>
-		</PressableScale>
-	);
-}
-
-export function Section({
-	children,
-	icon,
-	title,
-}: {
-	children: ReactNode;
-	icon?: IoniconName;
-	title: string;
-}) {
-	const { palette } = useUITheme();
-
-	return (
-		<View style={{ gap: 12, paddingVertical: 8 }}>
-			<View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
-				{icon ? (
-					<Ionicons color={palette.inkSecondary} name={icon} size={18} />
+				{errorMessage ? (
+					<AppText
+						accessibilityLiveRegion="polite"
+						tone="danger"
+						variant="subhead"
+					>
+						{errorMessage}
+					</AppText>
 				) : null}
-				<AppText accessibilityRole="header" bold variant="headline">
-					{title}
-				</AppText>
-			</View>
-			{children}
-		</View>
+				<View style={{ gap: spacing.lg }}>
+					<SheetField
+						label="Title"
+						onChangeText={(value) => onUpdateForm("title", value)}
+						placeholder="Siargao with friends"
+						value={form.title}
+					/>
+					<SheetField
+						label="Destination"
+						onChangeText={(value) => onUpdateForm("destination", value)}
+						placeholder="El Nido, Palawan"
+						value={form.destination}
+					/>
+				</View>
+
+				<View style={{ gap: spacing.md }}>
+					<ListGroup>
+						<ListRow
+							accessibilityLabel={`Dates, ${datesValue}`}
+							onPress={() => setIsDatesOpen((open) => !open)}
+							title="Dates"
+							trailing={
+								<Icon
+									name={isDatesOpen ? "chevron-up" : "chevron-down"}
+									size={14}
+									tone="tertiary"
+									weight="semibold"
+								/>
+							}
+							value={datesValue}
+						/>
+					</ListGroup>
+					{isDatesOpen ? (
+						<DateRangeCalendar
+							onValueChange={(value) => {
+								onUpdateForm("startDate", value.start);
+								onUpdateForm("endDate", value.end);
+							}}
+							value={dateRange}
+						/>
+					) : null}
+				</View>
+
+				<FormBlock title="Travelers">
+					<View
+						style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}
+					>
+						{travelerTypeOptions.map((option) => (
+							<Chip
+								key={option}
+								label={getTripCreateOptionLabel("travelerType", option)}
+								onPress={() => onUpdateForm("groupType", option)}
+								selected={selectedTravelerType === option}
+							/>
+						))}
+					</View>
+					{showTravelerCount ? (
+						<SheetField
+							keyboardType="numeric"
+							label="Number of travelers"
+							onChangeText={(value) => onUpdateForm("travelerCount", value)}
+							placeholder="4"
+							value={form.travelerCount}
+						/>
+					) : null}
+				</FormBlock>
+
+				<FormBlock title="Style">
+					<View
+						style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}
+					>
+						{tripStyleOptions.map((option) => (
+							<Chip
+								key={option}
+								label={getTripCreateOptionLabel("style", option)}
+								onPress={() => toggleTripStyle(option)}
+								selected={selectedStyles.includes(option)}
+							/>
+						))}
+					</View>
+				</FormBlock>
+
+				<FormBlock footer={profilePaceDetails[selectedPace]} title="Pace">
+					<View
+						style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}
+					>
+						{paceOptions.map((option) => (
+							<Chip
+								key={option}
+								label={getTripCreateOptionLabel("pace", option)}
+								onPress={() => onUpdateForm("pace", option)}
+								selected={selectedPace === option}
+							/>
+						))}
+					</View>
+				</FormBlock>
+
+				<SheetField
+					keyboardType="numeric"
+					label="Budget (₱)"
+					onChangeText={(value) => onUpdateForm("budgetAmount", value)}
+					placeholder="25,000"
+					value={form.budgetAmount}
+				/>
+			</BottomSheetScrollView>
+		</AppSheet>
 	);
 }
 
-export function EmptyCopy({
-	actionHref,
-	actionLabel,
-	children,
-	icon = "ellipse-outline",
-}: {
-	actionHref?: Href;
-	actionLabel?: string;
-	children: string;
-	icon?: IoniconName;
-}) {
-	const { palette } = useUITheme();
+// ---------------------------------------------------------------------------
+// Header actions: Ask Viya + More
+// ---------------------------------------------------------------------------
 
-	return (
-		<View
-			style={{
-				alignItems: "center",
-				backgroundColor: palette.fill,
-				borderCurve: "continuous",
-				borderRadius: radius.card,
-				gap: 8,
-				padding: 20,
-			}}
-		>
-			<Ionicons color={palette.inkTertiary} name={icon} size={20} />
-			<AppText
-				style={{ textAlign: "center" }}
-				tone="secondary"
-				variant="subhead"
-			>
-				{children}
-			</AppText>
-			{actionHref && actionLabel ? (
-				<LinkButton href={actionHref}>{actionLabel}</LinkButton>
-			) : null}
-		</View>
-	);
-}
-
-export function TripHeaderActionGroup({
-	model,
-}: {
-	model: TripDashboardModel;
-}) {
+export function useTripHeaderActions(model: TripDashboardModel) {
 	const router = useRouter();
-	const { palette } = useUITheme();
+	const { confirm, showToast } = useFeedback();
 	const updateTripProfile = useMutation(api.trips.updateTripProfile);
 	const toggleTripFavorite = useMutation(api.trips.toggleTripFavorite);
 	const archiveTrip = useMutation(api.trips.archiveTrip);
 	const deleteTrip = useMutation(api.trips.deleteTrip);
-	const isFavorite = model.workspace.trip.isFavorite ?? false;
-	const isArchived = model.workspace.trip.status === "archived";
+	const lastViyaPressRef = useRef(0);
+	const { trip } = model.workspace;
+	const isFavorite = trip.isFavorite ?? false;
+	const isArchived = trip.status === "archived";
 	const [isProfileSheetOpen, setIsProfileSheetOpen] = useState(false);
-	const [isDeleteSheetOpen, setIsDeleteSheetOpen] = useState(false);
 	const [isSavingProfile, setIsSavingProfile] = useState(false);
-	const [isDeletingTrip, setIsDeletingTrip] = useState(false);
-	const [actionErrorMessage, setActionErrorMessage] = useState<string | null>(
-		null
-	);
 	const [profileErrorMessage, setProfileErrorMessage] = useState<string | null>(
 		null
 	);
-	const [profileForm, setProfileForm] = useState<TripProfileForm>({
-		budgetAmount: model.workspace.trip.budgetAmount?.toString() ?? "",
-		destination: model.workspace.trip.destination,
-		endDate: model.workspace.trip.endDate,
-		groupType: model.workspace.trip.groupType,
-		pace: model.workspace.trip.pace,
-		startDate: model.workspace.trip.startDate,
-		title: model.workspace.trip.title,
-		travelStyle: model.workspace.trip.travelStyle,
-	});
+	const [profileForm, setProfileForm] = useState<TripProfileForm>(() =>
+		getProfileForm(trip)
+	);
 
 	const updateProfileForm = (key: keyof TripProfileForm, value: string) => {
 		setProfileErrorMessage(null);
@@ -766,16 +438,7 @@ export function TripHeaderActionGroup({
 
 	const openProfileSheet = () => {
 		setProfileErrorMessage(null);
-		setProfileForm({
-			budgetAmount: model.workspace.trip.budgetAmount?.toString() ?? "",
-			destination: model.workspace.trip.destination,
-			endDate: model.workspace.trip.endDate,
-			groupType: model.workspace.trip.groupType,
-			pace: model.workspace.trip.pace,
-			startDate: model.workspace.trip.startDate,
-			title: model.workspace.trip.title,
-			travelStyle: model.workspace.trip.travelStyle,
-		});
+		setProfileForm(getProfileForm(trip));
 		setIsProfileSheetOpen(true);
 	};
 
@@ -783,12 +446,14 @@ export function TripHeaderActionGroup({
 		const title = profileForm.title.trim();
 		const destination = profileForm.destination.trim();
 
-		if (!(title && destination)) {
-			setProfileErrorMessage("Add a trip title and destination.");
+		if (!title) {
+			haptic("warning");
+			setProfileErrorMessage("Add a trip title.");
 			return;
 		}
 
 		const budgetAmount = Number(profileForm.budgetAmount.replaceAll(",", ""));
+		const travelerCount = Math.floor(Number(profileForm.travelerCount));
 		setProfileErrorMessage(null);
 		setIsSavingProfile(true);
 		try {
@@ -797,7 +462,7 @@ export function TripHeaderActionGroup({
 					Number.isFinite(budgetAmount) && budgetAmount > 0
 						? budgetAmount
 						: undefined,
-				budgetCurrency: model.workspace.trip.budgetCurrency ?? "PHP",
+				budgetCurrency: trip.budgetCurrency ?? "PHP",
 				destination,
 				endDate: profileForm.endDate.trim(),
 				groupType: profileForm.groupType.trim() || "solo",
@@ -805,416 +470,156 @@ export function TripHeaderActionGroup({
 				startDate: profileForm.startDate.trim(),
 				summary: getProfileTripSummary(profileForm),
 				title,
+				travelerCount:
+					Number.isFinite(travelerCount) && travelerCount > 0
+						? travelerCount
+						: undefined,
 				travelStyle: profileForm.travelStyle.trim() || "balanced",
 				tripId: model.tripId,
 			});
+			haptic("success");
 			setIsProfileSheetOpen(false);
 		} catch {
-			setProfileErrorMessage("Could not update trip profile.");
+			haptic("error");
+			setProfileErrorMessage("Could not save the trip. Try again.");
 		} finally {
 			setIsSavingProfile(false);
 		}
 	};
 
 	const handleFavoritePress = () => {
-		setActionErrorMessage(null);
 		haptic("selection");
 		toggleTripFavorite({
 			isFavorite: !isFavorite,
 			tripId: model.tripId,
 		}).catch(() => {
-			setActionErrorMessage("Could not update favorite.");
+			showToast({ message: "Could not update favorite.", tone: "error" });
 		});
 	};
 
 	const handleArchivePress = () => {
-		setActionErrorMessage(null);
-		archiveTrip({ tripId: model.tripId }).catch(() => {
-			setActionErrorMessage("Could not archive trip.");
+		archiveTrip({ tripId: model.tripId })
+			.then(() => {
+				haptic("success");
+				showToast({ message: "Trip archived.", tone: "success" });
+			})
+			.catch(() => {
+				showToast({ message: "Could not archive trip.", tone: "error" });
+			});
+	};
+
+	const handleDeletePress = async () => {
+		const isConfirmed = await confirm({
+			confirmLabel: "Delete trip",
+			destructive: true,
+			message: "This removes the trip and everything saved in it.",
+			title: "Delete this trip?",
 		});
-	};
 
-	const handleDeleteTrip = async () => {
-		setActionErrorMessage(null);
-		setIsDeletingTrip(true);
-		try {
-			await deleteTrip({ tripId: model.tripId });
-			haptic("success");
-			setIsDeleteSheetOpen(false);
-			router.replace(VIYA_ROUTES.trips as Href);
-		} catch {
-			haptic("error");
-			setActionErrorMessage("Could not delete trip.");
-		} finally {
-			setIsDeletingTrip(false);
-		}
-	};
-
-	const handleDeletePress = () => {
-		setActionErrorMessage(null);
-		setIsDeleteSheetOpen(true);
-	};
-
-	return (
-		<>
-			<View style={{ alignItems: "flex-end", gap: 4 }}>
-				<Menu>
-					<Menu.Trigger asChild={true}>
-						<PressableScale
-							accessibilityLabel="Open trip options"
-							accessibilityRole="button"
-							style={{
-								alignItems: "center",
-								backgroundColor: palette.surface,
-								borderRadius: radius.pill,
-								height: 44,
-								justifyContent: "center",
-								width: 44,
-							}}
-						>
-							<Ionicons
-								color={palette.ink}
-								name="ellipsis-horizontal"
-								size={22}
-							/>
-						</PressableScale>
-					</Menu.Trigger>
-					<Menu.Portal>
-						<Menu.Overlay />
-						<Menu.Content
-							align="end"
-							className="rounded-[24px] bg-surface p-2"
-							offset={10}
-							placement="bottom"
-							presentation="popover"
-							width={300}
-						>
-							<Menu.Item
-								accessibilityLabel="Edit trip profile"
-								className="flex-row items-center gap-3 rounded-[22px] p-3"
-								isAnimatedStyleActive={false}
-								onPress={openProfileSheet}
-							>
-								<View className="h-9 w-9 items-center justify-center rounded-full bg-primary/10">
-									<Ionicons
-										color={palette.accent}
-										name="create-outline"
-										size={18}
-									/>
-								</View>
-								<View className="flex-1">
-									<Menu.ItemTitle className="font-semibold text-sm">
-										Edit profile
-									</Menu.ItemTitle>
-									<Menu.ItemDescription className="text-xs">
-										Update dates, destination, budget, and notes.
-									</Menu.ItemDescription>
-								</View>
-							</Menu.Item>
-							<Menu.Item
-								accessibilityLabel={
-									isFavorite ? "Remove from favorites" : "Add to favorites"
-								}
-								className="flex-row items-center gap-3 rounded-[22px] p-3"
-								isAnimatedStyleActive={false}
-								onPress={handleFavoritePress}
-							>
-								<View className="h-9 w-9 items-center justify-center rounded-full bg-warning/10">
-									<Ionicons
-										color={palette.warning}
-										name={isFavorite ? "heart" : "heart-outline"}
-										size={18}
-									/>
-								</View>
-								<View className="flex-1">
-									<Menu.ItemTitle className="font-semibold text-sm">
-										{isFavorite ? "Favorited" : "Add to favorites"}
-									</Menu.ItemTitle>
-									<Menu.ItemDescription className="text-xs">
-										{isFavorite
-											? "Keep this trip in favorites."
-											: "Pin this trip for quick access."}
-									</Menu.ItemDescription>
-								</View>
-							</Menu.Item>
-							<Menu.Item
-								accessibilityLabel={
-									isArchived ? "Trip archived" : "Archive trip"
-								}
-								className="flex-row items-center gap-3 rounded-[22px] p-3"
-								isAnimatedStyleActive={false}
-								isDisabled={isArchived}
-								onPress={handleArchivePress}
-								style={{ opacity: isArchived ? 0.5 : 1 }}
-							>
-								<View className="h-9 w-9 items-center justify-center rounded-full bg-surface-secondary">
-									<Ionicons
-										color={palette.inkSecondary}
-										name="archive-outline"
-										size={18}
-									/>
-								</View>
-								<View className="flex-1">
-									<Menu.ItemTitle className="font-semibold text-sm">
-										{isArchived ? "Archived" : "Archive"}
-									</Menu.ItemTitle>
-									<Menu.ItemDescription className="text-xs">
-										Move this trip out of active planning.
-									</Menu.ItemDescription>
-								</View>
-							</Menu.Item>
-							<View className="mx-3 my-1 h-px bg-border" />
-							<Menu.Item
-								accessibilityLabel="Delete trip"
-								className="flex-row items-center gap-3 rounded-[22px] p-3"
-								isAnimatedStyleActive={false}
-								onPress={handleDeletePress}
-							>
-								<View className="h-9 w-9 items-center justify-center rounded-full bg-danger/10">
-									<Ionicons
-										color={palette.danger}
-										name="trash-outline"
-										size={18}
-									/>
-								</View>
-								<View className="flex-1">
-									<Menu.ItemTitle className="font-semibold text-danger text-sm">
-										Delete trip
-									</Menu.ItemTitle>
-									<Menu.ItemDescription className="text-xs">
-										Remove this trip permanently.
-									</Menu.ItemDescription>
-								</View>
-							</Menu.Item>
-						</Menu.Content>
-					</Menu.Portal>
-				</Menu>
-				{actionErrorMessage ? (
-					<AppText
-						accessibilityLiveRegion="polite"
-						className="max-w-44"
-						tone="danger"
-						variant="footnote"
-					>
-						{actionErrorMessage}
-					</AppText>
-				) : null}
-			</View>
-			<TripProfileEditSheet
-				errorMessage={profileErrorMessage}
-				form={profileForm}
-				isOpen={isProfileSheetOpen}
-				isSaving={isSavingProfile}
-				onOpenChange={(isOpen) => {
-					setIsProfileSheetOpen(isOpen);
-					if (!isOpen) {
-						setProfileErrorMessage(null);
-					}
-				}}
-				onSubmit={() => {
-					handleSaveProfile().catch(() => undefined);
-				}}
-				onUpdateForm={updateProfileForm}
-			/>
-			<TripDeleteConfirmSheet
-				errorMessage={actionErrorMessage}
-				isDeleting={isDeletingTrip}
-				isOpen={isDeleteSheetOpen}
-				onConfirm={() => {
-					handleDeleteTrip().catch(() => undefined);
-				}}
-				onOpenChange={(isOpen) => {
-					setIsDeleteSheetOpen(isOpen);
-					if (!isOpen) {
-						setActionErrorMessage(null);
-					}
-				}}
-			/>
-		</>
-	);
-}
-
-export function TripStickyHeader({ model }: { model: TripDashboardModel }) {
-	const router = useRouter();
-	const insets = useSafeAreaInsets();
-	const { palette } = useUITheme();
-	const { trip } = model.workspace;
-
-	return (
-		<View
-			style={{
-				backgroundColor: palette.canvas,
-				paddingBottom: 12,
-				paddingHorizontal: 16,
-				paddingTop: insets.top + 10,
-				zIndex: 30,
-			}}
-		>
-			<View
-				style={{
-					alignItems: "center",
-					flexDirection: "row",
-					gap: 12,
-					minHeight: 44,
-				}}
-			>
-				<View
-					style={{
-						alignItems: "center",
-						flex: 1,
-						flexDirection: "row",
-						gap: 12,
-						minWidth: 0,
-					}}
-				>
-					<NavigationBackButton onPress={() => router.back()} />
-					<View style={{ flex: 1, minWidth: 0 }}>
-						<AppText bold numberOfLines={1} variant="subhead">
-							{trip.title}
-						</AppText>
-						<AppText numberOfLines={1} tone="secondary" variant="footnote">
-							{trip.destination} · {model.tripWindow}
-						</AppText>
-					</View>
-				</View>
-				<View style={{ alignItems: "flex-end", minWidth: 48 }}>
-					<TripHeaderActionGroup model={model} />
-				</View>
-			</View>
-		</View>
-	);
-}
-
-export function TripFloatingViyaButton({
-	activeTab,
-	tripId,
-}: {
-	activeTab: TripTab;
-	tripId: Id<"trips">;
-}) {
-	const router = useRouter();
-	const { palette } = useUITheme();
-	const lastNavigationPressRef = useRef(0);
-
-	const handlePress = () => {
-		const now = Date.now();
-
-		if (now - lastNavigationPressRef.current < viyaButtonNavigationThrottleMs) {
+		if (!isConfirmed) {
 			return;
 		}
 
-		lastNavigationPressRef.current = now;
+		try {
+			await deleteTrip({ tripId: model.tripId });
+			haptic("success");
+			router.replace(VIYA_ROUTES.trips as Href);
+		} catch {
+			haptic("error");
+			showToast({ message: "Could not delete trip.", tone: "error" });
+		}
+	};
+
+	const handleViyaPress = () => {
+		const now = Date.now();
+
+		if (now - lastViyaPressRef.current < viyaButtonNavigationThrottleMs) {
+			return;
+		}
+
+		lastViyaPressRef.current = now;
 		router.push({
 			params: {
 				mode: "trip",
-				returnTo:
-					activeTab === "overview"
-						? `/(app)/trips/${tripId}`
-						: `/(app)/trips/${tripId}/${activeTab}`,
-				tripId: String(tripId),
-				workspaceTab: activeTab,
+				returnTo: `/(app)/trips/${model.tripId}`,
+				tripId: String(model.tripId),
+				workspaceTab: "overview",
 			},
 			pathname: VIYA_ROUTES.ai,
 		});
 	};
 
-	return (
-		<GlassSurface interactive shape="circle" style={{ height: 56, width: 56 }}>
-			<PressableScale
-				accessibilityLabel="Open Viya for this trip"
-				accessibilityRole="button"
-				onPress={handlePress}
-				style={{
-					alignItems: "center",
-					height: 56,
-					justifyContent: "center",
-					width: 56,
-				}}
-			>
-				<Ionicons color={palette.accent} name="chatbubble-outline" size={22} />
-			</PressableScale>
-		</GlassSurface>
-	);
-}
+	const actions: ShellAction[] = [
+		{
+			icon: "sparkles",
+			key: "viya",
+			label: "Ask Viya about this trip",
+			onPress: handleViyaPress,
+			type: "button",
+		},
+		{
+			icon: "ellipsis-horizontal",
+			items: [
+				{
+					icon: "create-outline",
+					key: "edit",
+					onPress: openProfileSheet,
+					title: "Edit trip",
+				},
+				{
+					icon: isFavorite ? "heart" : "heart-outline",
+					key: "favorite",
+					onPress: handleFavoritePress,
+					title: isFavorite ? "Remove from favorites" : "Add to favorites",
+				},
+				{
+					disabled: isArchived,
+					icon: "archive-outline",
+					key: "archive",
+					onPress: handleArchivePress,
+					title: isArchived ? "Archived" : "Archive",
+				},
+				{
+					destructive: true,
+					icon: "trash-outline",
+					key: "delete",
+					onPress: () => {
+						handleDeletePress().catch(() => undefined);
+					},
+					title: "Delete trip",
+				},
+			],
+			key: "more",
+			label: "More trip options",
+			type: "menu",
+		},
+	];
 
-function TripMetaChip({ icon, label }: { icon: IoniconName; label: string }) {
-	const { palette } = useUITheme();
-
-	return (
-		<View
-			style={{
-				alignItems: "center",
-				flexDirection: "row",
-				gap: 6,
-				maxWidth: "100%",
+	const sheet = (
+		<TripProfileEditSheet
+			errorMessage={profileErrorMessage}
+			form={profileForm}
+			isOpen={isProfileSheetOpen}
+			isSaving={isSavingProfile}
+			onOpenChange={(isOpen) => {
+				setIsProfileSheetOpen(isOpen);
+				if (!isOpen) {
+					setProfileErrorMessage(null);
+				}
 			}}
-		>
-			<Ionicons color={palette.inkSecondary} name={icon} size={13} />
-			<AppText
-				bold
-				numberOfLines={1}
-				style={{ flexShrink: 1 }}
-				variant="footnote"
-			>
-				{label}
-			</AppText>
-		</View>
-	);
-}
-
-function TripHeroCover({
-	coverImageUrl,
-	destination,
-}: {
-	coverImageUrl?: string | null;
-	destination: string;
-}) {
-	const { palette } = useUITheme();
-	const destinationInitial = (
-		destination.trim().charAt(0) || "V"
-	).toUpperCase();
-
-	if (coverImageUrl) {
-		return (
-			<View
-				style={{
-					backgroundColor: palette.fill,
-					borderCurve: "continuous",
-					borderRadius: 22,
-					height: 96,
-					overflow: "hidden",
-					width: 96,
-				}}
-			>
-				<ImageBackground
-					accessibilityIgnoresInvertColors={true}
-					accessibilityLabel={`${destination} cover photo`}
-					imageStyle={{ borderRadius: 22 }}
-					source={{ uri: coverImageUrl }}
-					style={{ height: "100%", width: "100%" }}
-				/>
-			</View>
-		);
-	}
-
-	return (
-		<View
-			style={{
-				alignItems: "center",
-				backgroundColor: palette.fill,
-				borderCurve: "continuous",
-				borderRadius: 22,
-				height: 96,
-				justifyContent: "center",
-				width: 96,
+			onSubmit={() => {
+				handleSaveProfile().catch(() => undefined);
 			}}
-		>
-			<AppText bold variant="heading">
-				{destinationInitial}
-			</AppText>
-		</View>
+			onUpdateForm={updateProfileForm}
+		/>
 	);
+
+	return { actions, openProfileSheet, sheet };
 }
+
+// ---------------------------------------------------------------------------
+// Cover and summary
+// ---------------------------------------------------------------------------
 
 const getDestinationImageFallbackNames = (destination: string) => {
 	const cleanedDestination = destination.trim();
@@ -1222,637 +627,449 @@ const getDestinationImageFallbackNames = (destination: string) => {
 		.replace(destinationParentheticalPattern, "")
 		.split(",")[0]
 		?.trim();
-	const names = [cleanedDestination, locationName].filter(
+
+	return [cleanedDestination, locationName].filter(
 		(name, index, values): name is string =>
 			Boolean(name) && values.indexOf(name) === index
 	);
-
-	return names;
 };
 
-export function TripHero({ model }: { model: TripDashboardModel }) {
-	const { palette } = useUITheme();
-	const { readiness, travelerLabel, tripWindow, workspace } = model;
-	const destinationImageFallbackNames = getDestinationImageFallbackNames(
-		workspace.trip.destination
-	);
-	const destinationsNeedingCoverImages =
-		!workspace.trip.coverImageUrl ||
-		isDecorativeDestinationImageUrl(workspace.trip.coverImageUrl)
-			? destinationImageFallbackNames
-			: [];
-	const replacementCoverImageUrls = useDestinationImages(
-		destinationsNeedingCoverImages
-	);
-	const replacementCoverImageUrl = destinationImageFallbackNames
-		.map((name) => replacementCoverImageUrls[name])
-		.find(Boolean);
-	const coverImageUrl = isDecorativeDestinationImageUrl(
-		workspace.trip.coverImageUrl
-	)
-		? replacementCoverImageUrl
-		: (workspace.trip.coverImageUrl ?? replacementCoverImageUrl);
-	const readinessDisplay = getReadinessDisplay({
-		itemCount: workspace.readinessItems.length,
-		score: readiness.score,
-	});
-	const destinationLabel =
-		workspace.trip.destination.trim() || "Destination TBD";
-	const hasBudget = Boolean(workspace.trip.budgetAmount);
-	const budgetSummary = hasBudget
-		? `${formatMoney(model.budget.remaining, model.currency)} left`
-		: "Set budget";
-	const budgetProgress =
-		hasBudget && workspace.trip.budgetAmount
-			? Math.min(
-					100,
-					Math.max(
-						0,
-						(model.budget.totalTrackedSpend / workspace.trip.budgetAmount) * 100
-					)
-				)
-			: 0;
-	return (
-		<Animated.View
-			entering={FadeInDown.duration(220)}
-			style={{ gap: 20, paddingHorizontal: 4, paddingVertical: 8 }}
-		>
-			<View style={{ alignItems: "center", flexDirection: "row", gap: 16 }}>
-				<TripHeroCover
-					coverImageUrl={coverImageUrl}
-					destination={workspace.trip.destination}
-				/>
-				<View style={{ flex: 1, gap: 10, minWidth: 0 }}>
-					<AppText
-						accessibilityRole="header"
-						bold
-						numberOfLines={2}
-						variant="heading"
-					>
-						{workspace.trip.title}
-					</AppText>
-					<View style={{ gap: 6 }}>
-						<View
-							style={{
-								alignItems: "center",
-								columnGap: 12,
-								flexDirection: "row",
-								flexWrap: "wrap",
-								rowGap: 6,
-							}}
-						>
-							<TripMetaChip icon="location-outline" label={destinationLabel} />
-							<TripMetaChip icon="people-outline" label={travelerLabel} />
-						</View>
-						<TripMetaChip icon="calendar-clear-outline" label={tripWindow} />
-					</View>
-				</View>
-			</View>
-			<View
-				style={{
-					alignItems: "stretch",
-					flexDirection: "row",
-					gap: 16,
-					paddingTop: 16,
-				}}
-			>
-				<Link asChild href={VIYA_ROUTES.tripReadiness(model.tripId)}>
-					<PressableScale
-						accessibilityLabel="View readiness details"
-						accessibilityRole="button"
-						scaleTo={0.98}
-						style={{ flex: 1, minWidth: 0 }}
-					>
-						<TripMetricBlock
-							detail={readinessDisplay.detail}
-							label="READINESS"
-							progress={readinessDisplay.progress}
-							tone="success"
-							value={readinessDisplay.value}
-						/>
-					</PressableScale>
-				</Link>
-				<View
-					style={{
-						alignSelf: "stretch",
-						backgroundColor: palette.separator,
-						width: 1,
-					}}
-				/>
-				<Link asChild href={VIYA_ROUTES.tripBudget(model.tripId)}>
-					<PressableScale
-						accessibilityLabel="Open trip budget"
-						accessibilityRole="button"
-						scaleTo={0.98}
-						style={{ flex: 1, minWidth: 0 }}
-					>
-						<TripMetricBlock
-							align="flex-end"
-							detail={model.budget.status}
-							label="BUDGET"
-							progress={budgetProgress}
-							value={budgetSummary}
-						/>
-					</PressableScale>
-				</Link>
-			</View>
-		</Animated.View>
-	);
-}
-
-interface TripWorkspaceModule {
-	detail: string;
-	href: Href;
-	icon: IoniconName;
-	label: string;
-	span?: "full";
-	tab: TripTab;
-	value: string;
-}
-
-type WorkspaceModuleGroupKey = "core";
-
-interface TripWorkspaceModuleGroup {
-	items: TripWorkspaceModule[];
-	label: string;
-	value: WorkspaceModuleGroupKey;
-}
-
-const formatCountLabel = (count: number, singular: string) =>
-	`${count} ${count === 1 ? singular : `${singular}s`}`;
-
-const formatWorkspaceStatusLabel = (status: string) =>
-	status
-		.split("-")
-		.map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
-		.join(" ");
-
-const getTripWorkspaceModuleGroups = (
-	model: TripDashboardModel,
-	options: { includeOverview?: boolean } = {}
-): TripWorkspaceModuleGroup[] => {
-	const documentCount =
-		model.workspace.documents.length + model.workspace.vaultItems.length;
-	const bookingCount = model.workspace.bookings.length;
-	const itineraryDayCount = model.workspace.itineraryDays.length;
-	const itineraryItemCount = model.workspace.itineraryItems.length;
-	const vaultValue =
-		bookingCount > 0
-			? formatCountLabel(bookingCount, "booking")
-			: formatCountLabel(documentCount, "file");
-	const overviewItem: TripWorkspaceModule = {
-		detail: "Trip snapshot, next actions, and workspace summary",
-		href: VIYA_ROUTES.tripDashboard(model.tripId),
-		icon: "speedometer-outline",
-		label: "Overview",
-		span: "full",
-		tab: "overview",
-		value: formatWorkspaceStatusLabel(model.workspace.trip.status),
-	};
-	const workspaceItems: TripWorkspaceModule[] = [
-		{
-			detail:
-				itineraryDayCount > 0
-					? `${formatCountLabel(itineraryDayCount, "day")} planned`
-					: "Add days, places, meals, and transfers",
-			href: VIYA_ROUTES.tripItinerary(model.tripId),
-			icon: "calendar-outline",
-			label: "Itinerary",
-			tab: "itinerary",
-			value: formatCountLabel(itineraryItemCount, "stop"),
-		},
-		{
-			href: VIYA_ROUTES.tripBudget(model.tripId),
-			icon: "wallet-outline",
-			label: "Budget",
-			tab: "budget",
-			detail: "Central spend, bookings, receipts, and daily pace",
-			value: `${formatMoney(model.budget.remaining, model.currency)} left`,
-		},
-		{
-			detail: "Bookings, passports, tickets, and documents",
-			href: VIYA_ROUTES.tripVault(model.tripId),
-			icon: "folder-open-outline",
-			label: "Vault",
-			tab: "documents",
-			value: vaultValue,
-		},
-		{
-			detail: model.readiness.topBlocker,
-			href: VIYA_ROUTES.tripReadiness(model.tripId),
-			icon: "shield-checkmark-outline",
-			label: "Readiness",
-			tab: "checklist",
-			value: model.readiness.label,
-		},
-	];
-
-	return [
-		{
-			label: "Workspace",
-			value: "core",
-			items: options.includeOverview
-				? [overviewItem, ...workspaceItems]
-				: workspaceItems,
-		},
-	];
-};
-
-function ModuleLauncherBadge({
-	accent,
-	isActive,
-	value,
+/** Opaque cover photo (16:10) with status and facts underneath. No overlay. */
+export function TripHero({
+	model,
+	onAddDestination,
 }: {
-	accent: ModuleAccent;
-	isActive: boolean;
-	value: string;
+	model: TripDashboardModel;
+	onAddDestination: () => void;
 }) {
 	const { palette } = useUITheme();
-
-	if (isActive) {
-		return (
-			<View
-				style={{
-					alignItems: "center",
-					backgroundColor: palette.surface,
-					borderRadius: radius.pill,
-					flexDirection: "row",
-					gap: 4,
-					paddingHorizontal: 8,
-					paddingVertical: 4,
-				}}
-			>
-				<Ionicons
-					color={accent.color}
-					name="checkmark-circle-outline"
-					size={12}
-				/>
-				<AppText bold style={{ color: accent.color }} variant="footnote">
-					Current
-				</AppText>
-			</View>
-		);
-	}
+	const { countdownLabel, phaseLabel, phaseStatus, tripFacts, workspace } =
+		model;
+	const { trip } = workspace;
+	const fallbackNames = getDestinationImageFallbackNames(trip.destination);
+	const needsCover =
+		!trip.coverImageUrl || isDecorativeDestinationImageUrl(trip.coverImageUrl);
+	const replacementUrls = useDestinationImages(needsCover ? fallbackNames : []);
+	const replacementUrl = fallbackNames
+		.map((name) => replacementUrls[name])
+		.find(Boolean);
+	const coverImageUrl = needsCover
+		? replacementUrl
+		: (trip.coverImageUrl ?? replacementUrl);
+	const destinationLabel = trip.destination.trim() || trip.title;
+	const hasDestination = trip.destination.trim().length > 0;
 
 	return (
-		<View
-			style={{
-				alignItems: "center",
-				backgroundColor: palette.fill,
-				borderRadius: radius.pill,
-				flexShrink: 1,
-				maxWidth: 128,
-				minWidth: 0,
-				paddingHorizontal: 8,
-				paddingVertical: 4,
-			}}
-		>
-			<AppText
-				bold
-				numberOfLines={1}
-				style={{ color: accent.color }}
-				variant="footnote"
-			>
-				{value}
-			</AppText>
+		<View style={{ gap: spacing.md }}>
+			{coverImageUrl ? (
+				<Image
+					accessibilityIgnoresInvertColors={true}
+					accessibilityLabel={`${destinationLabel} cover photo`}
+					contentFit="cover"
+					source={{ uri: coverImageUrl }}
+					style={{
+						aspectRatio: coverAspectRatio,
+						backgroundColor: palette.fill,
+						borderRadius: radius.card,
+						width: "100%",
+					}}
+					transition={motion.duration.normal}
+				/>
+			) : null}
+			<View style={{ gap: spacing.xs, paddingHorizontal: spacing.xs }}>
+				{hasDestination &&
+				shouldShowDestinationLine(trip.title, trip.destination) ? (
+					<AppText numberOfLines={2} variant="headline">
+						{destinationLabel}
+					</AppText>
+				) : null}
+				<AppText tone="secondary" variant="subhead">
+					{tripFacts}
+				</AppText>
+				<View
+					style={{
+						alignItems: "center",
+						flexDirection: "row",
+						flexWrap: "wrap",
+						gap: spacing.sm,
+					}}
+				>
+					<TripStatusText label={phaseLabel} status={phaseStatus} />
+					{countdownLabel.startsWith(phaseLabel) ? null : (
+						<AppText tone="secondary" variant="subhead">
+							{`· ${countdownLabel}`}
+						</AppText>
+					)}
+				</View>
+			</View>
+			{hasDestination ? null : (
+				<ListGroup>
+					<ListRow
+						accessibilityLabel="Add a destination"
+						leading={<Icon name="location-outline" tone="secondary" />}
+						onPress={onAddDestination}
+						title="Add a destination"
+					/>
+				</ListGroup>
+			)}
 		</View>
 	);
 }
 
-function ModuleLauncherTile({
-	isActive,
-	item,
-	onPress,
-}: {
-	isActive: boolean;
-	item: TripWorkspaceModule;
-	onPress: () => void;
-}) {
-	const { palette } = useUITheme();
-	const accent = getModuleAccent(item.label);
+// ---------------------------------------------------------------------------
+// Next up
+// ---------------------------------------------------------------------------
+
+/** The single next useful thing. Hidden while traveling (Travel Mode leads). */
+export function TripNextUp({ model }: { model: TripDashboardModel }) {
+	const router = useRouter();
+	const { nextAction } = model;
 
 	return (
-		<PressableScale
-			accessibilityLabel={`${isActive ? "Current module" : "Open"} ${item.label}`}
-			accessibilityRole="button"
-			accessibilityState={{ selected: isActive }}
-			haptic="selection"
-			onPress={onPress}
-			scaleTo={0.98}
-			style={{
-				backgroundColor: isActive ? accent.bg : palette.surface,
-				borderCurve: "continuous",
-				borderRadius: radius.card,
-				flexBasis: item.span === "full" ? "100%" : "47%",
-				flexGrow: 1,
-				gap: 10,
-				justifyContent: "space-between",
-				minHeight: 96,
-				padding: 14,
-			}}
-		>
-			<View
-				style={{
-					alignItems: "center",
-					flexDirection: "row",
-					gap: 8,
-					justifyContent: "space-between",
-				}}
-			>
-				<View
-					style={{
-						alignItems: "center",
-						backgroundColor: palette.fill,
-						borderRadius: radius.group,
-						height: 36,
-						justifyContent: "center",
-						width: 36,
-					}}
-				>
-					<Ionicons color={accent.color} name={item.icon} size={18} />
-				</View>
-				<ModuleLauncherBadge
-					accent={accent}
-					isActive={isActive}
-					value={item.value}
-				/>
-			</View>
-			<View style={{ gap: 2 }}>
-				<AppText bold numberOfLines={1} variant="callout">
-					{item.label}
-				</AppText>
-				<AppText numberOfLines={2} tone="secondary" variant="footnote">
-					{item.detail}
-				</AppText>
-			</View>
-		</PressableScale>
+		<ListGroup header="Next up">
+			<ListRow
+				accessibilityLabel={`${nextAction.title}. ${nextAction.description}`}
+				leading={<Icon name={nextAction.icon} tone="secondary" />}
+				onPress={() => router.push(nextAction.href)}
+				subtitle={nextAction.description}
+				title={nextAction.title}
+			/>
+		</ListGroup>
 	);
 }
 
-function TripModulesSheet({
-	activeTab,
-	isOpen,
-	model,
-	onOpenChange,
+/** While traveling: the stop happening now, or the next one. */
+export function TripToday({ model }: { model: TripDashboardModel }) {
+	const router = useRouter();
+	const scheduled = model.nowScheduledItem ?? model.nextScheduledItem;
+
+	if (!scheduled) {
+		return null;
+	}
+
+	const { item } = scheduled;
+	const isToday = scheduled.date === model.todayKey;
+
+	return (
+		<ListGroup header={model.nowScheduledItem ? "Now" : "Next"}>
+			<ListRow
+				accessibilityLabel={`${item.title}, ${formatTimeRange(item.startTime, item.endTime)}`}
+				leading={<Icon name="time-outline" tone="secondary" />}
+				onPress={() => router.push(VIYA_ROUTES.tripItinerary(model.tripId))}
+				subtitle={
+					[
+						item.locationName || null,
+						isToday || !scheduled.date ? null : formatDay(scheduled.date),
+					]
+						.filter(Boolean)
+						.join(" · ") || undefined
+				}
+				title={item.title}
+				value={formatTimeRange(item.startTime, item.endTime)}
+			/>
+		</ListGroup>
+	);
+}
+
+// ---------------------------------------------------------------------------
+// Module groups
+// ---------------------------------------------------------------------------
+
+function ModuleRow({
+	href,
+	icon,
+	isMuted,
+	subtitle,
+	title,
+	trailing,
+	value,
 }: {
-	activeTab: TripTab;
-	isOpen: boolean;
-	model: TripDashboardModel;
-	onOpenChange: (isOpen: boolean) => void;
+	href: Href;
+	icon: Parameters<typeof Icon>[0]["name"];
+	isMuted?: boolean;
+	subtitle?: string;
+	title: string;
+	trailing?: ReactNode;
+	value?: string;
 }) {
 	const router = useRouter();
-	const insets = useSafeAreaInsets();
-	const { palette } = useUITheme();
-	const { height } = useWindowDimensions();
-	const moduleGroups = getTripWorkspaceModuleGroups(model, {
-		includeOverview: true,
-	});
-	const moduleListMaxHeight = getTripModulesSheetListMaxHeight({
-		bottomInset: insets.bottom,
-		windowHeight: height,
-	});
-
-	const openModule = (item: TripWorkspaceModule) => {
-		onOpenChange(false);
-
-		if (item.tab !== activeTab) {
-			router.push(item.href);
-		}
-	};
 
 	return (
-		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
-			<BottomSheet.Portal>
-				<BottomSheet.Overlay />
-				<BottomSheet.Content
-					backgroundClassName="rounded-t-[36px] bg-surface"
-					enablePanDownToClose={true}
-					snapPoints={["78%"]}
-				>
-					<View
-						style={{
-							backgroundColor: palette.surface,
-							gap: 16,
-							paddingBottom: Math.max(insets.bottom, 18),
-							paddingHorizontal: 20,
-						}}
-					>
-						<SheetHeader
-							onClose={() => onOpenChange(false)}
-							subtitle={`Jump between sections for ${model.workspace.trip.title}.`}
-							title="Workspace"
-						/>
-
-						<ScrollView
-							contentContainerStyle={{ gap: 18, paddingBottom: 6 }}
-							showsVerticalScrollIndicator={false}
-							style={{ maxHeight: moduleListMaxHeight }}
-						>
-							{moduleGroups.map((group) => (
-								<View key={group.value} style={{ gap: 12 }}>
-									<AppText
-										style={{ paddingHorizontal: 4 }}
-										tone="secondary"
-										variant="eyebrow"
-									>
-										{group.label}
-									</AppText>
-									<View
-										style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}
-									>
-										{group.items.map((item) => (
-											<ModuleLauncherTile
-												isActive={item.tab === activeTab}
-												item={item}
-												key={item.label}
-												onPress={() => openModule(item)}
-											/>
-										))}
-									</View>
-								</View>
-							))}
-						</ScrollView>
-					</View>
-				</BottomSheet.Content>
-			</BottomSheet.Portal>
-		</BottomSheet>
+		<ListRow
+			accessibilityLabel={value ? `${title}, ${value}` : title}
+			leading={<Icon name={icon} tone={isMuted ? "tertiary" : "secondary"} />}
+			onPress={() => router.push(href)}
+			subtitle={subtitle}
+			title={title}
+			trailing={trailing}
+			value={value}
+		/>
 	);
 }
 
-export function TripModuleMenuButton({
-	activeTab,
+const getTravelersRow = (model: TripDashboardModel) => {
+	const { travelerCount } = model;
+	const added = model.workspace.companions.length;
+	let value = "Not set";
+	if (travelerCount === 1 && added === 0) {
+		value = "Just you";
+	} else if (travelerCount) {
+		value = formatCount(travelerCount, "traveler");
+	}
+	let subtitle: string | undefined;
+	if (added > 0) {
+		subtitle = `${added} added`;
+	} else if ((travelerCount ?? 0) > 1) {
+		subtitle = "None added yet";
+	}
+
+	return { subtitle, value };
+};
+
+const getBudgetRow = ({ budget, currency }: TripDashboardModel) => {
+	if (!budget.hasBudget) {
+		return {
+			subtitle:
+				budget.spent > 0
+					? `${formatMoney(budget.spent, currency)} spent`
+					: undefined,
+			value: "Not set",
+		};
+	}
+
+	return {
+		subtitle: `${formatMoney(budget.spent, currency)} of ${formatMoney(budget.amount, currency)} spent`,
+		value:
+			budget.over > 0
+				? `Over by ${formatMoney(budget.over, currency)}`
+				: `${formatMoney(budget.left, currency)} left`,
+	};
+};
+
+const getItineraryValue = ({ itinerary }: TripDashboardModel) => {
+	if (itinerary.stops === 0) {
+		return "Nothing planned";
+	}
+
+	return itinerary.tripDays
+		? `${itinerary.plannedDays} of ${itinerary.tripDays} days planned`
+		: formatCount(itinerary.plannedDays, "day");
+};
+
+const getTravelModeValue = (model: TripDashboardModel) => {
+	if (model.phase === "during") {
+		return model.countdownLabel;
+	}
+
+	return model.phase === "upcoming" && model.workspace.trip.startDate
+		? `Opens ${formatShortDate(model.workspace.trip.startDate)}`
+		: undefined;
+};
+
+const getReadinessSubtitle = ({ readiness }: TripDashboardModel) => {
+	if (readiness.active === 0) {
+		return "Open to get your checklist";
+	}
+
+	const overdue =
+		readiness.overdue > 0 ? ` · ${readiness.overdue} overdue` : "";
+
+	return `${readiness.done} of ${readiness.active} done${overdue}`;
+};
+
+function PlanningGroup({
 	model,
+	onOpenDrafts,
 }: {
-	activeTab: TripTab;
 	model: TripDashboardModel;
+	onOpenDrafts: () => void;
 }) {
-	const { palette } = useUITheme();
-	const [isModulesOpen, setIsModulesOpen] = useState(false);
-	const activeScreen = tripScreenMeta[activeTab];
-	const activeAccent = getModuleAccent(activeScreen.label);
+	const { bookings, budget, itinerary, places, readiness, risks } = model;
+	const { workspace, tripId } = model;
+	const draftCount = workspace.agentDrafts.length;
+	const gaps = getWorkspaceGaps(model);
+	const budgetRow = getBudgetRow(model);
+	const itineraryValue = getItineraryValue(model);
+	const readinessSubtitle = getReadinessSubtitle(model);
 
 	return (
-		<>
-			<GlassSurface interactive shape="pill" style={{ height: 56, width: 176 }}>
-				<PressableScale
-					accessibilityLabel={`Open workspace from ${activeScreen.label}`}
-					accessibilityRole="button"
-					onPress={() => setIsModulesOpen(true)}
-					scaleTo={0.97}
-					style={{
-						alignItems: "center",
-						flexDirection: "row",
-						gap: 12,
-						height: 56,
-						paddingHorizontal: 8,
-					}}
-				>
-					<View
-						style={{
-							alignItems: "center",
-							backgroundColor: activeAccent.bg,
-							borderRadius: radius.pill,
-							height: 40,
-							justifyContent: "center",
-							width: 40,
-						}}
-					>
-						<Ionicons
-							color={activeAccent.color}
-							name={activeScreen.icon}
-							size={18}
-						/>
-					</View>
-					<View style={{ flex: 1, minWidth: 0 }}>
-						<AppText
-							adjustsFontSizeToFit={true}
-							bold
-							numberOfLines={1}
-							variant="subhead"
-						>
-							{activeScreen.label}
-						</AppText>
-					</View>
-					<Ionicons color={palette.inkSecondary} name="chevron-up" size={14} />
-				</PressableScale>
-			</GlassSurface>
-			<TripModulesSheet
-				activeTab={activeTab}
-				isOpen={isModulesOpen}
-				model={model}
-				onOpenChange={setIsModulesOpen}
+		<ListGroup header="Planning">
+			<ModuleRow
+				href={VIYA_ROUTES.tripItinerary(tripId)}
+				icon="calendar-outline"
+				subtitle={
+					itinerary.stops > 0 ? formatCount(itinerary.stops, "stop") : undefined
+				}
+				title="Itinerary"
+				value={itineraryValue}
 			/>
+			<ModuleRow
+				href={VIYA_ROUTES.tripPlaces(tripId)}
+				icon="map-outline"
+				subtitle={
+					places.unassigned > 0
+						? `${places.unassigned} not on a day`
+						: undefined
+				}
+				title="Places"
+				value={places.saved > 0 ? `${places.saved} saved` : "None saved"}
+			/>
+			<ModuleRow
+				href={VIYA_ROUTES.tripBookings(tripId)}
+				icon="ticket-outline"
+				subtitle={
+					bookings.nextToBookTitle
+						? `Next: ${bookings.nextToBookTitle}`
+						: undefined
+				}
+				title="Bookings"
+				value={
+					bookings.total > 0
+						? `${bookings.booked} of ${bookings.total} booked`
+						: "None added"
+				}
+			/>
+			<ModuleRow
+				href={VIYA_ROUTES.tripReadiness(tripId)}
+				icon="shield-checkmark-outline"
+				subtitle={readinessSubtitle}
+				title="Readiness"
+				value={
+					readiness.percent === null ? "Not started" : `${readiness.percent}%`
+				}
+			/>
+			<ModuleRow
+				href={VIYA_ROUTES.tripBudget(tripId)}
+				icon="wallet-outline"
+				subtitle={budgetRow.subtitle}
+				title="Budget"
+				trailing={
+					budget.over > 0 ? (
+						<Icon name="alert-circle-outline" tone="danger" />
+					) : undefined
+				}
+				value={budgetRow.value}
+			/>
+			{risks.open > 0 ? (
+				<ModuleRow
+					href={VIYA_ROUTES.tripRisks(tripId)}
+					icon="warning-outline"
+					subtitle={risks.topTitle ?? undefined}
+					title="Risks"
+					value={`${risks.open} open`}
+				/>
+			) : null}
+			{gaps.length === 0 && draftCount === 0 ? null : (
+				<ListRow
+					accessibilityLabel={
+						draftCount > 0 ? "Drafts from Viya" : "Fill gaps with Viya"
+					}
+					leading={<Icon name="sparkles-outline" tone="secondary" />}
+					onPress={onOpenDrafts}
+					subtitle={draftCount > 0 ? undefined : gaps.join(", ")}
+					title={draftCount > 0 ? "Drafts from Viya" : "Fill gaps with Viya"}
+					value={draftCount > 0 ? `${draftCount} to review` : undefined}
+				/>
+			)}
+		</ListGroup>
+	);
+}
+
+function PeopleGroup({ model }: { model: TripDashboardModel }) {
+	const { vault } = model;
+	const { notes } = model.workspace;
+	const { tripId } = model;
+	const travelers = getTravelersRow(model);
+
+	return (
+		<ListGroup header="People and files">
+			<ModuleRow
+				href={VIYA_ROUTES.tripCompanions(tripId)}
+				icon="people-outline"
+				subtitle={travelers.subtitle}
+				title="Travelers"
+				value={travelers.value}
+			/>
+			<ModuleRow
+				href={VIYA_ROUTES.tripNotes(tripId)}
+				icon="document-text-outline"
+				subtitle={notes[0]?.title}
+				title="Notes"
+				value={notes.length > 0 ? formatCount(notes.length, "note") : "None"}
+			/>
+			<ModuleRow
+				href={VIYA_ROUTES.tripVault(tripId)}
+				icon="folder-open-outline"
+				subtitle={
+					vault.missingDocuments > 0
+						? `${vault.missingDocuments} documents missing`
+						: undefined
+				}
+				title="Vault"
+				value={vault.files > 0 ? formatCount(vault.files, "file") : "Empty"}
+			/>
+		</ListGroup>
+	);
+}
+
+function TripGroup({ model }: { model: TripDashboardModel }) {
+	const { moments } = model.workspace;
+	const { tripId } = model;
+	const highlightCount = moments.filter((moment) => moment.isHighlight).length;
+	const isCompleted = model.phase === "completed";
+	const travelModeValue = getTravelModeValue(model);
+
+	return (
+		<ListGroup header="On the trip">
+			<ModuleRow
+				href={VIYA_ROUTES.tripTravelMode(tripId)}
+				icon="navigate-outline"
+				title="Travel Mode"
+				value={travelModeValue}
+			/>
+			<ModuleRow
+				href={VIYA_ROUTES.tripMoments(tripId)}
+				icon="images-outline"
+				subtitle={
+					highlightCount > 0 ? `${highlightCount} highlighted` : undefined
+				}
+				title="Moments"
+				value={
+					moments.length > 0 ? formatCount(moments.length, "moment") : "None"
+				}
+			/>
+			<ModuleRow
+				href={VIYA_ROUTES.tripWrapped(tripId)}
+				icon="share-outline"
+				isMuted={!isCompleted}
+				subtitle={
+					isCompleted ? undefined : "Mark the trip complete to finish it"
+				}
+				title="Recap"
+			/>
+		</ListGroup>
+	);
+}
+
+export function TripModuleGroups({
+	model,
+	onOpenDrafts,
+}: {
+	model: TripDashboardModel;
+	onOpenDrafts: () => void;
+}) {
+	return (
+		<>
+			<PlanningGroup model={model} onOpenDrafts={onOpenDrafts} />
+			<PeopleGroup model={model} />
+			<TripGroup model={model} />
 		</>
 	);
 }
 
-export function TripModuleNavigationBar({
-	activeTab,
-	model,
-}: {
-	activeTab: TripTab;
-	model: TripDashboardModel;
-}) {
-	const insets = useSafeAreaInsets();
-
-	return (
-		<View
-			pointerEvents="box-none"
-			style={{
-				alignItems: "center",
-				bottom: Math.max(insets.bottom + 10, tripFloatingBarBottomInset),
-				flexDirection: "row",
-				gap: tripFloatingBarGap,
-				justifyContent: "center",
-				left: 0,
-				paddingHorizontal: 16,
-				position: "absolute",
-				right: 0,
-				zIndex: 30,
-			}}
-		>
-			<TripModuleMenuButton activeTab={activeTab} model={model} />
-			<TripFloatingViyaButton activeTab={activeTab} tripId={model.tripId} />
-		</View>
-	);
-}
-
-function WorkspaceModuleTile({ item }: { item: TripWorkspaceModule }) {
-	const { palette } = useUITheme();
-	const accent = getModuleAccent(item.label);
-
-	return (
-		<Link asChild href={item.href}>
-			<PressableScale
-				accessibilityLabel={`Open ${item.label}`}
-				accessibilityRole="button"
-				scaleTo={0.98}
-				style={{
-					backgroundColor: palette.surface,
-					borderCurve: "continuous",
-					borderRadius: radius.card,
-					flexBasis: "47%",
-					flexGrow: 1,
-					gap: 10,
-					justifyContent: "space-between",
-					minHeight: 96,
-					padding: 14,
-				}}
-			>
-				<View
-					style={{
-						alignItems: "center",
-						flexDirection: "row",
-						gap: 8,
-						justifyContent: "space-between",
-						minWidth: 0,
-					}}
-				>
-					<View
-						style={{
-							alignItems: "center",
-							backgroundColor: palette.fill,
-							borderRadius: radius.group,
-							height: 36,
-							justifyContent: "center",
-							width: 36,
-						}}
-					>
-						<Ionicons color={accent.color} name={item.icon} size={18} />
-					</View>
-					<View
-						style={{
-							backgroundColor: palette.fill,
-							borderRadius: radius.pill,
-							flexShrink: 1,
-							maxWidth: 128,
-							minWidth: 0,
-							paddingHorizontal: 10,
-							paddingVertical: 4,
-						}}
-					>
-						<AppText
-							bold
-							numberOfLines={1}
-							style={{ color: accent.color }}
-							variant="footnote"
-						>
-							{item.value}
-						</AppText>
-					</View>
-				</View>
-				<View style={{ gap: 2 }}>
-					<AppText bold numberOfLines={1} variant="callout">
-						{item.label}
-					</AppText>
-					<AppText numberOfLines={2} tone="secondary" variant="footnote">
-						{item.detail}
-					</AppText>
-				</View>
-			</PressableScale>
-		</Link>
-	);
-}
+// ---------------------------------------------------------------------------
+// Viya drafts (autopilot)
+// ---------------------------------------------------------------------------
 
 const buildWorkspaceAutopilotPrompt = (model: TripDashboardModel) => {
 	const { workspace } = model;
@@ -1860,12 +1077,12 @@ const buildWorkspaceAutopilotPrompt = (model: TripDashboardModel) => {
 	const tripLabel = trip.title.trim() || "this trip";
 	const destination = trip.destination.trim() || "the destination";
 	const budget = trip.budgetAmount
-		? `${formatMoney(trip.budgetAmount, model.currency)} budget`
+		? `${model.currency} ${trip.budgetAmount.toLocaleString("en-US")} budget`
 		: "no confirmed budget yet";
-	const vaultCoverageCount = Math.max(
-		workspace.vaultItems.length,
-		workspace.documents.length
-	);
+	const vaultCoverageCount = getVaultCounts(
+		workspace.vaultItems,
+		workspace.documents
+	).files;
 	const coverage = [
 		`${workspace.itineraryDays.length} itinerary days`,
 		`${workspace.itineraryItems.length} itinerary stops`,
@@ -1873,12 +1090,12 @@ const buildWorkspaceAutopilotPrompt = (model: TripDashboardModel) => {
 		`${workspace.bookings.length} bookings`,
 		`${workspace.expenses.length} expenses`,
 		`${workspace.risks.length} risks`,
-		`${model.readiness.score}% readiness`,
+		`${model.readiness.percent ?? 0}% readiness`,
 	].join(", ");
 
 	return [
 		`Complete the workspace for ${tripLabel}.`,
-		`Trip context: destination ${destination}; dates ${model.tripWindow}; traveler context ${model.travelerLabel}; ${budget}.`,
+		`Trip context: destination ${destination}; dates ${formatTripRange(trip.startDate, trip.endDate, { year: "always" })}; travelers ${model.travelerCount ?? "unknown"}; ${budget}.`,
 		`Current workspace coverage: ${coverage}.`,
 		"Use the trip profile, Vault, bookings, budget, itinerary, risks, notes, companions, travel mode, and readiness together.",
 		"Stage the work as reviewable changes: prepare Vault, identify booking or document gaps, generate or refine a realistic itinerary, track budget evidence, add risks and backups, then run a readiness audit.",
@@ -1907,6 +1124,64 @@ const tripAgentModuleLabels = {
 	travel: "Travel Mode",
 } as const satisfies Record<Doc<"tripAgentDrafts">["module"], string>;
 
+/** Parts of the workspace that are still empty, in display order. */
+const getWorkspaceGaps = (model: TripDashboardModel) => {
+	const { workspace } = model;
+	const gaps: string[] = [];
+
+	if (workspace.itineraryItems.length === 0) {
+		gaps.push("itinerary");
+	}
+	if (model.vault.files === 0) {
+		gaps.push("Vault");
+	}
+	if (workspace.bookings.length === 0) {
+		gaps.push("bookings");
+	}
+	if (!model.budget.hasBudget) {
+		gaps.push("budget");
+	}
+	if ((model.readiness.percent ?? 0) < 80) {
+		gaps.push("checklist");
+	}
+
+	return gaps;
+};
+
+function DraftActionButton({
+	disabled,
+	label,
+	onPress,
+	tone,
+}: {
+	disabled: boolean;
+	label: string;
+	onPress: () => void;
+	tone: "accent" | "secondary";
+}) {
+	return (
+		<PressableScale
+			accessibilityLabel={label}
+			accessibilityState={{ disabled }}
+			disabled={disabled}
+			haptic="selection"
+			hitSlop={{ bottom: spacing.xs, top: spacing.xs }}
+			onPress={onPress}
+			style={{
+				alignItems: "center",
+				justifyContent: "center",
+				minHeight: metrics.minTarget,
+				opacity: disabled ? 0.4 : 1,
+				paddingHorizontal: spacing.sm,
+			}}
+		>
+			<AppText bold={tone === "accent"} tone={tone} variant="subhead">
+				{label}
+			</AppText>
+		</PressableScale>
+	);
+}
+
 function TripAgentDraftRow({
 	draft,
 	isPending,
@@ -1918,66 +1193,56 @@ function TripAgentDraftRow({
 	onApply: (draftId: Id<"tripAgentDrafts">) => void;
 	onDismiss: (draftId: Id<"tripAgentDrafts">) => void;
 }) {
-	const { palette } = useUITheme();
-
 	return (
 		<View
 			style={{
-				borderTopColor: palette.separator,
-				borderTopWidth: 1,
-				gap: 8,
-				paddingTop: 12,
+				gap: spacing.xs,
+				paddingHorizontal: spacing.lg,
+				paddingTop: spacing.md,
 			}}
 		>
-			<View style={{ alignItems: "flex-start", flexDirection: "row", gap: 12 }}>
-				<View
-					style={{
-						alignItems: "center",
-						backgroundColor: palette.fill,
-						borderRadius: radius.pill,
-						height: 32,
-						justifyContent: "center",
-						width: 32,
-					}}
-				>
-					<Ionicons color={palette.accent} name="sparkles-outline" size={15} />
-				</View>
-				<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-					<AppText tone="secondary" variant="eyebrow">
-						{tripAgentModuleLabels[draft.module]} draft
-					</AppText>
-					<AppText bold numberOfLines={1} variant="subhead">
-						{draft.title}
-					</AppText>
-					<AppText numberOfLines={2} tone="secondary" variant="footnote">
-						{draft.rationale}
-					</AppText>
-				</View>
-			</View>
-			<View style={{ flexDirection: "row", gap: 8 }}>
-				<View style={{ flex: 1, minWidth: 0 }}>
-					<PrimaryButton
-						disabled={isPending}
-						isPending={isPending}
-						label="Apply"
-						onPress={() => onApply(draft._id)}
-					/>
-				</View>
-				<View style={{ flex: 1, minWidth: 0 }}>
-					<SecondaryButton
-						disabled={isPending}
-						label="Dismiss"
-						onPress={() => onDismiss(draft._id)}
-					/>
-				</View>
+			<AppText tone="secondary" variant="footnote">
+				{tripAgentModuleLabels[draft.module]}
+			</AppText>
+			<AppText variant="callout">{draft.title}</AppText>
+			<AppText numberOfLines={3} tone="secondary" variant="subhead">
+				{draft.rationale}
+			</AppText>
+			<View
+				style={{
+					flexDirection: "row",
+					gap: spacing.sm,
+					justifyContent: "flex-end",
+				}}
+			>
+				<DraftActionButton
+					disabled={isPending}
+					label="Dismiss"
+					onPress={() => onDismiss(draft._id)}
+					tone="secondary"
+				/>
+				<DraftActionButton
+					disabled={isPending}
+					label="Apply"
+					onPress={() => onApply(draft._id)}
+					tone="accent"
+				/>
 			</View>
 		</View>
 	);
 }
 
-function WorkspaceAutopilotCard({ model }: { model: TripDashboardModel }) {
+export function TripDraftsSheet({
+	isOpen,
+	model,
+	onOpenChange,
+}: {
+	isOpen: boolean;
+	model: TripDashboardModel;
+	onOpenChange: (isOpen: boolean) => void;
+}) {
 	const router = useRouter();
-	const { palette } = useUITheme();
+	const insets = useSafeAreaInsets();
 	const { workspace } = model;
 	const generateTripAgentDraft = useAction(
 		api.ai.tripAgent.generateTripAgentDraft
@@ -1993,10 +1258,6 @@ function WorkspaceAutopilotCard({ model }: { model: TripDashboardModel }) {
 	const [agentErrorMessage, setAgentErrorMessage] = useState<string | null>(
 		null
 	);
-	const readinessDisplay = getReadinessDisplay({
-		itemCount: workspace.readinessItems.length,
-		score: model.readiness.score,
-	});
 	const pendingDrafts = workspace.agentDrafts;
 	const pendingDraftModules = new Set(
 		pendingDrafts.map((draft) => draft.module)
@@ -2004,26 +1265,19 @@ function WorkspaceAutopilotCard({ model }: { model: TripDashboardModel }) {
 	const missingDraftModules = workspaceAutopilotDraftModules.filter(
 		(config) => !pendingDraftModules.has(config.module)
 	);
-	const completedStageCount = [
-		workspace.itineraryItems.length > 0,
-		workspace.vaultItems.length + workspace.documents.length > 0,
-		workspace.bookings.length > 0,
-		workspace.trip.budgetAmount !== undefined || workspace.expenses.length > 0,
-		model.readiness.score >= 80,
-	].filter(Boolean).length;
-	const isWorkspaceReady =
-		completedStageCount === 5 && model.readiness.score >= 100;
+	const isWorkspaceReady = getWorkspaceGaps(model).length === 0;
 	const visibleDrafts = isWorkspaceReady ? [] : pendingDrafts;
 	const autopilotTitle = isWorkspaceReady
 		? "Trip is ready"
 		: "Complete this trip";
 	const autopilotDescription = isWorkspaceReady
-		? "This workspace has itinerary, Vault, bookings, budget, risks, and readiness connected for travel."
-		: "Turn this workspace into a complete trip plan: itinerary, Vault, bookings, budget, risks, and readiness.";
+		? "Itinerary, Vault, bookings, budget and readiness are all in place."
+		: `Still missing: ${getWorkspaceGaps(model).join(", ")}. Viya drafts them for you. Nothing changes until you apply a draft.`;
 	const primaryActionLabel = isWorkspaceReady
 		? "Ask Viya"
 		: "Complete this trip";
 	const openTripChat = () => {
+		onOpenChange(false);
 		router.push({
 			params: {
 				mode: "trip",
@@ -2046,7 +1300,7 @@ function WorkspaceAutopilotCard({ model }: { model: TripDashboardModel }) {
 		}
 
 		if (missingDraftModules.length === 0) {
-			setAgentMessage("Viya already staged drafts for the core modules.");
+			setAgentMessage("Viya already drafted every section.");
 			return;
 		}
 
@@ -2067,12 +1321,13 @@ function WorkspaceAutopilotCard({ model }: { model: TripDashboardModel }) {
 				)
 			);
 			haptic("success");
-			setAgentMessage("Viya staged reviewable drafts for this workspace.");
+			setAgentMessage("Drafts are ready to review.");
 		} catch (error) {
+			haptic("error");
 			setAgentErrorMessage(
 				error instanceof Error
 					? error.message
-					: "Viya could not stage workspace drafts."
+					: "Viya could not draft this trip. Try again."
 			);
 		} finally {
 			setIsGeneratingDrafts(false);
@@ -2085,10 +1340,10 @@ function WorkspaceAutopilotCard({ model }: { model: TripDashboardModel }) {
 		try {
 			await applyTripAgentDraft({ draftId });
 			haptic("success");
-			setAgentMessage("Draft applied to the trip workspace.");
+			setAgentMessage("Draft applied.");
 		} catch (error) {
 			setAgentErrorMessage(
-				error instanceof Error ? error.message : "Viya could not apply draft."
+				error instanceof Error ? error.message : "Could not apply the draft."
 			);
 		} finally {
 			setPendingDraftId(null);
@@ -2103,7 +1358,7 @@ function WorkspaceAutopilotCard({ model }: { model: TripDashboardModel }) {
 			setAgentMessage("Draft dismissed.");
 		} catch (error) {
 			setAgentErrorMessage(
-				error instanceof Error ? error.message : "Viya could not dismiss draft."
+				error instanceof Error ? error.message : "Could not dismiss the draft."
 			);
 		} finally {
 			setPendingDraftId(null);
@@ -2111,70 +1366,29 @@ function WorkspaceAutopilotCard({ model }: { model: TripDashboardModel }) {
 	};
 
 	return (
-		<Animated.View entering={FadeInDown.duration(220)}>
-			<Card style={{ gap: 16 }}>
-				<View
-					style={{ alignItems: "flex-start", flexDirection: "row", gap: 12 }}
-				>
-					<View
-						style={{
-							alignItems: "center",
-							backgroundColor: palette.fill,
-							borderRadius: radius.group,
-							height: 44,
-							justifyContent: "center",
-							width: 44,
-						}}
-					>
-						<Ionicons
-							color={palette.accent}
-							name="sparkles-outline"
-							size={20}
-						/>
-					</View>
-					<View style={{ flex: 1, gap: 4, minWidth: 0 }}>
-						<AppText tone="secondary" variant="eyebrow">
-							Viya autopilot
-						</AppText>
-						<AppText bold variant="callout">
-							{autopilotTitle}
-						</AppText>
-						<AppText tone="secondary" variant="subhead">
-							{autopilotDescription}
-						</AppText>
-					</View>
-				</View>
-				<View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-					<View
-						style={{
-							backgroundColor: palette.fill,
-							borderRadius: radius.pill,
-							paddingHorizontal: 12,
-							paddingVertical: 6,
-						}}
-					>
-						<AppText bold tone="secondary" variant="footnote">
-							{completedStageCount}/5 stages
-						</AppText>
-					</View>
-					<View
-						style={{
-							backgroundColor: palette.fill,
-							borderRadius: radius.pill,
-							paddingHorizontal: 12,
-							paddingVertical: 6,
-						}}
-					>
-						<AppText bold tone="secondary" variant="footnote">
-							{readinessDisplay.value} readiness
-						</AppText>
-					</View>
+		<AppSheet isOpen={isOpen} onOpenChange={onOpenChange} snapPoints={["75%"]}>
+			<SheetHeader
+				onClose={() => onOpenChange(false)}
+				title="Drafts from Viya"
+			/>
+			<BottomSheetScrollView
+				contentContainerStyle={{
+					gap: spacing.lg,
+					paddingBottom: Math.max(insets.bottom, spacing.lg),
+					paddingHorizontal: spacing.screen,
+					paddingTop: spacing.md,
+				}}
+				showsVerticalScrollIndicator={false}
+			>
+				<View style={{ gap: spacing.xs }}>
+					<AppText variant="heading">{autopilotTitle}</AppText>
+					<AppText tone="secondary">{autopilotDescription}</AppText>
 				</View>
 				{agentMessage ? (
 					<AppText
 						accessibilityLiveRegion="polite"
 						tone="secondary"
-						variant="footnote"
+						variant="subhead"
 					>
 						{agentMessage}
 					</AppText>
@@ -2183,342 +1397,44 @@ function WorkspaceAutopilotCard({ model }: { model: TripDashboardModel }) {
 					<AppText
 						accessibilityLiveRegion="polite"
 						tone="danger"
-						variant="footnote"
+						variant="subhead"
 					>
 						{agentErrorMessage}
 					</AppText>
 				) : null}
 				{visibleDrafts.length > 0 ? (
-					<View style={{ gap: 12 }}>
-						<AppText tone="secondary" variant="eyebrow">
-							Reviewable changes
-						</AppText>
+					<ListGroup header="Review">
 						{visibleDrafts.map((draft) => (
-							<TripAgentDraftRow
-								draft={draft}
-								isPending={pendingDraftId === draft._id}
-								key={draft._id}
-								onApply={handleApplyDraft}
-								onDismiss={handleDismissDraft}
-							/>
-						))}
-					</View>
-				) : null}
-				<View style={{ gap: 8 }}>
-					<PrimaryButton
-						accessibilityLabel={
-							isWorkspaceReady
-								? "Ask Viya about this ready trip"
-								: "Complete this trip with Viya"
-						}
-						disabled={isGeneratingDrafts}
-						icon="sparkles-outline"
-						isPending={isGeneratingDrafts}
-						label={primaryActionLabel}
-						onPress={handleGenerateDrafts}
-					/>
-					{isWorkspaceReady ? null : (
-						<SecondaryButton
-							accessibilityLabel="Ask Viya about this trip"
-							disabled={isGeneratingDrafts}
-							icon="chatbubble-outline"
-							label="Ask Viya"
-							onPress={openTripChat}
-						/>
-					)}
-				</View>
-			</Card>
-		</Animated.View>
-	);
-}
-
-export function MainModules({ model }: { model: TripDashboardModel }) {
-	const { palette } = useUITheme();
-	const [activeWorkspaceGroup, setActiveWorkspaceGroup] =
-		useState<WorkspaceModuleGroupKey>("core");
-	const workspaceModuleGroups = getTripWorkspaceModuleGroups(model);
-	const shouldShowWorkspacePicker = workspaceModuleGroups.length > 1;
-
-	return (
-		<View style={{ gap: 28 }}>
-			<WorkspaceAutopilotCard model={model} />
-			<View style={{ gap: 12 }}>
-				<View style={{ paddingHorizontal: 4 }}>
-					<AppText accessibilityRole="header" bold variant="headline">
-						Workspace
-					</AppText>
-				</View>
-				<View style={{ gap: 12 }}>
-					{shouldShowWorkspacePicker ? (
-						<View
-							style={{
-								alignItems: "center",
-								backgroundColor: palette.fill,
-								borderRadius: radius.pill,
-								flexDirection: "row",
-								padding: 4,
-								width: "100%",
-							}}
-						>
-							{workspaceModuleGroups.map((group) => {
-								const isSelected = group.value === activeWorkspaceGroup;
-
-								return (
-									<PressableScale
-										accessibilityLabel={`Show ${group.label} modules`}
-										accessibilityRole="tab"
-										accessibilityState={{ selected: isSelected }}
-										haptic="selection"
-										key={group.value}
-										onPress={() => setActiveWorkspaceGroup(group.value)}
-										style={{
-											alignItems: "center",
-											backgroundColor: isSelected
-												? palette.selection
-												: "transparent",
-											borderRadius: radius.pill,
-											flex: 1,
-											height: 36,
-											justifyContent: "center",
-											minWidth: 0,
-										}}
-									>
-										<AppText
-											bold={isSelected}
-											tone={isSelected ? "ink" : "secondary"}
-											variant="subhead"
-										>
-											{group.label}
-										</AppText>
-									</PressableScale>
-								);
-							})}
-						</View>
-					) : null}
-					{workspaceModuleGroups.map((group) =>
-						group.value === activeWorkspaceGroup ? (
-							<View
-								key={group.value}
-								style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}
-							>
-								{group.items.map((item) => (
-									<WorkspaceModuleTile item={item} key={item.label} />
-								))}
+							<View key={draft._id} style={{ paddingBottom: spacing.xs }}>
+								<TripAgentDraftRow
+									draft={draft}
+									isPending={pendingDraftId === draft._id}
+									onApply={(draftId) => {
+										handleApplyDraft(draftId).catch(() => undefined);
+									}}
+									onDismiss={(draftId) => {
+										handleDismissDraft(draftId).catch(() => undefined);
+									}}
+								/>
 							</View>
-						) : null
-					)}
-				</View>
-			</View>
-		</View>
-	);
-}
-
-function QuickActionButton({
-	action,
-	onSelectTab,
-}: {
-	action: DashboardAction;
-	onSelectTab: (tab: TripTab) => void;
-}) {
-	const { palette } = useUITheme();
-	const button = (
-		<PressableScale
-			accessibilityLabel={action.label}
-			accessibilityRole="button"
-			hitSlop={{ bottom: 5, top: 5 }}
-			onPress={
-				action.tab ? () => onSelectTab(action.tab as TripTab) : undefined
-			}
-			scaleTo={0.97}
-			style={{
-				alignItems: "center",
-				backgroundColor: palette.surface,
-				borderRadius: radius.pill,
-				flexDirection: "row",
-				gap: 6,
-				height: 34,
-				minWidth: 112,
-				paddingHorizontal: 14,
-			}}
-		>
-			<Ionicons color={palette.accent} name={action.icon} size={16} />
-			<AppText bold variant="subhead">
-				{action.label}
-			</AppText>
-		</PressableScale>
-	);
-
-	if (!action.href) {
-		return button;
-	}
-
-	return (
-		<Link asChild href={action.href}>
-			{button}
-		</Link>
-	);
-}
-
-export function QuickActions({
-	actions,
-	onSelectTab,
-}: {
-	actions: DashboardAction[];
-	onSelectTab: (tab: TripTab) => void;
-}) {
-	return (
-		<View style={{ gap: 8 }}>
-			<AppText
-				style={{ paddingHorizontal: 4 }}
-				tone="secondary"
-				variant="eyebrow"
-			>
-				Quick actions
-			</AppText>
-			<ScrollView
-				contentContainerStyle={{ gap: 8, paddingRight: 8 }}
-				horizontal
-				showsHorizontalScrollIndicator={false}
-			>
-				{actions.map((action) => (
-					<QuickActionButton
-						action={action}
-						key={action.label}
-						onSelectTab={onSelectTab}
-					/>
-				))}
-			</ScrollView>
-		</View>
-	);
-}
-
-function TabButton({
-	count,
-	isActive,
-	onPress,
-	tab,
-}: {
-	count?: number;
-	isActive: boolean;
-	onPress: () => void;
-	tab: DashboardTab;
-}) {
-	const { palette } = useUITheme();
-	const foreground = isActive ? palette.onPrimary : palette.ink;
-
-	return (
-		<PressableScale
-			accessibilityLabel={tab.label}
-			accessibilityRole="tab"
-			accessibilityState={{ selected: isActive }}
-			haptic="selection"
-			onPress={onPress}
-			scaleTo={0.97}
-			style={{
-				alignItems: "center",
-				backgroundColor: isActive ? palette.ink : palette.surface,
-				borderRadius: radius.pill,
-				flexDirection: "row",
-				gap: 8,
-				height: 44,
-				paddingHorizontal: 16,
-			}}
-		>
-			<Ionicons
-				color={isActive ? palette.onPrimary : palette.accent}
-				name={tab.icon}
-				size={16}
-			/>
-			<AppText bold style={{ color: foreground }} variant="subhead">
-				{tab.label}
-			</AppText>
-			{count ? (
-				<AppText
-					style={{ color: isActive ? palette.onPrimary : palette.inkSecondary }}
-					variant="footnote"
-				>
-					{count}
-				</AppText>
-			) : null}
-		</PressableScale>
-	);
-}
-
-export function TripTabPicker({
-	activeTab,
-	model,
-	onSelectTab,
-}: {
-	activeTab: TripTab;
-	model: TripDashboardModel;
-	onSelectTab: (tab: TripTab) => void;
-}) {
-	return (
-		<View style={{ gap: 8 }}>
-			<AppText
-				style={{ paddingHorizontal: 4 }}
-				tone="secondary"
-				variant="eyebrow"
-			>
-				Focus
-			</AppText>
-			<ScrollView
-				contentContainerStyle={{ gap: 8, paddingRight: 8 }}
-				horizontal
-				showsHorizontalScrollIndicator={false}
-			>
-				{model.tabs.map((tab) => (
-					<TabButton
-						count={model.tabCounts[tab.id]}
-						isActive={tab.id === activeTab}
-						key={tab.id}
-						onPress={() => onSelectTab(tab.id)}
-						tab={tab}
-					/>
-				))}
-			</ScrollView>
-		</View>
-	);
-}
-
-export function InfoRow({
-	detail,
-	icon,
-	label,
-	right,
-}: {
-	detail?: string;
-	icon?: IoniconName;
-	label: string;
-	right?: string;
-}) {
-	const { palette } = useUITheme();
-
-	return (
-		<View
-			style={{
-				alignItems: "center",
-				flexDirection: "row",
-				gap: 12,
-				paddingVertical: 8,
-			}}
-		>
-			{icon ? <Ionicons color={palette.accent} name={icon} size={18} /> : null}
-			<View style={{ flex: 1, minWidth: 0 }}>
-				<AppText bold numberOfLines={1} variant="subhead">
-					{label}
-				</AppText>
-				{detail ? (
-					<AppText numberOfLines={1} tone="secondary" variant="footnote">
-						{detail}
-					</AppText>
+						))}
+					</ListGroup>
 				) : null}
-			</View>
-			{right ? (
-				<AppText numberOfLines={1} tone="secondary" variant="footnote">
-					{right}
-				</AppText>
-			) : null}
-		</View>
+				<PrimaryButton
+					accessibilityLabel={
+						isWorkspaceReady
+							? "Ask Viya about this ready trip"
+							: "Complete this trip with Viya"
+					}
+					disabled={isGeneratingDrafts}
+					icon="sparkles-outline"
+					isPending={isGeneratingDrafts}
+					label={primaryActionLabel}
+					onPress={() => {
+						handleGenerateDrafts().catch(() => undefined);
+					}}
+				/>
+			</BottomSheetScrollView>
+		</AppSheet>
 	);
 }

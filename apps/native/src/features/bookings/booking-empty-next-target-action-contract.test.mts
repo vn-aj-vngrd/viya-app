@@ -13,9 +13,9 @@ describe("booking empty next target action contract", () => {
 			"apps/native/src/features/bookings/booking-hub-screen.tsx"
 		);
 
-		expect(source).toContain("No open booking target");
-		expect(source).toContain("onCreateNextTarget");
-		expect(source).toContain("Add next target");
+		expect(source).toContain("No bookings yet");
+		expect(source).toContain("Import from Vault");
+		expect(source).toContain("Add booking");
 		expect(source).toContain("openCreateSheet");
 	});
 });

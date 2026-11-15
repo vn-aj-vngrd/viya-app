@@ -1,6 +1,13 @@
 import { TextInput, type TextInputProps, View } from "react-native";
 
-import { AppText, radius, useUITheme } from "@/src/components/ui";
+import {
+	AppText,
+	metrics,
+	radius,
+	spacing,
+	typeScale,
+	useUITheme,
+} from "@/src/components/ui";
 
 interface TripTextFieldProps
 	extends Omit<TextInputProps, "placeholderTextColor" | "style"> {
@@ -11,7 +18,7 @@ interface TripTextFieldProps
 	label: string;
 }
 
-/** Labeled, themed text input: opaque fill, no border unless invalid. */
+/** Labeled, themed text input: opaque fill, hairline edge only when invalid. */
 export function TripTextField({
 	errorText,
 	helperText,
@@ -24,8 +31,12 @@ export function TripTextField({
 	const showError = Boolean(isInvalid && errorText);
 
 	return (
-		<View style={{ gap: 8 }}>
-			<AppText bold variant="subhead">
+		<View style={{ gap: spacing.sm }}>
+			<AppText
+				style={{ paddingHorizontal: spacing.xs }}
+				tone="secondary"
+				variant="footnote"
+			>
 				{label}
 				{isRequired ? <AppText tone="danger"> *</AppText> : null}
 			</AppText>
@@ -41,10 +52,10 @@ export function TripTextField({
 					borderRadius: radius.field,
 					borderWidth: isInvalid ? 1 : 0,
 					color: palette.ink,
-					fontSize: 17,
-					minHeight: inputProps.multiline ? 88 : 50,
-					paddingHorizontal: 16,
-					paddingVertical: inputProps.multiline ? 12 : 0,
+					fontSize: typeScale.body.fontSize,
+					minHeight: inputProps.multiline ? 88 : metrics.actionHeight,
+					paddingHorizontal: spacing.lg,
+					paddingVertical: inputProps.multiline ? spacing.md : 0,
 					textAlignVertical: inputProps.multiline ? "top" : "center",
 				}}
 				{...inputProps}
@@ -52,6 +63,7 @@ export function TripTextField({
 			{showError ? (
 				<AppText
 					accessibilityLiveRegion="polite"
+					style={{ paddingHorizontal: spacing.xs }}
 					tone="danger"
 					variant="footnote"
 				>
@@ -59,7 +71,11 @@ export function TripTextField({
 				</AppText>
 			) : null}
 			{!showError && helperText ? (
-				<AppText tone="secondary" variant="footnote">
+				<AppText
+					style={{ paddingHorizontal: spacing.xs }}
+					tone="secondary"
+					variant="footnote"
+				>
 					{helperText}
 				</AppText>
 			) : null}

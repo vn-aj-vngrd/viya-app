@@ -12,9 +12,6 @@ describe("trip vault linked navigation contract", () => {
 		const screenSource = readWorkspaceFile(
 			"apps/native/src/features/vault/trip-vault-screen.tsx"
 		);
-		const cardSource = readWorkspaceFile(
-			"apps/native/src/features/vault/vault-preview-card.tsx"
-		);
 
 		expect(screenSource).toContain("getVaultRelatedHref");
 		expect(screenSource).toContain("VIYA_ROUTES.tripItinerary");
@@ -22,8 +19,8 @@ describe("trip vault linked navigation contract", () => {
 		expect(screenSource).toContain("VIYA_ROUTES.tripBudget");
 		expect(screenSource).toContain("VIYA_ROUTES.tripNotes");
 		expect(screenSource).toContain("VIYA_ROUTES.tripRisks");
-		expect(cardSource).toContain("linkedEntityHref");
-		expect(cardSource).toContain("Open linked item");
-		expect(cardSource).toContain("asChild");
+		expect(screenSource).toContain("editingHref");
+		expect(screenSource).toContain("Open linked item");
+		expect(screenSource).toContain("router.push(editingHref)");
 	});
 });

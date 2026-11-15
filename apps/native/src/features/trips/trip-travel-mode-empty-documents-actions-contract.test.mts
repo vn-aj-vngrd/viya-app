@@ -13,11 +13,9 @@ describe("trip travel mode empty document actions contract", () => {
 			"apps/native/src/features/trips/trip-travel-mode-screen.tsx"
 		);
 
-		expect(source).toContain("No confirmed bookings");
-		expect(source).toContain("No documents uploaded");
-		expect(source).toContain('actionLabel="Review bookings"');
-		expect(source).toContain('actionLabel="Upload documents"');
-		expect(source).toContain("actionHref={VIYA_ROUTES.tripBookings(tripId)}");
-		expect(source).toContain("actionHref={VIYA_ROUTES.tripVault(tripId)}");
+		expect(source).toContain('title="Bookings"');
+		expect(source).toContain('title="Documents"');
+		expect(source).toContain("router.push(VIYA_ROUTES.tripBookings(tripId))");
+		expect(source).toContain("router.push(VIYA_ROUTES.tripVault(tripId))");
 	});
 });

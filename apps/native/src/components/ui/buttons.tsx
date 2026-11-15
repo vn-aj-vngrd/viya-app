@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { ActivityIndicator, View } from "react-native";
 import { AppText } from "./app-text";
-import type { IconName } from "./glass-icon-button";
+import type { IconName } from "./icon";
 import { PressableScale } from "./pressable-scale";
 import { metrics, radius, spacing } from "./tokens";
 import { useUITheme } from "./use-ui-theme";

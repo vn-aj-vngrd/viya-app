@@ -1,174 +1,33 @@
-import { Ionicons } from "@expo/vector-icons";
 import {
-	BottomSheet,
-	Input,
-	Label,
-	Menu,
-	TextArea,
-	TextField,
-} from "heroui-native";
-import type { ReactNode } from "react";
-import { ScrollView, View } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
+	BottomSheetScrollView,
+	BottomSheetTextInput,
+} from "@gorhom/bottom-sheet";
+import { type ReactNode, useRef } from "react";
+import {
+	ActionSheetIOS,
+	type KeyboardTypeOptions,
+	Platform,
+	Pressable,
+	View,
+} from "react-native";
+import ReanimatedSwipeable, {
+	type SwipeableMethods,
+} from "react-native-gesture-handler/ReanimatedSwipeable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Container } from "@/components/container";
-import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 import {
+	AppSheet,
 	AppText,
 	Chip,
-	EmptyState,
-	GlassIconButton,
+	haptic,
+	Icon,
 	type IconName,
-	LoadingState,
 	metrics,
-	PressableScale,
-	type PressableScaleProps,
-	PrimaryButton,
 	radius,
+	SecondaryButton,
+	SheetHeader,
 	spacing,
-	type TextTone,
 	useUITheme,
 } from "@/src/components/ui";
-
-export type Tone = "accent" | "danger" | "neutral" | "success" | "warning";
-
-/** Soft 12% wash of a 6-digit palette hex, for icon badges. */
-const wash = (color: string) => `${color}1F`;
-
-function useToneColor(tone: Tone) {
-	const { palette } = useUITheme();
-	const map = {
-		accent: palette.accent,
-		danger: palette.danger,
-		neutral: palette.inkSecondary,
-		success: palette.success,
-		warning: palette.warning,
-	} as const;
-
-	return map[tone];
-}
-
-/** Round tinted icon container used at the start of rows and cards. */
-export function IconBadge({
-	icon,
-	size = 36,
-	tone = "accent",
-}: {
-	icon: IconName;
-	size?: number;
-	tone?: Tone;
-}) {
-	const { palette } = useUITheme();
-	const color = useToneColor(tone);
-
-	return (
-		<View
-			style={{
-				alignItems: "center",
-				backgroundColor: tone === "neutral" ? palette.fill : wash(color),
-				borderRadius: radius.pill,
-				height: size,
-				justifyContent: "center",
-				width: size,
-			}}
-		>
-			<Ionicons color={color} name={icon} size={Math.round(size * 0.5)} />
-		</View>
-	);
-}
-
-/** Static, quiet meta tag (stop count, pace, cost). Not interactive. */
-export function MetaTag({
-	icon,
-	label,
-	tone = "neutral",
-}: {
-	icon?: IconName;
-	label: string;
-	tone?: Tone;
-}) {
-	const { palette } = useUITheme();
-	const color = useToneColor(tone);
-
-	return (
-		<View
-			style={{
-				alignItems: "center",
-				alignSelf: "flex-start",
-				backgroundColor: palette.fill,
-				borderRadius: radius.pill,
-				flexDirection: "row",
-				gap: 5,
-				paddingHorizontal: 10,
-				paddingVertical: 5,
-			}}
-		>
-			{icon ? <Ionicons color={color} name={icon} size={13} /> : null}
-			<AppText
-				numberOfLines={1}
-				style={{ color, fontWeight: "500" }}
-				variant="footnote"
-			>
-				{label}
-			</AppText>
-		</View>
-	);
-}
-
-type ActionPillProps = Omit<PressableScaleProps, "children" | "style"> & {
-	icon?: IconName;
-	isPending?: boolean;
-	label: string;
-	variant?: "primary" | "secondary";
-};
-
-/**
- * Compact pill action for inline use. Spreads rest props to the pressable so it
- * can sit inside `<Link asChild>`; the visible height is 40 with a 44pt hit area.
- */
-export function ActionPill({
-	disabled,
-	icon,
-	isPending,
-	label,
-	variant = "secondary",
-	...rest
-}: ActionPillProps) {
-	const { palette } = useUITheme();
-	const isPrimary = variant === "primary";
-	const foreground = isPrimary ? palette.onPrimary : palette.ink;
-	const inactive = Boolean(disabled) || Boolean(isPending);
-
-	return (
-		<PressableScale
-			accessibilityLabel={label}
-			accessibilityState={{ busy: Boolean(isPending), disabled: inactive }}
-			disabled={inactive}
-			hitSlop={{ bottom: 2, top: 2 }}
-			style={{
-				alignItems: "center",
-				backgroundColor: isPrimary ? palette.ink : palette.fill,
-				borderRadius: radius.pill,
-				flexDirection: "row",
-				gap: 6,
-				height: 40,
-				justifyContent: "center",
-				opacity: inactive ? 0.5 : 1,
-				paddingHorizontal: spacing.lg,
-			}}
-			{...rest}
-		>
-			{icon ? <Ionicons color={foreground} name={icon} size={16} /> : null}
-			<AppText
-				numberOfLines={1}
-				style={{ color: foreground, fontWeight: "600" }}
-				variant="subhead"
-			>
-				{isPending ? "Working..." : label}
-			</AppText>
-		</PressableScale>
-	);
-}
 
 /** Inline error line: danger tone, announced to screen readers. */
 export function InlineError({ message }: { message: string | null }) {
@@ -188,175 +47,196 @@ export function InlineError({ message }: { message: string | null }) {
 	);
 }
 
-/** Eyebrow label that heads a group of cards. */
-export function GroupLabel({
-	children,
-	tone = "secondary",
-}: {
-	children: string;
-	tone?: TextTone;
-}) {
-	return (
-		<AppText
-			accessibilityRole="header"
-			style={{ paddingHorizontal: spacing.xs }}
-			tone={tone}
-			variant="eyebrow"
-		>
-			{children}
-		</AppText>
-	);
-}
-
-/** Staggered spring entrance for list items. */
-export function Reveal({
-	children,
-	index = 0,
-}: {
-	children: ReactNode;
-	index?: number;
-}) {
-	return (
-		<Animated.View
-			entering={FadeInDown.delay(Math.min(index, 8) * 40).springify()}
-		>
-			{children}
-		</Animated.View>
-	);
-}
-
-/** Scrolling module page on the canvas. */
-export function ModuleScroll({ children }: { children: ReactNode }) {
-	return (
-		<Container includeBottomInset={false} isScrollable={false}>
-			<ScrollView
-				contentContainerStyle={{
-					flexGrow: 1,
-					gap: spacing.lg,
-					paddingBottom: 112,
-					paddingHorizontal: spacing.screen,
-					paddingTop: spacing.xs,
-				}}
-				contentInsetAdjustmentBehavior="never"
-				keyboardShouldPersistTaps="handled"
-				showsVerticalScrollIndicator={false}
-			>
-				{children}
-			</ScrollView>
-		</Container>
-	);
-}
-
-export function ModuleLoading({ title }: { title: string }) {
-	return (
-		<Container className="px-4 pb-28" isScrollable={false}>
-			<LoadingState title={title} />
-		</Container>
-	);
-}
-
-export function ModuleMissing({
-	description,
-	icon,
-}: {
-	description: string;
+export interface SwipeAction {
 	icon: IconName;
-}) {
-	return (
-		<Container className="px-4 pb-28" isScrollable={false}>
-			<EmptyState
-				description={description}
-				icon={icon}
-				title="Trip not found"
-			/>
-		</Container>
-	);
-}
-
-/** 44pt round overflow button that opens a `Menu`. */
-export function OverflowTrigger({
-	disabled,
-	label,
-}: {
-	disabled?: boolean;
 	label: string;
-}) {
-	const { palette } = useUITheme();
-
-	return (
-		<Menu.Trigger asChild={true}>
-			<PressableScale
-				accessibilityLabel={label}
-				disabled={disabled}
-				haptic="selection"
-				style={{
-					alignItems: "center",
-					backgroundColor: palette.fill,
-					borderRadius: radius.pill,
-					height: metrics.minTarget,
-					justifyContent: "center",
-					opacity: disabled ? 0.5 : 1,
-					width: metrics.minTarget,
-				}}
-			>
-				<Ionicons
-					color={palette.inkSecondary}
-					name="ellipsis-horizontal"
-					size={18}
-				/>
-			</PressableScale>
-		</Menu.Trigger>
-	);
+	onPress: () => void;
+	tone: "accent" | "danger" | "success";
 }
 
-export function MenuPanel({
-	children,
-	width = 232,
+function SwipePanel({
+	action,
+	onDone,
 }: {
-	children: ReactNode;
-	width?: number;
+	action: SwipeAction;
+	onDone: () => void;
 }) {
-	return (
-		<Menu.Portal>
-			<Menu.Overlay />
-			<Menu.Content
-				align="end"
-				className="rounded-[20px] bg-surface p-1.5"
-				offset={8}
-				placement="bottom"
-				presentation="popover"
-				width={width}
-			>
-				{children}
-			</Menu.Content>
-		</Menu.Portal>
-	);
-}
-
-export function MenuDivider() {
 	const { palette } = useUITheme();
+	const backgrounds = {
+		accent: palette.accent,
+		danger: palette.danger,
+		success: palette.success,
+	} as const;
 
 	return (
-		<View
-			style={{
-				backgroundColor: palette.separator,
-				height: 1,
-				marginHorizontal: spacing.sm,
-				marginVertical: spacing.xs,
+		<Pressable
+			accessibilityLabel={action.label}
+			accessibilityRole="button"
+			onPress={() => {
+				onDone();
+				action.onPress();
 			}}
-		/>
+			style={{
+				alignItems: "center",
+				backgroundColor: backgrounds[action.tone],
+				gap: spacing.xs,
+				justifyContent: "center",
+				width: 88,
+			}}
+		>
+			<Icon name={action.icon} size={20} tone="onPrimary" />
+			<AppText tone="onPrimary" variant="footnote">
+				{action.label}
+			</AppText>
+		</Pressable>
 	);
 }
 
-/** Menu row content (icon + title). Wrap in `Menu.Item`. */
-export function MenuItemContent({
-	danger,
-	icon,
-	label,
+/** Row with swipe actions (leading and trailing) on an opaque surface. */
+export function SwipeRow({
+	children,
+	leading,
+	trailing,
 }: {
-	danger?: boolean;
-	icon: IconName;
+	children: ReactNode;
+	leading?: SwipeAction;
+	trailing?: SwipeAction;
+}) {
+	const { palette } = useUITheme();
+	const ref = useRef<SwipeableMethods | null>(null);
+	const close = () => ref.current?.close();
+
+	return (
+		<ReanimatedSwipeable
+			friction={2}
+			onSwipeableOpen={() => haptic("selection")}
+			overshootLeft={false}
+			overshootRight={false}
+			ref={ref}
+			renderLeftActions={
+				leading
+					? () => <SwipePanel action={leading} onDone={close} />
+					: undefined
+			}
+			renderRightActions={
+				trailing
+					? () => <SwipePanel action={trailing} onDone={close} />
+					: undefined
+			}
+		>
+			<View style={{ backgroundColor: palette.surface }}>{children}</View>
+		</ReanimatedSwipeable>
+	);
+}
+
+export interface RowMenuAction {
+	destructive?: boolean;
 	label: string;
+	onPress: () => void;
+}
+
+/** Long-press context menu. Native action sheet on iOS; Android uses swipe and the detail sheet. */
+export function showRowMenu(title: string, actions: RowMenuAction[]) {
+	if (Platform.OS !== "ios" || actions.length === 0) {
+		return;
+	}
+
+	haptic("medium");
+	const destructiveButtonIndex = actions.findIndex(
+		(action) => action.destructive
+	);
+	ActionSheetIOS.showActionSheetWithOptions(
+		{
+			cancelButtonIndex: actions.length,
+			destructiveButtonIndex:
+				destructiveButtonIndex === -1 ? undefined : destructiveButtonIndex,
+			options: [...actions.map((action) => action.label), "Cancel"],
+			title,
+		},
+		(index) => actions[index]?.onPress()
+	);
+}
+
+/** Inset group for sheet forms. Opaque rows, hairline dividers. */
+export function FormGroup({
+	children,
+	footer,
+	header,
+}: {
+	children: ReactNode;
+	footer?: string;
+	header?: string;
+}) {
+	const { palette } = useUITheme();
+	const rows = Array.isArray(children) ? children.flat() : [children];
+	const visible = rows.filter(Boolean);
+
+	return (
+		<View style={{ gap: spacing.sm }}>
+			{header ? (
+				<AppText
+					accessibilityRole="header"
+					style={{ paddingHorizontal: spacing.lg }}
+					tone="secondary"
+					variant="eyebrow"
+				>
+					{header}
+				</AppText>
+			) : null}
+			<View
+				style={{
+					backgroundColor: palette.surface,
+					borderRadius: radius.card,
+					overflow: "hidden",
+				}}
+			>
+				{visible.map((row, index) => (
+					<View
+						key={
+							typeof row === "object" && row !== null && "key" in row
+								? (row.key ?? index)
+								: index
+						}
+					>
+						{index > 0 ? (
+							<View
+								style={{
+									backgroundColor: palette.separator,
+									height: 1,
+									marginLeft: spacing.lg,
+								}}
+							/>
+						) : null}
+						{row}
+					</View>
+				))}
+			</View>
+			{footer ? (
+				<AppText
+					style={{ paddingHorizontal: spacing.lg }}
+					tone="secondary"
+					variant="footnote"
+				>
+					{footer}
+				</AppText>
+			) : null}
+		</View>
+	);
+}
+
+/** Label left, value right, 54pt: the single-line field used in every form. */
+export function FieldRow({
+	keyboardType,
+	label,
+	onChangeText,
+	placeholder,
+	value,
+}: {
+	keyboardType?: KeyboardTypeOptions;
+	label: string;
+	onChangeText: (value: string) => void;
+	placeholder: string;
+	value: string;
 }) {
 	const { palette } = useUITheme();
 
@@ -366,134 +246,64 @@ export function MenuItemContent({
 				alignItems: "center",
 				flexDirection: "row",
 				gap: spacing.md,
-				minHeight: metrics.minTarget - 8,
+				minHeight: metrics.rowHeight,
+				paddingHorizontal: spacing.lg,
 			}}
 		>
-			<Ionicons
-				color={danger ? palette.danger : palette.accent}
-				name={icon}
-				size={19}
+			<AppText style={{ flexShrink: 0, minWidth: 84 }}>{label}</AppText>
+			<BottomSheetTextInput
+				accessibilityLabel={label}
+				keyboardType={keyboardType}
+				onChangeText={onChangeText}
+				placeholder={placeholder}
+				placeholderTextColor={palette.inkTertiary}
+				style={{
+					color: palette.ink,
+					flex: 1,
+					fontSize: 17,
+					minHeight: metrics.minTarget,
+					textAlign: "right",
+				}}
+				value={value}
 			/>
-			<Menu.ItemTitle
-				className={
-					danger
-						? "font-semibold text-base text-danger"
-						: "font-medium text-base"
-				}
-			>
-				{label}
-			</Menu.ItemTitle>
 		</View>
 	);
 }
 
-export function MenuAction({
-	danger,
-	disabled,
-	icon,
+/** Multi-line notes row inside a FormGroup. */
+export function NotesRow({
 	label,
-	onPress,
+	onChangeText,
+	placeholder,
+	value,
 }: {
-	danger?: boolean;
-	disabled?: boolean;
-	icon: IconName;
 	label: string;
-	onPress: () => void;
+	onChangeText: (value: string) => void;
+	placeholder: string;
+	value: string;
 }) {
+	const { palette } = useUITheme();
+
 	return (
-		<Menu.Item
+		<BottomSheetTextInput
 			accessibilityLabel={label}
-			className="rounded-[14px] px-2.5"
-			isAnimatedStyleActive={false}
-			isDisabled={disabled}
-			onPress={onPress}
-		>
-			<MenuItemContent danger={danger} icon={icon} label={label} />
-		</Menu.Item>
+			multiline={true}
+			onChangeText={onChangeText}
+			placeholder={placeholder}
+			placeholderTextColor={palette.inkTertiary}
+			style={{
+				color: palette.ink,
+				fontSize: 17,
+				minHeight: 96,
+				padding: spacing.lg,
+				textAlignVertical: "top",
+			}}
+			value={value}
+		/>
 	);
 }
 
-/** Single-line form field for bottom sheets. */
-export function FormField({
-	keyboardType,
-	label,
-	onChangeText,
-	placeholder,
-	value,
-}: {
-	keyboardType?: "default" | "numeric";
-	label: string;
-	onChangeText: (value: string) => void;
-	placeholder: string;
-	value: string;
-}) {
-	const { palette } = useUITheme();
-	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
-
-	return (
-		<TextField className="gap-1.5">
-			<Label>
-				<Label.Text>{label}</Label.Text>
-			</Label>
-			<Input
-				className="px-4"
-				keyboardType={keyboardType}
-				onBlur={onBlur}
-				onChangeText={onChangeText}
-				onFocus={onFocus}
-				placeholder={placeholder}
-				style={{
-					backgroundColor: palette.surface,
-					borderRadius: radius.field,
-					borderWidth: 0,
-					height: metrics.actionHeight,
-				}}
-				value={value}
-				variant="secondary"
-			/>
-		</TextField>
-	);
-}
-
-export function FormTextArea({
-	label,
-	onChangeText,
-	placeholder,
-	value,
-}: {
-	label: string;
-	onChangeText: (value: string) => void;
-	placeholder: string;
-	value: string;
-}) {
-	const { palette } = useUITheme();
-	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
-
-	return (
-		<TextField className="gap-1.5">
-			<Label>
-				<Label.Text>{label}</Label.Text>
-			</Label>
-			<TextArea
-				className="px-4 py-3"
-				onBlur={onBlur}
-				onChangeText={onChangeText}
-				onFocus={onFocus}
-				placeholder={placeholder}
-				style={{
-					backgroundColor: palette.surface,
-					borderRadius: radius.field,
-					borderWidth: 0,
-					minHeight: 96,
-				}}
-				value={value}
-				variant="secondary"
-			/>
-		</TextField>
-	);
-}
-
-/** Wrapping group of selectable chips. */
+/** Wrapping group of selectable chips under a quiet label. */
 export function ChoiceChips({
 	extraOption,
 	formatLabel,
@@ -518,7 +328,11 @@ export function ChoiceChips({
 
 	return (
 		<View style={{ gap: spacing.sm }}>
-			<AppText tone="secondary" variant="eyebrow">
+			<AppText
+				style={{ paddingHorizontal: spacing.lg }}
+				tone="secondary"
+				variant="eyebrow"
+			>
 				{label}
 			</AppText>
 			<View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
@@ -542,32 +356,32 @@ export function ChoiceChips({
 	);
 }
 
-/** Bottom sheet shell: centered title, glass close, scrolling form, one primary action. */
+/**
+ * Sheet shell on AppSheet (the only grabber): SheetHeader with close and
+ * confirm, scrolling content in a 20pt-inset column. "medium" and "large"
+ * detents; always draggable down.
+ */
 export function FormSheet({
 	children,
-	closeLabel,
 	errorMessage,
 	isDisabled,
 	isOpen,
 	isPending,
-	maxHeight = 520,
 	onOpenChange,
 	onSubmit,
-	snapPoint = "84%",
+	size = "large",
 	submitLabel,
 	subtitle,
 	title,
 }: {
 	children: ReactNode;
-	closeLabel: string;
 	errorMessage?: string | null;
 	isDisabled?: boolean;
 	isOpen: boolean;
 	isPending?: boolean;
-	maxHeight?: number;
 	onOpenChange: (isOpen: boolean) => void;
 	onSubmit?: () => void;
-	snapPoint?: string;
+	size?: "large" | "medium";
 	submitLabel?: string;
 	subtitle?: string;
 	title: string;
@@ -575,99 +389,81 @@ export function FormSheet({
 	const insets = useSafeAreaInsets();
 
 	return (
-		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
-			<BottomSheet.Portal>
-				<BottomSheet.Overlay />
-				<BottomSheet.Content
-					backgroundClassName="rounded-t-[32px] bg-background"
-					enablePanDownToClose={true}
-					snapPoints={[snapPoint]}
-				>
-					<View
-						style={{
-							gap: spacing.lg,
-							paddingBottom: Math.max(insets.bottom, spacing.lg),
-							paddingHorizontal: spacing.screen,
-							paddingTop: spacing.xs,
-						}}
-					>
-						<View
-							style={{
-								alignItems: "center",
-								flexDirection: "row",
-								gap: spacing.md,
-							}}
-						>
-							<GlassIconButton
-								accessibilityLabel={closeLabel}
-								icon="close"
-								onPress={() => onOpenChange(false)}
-							/>
-							<View style={{ alignItems: "center", flex: 1 }}>
-								<BottomSheet.Title>{title}</BottomSheet.Title>
-								{subtitle ? (
-									<BottomSheet.Description numberOfLines={2}>
-										{subtitle}
-									</BottomSheet.Description>
-								) : null}
-							</View>
-							<View style={{ width: metrics.iconButton }} />
-						</View>
-
-						<ScrollView
-							contentContainerStyle={{
-								gap: spacing.lg,
-								paddingBottom: spacing.sm,
-							}}
-							keyboardShouldPersistTaps="handled"
-							showsVerticalScrollIndicator={false}
-							style={{ maxHeight }}
-						>
-							{children}
-						</ScrollView>
-
-						<InlineError message={errorMessage ?? null} />
-						{submitLabel && onSubmit ? (
-							<PrimaryButton
-								disabled={isDisabled}
-								isPending={isPending}
-								label={submitLabel}
-								onPress={onSubmit}
-							/>
-						) : null}
-					</View>
-				</BottomSheet.Content>
-			</BottomSheet.Portal>
-		</BottomSheet>
+		<AppSheet
+			isOpen={isOpen}
+			onOpenChange={onOpenChange}
+			snapPoints={[size === "medium" ? "56%" : "92%"]}
+		>
+			<SheetHeader
+				confirm={
+					submitLabel && onSubmit
+						? {
+								disabled: isDisabled,
+								isPending,
+								label: submitLabel,
+								onPress: onSubmit,
+							}
+						: undefined
+				}
+				onClose={() => onOpenChange(false)}
+				subtitle={subtitle}
+				title={title}
+			/>
+			<BottomSheetScrollView
+				contentContainerStyle={{
+					gap: spacing.section,
+					paddingBottom: Math.max(insets.bottom, spacing.lg) + spacing.xl,
+					paddingHorizontal: spacing.screen,
+					paddingTop: spacing.lg,
+				}}
+				keyboardDismissMode="interactive"
+				keyboardShouldPersistTaps="handled"
+				showsVerticalScrollIndicator={false}
+			>
+				<InlineError message={errorMessage ?? null} />
+				{children}
+			</BottomSheetScrollView>
+		</AppSheet>
 	);
 }
 
-/** Quiet 44pt round icon action for use inside cards (flat fill, no glass). */
-export function IconAction({
-	icon,
-	label,
+/** Primary action for an empty module: sentence plus one labelled button. */
+export function EmptyPrimary({
+	actionLabel,
+	description,
 	onPress,
+	title,
 }: {
-	icon: IconName;
-	label: string;
-	onPress: () => void;
+	actionLabel?: string;
+	description: string;
+	onPress?: () => void;
+	title: string;
 }) {
-	const { palette } = useUITheme();
-
 	return (
-		<PressableScale
-			accessibilityLabel={label}
-			onPress={onPress}
-			style={{
-				alignItems: "center",
-				backgroundColor: palette.fill,
-				borderRadius: radius.pill,
-				height: metrics.minTarget,
-				justifyContent: "center",
-				width: metrics.minTarget,
-			}}
+		<View
+			style={{ alignItems: "center", gap: spacing.lg, paddingTop: spacing.xl }}
 		>
-			<Ionicons color={palette.accent} name={icon} size={18} />
-		</PressableScale>
+			<View style={{ alignItems: "center", gap: spacing.xs }}>
+				<AppText accessibilityRole="header" variant="headline">
+					{title}
+				</AppText>
+				<AppText
+					style={{ textAlign: "center" }}
+					tone="secondary"
+					variant="subhead"
+				>
+					{description}
+				</AppText>
+			</View>
+			{actionLabel && onPress ? (
+				<View>
+					<SecondaryButton
+						fullWidth={false}
+						label={actionLabel}
+						onPress={onPress}
+					/>
+				</View>
+			) : null}
+		</View>
 	);
 }

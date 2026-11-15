@@ -12,14 +12,11 @@ describe("booking proof open contract", () => {
 		const hubSource = readWorkspaceFile(
 			"apps/native/src/features/bookings/booking-hub-screen.tsx"
 		);
-		const cardSource = readWorkspaceFile(
-			"apps/native/src/features/bookings/booking-target-card.tsx"
-		);
 
 		expect(hubSource).toContain("getBookingProofMetaById");
 		expect(hubSource).toContain("vaultItem.url");
-		expect(cardSource).toContain("Linking.openURL");
-		expect(cardSource).toContain("onOpenProof");
-		expect(cardSource).toContain("Open proof");
+		expect(hubSource).toContain("Linking.openURL");
+		expect(hubSource).toContain("onOpenProof");
+		expect(hubSource).toContain("Open proof");
 	});
 });

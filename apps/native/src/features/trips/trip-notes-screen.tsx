@@ -1,42 +1,36 @@
 import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
-import { type Href, Link } from "expo-router";
-import { Menu } from "heroui-native";
+import { type Href, useRouter } from "expo-router";
 import { useState } from "react";
-import { View } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
-import { Container } from "@/components/container";
-import { NavigationIconButton } from "@/src/components/navigation/navigation-icon-button";
+import { ScrollView, TextInput } from "react-native";
+import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 import {
-	AppText,
-	Card,
 	Chip,
 	EmptyState,
-	LoadingState,
-	PrimaryButton,
-	radius,
-	SecondaryButton,
-	SectionHeader,
+	Icon,
+	ListGroup,
+	ListRow,
+	metrics,
+	ScreenShell,
 	spacing,
 	useFeedback,
 	useUITheme,
 } from "@/src/components/ui";
 import { VIYA_ROUTES } from "@/src/constants/routes";
-import { TripModuleScreenFrame } from "./trip-module-floating-bar";
 import {
-	ChoiceChips,
-	FormSheet,
-	MenuDivider,
-	MenuIcon,
-	MenuTrigger,
-	menuContentClassName,
-	menuItemClassName,
-	SheetField,
-	SheetTextArea,
-	TagRow,
-} from "./trip-module-form-kit";
-import { TripModuleManualEntryCard } from "./trip-module-manual-entry-card";
+	ChoiceRow,
+	FieldGroup,
+	FieldRow,
+	FormError,
+	RecordSheet,
+	SwipeRow,
+} from "@/src/features/bookings/module-kit";
+import {
+	formatCount,
+	formatEnumLabel,
+	formatRelativeDay,
+} from "@/src/lib/format";
 import {
 	getCompactRelatedLabel,
 	getRelatedEntityKey,
@@ -74,20 +68,8 @@ const noteCategoryOptions = [
 	"reminder",
 ] as const;
 
-const actionNoteCategories = new Set([
-	"booking",
-	"document",
-	"reminder",
-	"safety",
-]);
-
-const formatNoteCategoryLabel = (value: string) =>
-	value
-		.replaceAll("_", " ")
-		.split(" ")
-		.filter(Boolean)
-		.map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
-		.join(" ");
+const BODY_MIN_HEIGHT = 160;
+const BODY_FONT_SIZE = 17;
 
 const getNoteRelatedLabel = (
 	note: Doc<"tripNotes">,
@@ -136,57 +118,41 @@ const getNoteRelatedHref = ({
 	}
 };
 
-function NoteCategoryPicker({
-	onChange,
+const getFirstLine = (body: string) =>
+	body
+		.split("\n")
+		.map((line) => line.trim())
+		.find(Boolean);
+
+function NoteBodyField({
+	onChangeText,
 	value,
 }: {
-	onChange: (value: string) => void;
+	onChangeText: (value: string) => void;
 	value: string;
 }) {
-	return (
-		<ChoiceChips label="Category">
-			{noteCategoryOptions.map((category) => (
-				<Chip
-					key={category}
-					label={formatNoteCategoryLabel(category)}
-					onPress={() => onChange(category)}
-					selected={value === category}
-				/>
-			))}
-		</ChoiceChips>
-	);
-}
-
-function NoteRelatedEntityPicker({
-	onChange,
-	options,
-	value,
-}: {
-	onChange: (value: string) => void;
-	options: TripRelatedEntityOption[];
-	value: string;
-}) {
-	const visibleOptions = options.slice(0, 12);
+	const { palette } = useUITheme();
+	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
 
 	return (
-		<View style={{ gap: spacing.sm }}>
-			<ChoiceChips label="Link to trip item">
-				<Chip label="None" onPress={() => onChange("")} selected={!value} />
-				{visibleOptions.map((option) => (
-					<Chip
-						key={option.key}
-						label={getCompactRelatedLabel(option.label)}
-						onPress={() => onChange(option.key)}
-						selected={value === option.key}
-					/>
-				))}
-			</ChoiceChips>
-			{options.length > visibleOptions.length ? (
-				<AppText tone="tertiary" variant="footnote">
-					Showing the most relevant {visibleOptions.length} trip items.
-				</AppText>
-			) : null}
-		</View>
+		<TextInput
+			accessibilityLabel="Note"
+			multiline={true}
+			onBlur={onBlur}
+			onChangeText={onChangeText}
+			onFocus={onFocus}
+			placeholder="What should the group remember?"
+			placeholderTextColor={palette.inkTertiary}
+			style={{
+				color: palette.ink,
+				fontSize: BODY_FONT_SIZE,
+				minHeight: BODY_MIN_HEIGHT,
+				paddingHorizontal: spacing.lg,
+				paddingTop: spacing.md,
+				textAlignVertical: "top",
+			}}
+			value={value}
+		/>
 	);
 }
 
@@ -196,7 +162,9 @@ function NoteSheet({
 	isOpen,
 	isSaving,
 	mode,
+	onDelete,
 	onOpenChange,
+	onOpenLinked,
 	onSubmit,
 	onUpdateForm,
 	relatedEntityOptions,
@@ -206,147 +174,84 @@ function NoteSheet({
 	isOpen: boolean;
 	isSaving: boolean;
 	mode: "create" | "edit";
+	onDelete: (() => void) | null;
 	onOpenChange: (isOpen: boolean) => void;
+	onOpenLinked: (() => void) | null;
 	onSubmit: () => void;
 	onUpdateForm: (key: keyof NoteForm, value: string) => void;
 	relatedEntityOptions: TripRelatedEntityOption[];
 }) {
+	const visibleOptions = relatedEntityOptions.slice(0, 12);
+	const linkLabels = new Map(
+		visibleOptions.map((option) => [
+			option.key,
+			getCompactRelatedLabel(option.label),
+		])
+	);
+
 	return (
-		<FormSheet
-			description="Save decisions, constraints, reminders, and shared context."
+		<RecordSheet
 			errorMessage={errorMessage}
 			isOpen={isOpen}
 			isSaving={isSaving}
 			onOpenChange={onOpenChange}
-			onSubmit={onSubmit}
-			saveLabel={mode === "edit" ? "Save note" : "Add note"}
-			snapPoint="76%"
-			title={mode === "edit" ? "Edit trip note" : "Add trip note"}
+			onSave={onSubmit}
+			title={mode === "edit" ? "Edit note" : "New note"}
 		>
-			<SheetField
-				label="Title"
-				onChangeText={(value) => onUpdateForm("title", value)}
-				placeholder="Visa reminder"
-				value={form.title}
-			/>
-			<NoteCategoryPicker
-				onChange={(value) => onUpdateForm("category", value)}
-				value={form.category}
-			/>
-			<NoteRelatedEntityPicker
-				onChange={(value) => onUpdateForm("relatedEntityKey", value)}
-				options={relatedEntityOptions}
-				value={form.relatedEntityKey}
-			/>
-			<SheetTextArea
-				label="Note"
-				onChangeText={(value) => onUpdateForm("body", value)}
-				placeholder="What should the group remember?"
-				value={form.body}
-			/>
-		</FormSheet>
-	);
-}
-
-function NoteCard({
-	isPending,
-	note,
-	onDelete,
-	onEdit,
-	relatedEntityHref,
-	relatedEntityLabel,
-}: {
-	isPending: boolean;
-	note: Doc<"tripNotes">;
-	onDelete: () => void;
-	onEdit: () => void;
-	relatedEntityHref: Href | null;
-	relatedEntityLabel: string | null;
-}) {
-	return (
-		<Animated.View
-			entering={FadeInDown.duration(220)}
-			style={{ opacity: isPending ? 0.6 : 1 }}
-		>
-			<Card padding="md">
-				<View
-					style={{
-						alignItems: "flex-start",
-						flexDirection: "row",
-						gap: spacing.md,
-					}}
-				>
-					<View style={{ flex: 1, gap: spacing.sm, minWidth: 0 }}>
-						<TagRow
-							labels={[
-								formatNoteCategoryLabel(note.category),
-								...(relatedEntityLabel ? [relatedEntityLabel] : []),
-							]}
+			<FieldGroup>
+				<FieldRow
+					label="Title"
+					onChangeText={(value) => onUpdateForm("title", value)}
+					placeholder="Visa reminder"
+					value={form.title}
+				/>
+				<NoteBodyField
+					onChangeText={(value) => onUpdateForm("body", value)}
+					value={form.body}
+				/>
+			</FieldGroup>
+			<FieldGroup>
+				<ChoiceRow
+					format={formatEnumLabel}
+					label="Category"
+					onChange={(value) => onUpdateForm("category", value)}
+					options={noteCategoryOptions}
+					value={form.category}
+				/>
+				{visibleOptions.length > 0 ? (
+					<ChoiceRow
+						format={(value) => linkLabels.get(value) ?? "None"}
+						label="Linked to"
+						onChange={(value) => onUpdateForm("relatedEntityKey", value)}
+						options={["", ...visibleOptions.map((option) => option.key)]}
+						value={form.relatedEntityKey}
+					/>
+				) : null}
+			</FieldGroup>
+			{onOpenLinked || onDelete ? (
+				<ListGroup>
+					{onOpenLinked ? (
+						<ListRow
+							leading={<Icon name="link-outline" size={20} tone="secondary" />}
+							onPress={onOpenLinked}
+							title="Open linked item"
 						/>
-						<AppText variant="headline">{note.title}</AppText>
-						<AppText tone="secondary" variant="subhead">
-							{note.body}
-						</AppText>
-						{relatedEntityHref ? (
-							<Link asChild href={relatedEntityHref}>
-								<SecondaryButton
-									fullWidth={false}
-									icon="open-outline"
-									label="Open linked item"
-									onPress={() => undefined}
-									variant="plain"
-								/>
-							</Link>
-						) : null}
-					</View>
-					<Menu>
-						<Menu.Trigger asChild={true}>
-							<MenuTrigger label="Note options" />
-						</Menu.Trigger>
-						<Menu.Portal>
-							<Menu.Overlay />
-							<Menu.Content
-								align="end"
-								className={menuContentClassName}
-								offset={8}
-								placement="bottom"
-								presentation="popover"
-								width={200}
-							>
-								<Menu.Item
-									accessibilityLabel="Edit note"
-									className={menuItemClassName}
-									isAnimatedStyleActive={false}
-									onPress={onEdit}
-								>
-									<MenuIcon name="create-outline" />
-									<Menu.ItemTitle className="text-base">
-										Edit note
-									</Menu.ItemTitle>
-								</Menu.Item>
-								<MenuDivider />
-								<Menu.Item
-									accessibilityLabel="Delete note"
-									className={menuItemClassName}
-									isAnimatedStyleActive={false}
-									isDisabled={isPending}
-									onPress={onDelete}
-								>
-									<MenuIcon destructive={true} name="trash-outline" />
-									<Menu.ItemTitle className="text-base text-danger">
-										Delete note
-									</Menu.ItemTitle>
-								</Menu.Item>
-							</Menu.Content>
-						</Menu.Portal>
-					</Menu>
-				</View>
-			</Card>
-		</Animated.View>
+					) : null}
+					{onDelete ? (
+						<ListRow
+							destructive={true}
+							onPress={onDelete}
+							title="Delete note"
+						/>
+					) : null}
+				</ListGroup>
+			) : null}
+		</RecordSheet>
 	);
 }
 
 export function TripNotesScreen() {
+	const router = useRouter();
 	const tripId = useTripIdParam();
 	const workspace = useQuery(
 		api.tripWorkspace.getTripWorkspace,
@@ -362,23 +267,26 @@ export function TripNotesScreen() {
 	);
 	const [isSheetOpen, setIsSheetOpen] = useState(false);
 	const [isSaving, setIsSaving] = useState(false);
-	const [pendingNoteId, setPendingNoteId] = useState<Id<"tripNotes"> | null>(
+	const [selectedCategory, setSelectedCategory] = useState("all");
+	const [screenErrorMessage, setScreenErrorMessage] = useState<string | null>(
 		null
 	);
-	const [noteErrorMessage, setNoteErrorMessage] = useState<string | null>(null);
+	const [sheetErrorMessage, setSheetErrorMessage] = useState<string | null>(
+		null
+	);
 
 	const updateForm = (key: keyof NoteForm, value: string) => {
-		setNoteErrorMessage(null);
+		setSheetErrorMessage(null);
 		setForm((currentForm) => ({ ...currentForm, [key]: value }));
 	};
 	const openCreateSheet = () => {
-		setNoteErrorMessage(null);
+		setSheetErrorMessage(null);
 		setEditingNoteId(null);
 		setForm(initialNoteForm);
 		setIsSheetOpen(true);
 	};
 	const openEditSheet = (note: Doc<"tripNotes">) => {
-		setNoteErrorMessage(null);
+		setSheetErrorMessage(null);
 		setEditingNoteId(note._id);
 		setForm({
 			body: note.body,
@@ -391,16 +299,33 @@ export function TripNotesScreen() {
 		});
 		setIsSheetOpen(true);
 	};
+	const closeSheet = () => {
+		setIsSheetOpen(false);
+		setEditingNoteId(null);
+		setSheetErrorMessage(null);
+		setForm(initialNoteForm);
+	};
 
-	if (!tripId) {
+	if (!tripId || workspace === null) {
 		return (
-			<Container className="px-4 pb-28">
-				<EmptyState
-					description="Open a saved trip before adding notes."
-					icon="document-text-outline"
-					title="Trip not found"
-				/>
-			</Container>
+			<ScreenShell
+				state={{
+					description: "This trip was deleted or is no longer available.",
+					icon: "document-text-outline",
+					kind: "empty",
+					title: "Trip not found",
+				}}
+				title="Notes"
+			/>
+		);
+	}
+
+	if (workspace === undefined) {
+		return (
+			<ScreenShell
+				state={{ kind: "loading", title: "Loading notes" }}
+				title="Notes"
+			/>
 		);
 	}
 
@@ -409,20 +334,14 @@ export function TripNotesScreen() {
 		const body = form.body.trim();
 
 		if (!(title && body)) {
-			setNoteErrorMessage("Add a note title and body.");
+			setSheetErrorMessage("Add a title and some text.");
 			return;
 		}
 
-		setNoteErrorMessage(null);
+		setSheetErrorMessage(null);
 		setIsSaving(true);
 		try {
-			const notePatch: {
-				body: string;
-				category: string;
-				relatedEntityId?: string;
-				relatedEntityType?: string;
-				title: string;
-			} = {
+			const notePatch = {
 				body,
 				category: form.category.trim() || "general",
 				title,
@@ -439,48 +358,37 @@ export function TripNotesScreen() {
 					noteId: editingNoteId,
 				});
 			} else {
-				await createTripNote({
-					...notePatch,
-					...relatedEntityFields,
-					tripId,
-				});
+				await createTripNote({ ...notePatch, ...relatedEntityFields, tripId });
 			}
-			setEditingNoteId(null);
-			setForm(initialNoteForm);
-			setIsSheetOpen(false);
+			closeSheet();
 		} catch {
-			setNoteErrorMessage("Could not save note.");
+			setSheetErrorMessage("Could not save this note. Try again.");
 		} finally {
 			setIsSaving(false);
 		}
 	};
 
 	const handleDeleteNote = async (noteId: Id<"tripNotes">) => {
-		setPendingNoteId(noteId);
+		setScreenErrorMessage(null);
 		try {
 			await deleteTripNote({ noteId });
 		} catch {
-			setNoteErrorMessage("Could not delete note.");
-		} finally {
-			setPendingNoteId(null);
+			setScreenErrorMessage("Could not delete this note. Try again.");
 		}
 	};
 
-	if (workspace === null) {
-		return (
-			<Container className="px-4 pb-28">
-				<EmptyState
-					description="This trip was deleted or is no longer available."
-					icon="document-text-outline"
-					title="Trip not found"
-				/>
-			</Container>
-		);
-	}
-
-	if (workspace === undefined) {
-		return <LoadingState title="Loading notes" />;
-	}
+	const confirmDeleteNote = async (note: Doc<"tripNotes">) => {
+		const confirmed = await confirm({
+			confirmLabel: "Delete note",
+			destructive: true,
+			message: `${note.title} will be removed from this trip.`,
+			title: "Delete note?",
+		});
+		if (confirmed) {
+			closeSheet();
+			await handleDeleteNote(note._id);
+		}
+	};
 
 	const notes = workspace.notes;
 	const relatedEntityOptions = getTripRelatedEntityOptions(workspace, {
@@ -489,217 +397,149 @@ export function TripNotesScreen() {
 		vaultItemLimit: 6,
 	});
 	const relatedEntityLabelByKey = getTripRelatedEntityLabelByKey(workspace);
-	const latestNote = notes.at(0) ?? null;
-	const categoryCount = new Set(notes.map((note) => note.category)).size;
-	const actionNoteCount = notes.filter((note) =>
-		actionNoteCategories.has(note.category)
-	).length;
-	const linkedNoteCount = notes.filter(
-		(note) => note.relatedEntityId && note.relatedEntityType
-	).length;
-	const latestNoteRelatedLabel = latestNote
-		? getNoteRelatedLabel(latestNote, relatedEntityLabelByKey)
-		: null;
-	const latestNoteRelatedHref = latestNote
+	const categories = noteCategoryOptions.filter((category) =>
+		notes.some((note) => note.category === category)
+	);
+	const activeCategory = categories.some(
+		(category) => category === selectedCategory
+	)
+		? selectedCategory
+		: "all";
+	const visibleNotes = notes.filter(
+		(note) => activeCategory === "all" || note.category === activeCategory
+	);
+	const editingNote = notes.find((note) => note._id === editingNoteId) ?? null;
+	const editingHref = editingNote
 		? getNoteRelatedHref({
-				relatedEntityType: latestNote.relatedEntityType,
+				relatedEntityType: editingNote.relatedEntityType,
 				tripId,
 			})
 		: null;
 
-	const confirmDeleteNote = async (note: Doc<"tripNotes">) => {
-		const confirmed = await confirm({
-			confirmLabel: "Delete",
-			destructive: true,
-			message: "This note will be removed from the trip.",
-			title: `Delete ${note.title}?`,
-		});
-		if (confirmed) {
-			await handleDeleteNote(note._id);
-		}
-	};
+	const summary =
+		notes.length > 0
+			? `${formatCount(notes.length, "note")}${categories.length > 1 ? ` in ${categories.length} categories` : ""}`
+			: undefined;
 
 	return (
-		<TripModuleScreenFrame
-			activeTab="notes"
-			headerAction={
-				<NavigationIconButton
-					accessibilityLabel="Add trip note"
-					icon="add"
-					onPress={openCreateSheet}
-				/>
-			}
-			tripId={tripId}
-		>
-			<Container
-				className="px-4 pb-28"
-				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
+		<>
+			<ScreenShell
+				actions={
+					notes.length > 0
+						? [
+								{
+									icon: "add",
+									key: "add",
+									label: "Add trip note",
+									onPress: openCreateSheet,
+									type: "button",
+								},
+							]
+						: []
+				}
+				summary={summary}
+				title="Notes"
 			>
-				<View style={{ gap: spacing.lg, paddingBottom: spacing.lg }}>
-					<TripModuleManualEntryCard
-						description="Write decisions, constraints, reminders, and group context directly into the trip workspace."
-						moduleLabel="notes"
-						onPrimaryPress={openCreateSheet}
-						primaryActionIcon="document-text-outline"
-						primaryActionLabel="Add note"
-					/>
-
-					<Card>
-						<View style={{ gap: spacing.lg }}>
-							<SectionHeader eyebrow="Decision notebook" title="Trip context" />
-							<AppText tone="secondary" variant="subhead">
-								Keep decisions, constraints, and reminders close to planning.
-							</AppText>
-							<TagRow
-								labels={[
-									`${notes.length} notes`,
-									`${categoryCount} categories`,
-									`${actionNoteCount} action notes`,
-									`${linkedNoteCount} linked`,
-								]}
-							/>
-							<LatestNoteSummary
-								latestNote={latestNote}
-								latestNoteRelatedHref={latestNoteRelatedHref}
-								latestNoteRelatedLabel={latestNoteRelatedLabel}
-								onCreate={openCreateSheet}
-								onReview={() => {
-									if (latestNote) {
-										openEditSheet(latestNote);
-									}
-								}}
-							/>
-						</View>
-					</Card>
-
-					{notes.length === 0 ? (
-						<EmptyState
-							action={{
-								label: "Add note",
-								onPress: openCreateSheet,
-							}}
-							description="Save group decisions, dietary notes, meeting details, or constraints."
-							icon="document-text-outline"
-							title="No notes yet"
+				{categories.length > 1 ? (
+					<ScrollView
+						contentContainerStyle={{ gap: spacing.sm }}
+						horizontal={true}
+						showsHorizontalScrollIndicator={false}
+						style={{ minHeight: metrics.minTarget }}
+					>
+						<Chip
+							label="All"
+							onPress={() => setSelectedCategory("all")}
+							selected={activeCategory === "all"}
 						/>
-					) : (
-						<View style={{ gap: spacing.md }}>
-							{notes.map((note) => (
-								<NoteCard
-									isPending={pendingNoteId === note._id}
-									key={note._id}
-									note={note}
-									onDelete={() => {
-										confirmDeleteNote(note).catch(() => undefined);
-									}}
-									onEdit={() => openEditSheet(note)}
-									relatedEntityHref={getNoteRelatedHref({
-										relatedEntityType: note.relatedEntityType,
-										tripId,
-									})}
-									relatedEntityLabel={getNoteRelatedLabel(
-										note,
-										relatedEntityLabelByKey
-									)}
-								/>
-							))}
-						</View>
-					)}
-				</View>
-				<NoteSheet
-					errorMessage={noteErrorMessage}
-					form={form}
-					isOpen={isSheetOpen}
-					isSaving={isSaving}
-					mode={editingNoteId ? "edit" : "create"}
-					onOpenChange={(isOpen) => {
-						setIsSheetOpen(isOpen);
-						if (!isOpen) {
-							setEditingNoteId(null);
-							setNoteErrorMessage(null);
-							setForm(initialNoteForm);
-						}
-					}}
-					onSubmit={() => {
-						handleSaveNote().catch(() => undefined);
-					}}
-					onUpdateForm={updateForm}
-					relatedEntityOptions={relatedEntityOptions}
-				/>
-			</Container>
-		</TripModuleScreenFrame>
-	);
-}
-
-function LatestNoteSummary({
-	latestNote,
-	latestNoteRelatedHref,
-	latestNoteRelatedLabel,
-	onCreate,
-	onReview,
-}: {
-	latestNote: Doc<"tripNotes"> | null;
-	latestNoteRelatedHref: Href | null;
-	latestNoteRelatedLabel: string | null;
-	onCreate: () => void;
-	onReview: () => void;
-}) {
-	const { palette } = useUITheme();
-
-	return (
-		<View
-			style={{
-				backgroundColor: palette.fill,
-				borderRadius: radius.group,
-				gap: spacing.md,
-				padding: spacing.lg,
-			}}
-		>
-			<View style={{ gap: 2 }}>
-				<AppText tone="secondary" variant="eyebrow">
-					Latest context
-				</AppText>
-				<AppText numberOfLines={1} variant="headline">
-					{latestNote?.title ?? "No context captured yet"}
-				</AppText>
-			</View>
-			<AppText tone="secondary" variant="subhead">
-				{latestNote
-					? latestNote.body
-					: "Add the first trip note to preserve group decisions, constraints, or reminders."}
-			</AppText>
-			{latestNote ? (
-				<View style={{ gap: spacing.md }}>
-					<TagRow
-						labels={[
-							formatNoteCategoryLabel(latestNote.category),
-							...(latestNoteRelatedLabel ? [latestNoteRelatedLabel] : []),
-						]}
-					/>
-					<SecondaryButton
-						icon="create-outline"
-						label="Review latest"
-						onPress={onReview}
-					/>
-					{latestNoteRelatedHref ? (
-						<Link asChild href={latestNoteRelatedHref}>
-							<SecondaryButton
-								icon="open-outline"
-								label="Open latest link"
-								onPress={() => undefined}
-								variant="plain"
+						{categories.map((category) => (
+							<Chip
+								key={category}
+								label={formatEnumLabel(category)}
+								onPress={() => setSelectedCategory(category)}
+								selected={activeCategory === category}
 							/>
-						</Link>
-					) : null}
-				</View>
-			) : (
-				<PrimaryButton
-					fullWidth={false}
-					icon="add-outline"
-					label="Add first note"
-					onPress={onCreate}
-				/>
-			)}
-		</View>
+						))}
+					</ScrollView>
+				) : null}
+				<FormError message={screenErrorMessage} />
+				{notes.length === 0 ? (
+					<EmptyState
+						action={{ label: "Add note", onPress: openCreateSheet }}
+						description="Save decisions, reminders and anything the group should remember."
+						icon="document-text-outline"
+						title="No notes yet"
+					/>
+				) : (
+					<ListGroup>
+						{visibleNotes.map((note) => {
+							const relatedLabel = getNoteRelatedLabel(
+								note,
+								relatedEntityLabelByKey
+							);
+
+							return (
+								<SwipeRow
+									key={note._id}
+									trailing={{
+										icon: "trash-outline",
+										label: "Delete",
+										onPress: () => {
+											confirmDeleteNote(note).catch(() => undefined);
+										},
+										tone: "danger",
+									}}
+								>
+									<ListRow
+										accessibilityLabel={`${note.title}. Edit`}
+										onPress={() => openEditSheet(note)}
+										showChevron={false}
+										subtitle={
+											[getFirstLine(note.body), relatedLabel]
+												.filter(Boolean)
+												.join(" · ") || undefined
+										}
+										title={note.title}
+										value={formatRelativeDay(note.updatedAt)}
+									/>
+								</SwipeRow>
+							);
+						})}
+					</ListGroup>
+				)}
+			</ScreenShell>
+			<NoteSheet
+				errorMessage={sheetErrorMessage}
+				form={form}
+				isOpen={isSheetOpen}
+				isSaving={isSaving}
+				mode={editingNoteId ? "edit" : "create"}
+				onDelete={
+					editingNote
+						? () => {
+								confirmDeleteNote(editingNote).catch(() => undefined);
+							}
+						: null
+				}
+				onOpenChange={(isOpen) => {
+					if (!isOpen) {
+						closeSheet();
+					}
+				}}
+				onOpenLinked={
+					editingHref
+						? () => {
+								closeSheet();
+								router.push(editingHref);
+							}
+						: null
+				}
+				onSubmit={() => {
+					handleSaveNote().catch(() => undefined);
+				}}
+				onUpdateForm={updateForm}
+				relatedEntityOptions={relatedEntityOptions}
+			/>
+		</>
 	);
 }

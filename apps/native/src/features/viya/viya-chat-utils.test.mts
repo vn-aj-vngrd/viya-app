@@ -91,11 +91,13 @@ describe("Viya back route", () => {
 	});
 
 	test("falls back to the launching tab route", () => {
-		expect(getViyaBackRoute({ fromTab: "trips" })).toBe("/(app)/(tabs)/trips");
+		expect(getViyaBackRoute({ fromTab: "trips" })).toBe(
+			"/(app)/(tabs)/(trips)/trips"
+		);
 	});
 
 	test("uses home when no launch context is present", () => {
-		expect(getViyaBackRoute({})).toBe("/(app)/(tabs)");
+		expect(getViyaBackRoute({})).toBe("/(app)/(tabs)/(discover)");
 	});
 
 	test("pops stack-launched app routes instead of replacing with duplicates", () => {

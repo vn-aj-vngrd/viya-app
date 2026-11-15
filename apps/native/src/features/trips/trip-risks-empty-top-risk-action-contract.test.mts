@@ -8,14 +8,14 @@ const readWorkspaceFile = (path: string) =>
 	readFileSync(resolve(rootPath, path), "utf8");
 
 describe("trip risks empty top risk action contract", () => {
-	it("keeps the empty top risk summary connected to risk capture", () => {
+	it("keeps the empty risks list connected to risk capture", () => {
 		const source = readWorkspaceFile(
-			"apps/native/app/(app)/trips/[tripId]/risks.tsx"
+			"apps/native/src/features/readiness/readiness-screen.tsx"
 		);
 
-		expect(source).toContain("No active risk");
-		expect(source).toContain("onCreateTopRisk");
-		expect(source).toContain("Add top risk");
-		expect(source).toContain("openCreateSheet");
+		expect(source).toContain("No risks for this trip");
+		expect(source).toContain("onAddRisk");
+		expect(source).toContain('label: "Add risk"');
+		expect(source).toContain('openSheet({ kind: "risk" })');
 	});
 });

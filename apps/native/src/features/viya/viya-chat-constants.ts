@@ -51,7 +51,7 @@ export const expandedComposerInputMinHeight = 220;
 export const CHAT_MODE_OPTIONS = [
 	{
 		accent: "#0A84FF",
-		description: "General travel help, files, decisions, and follow-ups.",
+		description: "Questions, files and ideas not tied to a trip.",
 		emptyDescription:
 			"Ask travel questions, upload files for text extraction, compare options, or turn loose notes into next steps.",
 		emptyTitle: "Ask Viya anything travel",
@@ -65,7 +65,8 @@ export const CHAT_MODE_OPTIONS = [
 
 export const TRIP_CONTEXT_MODE_OPTION = {
 	accent: "#FF9F0A",
-	description: "Agent help for itinerary, budget, vault, and readiness.",
+	description:
+		"Questions about one trip: itinerary, budget, Vault and readiness.",
 	emptyDescription:
 		"Ask Viya to file uploads, find passports or confirmations, generate itinerary drafts, centralize budget, and check trip status.",
 	emptyTitle: "Let Viya work on this trip",
@@ -90,7 +91,7 @@ export const chatPromptSuggestions = [
 		icon: "sparkles-outline",
 		prompt: "Help me understand this travel question and suggest next steps.",
 		soft: "rgba(10, 132, 255, 0.12)",
-		summary: "Get a concise travel answer.",
+		summary: "Short, practical answer.",
 		title: "Ask a travel question",
 	},
 	{
@@ -99,7 +100,7 @@ export const chatPromptSuggestions = [
 		prompt:
 			"I uploaded a file. Extract the useful travel details and tell me what to do next.",
 		soft: "rgba(48, 209, 88, 0.12)",
-		summary: "Use extracted file context.",
+		summary: "Read a ticket or receipt.",
 		title: "Work from a file",
 	},
 	{
@@ -107,7 +108,7 @@ export const chatPromptSuggestions = [
 		icon: "wallet-outline",
 		prompt: "Help me estimate costs and trade-offs for this travel decision.",
 		soft: "rgba(255, 159, 10, 0.14)",
-		summary: "Compare budget impact.",
+		summary: "Rough costs in PHP.",
 		title: "Estimate costs",
 	},
 	{
@@ -115,7 +116,7 @@ export const chatPromptSuggestions = [
 		icon: "git-compare-outline",
 		prompt: "Compare these travel options and recommend the practical choice.",
 		soft: "rgba(191, 90, 242, 0.12)",
-		summary: "Pick the best option.",
+		summary: "Pick one and say why.",
 		title: "Compare options",
 	},
 ] as const satisfies readonly PromptSuggestion[];
@@ -124,28 +125,19 @@ export const planPromptSuggestions = [
 	{
 		accent: "#BF5AF2",
 		icon: "map-outline",
-		prompt:
-			"Help me start planning a trip. Ask me one question at a time before drafting it.",
+		prompt: "Help me plan a trip. Start with the most important question.",
 		soft: "rgba(191, 90, 242, 0.12)",
-		summary: "Start with the first decision.",
-		title: "Plan the first night",
+		summary: "One question at a time.",
+		title: "Plan a new trip",
 	},
 	{
 		accent: "#0A84FF",
-		icon: "git-compare-outline",
-		prompt: "Help me plan a trip. Start with the most important question.",
-		soft: "rgba(10, 132, 255, 0.12)",
-		summary: "Answer one question at a time.",
-		title: "Start a guided plan",
-	},
-	{
-		accent: "#30D158",
-		icon: "checkmark-done-outline",
+		icon: "sunny-outline",
 		prompt:
-			"Walk me through the planning decisions for a beach trip, one question at a time.",
-		soft: "rgba(48, 209, 88, 0.12)",
-		summary: "Check weak spots before booking.",
-		title: "Pressure-test the plan",
+			"Help me plan a beach trip in the Philippines. Ask me one question at a time before drafting it.",
+		soft: "rgba(10, 132, 255, 0.12)",
+		summary: "Islands, beaches and slow days.",
+		title: "Plan a beach trip",
 	},
 	{
 		accent: "#FF9F0A",
@@ -153,8 +145,17 @@ export const planPromptSuggestions = [
 		prompt:
 			"Help me plan a rain-ready itinerary. Ask only the next question you need.",
 		soft: "rgba(255, 159, 10, 0.14)",
-		summary: "Build a lower-risk fallback.",
-		title: "Add a backup plan",
+		summary: "Indoor options and backups.",
+		title: "Plan around rain",
+	},
+	{
+		accent: "#30D158",
+		icon: "wallet-outline",
+		prompt:
+			"Help me plan a trip on a fixed budget in PHP. Ask for the total first.",
+		soft: "rgba(48, 209, 88, 0.12)",
+		summary: "Set a total and keep to it.",
+		title: "Plan on a budget",
 	},
 ] as const satisfies readonly PromptSuggestion[];
 
@@ -165,17 +166,17 @@ export const tripPromptSuggestions = [
 		prompt:
 			"Find passport, booking, ticket, and document gaps in this trip. Tell me what is already in the vault and what still needs to be uploaded or linked.",
 		soft: "rgba(255, 159, 10, 0.14)",
-		summary: "Audit saved files and missing proof.",
-		title: "Organize vault",
+		summary: "Tickets, IDs and confirmations.",
+		title: "Find missing documents",
 	},
 	{
 		accent: "#0A84FF",
 		icon: "calendar-outline",
 		prompt:
-			"Generate a simple Wanderlog-style itinerary draft for this trip with days, time blocks, places, meals, transfers, and realistic pacing.",
+			"Generate a simple itinerary draft for this trip with days, time blocks, places, meals, transfers, and realistic pacing.",
 		soft: "rgba(10, 132, 255, 0.12)",
-		summary: "Draft days and stops.",
-		title: "Build itinerary",
+		summary: "Days, times and places.",
+		title: "Draft the itinerary",
 	},
 	{
 		accent: "#30D158",
@@ -183,8 +184,8 @@ export const tripPromptSuggestions = [
 		prompt:
 			"Centralize the budget for this trip. Show booked costs, manual expenses, remaining spend, daily safe spend, and what needs a receipt or confirmation.",
 		soft: "rgba(48, 209, 88, 0.12)",
-		summary: "Review spend in one place.",
-		title: "Budget center",
+		summary: "Spent, left and per day.",
+		title: "Check the budget",
 	},
 	{
 		accent: "#BF5AF2",
@@ -192,15 +193,15 @@ export const tripPromptSuggestions = [
 		prompt:
 			"Based on the current trip status, what is the readiness state and what should Viya fix first?",
 		soft: "rgba(191, 90, 242, 0.12)",
-		summary: "Use current status to pick the next action.",
-		title: "Check readiness",
+		summary: "The most urgent open item.",
+		title: "What to do next",
 	},
 ] as const satisfies readonly PromptSuggestion[];
 
 export const SLASH_COMMAND_OPTIONS = [
 	{
 		accent: "#0A84FF",
-		description: "Switch to general travel chat.",
+		description: "Questions not tied to one trip.",
 		icon: "sparkles-outline",
 		id: "chat",
 		keywords: ["general", "ask", "question", "help"],
@@ -210,7 +211,7 @@ export const SLASH_COMMAND_OPTIONS = [
 	{
 		action: "newChat",
 		accent: "#71717A",
-		description: "Start fresh in the current mode.",
+		description: "Start a new conversation.",
 		icon: "create-outline",
 		id: "new",
 		keywords: ["clear", "reset", "fresh"],
@@ -218,7 +219,7 @@ export const SLASH_COMMAND_OPTIONS = [
 	},
 	{
 		accent: "#FF9F0A",
-		description: "Audit bookings and documents in the vault.",
+		description: "Find missing tickets, IDs and confirmations.",
 		icon: "folder-open-outline",
 		id: "vault",
 		keywords: ["passport", "files", "documents", "booking", "uploads"],
@@ -230,19 +231,19 @@ export const SLASH_COMMAND_OPTIONS = [
 	},
 	{
 		accent: "#0A84FF",
-		description: "Generate or refine the trip itinerary.",
+		description: "Draft or change the day-by-day plan.",
 		icon: "calendar-outline",
 		id: "itinerary",
 		keywords: ["wanderlog", "route", "days", "stops", "replan"],
 		label: "/itinerary",
 		mode: "trip",
 		prompt:
-			"Generate a simple Wanderlog-style itinerary draft for this trip with days, time blocks, places, meals, transfers, and realistic pacing.",
+			"Generate a simple itinerary draft for this trip with days, time blocks, places, meals, transfers, and realistic pacing.",
 		requiresTrip: true,
 	},
 	{
 		accent: "#30D158",
-		description: "Review centralized trip spend.",
+		description: "Show spent, left and the daily amount.",
 		icon: "wallet-outline",
 		id: "budget",
 		keywords: ["spend", "cost", "receipt", "money", "expenses"],
@@ -254,7 +255,7 @@ export const SLASH_COMMAND_OPTIONS = [
 	},
 	{
 		accent: "#BF5AF2",
-		description: "Check status-based readiness.",
+		description: "List what is still to do before the trip.",
 		icon: "shield-checkmark-outline",
 		id: "readiness",
 		keywords: ["checklist", "gaps", "status", "ready"],
@@ -266,7 +267,7 @@ export const SLASH_COMMAND_OPTIONS = [
 	},
 	{
 		accent: "#0A84FF",
-		description: "Let Viya help create a trip.",
+		description: "Draft a new trip from this chat.",
 		icon: "help-circle-outline",
 		id: "ask",
 		keywords: ["questions", "guided", "intake", "create", "trip"],

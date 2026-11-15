@@ -4,7 +4,7 @@ import type { VaultExtraction } from "@viya-app/domain";
 export interface PendingTripSyncUpload {
 	fileName: string;
 	fileSize: number;
-	kind: "booking" | "document" | "receipt" | "other";
+	kind: "booking" | "document" | "momentPhoto" | "receipt" | "other";
 	mimeType: string;
 	storageId: Id<"_storage">;
 }

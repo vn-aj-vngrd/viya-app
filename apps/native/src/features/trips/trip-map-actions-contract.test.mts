@@ -16,7 +16,7 @@ describe("trip map action contract", () => {
 			"apps/native/src/features/trips/trip-itinerary-screen.tsx"
 		);
 		const bookingSource = readWorkspaceFile(
-			"apps/native/src/features/bookings/booking-target-card.tsx"
+			"apps/native/src/features/bookings/booking-hub-screen.tsx"
 		);
 		const travelModeSource = readWorkspaceFile(
 			"apps/native/src/features/trips/trip-travel-mode-screen.tsx"
@@ -25,16 +25,18 @@ describe("trip map action contract", () => {
 			"apps/native/src/features/trips/trip-moments-screen.tsx"
 		);
 
-		for (const source of [
-			placesSource,
-			itinerarySource,
-			bookingSource,
-			travelModeSource,
-			momentsSource,
-		]) {
+		const sourcesWithMapLabel: [string, string][] = [
+			[placesSource, "Open Maps"],
+			[itinerarySource, "Open Maps"],
+			[bookingSource, "Open in Maps"],
+			[travelModeSource, "Directions"],
+			[momentsSource, "Open Maps"],
+		];
+
+		for (const [source, mapLabel] of sourcesWithMapLabel) {
 			expect(source).toContain("getTripMapSearchUrl");
 			expect(source).toContain("hasTripMapSearchTarget");
-			expect(source).toContain("Open Maps");
+			expect(source).toContain(mapLabel);
 		}
 	});
 });

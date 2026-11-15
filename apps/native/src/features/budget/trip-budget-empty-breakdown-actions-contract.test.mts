@@ -13,10 +13,10 @@ describe("trip budget header action contract", () => {
 			"apps/native/src/features/budget/trip-budget-screen.tsx"
 		);
 
-		expect(source).toContain('accessibilityLabel="Add expense"');
-		expect(source).toContain('icon="add"');
+		expect(source).toContain('label: "Add expense"');
+		expect(source).toContain('icon: "add"');
 		expect(source).toContain("ExpenseFormSheet");
-		expect(source).toContain("BottomSheet.Content");
+		expect(source).toContain("RecordSheet");
 		expect(source).toContain("Add expense");
 		expect(source).toContain("setExpenseForm(initialExpenseForm())");
 	});

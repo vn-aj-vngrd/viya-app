@@ -1,4 +1,0 @@
-interface:
-  display_name: "Viya Apple HeroUI Native UI"
-  short_description: "Design consistent Apple-style Viya screens"
-  default_prompt: "Use $viya-apple-heroui-native-ui to build or refine a Viya Native screen with HeroUI Native."

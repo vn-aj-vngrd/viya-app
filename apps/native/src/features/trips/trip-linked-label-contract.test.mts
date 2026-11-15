@@ -5,8 +5,8 @@ const notesScreenSource = readFileSync(
 	"apps/native/src/features/trips/trip-notes-screen.tsx",
 	"utf8"
 );
-const risksScreenSource = readFileSync(
-	"apps/native/app/(app)/trips/[tripId]/risks.tsx",
+const readinessScreenSource = readFileSync(
+	"apps/native/src/features/readiness/readiness-screen.tsx",
 	"utf8"
 );
 const limitedOptionsLabelMapPattern =
@@ -14,7 +14,7 @@ const limitedOptionsLabelMapPattern =
 
 describe("trip linked entity labels", () => {
 	it("uses the full workspace label map instead of limited picker options", () => {
-		for (const source of [notesScreenSource, risksScreenSource]) {
+		for (const source of [notesScreenSource, readinessScreenSource]) {
 			expect(source).toContain("getTripRelatedEntityLabelByKey");
 			expect(source).not.toMatch(limitedOptionsLabelMapPattern);
 		}

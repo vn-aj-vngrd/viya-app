@@ -1,37 +1,33 @@
-import { Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
+import { addDaysToKey, getVaultCounts } from "@viya-app/domain";
 import { useMutation, useQuery } from "convex/react";
-import type { Href } from "expo-router";
-import { Link } from "expo-router";
-import { BottomSheet } from "heroui-native";
+import { type Href, useRouter } from "expo-router";
 import { useState } from "react";
-import { Linking, ScrollView, View } from "react-native";
-import Animated, { FadeIn } from "react-native-reanimated";
+import { ActivityIndicator, Linking, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Container } from "@/components/container";
-import { NavigationIconButton } from "@/src/components/navigation/navigation-icon-button";
 import {
-	AppText,
+	AppSheet,
 	Chip,
 	EmptyState,
-	LoadingState,
-	PressableScale,
-	SecondaryButton,
+	Icon,
+	type IconName,
+	ListGroup,
+	ListRow,
+	ScreenShell,
 	SheetHeader,
 	spacing,
 	useFeedback,
-	useUITheme,
 } from "@/src/components/ui";
 import { VIYA_ROUTES } from "@/src/constants/routes";
-import { TripModuleScreenFrame } from "@/src/features/trips/trip-module-floating-bar";
 import {
-	ChoiceChips,
-	FieldLabel,
-	FormSheet,
-	InlineMessage,
-	SheetField,
-} from "@/src/features/trips/trip-module-form-kit";
+	ChoiceRow,
+	FieldGroup,
+	FieldRow,
+	FormError,
+	RecordSheet,
+	StatusLabel,
+} from "@/src/features/bookings/module-kit";
 import {
 	getLinkedEntityMutationFields,
 	getRelatedEntityKey,
@@ -41,10 +37,11 @@ import {
 	type TripRelatedEntityOption,
 } from "@/src/features/trips/trip-related-entities";
 import { useTripIdParam } from "@/src/features/trips/use-trip-id-param";
+import { formatCount, formatDay, formatEnumLabel } from "@/src/lib/format";
 import { TripSyncReviewSheet } from "./tripsync-review-sheet";
 import type { PendingTripSyncReview } from "./tripsync-types";
 import { useVaultUpload } from "./use-vault-upload";
-import { VaultPreviewCard } from "./vault-preview-card";
+import { VaultPreviewCard, vaultKindLabels } from "./vault-preview-card";
 
 interface VaultForm {
 	kind: string;
@@ -73,7 +70,7 @@ const vaultKindOptions = [
 type VaultGroup = "all" | "booking" | "document" | "receipt" | "photo";
 
 const vaultGroupOptions = [
-	{ id: "all", label: "All files" },
+	{ id: "all", label: "All" },
 	{ id: "booking", label: "Bookings" },
 	{ id: "document", label: "Documents" },
 	{ id: "receipt", label: "Receipts" },
@@ -82,20 +79,35 @@ const vaultGroupOptions = [
 
 const vaultKinds = new Set<string>(vaultKindOptions);
 
+const vaultSectionLabels: Record<VaultKind, string> = {
+	booking: "Bookings",
+	document: "Documents",
+	momentPhoto: "Photos",
+	noteAttachment: "Attachments",
+	other: "Other",
+	receipt: "Receipts",
+};
+
 const getVaultKind = (value: string): VaultKind => {
 	const kind = value.trim();
 
 	return vaultKinds.has(kind) ? (kind as VaultKind) : "other";
 };
 
-const formatVaultKindLabel = (value: string) =>
-	value
-		.replaceAll("_", " ")
-		.replaceAll(/([a-z])([A-Z])/g, "$1 $2")
-		.split(" ")
-		.filter(Boolean)
-		.map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
-		.join(" ");
+const getVaultGroupKind = (group: VaultGroup): VaultKind | null => {
+	switch (group) {
+		case "booking":
+			return "booking";
+		case "document":
+			return "document";
+		case "receipt":
+			return "receipt";
+		case "photo":
+			return "momentPhoto";
+		default:
+			return null;
+	}
+};
 
 const getVaultRelatedHref = ({
 	relatedEntityType,
@@ -133,40 +145,15 @@ const getVaultRelatedHref = ({
 };
 
 function VaultGroupChip({
-	count,
 	isSelected,
 	label,
 	onPress,
 }: {
-	count: number;
 	isSelected: boolean;
 	label: string;
 	onPress: () => void;
 }) {
-	return (
-		<Chip label={`${label} ${count}`} onPress={onPress} selected={isSelected} />
-	);
-}
-
-function VaultKindPicker({
-	onChange,
-	value,
-}: {
-	onChange: (value: string) => void;
-	value: string;
-}) {
-	return (
-		<ChoiceChips label="Kind">
-			{vaultKindOptions.map((kind) => (
-				<Chip
-					key={kind}
-					label={formatVaultKindLabel(kind)}
-					onPress={() => onChange(kind)}
-					selected={value === kind}
-				/>
-			))}
-		</ChoiceChips>
-	);
+	return <Chip label={label} onPress={onPress} selected={isSelected} />;
 }
 
 function VaultEditSheet({
@@ -174,8 +161,12 @@ function VaultEditSheet({
 	form,
 	isOpen,
 	isSaving,
+	item,
 	linkOptions,
+	onDelete,
 	onOpenChange,
+	onOpenFile,
+	onOpenLinked,
 	onSubmit,
 	onUpdateForm,
 }: {
@@ -183,95 +174,102 @@ function VaultEditSheet({
 	form: VaultForm;
 	isOpen: boolean;
 	isSaving: boolean;
+	item: { url?: string | null } | null;
 	linkOptions: TripRelatedEntityOption[];
+	onDelete: () => void;
 	onOpenChange: (isOpen: boolean) => void;
+	onOpenFile: () => void;
+	onOpenLinked: (() => void) | null;
 	onSubmit: () => void;
 	onUpdateForm: (key: keyof VaultForm, value: string) => void;
 }) {
+	const linkLabels = new Map(linkOptions.map((o) => [o.key, o.label]));
+
 	return (
-		<FormSheet
-			description="Update the label used across trip modules."
+		<RecordSheet
 			errorMessage={errorMessage}
 			isOpen={isOpen}
 			isSaving={isSaving}
 			onOpenChange={onOpenChange}
-			onSubmit={onSubmit}
-			saveLabel="Save item"
-			snapPoint="78%"
-			title="Edit vault item"
+			onSave={onSubmit}
+			title="File details"
 		>
-			<SheetField
-				label="Title"
-				onChangeText={(value) => onUpdateForm("title", value)}
-				placeholder="Hotel confirmation"
-				value={form.title}
-			/>
-			<VaultKindPicker
-				onChange={(value) => onUpdateForm("kind", value)}
-				value={form.kind}
-			/>
-			<SheetField
-				label="Note"
-				onChangeText={(value) => onUpdateForm("note", value)}
-				placeholder="Optional note"
-				value={form.note}
-			/>
-			<View style={{ gap: spacing.sm }}>
-				<FieldLabel>Linked trip item</FieldLabel>
-				{linkOptions.length === 0 ? (
-					<AppText tone="secondary" variant="subhead">
-						Add bookings, documents, moments, or checklist tasks before linking
-						this file.
-					</AppText>
-				) : (
-					<ScrollView
-						contentContainerStyle={{ gap: spacing.sm }}
-						nestedScrollEnabled={true}
-						showsVerticalScrollIndicator={false}
-						style={{ maxHeight: 220 }}
-					>
-						<Chip
-							label="No linked item"
-							onPress={() => onUpdateForm("relatedEntityKey", "")}
-							selected={!form.relatedEntityKey}
-						/>
-						{linkOptions.map((option) => (
-							<Chip
-								key={option.key}
-								label={`${option.label} · ${option.detail}`}
-								onPress={() => onUpdateForm("relatedEntityKey", option.key)}
-								selected={form.relatedEntityKey === option.key}
-							/>
-						))}
-					</ScrollView>
-				)}
-			</View>
-		</FormSheet>
+			<FieldGroup>
+				<FieldRow
+					label="Title"
+					onChangeText={(value) => onUpdateForm("title", value)}
+					placeholder="Hotel confirmation"
+					value={form.title}
+				/>
+				<FieldRow
+					label="Note"
+					multiline={true}
+					onChangeText={(value) => onUpdateForm("note", value)}
+					placeholder="Optional"
+					value={form.note}
+				/>
+				<ChoiceRow
+					format={(value) => vaultKindLabels[value] ?? "File"}
+					label="Kind"
+					onChange={(value) => onUpdateForm("kind", value)}
+					options={vaultKindOptions}
+					value={form.kind}
+				/>
+			</FieldGroup>
+			{linkOptions.length > 0 ? (
+				<FieldGroup footer="Linked files show up in that part of your trip.">
+					<ChoiceRow
+						format={(value) => linkLabels.get(value) ?? "None"}
+						label="Linked to"
+						onChange={(value) => onUpdateForm("relatedEntityKey", value)}
+						options={["", ...linkOptions.map((option) => option.key)]}
+						value={form.relatedEntityKey}
+					/>
+				</FieldGroup>
+			) : null}
+			<ListGroup>
+				{item?.url ? (
+					<ListRow
+						leading={<Icon name="open-outline" size={20} tone="secondary" />}
+						onPress={onOpenFile}
+						title="Open file"
+					/>
+				) : null}
+				{onOpenLinked ? (
+					<ListRow
+						leading={<Icon name="link-outline" size={20} tone="secondary" />}
+						onPress={onOpenLinked}
+						title="Open linked item"
+					/>
+				) : null}
+				<ListRow destructive={true} onPress={onDelete} title="Delete file" />
+			</ListGroup>
+		</RecordSheet>
 	);
 }
 
-const uploadActionMeta = [
+const uploadActions: readonly {
+	icon: IconName;
+	label: string;
+	subtitle: string;
+}[] = [
+	{ icon: "document-outline", label: "Document", subtitle: "PDFs, IDs, forms" },
 	{
-		description: "PDFs, IDs, tickets, or travel forms",
-		icon: "document-outline",
-		label: "Document",
-	},
-	{
-		description: "Flights, stays, tours, and confirmations",
 		icon: "ticket-outline",
 		label: "Booking",
+		subtitle: "Flights, stays, tours",
 	},
 	{
-		description: "Payments, refunds, and expense proof",
 		icon: "receipt-outline",
 		label: "Receipt",
+		subtitle: "Payments and refunds",
 	},
 	{
-		description: "Camera roll photos or screenshots",
 		icon: "images-outline",
 		label: "Photo or screenshot",
+		subtitle: "From your library",
 	},
-] as const;
+];
 
 function VaultAddSheet({
 	isOpen,
@@ -291,77 +289,160 @@ function VaultAddSheet({
 	onPickReceipt: () => void;
 }) {
 	const insets = useSafeAreaInsets();
-	const { palette } = useUITheme();
 	const handlers = [onPickDocument, onPickBooking, onPickReceipt, onPickPhoto];
 
 	return (
-		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
-			<BottomSheet.Portal>
-				<BottomSheet.Overlay />
-				<BottomSheet.Content
-					backgroundClassName="rounded-t-[32px] bg-background"
-					enablePanDownToClose={true}
-					snapPoints={["52%"]}
-				>
-					<SheetHeader
-						onClose={() => onOpenChange(false)}
-						subtitle="Choose what kind of file Viya should extract and link."
-						title="Add to vault"
-					/>
-					<View
-						style={{
-							gap: spacing.sm,
-							paddingBottom: Math.max(insets.bottom, spacing.lg),
-							paddingHorizontal: spacing.screen,
-							paddingTop: spacing.sm,
-						}}
-					>
-						{uploadActionMeta.map((action, index) => (
-							<PressableScale
-								accessibilityLabel={action.label}
-								disabled={isUploading}
-								haptic="selection"
-								key={action.label}
-								onPress={handlers[index]}
-								scaleTo={0.98}
-								style={{
-									alignItems: "center",
-									backgroundColor: palette.surface,
-									borderRadius: 16,
-									flexDirection: "row",
-									gap: spacing.md,
-									minHeight: 64,
-									opacity: isUploading ? 0.5 : 1,
-									paddingHorizontal: spacing.lg,
-									paddingVertical: spacing.md,
-								}}
-							>
-								<Ionicons color={palette.accent} name={action.icon} size={22} />
-								<View style={{ flex: 1, gap: 2 }}>
-									<AppText variant="headline">{action.label}</AppText>
-									<AppText
-										numberOfLines={1}
-										tone="secondary"
-										variant="footnote"
-									>
-										{action.description}
-									</AppText>
-								</View>
-								<Ionicons
-									color={palette.inkTertiary}
-									name="chevron-forward"
-									size={16}
-								/>
-							</PressableScale>
-						))}
-					</View>
-				</BottomSheet.Content>
-			</BottomSheet.Portal>
-		</BottomSheet>
+		<AppSheet isOpen={isOpen} onOpenChange={onOpenChange} snapPoints={["46%"]}>
+			<SheetHeader onClose={() => onOpenChange(false)} title="Add to vault" />
+			<View
+				style={{
+					gap: spacing.md,
+					paddingBottom: Math.max(insets.bottom, spacing.lg),
+					paddingHorizontal: spacing.screen,
+					paddingTop: spacing.md,
+				}}
+			>
+				<ListGroup footer="Viya reads the file and links it to your plan.">
+					{uploadActions.map((action, index) => (
+						<ListRow
+							key={action.label}
+							leading={<Icon name={action.icon} size={22} tone="secondary" />}
+							onPress={isUploading ? undefined : handlers[index]}
+							subtitle={action.subtitle}
+							title={action.label}
+						/>
+					))}
+				</ListGroup>
+			</View>
+		</AppSheet>
+	);
+}
+
+function VaultStatusRows({
+	didSync,
+	isUploading,
+	onReview,
+}: {
+	didSync: boolean;
+	isUploading: boolean;
+	onReview: () => void;
+}) {
+	if (!(isUploading || didSync)) {
+		return null;
+	}
+
+	return (
+		<ListGroup>
+			{isUploading ? (
+				<ListRow
+					leading={<ActivityIndicator />}
+					subtitle="Viya is reading it and linking it to your trip."
+					title="Uploading file"
+				/>
+			) : null}
+			{didSync ? (
+				<ListRow
+					leading={
+						<Icon name="checkmark-circle-outline" size={22} tone="success" />
+					}
+					onPress={onReview}
+					subtitle="See what this file changed"
+					title="Review readiness impact"
+				/>
+			) : null}
+		</ListGroup>
+	);
+}
+
+function getVaultSummary(
+	vaultItems: readonly Doc<"vaultItems">[],
+	documents: readonly Doc<"travelDocuments">[]
+) {
+	const counts = getVaultCounts(vaultItems, documents);
+
+	if (vaultItems.length === 0 && counts.missingDocuments === 0) {
+		return;
+	}
+
+	return [
+		formatCount(counts.files, "file"),
+		counts.linked > 0 ? `${counts.linked} linked` : null,
+		counts.missingDocuments > 0
+			? `${counts.missingDocuments} documents missing`
+			: null,
+	]
+		.filter(Boolean)
+		.join(" · ");
+}
+
+function TravelDocumentStatus({
+	document,
+	expiryCutoff,
+}: {
+	document: Doc<"travelDocuments">;
+	expiryCutoff: string | null;
+}) {
+	if (document.status === "missing") {
+		return (
+			<StatusLabel icon="alert-circle-outline" label="Missing" tone="danger" />
+		);
+	}
+
+	if (document.expiryDate) {
+		return (
+			<StatusLabel
+				icon="time-outline"
+				label={`Expires ${formatDay(document.expiryDate, { year: "always" })}`}
+				tone={
+					expiryCutoff && document.expiryDate < expiryCutoff
+						? "warning"
+						: "secondary"
+				}
+			/>
+		);
+	}
+
+	return (
+		<StatusLabel icon="checkmark-circle-outline" label="Saved" tone="success" />
+	);
+}
+
+function TravelDocumentsGroup({
+	documents,
+	expiryCutoff,
+	onPress,
+}: {
+	documents: readonly Doc<"travelDocuments">[];
+	expiryCutoff: string | null;
+	onPress: (document: Doc<"travelDocuments">) => void;
+}) {
+	if (documents.length === 0) {
+		return null;
+	}
+
+	return (
+		<ListGroup header="Travel documents">
+			{documents.map((document) => (
+				<ListRow
+					key={document._id}
+					onPress={() => onPress(document)}
+					showChevron={false}
+					subtitle={formatEnumLabel(document.type)}
+					title={document.title}
+					trailing={
+						<TravelDocumentStatus
+							document={document}
+							expiryCutoff={expiryCutoff}
+						/>
+					}
+				/>
+			))}
+		</ListGroup>
 	);
 }
 
 export function TripVaultScreen() {
+	const router = useRouter();
 	const tripId = useTripIdParam();
 	const vaultItems = useQuery(
 		api.vault.listTripVaultItems,
@@ -407,18 +488,25 @@ export function TripVaultScreen() {
 
 	if (!tripId) {
 		return (
-			<Container className="px-4 pb-28">
-				<EmptyState
-					description="Open a saved trip before syncing trip files."
-					icon="folder-open-outline"
-					title="Trip not found"
-				/>
-			</Container>
+			<ScreenShell
+				state={{
+					description: "Open a saved trip to see its files.",
+					icon: "folder-open-outline",
+					kind: "empty",
+					title: "Trip not found",
+				}}
+				title="Vault"
+			/>
 		);
 	}
 
 	if (vaultItems === undefined) {
-		return <LoadingState title="Loading vault" />;
+		return (
+			<ScreenShell
+				state={{ kind: "loading", title: "Loading vault" }}
+				title="Vault"
+			/>
+		);
 	}
 
 	const handlePhotoUpload = async () => {
@@ -449,9 +537,9 @@ export function TripVaultScreen() {
 			});
 			setPendingReview(null);
 			setDidSync(true);
-			showToast({ message: "TripSync saved", tone: "success" });
+			showToast({ message: "Trip updated from file", tone: "success" });
 		} catch {
-			setVaultErrorMessage("Could not save TripSync review.");
+			setVaultErrorMessage("Could not apply the changes. Try again.");
 		} finally {
 			setIsConfirming(false);
 		}
@@ -478,7 +566,7 @@ export function TripVaultScreen() {
 
 		const title = editForm.title.trim();
 		if (!title) {
-			setVaultErrorMessage("Add a file title.");
+			setVaultErrorMessage("Add a title for this file.");
 			return;
 		}
 
@@ -498,7 +586,7 @@ export function TripVaultScreen() {
 			});
 			setEditingItemId(null);
 		} catch {
-			setVaultErrorMessage("Could not save vault item.");
+			setVaultErrorMessage("Could not save this file. Try again.");
 		} finally {
 			setIsSavingEdit(false);
 		}
@@ -508,7 +596,7 @@ export function TripVaultScreen() {
 		try {
 			await deleteVaultItem({ vaultItemId });
 		} catch {
-			setVaultErrorMessage("Could not delete vault item.");
+			setVaultErrorMessage("Could not delete this file. Try again.");
 		}
 	};
 	const confirmDeleteVaultItem = async (
@@ -516,18 +604,19 @@ export function TripVaultScreen() {
 		itemTitle: string
 	) => {
 		const confirmed = await confirm({
-			confirmLabel: "Delete",
+			confirmLabel: "Delete file",
 			destructive: true,
-			message: "This removes the file from the trip vault.",
-			title: `Delete ${itemTitle}?`,
+			message: `${itemTitle} will be removed from this trip.`,
+			title: "Delete file?",
 		});
 		if (confirmed) {
+			setEditingItemId(null);
 			await handleDeleteVaultItem(vaultItemId);
 		}
 	};
 	const handleOpenVaultFile = async (url?: string | null) => {
 		if (!url) {
-			setOpenFileErrorMessage("File preview is not available yet.");
+			setOpenFileErrorMessage("This file has no preview yet.");
 			return;
 		}
 
@@ -553,40 +642,35 @@ export function TripVaultScreen() {
 	const linkLabelByKey = workspace
 		? getTripRelatedEntityLabelByKey(workspace)
 		: new Map<string, string>();
-	const receiptCount = vaultItems.filter(
-		(item) => item.kind === "receipt"
-	).length;
-	const getVaultGroupCount = (group: VaultGroup) => {
-		switch (group) {
-			case "booking":
-				return vaultItems.filter((item) => item.kind === "booking").length;
-			case "document":
-				return vaultItems.filter((item) => item.kind === "document").length;
-			case "receipt":
-				return receiptCount;
-			case "photo":
-				return vaultItems.filter((item) => item.kind === "momentPhoto").length;
-			default:
-				return vaultItems.length;
-		}
-	};
-	const filteredVaultItems = vaultItems.filter((item) => {
-		switch (selectedVaultGroup) {
-			case "booking":
-				return item.kind === "booking";
-			case "document":
-				return item.kind === "document";
-			case "receipt":
-				return item.kind === "receipt";
-			case "photo":
-				return item.kind === "momentPhoto";
-			default:
-				return true;
-		}
+	const availableGroups = vaultGroupOptions.filter((option) => {
+		const kind = getVaultGroupKind(option.id);
+		return kind === null || vaultItems.some((item) => item.kind === kind);
 	});
-	const selectedVaultGroupLabel =
-		vaultGroupOptions.find((option) => option.id === selectedVaultGroup)
-			?.label ?? "Files";
+	const activeGroup = availableGroups.some(
+		(option) => option.id === selectedVaultGroup
+	)
+		? selectedVaultGroup
+		: "all";
+	const activeKind = getVaultGroupKind(activeGroup);
+	const filteredVaultItems = vaultItems.filter(
+		(item) => activeKind === null || item.kind === activeKind
+	);
+	const sections = vaultKindOptions
+		.map((kind) => ({
+			items: filteredVaultItems.filter(
+				(item) => getVaultKind(item.kind) === kind
+			),
+			kind,
+		}))
+		.filter((section) => section.items.length > 0);
+	const editingItem =
+		vaultItems.find((item) => item._id === editingItemId) ?? null;
+	const editingHref = editingItem
+		? getVaultRelatedHref({
+				relatedEntityType: editingItem.linkedEntityType,
+				tripId,
+			})
+		: null;
 
 	const handleSheetUpload = async (
 		upload: () => Promise<PendingTripSyncReview | null>
@@ -604,40 +688,27 @@ export function TripVaultScreen() {
 			return (
 				<EmptyState
 					action={{
-						label: isUploading ? "Uploading..." : "Add file",
+						label: isUploading ? "Uploading" : "Add file",
 						onPress: () => {
 							setIsAddSheetOpen(true);
 						},
 					}}
-					description="Upload confirmations, travel documents, receipts, or useful screenshots."
+					description="Add a ticket, booking confirmation, ID or receipt. Viya reads it and suggests bookings and expenses for you to review."
 					icon="folder-open-outline"
-					title="No synced files"
+					title="No files for this trip"
 				/>
 			);
 		}
 
-		if (filteredVaultItems.length === 0) {
-			return (
-				<EmptyState
-					description="Add one from the plus button."
-					icon="folder-open-outline"
-					title={`No ${selectedVaultGroupLabel.toLowerCase()} yet`}
-				/>
-			);
-		}
-
-		return (
-			<View style={{ gap: spacing.md }}>
-				{filteredVaultItems.map((item) => (
+		return sections.map((section) => (
+			<ListGroup header={vaultSectionLabels[section.kind]} key={section.kind}>
+				{section.items.map((item) => (
 					<VaultPreviewCard
 						createdAt={item.createdAt}
 						fileName={item.fileName}
+						fileSize={item.fileSize}
 						key={item._id}
 						kind={item.kind}
-						linkedEntityHref={getVaultRelatedHref({
-							relatedEntityType: item.linkedEntityType,
-							tripId,
-						})}
 						linkedEntityLabel={
 							item.linkedEntityType && item.linkedEntityId
 								? (getTripRelatedEntityLabel(
@@ -646,7 +717,7 @@ export function TripVaultScreen() {
 											relatedEntityType: item.linkedEntityType,
 										},
 										linkLabelByKey
-									) ?? item.linkedEntityType)
+									) ?? undefined)
 								: undefined
 						}
 						onDelete={() => {
@@ -662,144 +733,159 @@ export function TripVaultScreen() {
 						url={item.url}
 					/>
 				))}
-			</View>
-		);
+			</ListGroup>
+		));
 	})();
 
+	const documents = workspace?.documents ?? [];
+	const summary = getVaultSummary(vaultItems, documents);
+	const expiryCutoff = workspace?.trip.endDate
+		? addDaysToKey(workspace.trip.endDate, 180)
+		: null;
+	const handleDocumentPress = (document: Doc<"travelDocuments">) => {
+		const linkedFile = document.vaultItemId
+			? vaultItems.find((item) => item._id === document.vaultItemId)
+			: undefined;
+
+		if (linkedFile) {
+			handleOpenVaultFile(linkedFile.url).catch(() => undefined);
+			return;
+		}
+
+		setIsAddSheetOpen(true);
+	};
+	const documentsContent = (
+		<TravelDocumentsGroup
+			documents={documents}
+			expiryCutoff={expiryCutoff}
+			onPress={handleDocumentPress}
+		/>
+	);
+
 	return (
-		<TripModuleScreenFrame
-			activeTab="documents"
-			headerAction={
-				<NavigationIconButton
-					accessibilityLabel="Add file to vault"
-					icon="add"
-					onPress={() => setIsAddSheetOpen(true)}
-				/>
-			}
-			tripId={tripId}
-		>
-			<Container includeBottomInset={false} isScrollable={false}>
-				<ScrollView
-					contentContainerStyle={{
-						flexGrow: 1,
-						gap: spacing.md,
-						paddingBottom: 112,
-						paddingHorizontal: spacing.lg,
-					}}
-					contentInsetAdjustmentBehavior="automatic"
-					keyboardShouldPersistTaps="handled"
-					showsVerticalScrollIndicator={false}
-				>
+		<>
+			<ScreenShell
+				actions={
+					vaultItems.length > 0
+						? [
+								{
+									icon: "add",
+									key: "add",
+									label: "Add file to vault",
+									onPress: () => setIsAddSheetOpen(true),
+									type: "button",
+								},
+							]
+						: []
+				}
+				summary={summary}
+				title="Vault"
+			>
+				{availableGroups.length > 2 ? (
 					<ScrollView
-						contentContainerStyle={{
-							gap: spacing.sm,
-							paddingRight: spacing.lg,
-						}}
+						contentContainerStyle={{ gap: spacing.sm }}
 						horizontal={true}
 						showsHorizontalScrollIndicator={false}
 					>
-						{vaultGroupOptions.map((option) => (
+						{availableGroups.map((option) => (
 							<VaultGroupChip
-								count={getVaultGroupCount(option.id)}
-								isSelected={selectedVaultGroup === option.id}
+								isSelected={activeGroup === option.id}
 								key={option.id}
 								label={option.label}
 								onPress={() => setSelectedVaultGroup(option.id)}
 							/>
 						))}
 					</ScrollView>
-					{isUploading ||
-					uploadErrorMessage ||
-					vaultErrorMessage ||
-					openFileErrorMessage ||
-					didSync ? (
-						<Animated.View
-							entering={FadeIn.duration(180)}
-							style={{ gap: spacing.sm }}
-						>
-							{isUploading ? (
-								<LoadingState
-									delay={0}
-									message="Viya is reading the file and linking it to your trip."
-									title="Uploading and extracting..."
-								/>
-							) : null}
-							<InlineMessage message={uploadErrorMessage ?? null} />
-							<InlineMessage message={vaultErrorMessage} />
-							<InlineMessage message={openFileErrorMessage} />
-							{didSync ? (
-								<Link asChild href={VIYA_ROUTES.tripReadiness(tripId)}>
-									<SecondaryButton
-										icon="checkmark-circle-outline"
-										label="Review readiness impact"
-										onPress={() => undefined}
-									/>
-								</Link>
-							) : null}
-						</Animated.View>
-					) : null}
-					{savedFilesContent}
-				</ScrollView>
-
-				<TripSyncReviewSheet
-					isConfirming={isConfirming}
-					isOpen={Boolean(pendingReview)}
-					onConfirm={() => {
-						handleConfirm().catch(() => undefined);
-					}}
-					onDiscard={() => setPendingReview(null)}
-					onOpenChange={(isOpen) => {
-						if (!(isOpen || isConfirming)) {
-							setPendingReview(null);
-						}
-					}}
-					review={pendingReview}
-				/>
-				<VaultEditSheet
-					errorMessage={vaultErrorMessage}
-					form={editForm}
-					isOpen={Boolean(editingItemId)}
-					isSaving={isSavingEdit}
-					linkOptions={linkOptions}
-					onOpenChange={(isOpen) => {
-						if (!isOpen) {
-							setEditingItemId(null);
-							setVaultErrorMessage(null);
-						}
-					}}
-					onSubmit={() => {
-						handleSaveEdit().catch(() => undefined);
-					}}
-					onUpdateForm={(key, value) => {
-						setVaultErrorMessage(null);
-						setEditForm((currentForm) => ({ ...currentForm, [key]: value }));
-					}}
-				/>
-				<VaultAddSheet
-					isOpen={isAddSheetOpen}
+				) : null}
+				<VaultStatusRows
+					didSync={didSync}
 					isUploading={isUploading}
-					onOpenChange={setIsAddSheetOpen}
-					onPickBooking={() => {
-						handleSheetUpload(() =>
-							pickDocument({ kind: "booking", tripId })
-						).catch(() => undefined);
-					}}
-					onPickDocument={() => {
-						handleSheetUpload(() =>
-							pickDocument({ kind: "document", tripId })
-						).catch(() => undefined);
-					}}
-					onPickPhoto={() => {
-						setIsAddSheetOpen(false);
-						handlePhotoUpload().catch(() => undefined);
-					}}
-					onPickReceipt={() => {
-						handleSheetUpload(() =>
-							pickDocument({ kind: "receipt", tripId })
-						).catch(() => undefined);
-					}}
+					onReview={() => router.push(VIYA_ROUTES.tripReadiness(tripId))}
 				/>
-			</Container>
-		</TripModuleScreenFrame>
+				<FormError message={uploadErrorMessage ?? null} />
+				<FormError message={vaultErrorMessage} />
+				<FormError message={openFileErrorMessage} />
+				{documentsContent}
+				{savedFilesContent}
+			</ScreenShell>
+
+			<TripSyncReviewSheet
+				isConfirming={isConfirming}
+				isOpen={Boolean(pendingReview)}
+				onConfirm={() => {
+					handleConfirm().catch(() => undefined);
+				}}
+				onDiscard={() => setPendingReview(null)}
+				onOpenChange={(isOpen) => {
+					if (!(isOpen || isConfirming)) {
+						setPendingReview(null);
+					}
+				}}
+				review={pendingReview}
+			/>
+			<VaultEditSheet
+				errorMessage={vaultErrorMessage}
+				form={editForm}
+				isOpen={Boolean(editingItemId)}
+				isSaving={isSavingEdit}
+				item={editingItem}
+				linkOptions={linkOptions}
+				onDelete={() => {
+					if (editingItem) {
+						confirmDeleteVaultItem(editingItem._id, editingItem.title).catch(
+							() => undefined
+						);
+					}
+				}}
+				onOpenChange={(isOpen) => {
+					if (!isOpen) {
+						setEditingItemId(null);
+						setVaultErrorMessage(null);
+					}
+				}}
+				onOpenFile={() => {
+					handleOpenVaultFile(editingItem?.url).catch(() => undefined);
+				}}
+				onOpenLinked={
+					editingHref
+						? () => {
+								setEditingItemId(null);
+								router.push(editingHref);
+							}
+						: null
+				}
+				onSubmit={() => {
+					handleSaveEdit().catch(() => undefined);
+				}}
+				onUpdateForm={(key, value) => {
+					setVaultErrorMessage(null);
+					setEditForm((currentForm) => ({ ...currentForm, [key]: value }));
+				}}
+			/>
+			<VaultAddSheet
+				isOpen={isAddSheetOpen}
+				isUploading={isUploading}
+				onOpenChange={setIsAddSheetOpen}
+				onPickBooking={() => {
+					handleSheetUpload(() =>
+						pickDocument({ kind: "booking", tripId })
+					).catch(() => undefined);
+				}}
+				onPickDocument={() => {
+					handleSheetUpload(() =>
+						pickDocument({ kind: "document", tripId })
+					).catch(() => undefined);
+				}}
+				onPickPhoto={() => {
+					setIsAddSheetOpen(false);
+					handlePhotoUpload().catch(() => undefined);
+				}}
+				onPickReceipt={() => {
+					handleSheetUpload(() =>
+						pickDocument({ kind: "receipt", tripId })
+					).catch(() => undefined);
+				}}
+			/>
+		</>
 	);
 }

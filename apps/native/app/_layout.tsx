@@ -33,15 +33,12 @@ function StackLayout() {
 				}}
 			>
 				<Stack.Screen name="(app)" options={{ headerShown: false }} />
-				<Stack.Screen name="(auth)" options={{ headerShown: false }} />
 				<Stack.Screen
-					name="modal"
+					name="(auth)"
 					options={{
-						headerShadowVisible: false,
-						headerStyle: { backgroundColor: palette.canvas },
-						headerTintColor: palette.ink,
-						presentation: "modal",
-						title: "Modal",
+						animation: "fade",
+						gestureEnabled: false,
+						headerShown: false,
 					}}
 				/>
 			</Stack>

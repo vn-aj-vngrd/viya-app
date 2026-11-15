@@ -1,94 +1,77 @@
-import { Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
 import {
-	calculateReadinessScore,
 	getMissingRequiredReadinessCategories,
+	getReadinessProgress,
 	PRIORITY_LABELS,
 	type Priority,
 	READINESS_CATEGORY_LABELS,
 	type ReadinessCategory,
-	type ReadinessItem,
+	type RiskSeverity,
+	type RiskType,
 	sortReadinessItemsForReview,
+	sortTripRisksForReview,
+	toReadinessItem,
 	type WorkStatus,
 } from "@viya-app/domain";
 import { useMutation, useQuery } from "convex/react";
-import type { Href } from "expo-router";
-import { Link } from "expo-router";
-import { BottomSheet, Input, Label, TextArea, TextField } from "heroui-native";
-import { useEffect, useState } from "react";
-import { ScrollView, View } from "react-native";
-import Animated, {
-	FadeIn,
-	FadeInDown,
-	useAnimatedStyle,
-	useSharedValue,
-	withSpring,
-} from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { Circle } from "react-native-svg";
-import { Container } from "@/components/container";
-import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
-import { NavigationIconButton } from "@/src/components/navigation/navigation-icon-button";
-import { ScreenLoadingState } from "@/src/components/screen-loading-state";
+import { type Href, Link, useLocalSearchParams } from "expo-router";
+import { type ReactNode, useEffect, useState } from "react";
+import { View } from "react-native";
+import {
+	DatePickerField,
+	formatIsoDate,
+} from "@/src/components/date/date-picker-field";
 import {
 	AppText,
-	Card,
-	Chip,
 	EmptyState,
-	GlassIconButton,
+	haptic,
 	ListGroup,
-	motion,
-	type Palette,
-	PrimaryButton,
-	radius,
+	ListRow,
+	ScreenShell,
 	SecondaryButton,
+	Segmented,
 	spacing,
-	useUITheme,
+	useFeedback,
 } from "@/src/components/ui";
 import { VIYA_ROUTES } from "@/src/constants/routes";
-import { PillAction } from "@/src/features/bookings/pill-action";
-import { TripModuleScreenFrame } from "@/src/features/trips/trip-module-floating-bar";
+import {
+	ChoiceRow,
+	FieldGroup,
+	FieldRow,
+	LinkRow,
+	RecordSheet,
+	StatusLabel,
+	SwipeRow,
+} from "@/src/features/bookings/module-kit";
+import {
+	getCompactRelatedLabel,
+	getRelatedEntityKey,
+	getRelatedEntityMutationFields,
+	getTripRelatedEntityLabel,
+	getTripRelatedEntityLabelByKey,
+	getTripRelatedEntityOptions,
+} from "@/src/features/trips/trip-related-entities";
 import { useTripIdParam } from "@/src/features/trips/use-trip-id-param";
+import { formatDay, formatEnumLabel, toLocalDateKey } from "@/src/lib/format";
 
-import { ReadinessCategoryCard } from "./readiness-category-card";
-import { ReadinessItemRow } from "./readiness-item-row";
+import { getTaskSubtitle, ReadinessTaskRow } from "./readiness-item-row";
 
-const priorityRank: Record<Priority, number> = {
-	critical: 4,
-	high: 3,
-	medium: 2,
-	low: 1,
-};
+type Segment = "done" | "heads-up" | "todo";
+type SheetKind = "risk" | "task";
 
-const toDomainReadinessItem = (item: Doc<"readinessItems">): ReadinessItem => ({
-	aiReason: item.aiReason,
-	assignedToMemberId: item.assignedToMemberId ?? null,
-	category: item.category as ReadinessCategory,
-	description: item.description,
-	dueDate: item.dueDate,
-	id: item._id,
-	priority: item.priority as Priority,
-	source: item.source as ReadinessItem["source"],
-	status: item.status as WorkStatus,
-	title: item.title,
-	tripId: item.tripId,
-});
+const segmentOptions = [
+	{ label: "To do", value: "todo" },
+	{ label: "Risks", value: "heads-up" },
+	{ label: "Done", value: "done" },
+] as const;
 
-const getHighestPriority = (items: ReadinessItem[]) =>
-	items.reduce<Priority | null>((highest, item) => {
-		if (item.status === "done" || item.status === "ignored") {
-			return highest;
-		}
+const sheetKindOptions = [
+	{ label: "Task", value: "task" },
+	{ label: "Risk", value: "risk" },
+] as const;
 
-		if (!highest || priorityRank[item.priority] > priorityRank[highest]) {
-			return item.priority;
-		}
-
-		return highest;
-	}, null);
-
-interface ReadinessForm {
+interface TaskForm {
 	assignedToMemberId: string;
 	category: string;
 	description: string;
@@ -97,13 +80,31 @@ interface ReadinessForm {
 	title: string;
 }
 
-const initialReadinessForm: ReadinessForm = {
+interface RiskForm {
+	message: string;
+	relatedEntityKey: string;
+	severity: string;
+	suggestedAction: string;
+	title: string;
+	type: string;
+}
+
+const initialTaskForm: TaskForm = {
 	assignedToMemberId: "",
 	category: "documents",
 	description: "",
 	dueDate: "",
 	priority: "medium",
 	title: "",
+};
+
+const initialRiskForm: RiskForm = {
+	message: "",
+	relatedEntityKey: "",
+	severity: "medium",
+	suggestedAction: "",
+	title: "",
+	type: "unknown",
 };
 
 const readinessCategoryOptions = [
@@ -118,60 +119,71 @@ const readinessCategoryOptions = [
 	"group",
 	"backupPlan",
 ] as const;
-
 const priorityOptions = ["low", "medium", "high", "critical"] as const;
-const readinessCategories = new Set<string>(readinessCategoryOptions);
-const priorities = new Set<string>(priorityOptions);
-
-const readinessRingSize = 48;
-const readinessRingStroke = 4;
-const readinessRingRadius = (readinessRingSize - readinessRingStroke) / 2;
-const readinessRingCircumference = 2 * Math.PI * readinessRingRadius;
-const readinessRingCenter = readinessRingSize / 2;
-
-const workspaceModuleGroups = [
-	{
-		categories: ["schedule", "transport", "weather"] as const,
-		detail: "Schedule, transfers, and weather",
-		icon: "calendar-outline" as const,
-		label: "Itinerary",
-		route: VIYA_ROUTES.tripItinerary,
-	},
-	{
-		categories: ["budget"] as const,
-		detail: "Spend, receipts, and daily pace",
-		icon: "wallet-outline" as const,
-		label: "Budget",
-		route: VIYA_ROUTES.tripBudget,
-	},
-	{
-		categories: ["documents", "bookings", "packing"] as const,
-		detail: "Bookings, passports, tickets, and documents",
-		icon: "folder-open-outline" as const,
-		label: "Vault",
-		route: VIYA_ROUTES.tripVault,
-	},
-	{
-		categories: ["safety", "group", "backupPlan"] as const,
-		detail: "Safety, group coverage, and backups",
-		icon: "shield-checkmark-outline" as const,
-		label: "Readiness",
-		route: VIYA_ROUTES.tripReadiness,
-	},
+const riskTypeOptions = [
+	"weather",
+	"schedule",
+	"booking",
+	"budget",
+	"transport",
+	"safety",
+	"group",
+	"document",
+	"fatigue",
+	"unknown",
 ] as const;
 
-const getReadinessCategory = (value: string): ReadinessCategory => {
-	const category = value.trim();
+const readinessCategories = new Set<string>(readinessCategoryOptions);
+const priorities = new Set<string>(priorityOptions);
+const riskTypes = new Set<string>(riskTypeOptions);
 
-	return readinessCategories.has(category)
-		? (category as ReadinessCategory)
+const getReadinessCategory = (value: string): ReadinessCategory =>
+	readinessCategories.has(value.trim())
+		? (value.trim() as ReadinessCategory)
 		: "documents";
-};
 
-const getPriority = (value: string): Priority => {
-	const priority = value.trim();
+const getPriority = (value: string): Priority =>
+	priorities.has(value.trim()) ? (value.trim() as Priority) : "medium";
 
-	return priorities.has(priority) ? (priority as Priority) : "medium";
+const getRiskSeverity = (value: string): RiskSeverity =>
+	priorities.has(value.trim()) ? (value.trim() as RiskSeverity) : "medium";
+
+const getRiskType = (value: string): RiskType =>
+	riskTypes.has(value.trim()) ? (value.trim() as RiskType) : "unknown";
+
+const getRiskRelatedHref = ({
+	relatedEntityType,
+	tripId,
+}: {
+	relatedEntityType?: string;
+	tripId: Id<"trips">;
+}): Href | null => {
+	switch (relatedEntityType) {
+		case "booking":
+			return VIYA_ROUTES.tripBookings(tripId);
+		case "companion":
+			return VIYA_ROUTES.tripCompanions(tripId);
+		case "expense":
+			return VIYA_ROUTES.tripBudget(tripId);
+		case "itineraryDay":
+		case "itineraryItem":
+			return VIYA_ROUTES.tripItinerary(tripId);
+		case "moment":
+			return VIYA_ROUTES.tripMoments(tripId);
+		case "readinessItem":
+			return VIYA_ROUTES.tripReadiness(tripId);
+		case "risk":
+			return VIYA_ROUTES.tripReadiness(tripId);
+		case "savedPlace":
+			return VIYA_ROUTES.tripPlaces(tripId);
+		case "travelDocument":
+		case "vaultItem":
+			return VIYA_ROUTES.tripVault(tripId);
+		case "tripNote":
+			return VIYA_ROUTES.tripNotes(tripId);
+		default:
+			return null;
+	}
 };
 
 const getReadinessCategoryHref = ({
@@ -180,630 +192,647 @@ const getReadinessCategoryHref = ({
 }: {
 	category: string;
 	tripId: Id<"trips">;
-}): Href | null => {
+}): { href: Href; label: string } | null => {
 	switch (category) {
 		case "documents":
-		case "packing":
-			return VIYA_ROUTES.tripVault(tripId);
+			return { href: VIYA_ROUTES.tripVault(tripId), label: "Open Vault" };
 		case "bookings":
-			return VIYA_ROUTES.tripBookings(tripId);
+			return {
+				href: VIYA_ROUTES.tripBookings(tripId),
+				label: "Open bookings",
+			};
 		case "budget":
-			return VIYA_ROUTES.tripBudget(tripId);
+			return { href: VIYA_ROUTES.tripBudget(tripId), label: "Open budget" };
 		case "schedule":
 		case "transport":
 		case "weather":
-			return VIYA_ROUTES.tripItinerary(tripId);
+			return {
+				href: VIYA_ROUTES.tripItinerary(tripId),
+				label: "Open itinerary",
+			};
 		case "group":
-			return VIYA_ROUTES.tripCompanions(tripId);
-		case "backupPlan":
-		case "safety":
-			return VIYA_ROUTES.tripRisks(tripId);
+			return {
+				href: VIYA_ROUTES.tripCompanions(tripId),
+				label: "Open travelers",
+			};
 		default:
 			return null;
 	}
 };
 
-function SheetField({
-	label,
-	onChangeText,
-	placeholder,
-	value,
-}: {
-	label: string;
-	onChangeText: (value: string) => void;
-	placeholder: string;
-	value: string;
-}) {
-	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
-
-	return (
-		<TextField className="gap-2">
-			<Label>
-				<Label.Text>{label}</Label.Text>
-			</Label>
-			<Input
-				className="h-12 border-0 bg-surface px-4"
-				onBlur={onBlur}
-				onChangeText={onChangeText}
-				onFocus={onFocus}
-				placeholder={placeholder}
-				value={value}
-				variant="secondary"
-			/>
-		</TextField>
-	);
-}
-
-function SheetTextArea({
-	label,
-	onChangeText,
-	placeholder,
-	value,
-}: {
-	label: string;
-	onChangeText: (value: string) => void;
-	placeholder: string;
-	value: string;
-}) {
-	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
-
-	return (
-		<TextField className="gap-2">
-			<Label>
-				<Label.Text>{label}</Label.Text>
-			</Label>
-			<TextArea
-				className="min-h-20 rounded-[16px] border-0 bg-surface px-4 py-3"
-				onBlur={onBlur}
-				onChangeText={onChangeText}
-				onFocus={onFocus}
-				placeholder={placeholder}
-				value={value}
-				variant="secondary"
-			/>
-		</TextField>
-	);
-}
-
-function ReadinessChoiceGroup({
-	label,
-	onChange,
-	options,
-	value,
-}: {
-	label: string;
-	onChange: (value: string) => void;
-	options: readonly string[];
-	value: string;
-}) {
-	return (
-		<View style={{ gap: spacing.sm }}>
-			<AppText tone="secondary" variant="eyebrow">
-				{label}
-			</AppText>
-			<View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
-				{options.map((option) => (
-					<Chip
-						key={option}
-						label={
-							READINESS_CATEGORY_LABELS[option as ReadinessCategory] ??
-							PRIORITY_LABELS[option as Priority] ??
-							option
-						}
-						onPress={() => onChange(option)}
-						selected={value === option}
-					/>
-				))}
-			</View>
-		</View>
-	);
-}
-
-function ReadinessAssigneePicker({
-	companions,
-	onChange,
-	value,
-}: {
-	companions: Doc<"tripCompanions">[];
-	onChange: (value: string) => void;
-	value: string;
-}) {
-	return (
-		<View style={{ gap: spacing.sm }}>
-			<AppText tone="secondary" variant="eyebrow">
-				OWNER
-			</AppText>
-			<View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
-				<Chip
-					label="Unassigned"
-					onPress={() => onChange("")}
-					selected={!value}
-				/>
-				{companions.map((companion) => (
-					<Chip
-						key={companion._id}
-						label={companion.name}
-						onPress={() => onChange(companion._id)}
-						selected={value === companion._id}
-					/>
-				))}
-			</View>
-		</View>
-	);
-}
-
-function ReadinessMetric({ label, value }: { label: string; value: string }) {
-	return (
-		<View style={{ flexBasis: "45%", flexGrow: 1, gap: 2 }}>
-			<AppText numberOfLines={1} tone="secondary" variant="footnote">
-				{label}
-			</AppText>
-			<AppText bold={true} numberOfLines={1} variant="subhead">
-				{value}
-			</AppText>
-		</View>
-	);
-}
-
-function ReadinessProgressBar({
-	color,
-	score,
-}: {
-	color: string;
-	score: number;
-}) {
-	const { palette } = useUITheme();
-	const clampedScore = Math.max(0, Math.min(100, score));
-	const width = useSharedValue(0);
-
-	useEffect(() => {
-		width.value = withSpring(clampedScore, motion.spring.selection);
-	}, [clampedScore, width]);
-
-	const fillStyle = useAnimatedStyle(() => ({ width: `${width.value}%` }));
-
-	return (
-		<View
-			style={{
-				backgroundColor: palette.fill,
-				borderRadius: radius.pill,
-				height: 8,
-				overflow: "hidden",
-			}}
-		>
-			<Animated.View
-				style={[
-					{ backgroundColor: color, borderRadius: radius.pill, height: "100%" },
-					fillStyle,
-				]}
-			/>
-		</View>
-	);
-}
-
-const getReadinessTone = (
-	progress: number,
-	hasCoverage: boolean,
-	palette: Palette
+const getReadinessHeader = (
+	progress: ReturnType<typeof getReadinessProgress>
 ) => {
-	if (!hasCoverage) {
-		return palette.inkTertiary;
+	if (progress.percent === null || progress.active === 0) {
+		return {
+			headerLine: "Add what you need to do before the trip.",
+			headerTitle: "No tasks yet",
+		};
 	}
 
-	if (progress >= 70) {
-		return palette.success;
-	}
-
-	if (progress >= 40) {
-		return palette.warning;
-	}
-
-	return palette.danger;
+	return {
+		headerLine: [
+			`${progress.done} of ${progress.active} done`,
+			progress.highOpen ? `${progress.highOpen} high priority` : null,
+			progress.overdue ? `${progress.overdue} overdue` : null,
+		]
+			.filter(Boolean)
+			.join(" · "),
+		headerTitle: `${progress.percent}% ready`,
+	};
 };
 
-function ReadinessRing({
-	hasCoverage,
-	progress,
-}: {
-	hasCoverage: boolean;
-	progress: number;
-}) {
-	const { palette } = useUITheme();
-	const tone = getReadinessTone(progress, hasCoverage, palette);
-	const boundedProgress = Math.min(100, Math.max(0, Math.round(progress)));
-	const dashOffset = readinessRingCircumference * (1 - boundedProgress / 100);
+const isOpenItem = (item: { status: string }) =>
+	item.status !== "done" && item.status !== "ignored";
 
-	return (
-		<View
-			accessibilityLabel={`${boundedProgress} percent ready`}
-			style={{
-				alignItems: "center",
-				height: readinessRingSize,
-				justifyContent: "center",
-				width: readinessRingSize,
-			}}
-		>
-			<Svg
-				height={readinessRingSize}
-				style={{ position: "absolute", transform: [{ rotate: "-90deg" }] }}
-				width={readinessRingSize}
-			>
-				<Circle
-					cx={readinessRingCenter}
-					cy={readinessRingCenter}
-					fill="none"
-					r={readinessRingRadius}
-					stroke={palette.fill}
-					strokeWidth={readinessRingStroke}
-				/>
-				{hasCoverage ? (
-					<Circle
-						cx={readinessRingCenter}
-						cy={readinessRingCenter}
-						fill="none"
-						r={readinessRingRadius}
-						stroke={tone}
-						strokeDasharray={readinessRingCircumference}
-						strokeDashoffset={dashOffset}
-						strokeLinecap="round"
-						strokeWidth={readinessRingStroke}
-					/>
-				) : null}
-			</Svg>
-			{hasCoverage && boundedProgress >= 100 ? (
-				<Ionicons color={tone} name="checkmark" size={22} />
-			) : null}
-			{hasCoverage && boundedProgress < 100 ? (
-				<AppText bold={true} style={{ color: tone }} variant="footnote">
-					{boundedProgress}
-				</AppText>
-			) : null}
-			{hasCoverage ? null : (
-				<Ionicons color={tone} name="sparkles-outline" size={16} />
-			)}
-		</View>
-	);
-}
+const getSeverityPresentation = (severity: string) =>
+	severity === "critical" || severity === "high"
+		? ({ icon: "alert-circle-outline", tone: "danger" } as const)
+		: ({ icon: "warning-outline", tone: "warning" } as const);
 
-function ReadinessOverview({
-	assignedOpenCount,
-	completedCount,
-	domainItemCount,
-	highestPriorityLabel,
-	highestPriorityItem,
-	onCreateTask,
-	onFixTopGap,
-	openCount,
-	score,
-	tripId,
-	urgentOpenCount,
-	weakestCategoryLabel,
-}: {
-	assignedOpenCount: number;
-	completedCount: number;
-	domainItemCount: number;
-	highestPriorityLabel: string;
-	highestPriorityItem?: Doc<"readinessItems">;
-	onCreateTask: () => void;
-	onFixTopGap: () => void;
-	openCount: number;
-	score: ReturnType<typeof calculateReadinessScore>;
-	tripId: Id<"trips">;
-	urgentOpenCount: number;
-	weakestCategoryLabel: string;
-}) {
-	const { palette } = useUITheme();
-	const isTravelReady = score.overallScore >= 90;
-	const hasReadinessCoverage = domainItemCount > 0;
-	const tone = getReadinessTone(
-		score.overallScore,
-		hasReadinessCoverage,
-		palette
-	);
-
-	return (
-		<Animated.View entering={FadeInDown.springify().damping(20)}>
-			<Card padding="lg" style={{ gap: spacing.lg }}>
-				<View
-					style={{
-						alignItems: "flex-start",
-						flexDirection: "row",
-						gap: spacing.lg,
-					}}
-				>
-					<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-						<AppText tone="secondary" variant="eyebrow">
-							READINESS
-						</AppText>
-						<AppText variant="title">{score.overallScore}% ready</AppText>
-						<AppText numberOfLines={2} tone="secondary" variant="subhead">
-							{score.summary}
-						</AppText>
-					</View>
-					<ReadinessRing
-						hasCoverage={hasReadinessCoverage}
-						progress={score.overallScore}
-					/>
-				</View>
-				<ReadinessProgressBar color={tone} score={score.overallScore} />
-				<View
-					style={{
-						columnGap: spacing.lg,
-						flexDirection: "row",
-						flexWrap: "wrap",
-						rowGap: spacing.md,
-					}}
-				>
-					<ReadinessMetric
-						label="Done"
-						value={`${completedCount}/${domainItemCount}`}
-					/>
-					<ReadinessMetric label="Open" value={`${openCount} tasks`} />
-					<ReadinessMetric label="Urgent" value={`${urgentOpenCount}`} />
-					<ReadinessMetric label="Assigned" value={`${assignedOpenCount}`} />
-					<ReadinessMetric label="Weakest" value={weakestCategoryLabel} />
-					<ReadinessMetric label="Priority" value={highestPriorityLabel} />
-				</View>
-				<View style={{ gap: spacing.sm }}>
-					{isTravelReady ? (
-						<Link asChild href={VIYA_ROUTES.tripTravelMode(tripId)}>
-							<PrimaryButton
-								label="Open travel mode"
-								onPress={() => undefined}
-							/>
-						</Link>
-					) : (
-						<PrimaryButton
-							disabled={!highestPriorityItem}
-							label="Fix highest-priority gap"
-							onPress={onFixTopGap}
-						/>
-					)}
-					<SecondaryButton
-						icon="add-circle-outline"
-						label="Add task"
-						onPress={onCreateTask}
-					/>
-				</View>
-			</Card>
-		</Animated.View>
-	);
-}
-
-function TopReadinessGapSummary({
-	assignedToName,
-	categoryHref,
-	item,
-	onCreateTopGap,
-	onMarkDone,
-	onReview,
-	ownerHref,
-}: {
-	assignedToName?: string;
-	categoryHref: Href | null;
-	item?: Doc<"readinessItems">;
-	onCreateTopGap: () => void;
-	onMarkDone: () => void;
-	onReview: () => void;
-	ownerHref: Href | null;
-}) {
-	const { palette } = useUITheme();
-
-	return (
-		<Card padding="lg" style={{ gap: spacing.md }}>
-			<View
-				style={{ alignItems: "center", flexDirection: "row", gap: spacing.md }}
-			>
-				<Ionicons
-					color={palette.accent}
-					name="alert-circle-outline"
-					size={22}
-				/>
-				<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-					<AppText tone="secondary" variant="eyebrow">
-						NEXT GAP
-					</AppText>
-					<AppText numberOfLines={1} variant="headline">
-						{item?.title ?? "No open gap"}
-					</AppText>
-				</View>
-			</View>
-			<AppText numberOfLines={2} tone="secondary" variant="subhead">
-				{item
-					? item.description
-					: "All required readiness tasks are resolved or ignored."}
-			</AppText>
-			{item ? (
-				<>
-					<View
-						style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}
-					>
-						<Chip
-							label={
-								READINESS_CATEGORY_LABELS[item.category as ReadinessCategory]
-							}
-						/>
-						<Chip label={PRIORITY_LABELS[item.priority as Priority]} />
-						<Chip label={assignedToName ?? "Unassigned"} />
-					</View>
-					<View
-						style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}
-					>
-						<PillAction
-							icon="create-outline"
-							label="Review top gap"
-							onPress={onReview}
-							tone="primary"
-						/>
-						<PillAction
-							icon="checkmark-outline"
-							label="Mark top done"
-							onPress={onMarkDone}
-						/>
-						{categoryHref ? (
-							<Link asChild href={categoryHref}>
-								<PillAction icon="open-outline" label="Open top category" />
-							</Link>
-						) : null}
-						{ownerHref ? (
-							<Link asChild href={ownerHref}>
-								<PillAction icon="people-outline" label="Open top owner" />
-							</Link>
-						) : null}
-					</View>
-				</>
-			) : (
-				<View style={{ alignItems: "flex-start" }}>
-					<PillAction
-						icon="add-circle-outline"
-						label="Add readiness task"
-						onPress={onCreateTopGap}
-					/>
-				</View>
-			)}
-		</Card>
-	);
-}
-
-function ReadinessTaskSheet({
+function TaskFields({
 	companions,
-	errorMessage,
 	form,
-	isOpen,
-	isSaving,
-	mode,
-	onOpenChange,
-	onSubmit,
-	onUpdateForm,
+	onUpdate,
 }: {
 	companions: Doc<"tripCompanions">[];
-	errorMessage: string | null;
-	form: ReadinessForm;
-	isOpen: boolean;
-	isSaving: boolean;
-	mode: "create" | "edit";
-	onOpenChange: (isOpen: boolean) => void;
-	onSubmit: () => void;
-	onUpdateForm: (key: keyof ReadinessForm, value: string) => void;
+	form: TaskForm;
+	onUpdate: (key: keyof TaskForm, value: string) => void;
 }) {
-	const insets = useSafeAreaInsets();
-	const { palette } = useUITheme();
+	const names = new Map<string, string>(
+		companions.map((companion) => [companion._id, companion.name])
+	);
 
 	return (
-		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
-			<BottomSheet.Portal>
-				<BottomSheet.Overlay />
-				<BottomSheet.Content
-					backgroundClassName="bg-background"
-					backgroundStyle={{
-						backgroundColor: palette.canvas,
-						borderTopLeftRadius: radius.sheet,
-						borderTopRightRadius: radius.sheet,
+		<FieldGroup>
+			<FieldRow
+				label="Task"
+				onChangeText={(value) => onUpdate("title", value)}
+				placeholder="Upload passport copy"
+				value={form.title}
+			/>
+			<ChoiceRow
+				format={(value) =>
+					READINESS_CATEGORY_LABELS[value as ReadinessCategory] ?? value
+				}
+				label="Category"
+				onChange={(value) => onUpdate("category", value)}
+				options={readinessCategoryOptions}
+				value={form.category}
+			/>
+			<ChoiceRow
+				format={(value) => PRIORITY_LABELS[value as Priority] ?? value}
+				label="Priority"
+				onChange={(value) => onUpdate("priority", value)}
+				options={priorityOptions}
+				value={form.priority}
+			/>
+			{companions.length > 0 ? (
+				<ChoiceRow
+					format={(id) => (id === "" ? "Unassigned" : (names.get(id) ?? id))}
+					label="Owner"
+					onChange={(value) => onUpdate("assignedToMemberId", value)}
+					options={["", ...companions.map((companion) => companion._id)]}
+					value={form.assignedToMemberId}
+				/>
+			) : null}
+			<DatePickerField
+				formatDate={(date) => formatDay(formatIsoDate(date))}
+				label="Due date"
+				onChangeText={(value) => onUpdate("dueDate", value)}
+				value={form.dueDate}
+			/>
+			<FieldRow
+				label="Details"
+				multiline={true}
+				onChangeText={(value) => onUpdate("description", value)}
+				placeholder="What needs to be true for this to be done?"
+				value={form.description}
+			/>
+		</FieldGroup>
+	);
+}
+
+function RiskFields({
+	form,
+	onUpdate,
+	relatedOptions,
+}: {
+	form: RiskForm;
+	onUpdate: (key: keyof RiskForm, value: string) => void;
+	relatedOptions: { key: string; label: string }[];
+}) {
+	const labels = new Map(
+		relatedOptions.map((option) => [option.key, option.label])
+	);
+
+	return (
+		<FieldGroup>
+			<FieldRow
+				label="Title"
+				onChangeText={(value) => onUpdate("title", value)}
+				placeholder="Tight transfer window"
+				value={form.title}
+			/>
+			<ChoiceRow
+				format={formatEnumLabel}
+				label="Type"
+				onChange={(value) => onUpdate("type", value)}
+				options={riskTypeOptions}
+				value={form.type}
+			/>
+			<ChoiceRow
+				format={(value) => PRIORITY_LABELS[value as Priority] ?? value}
+				label="Severity"
+				onChange={(value) => onUpdate("severity", value)}
+				options={priorityOptions}
+				value={form.severity}
+			/>
+			{relatedOptions.length > 0 ? (
+				<ChoiceRow
+					format={(key) =>
+						key === "" ? "None" : getCompactRelatedLabel(labels.get(key) ?? key)
+					}
+					label="Linked to"
+					onChange={(value) => onUpdate("relatedEntityKey", value)}
+					options={[
+						"",
+						...relatedOptions.slice(0, 12).map((option) => option.key),
+					]}
+					value={form.relatedEntityKey}
+				/>
+			) : null}
+			<FieldRow
+				label="What could go wrong"
+				multiline={true}
+				onChangeText={(value) => onUpdate("message", value)}
+				placeholder="Describe the risk"
+				value={form.message}
+			/>
+			<FieldRow
+				label="What to do"
+				multiline={true}
+				onChangeText={(value) => onUpdate("suggestedAction", value)}
+				placeholder="Backup plan"
+				value={form.suggestedAction}
+			/>
+		</FieldGroup>
+	);
+}
+
+interface ReadinessSheetProps {
+	companions: Doc<"tripCompanions">[];
+	editingRisk: Doc<"risks"> | null;
+	editingTask: Doc<"readinessItems"> | null;
+	initialKind: SheetKind;
+	isOpen: boolean;
+	onClose: () => void;
+	onDelete: () => void;
+	relatedOptions: { key: string; label: string }[];
+	tripId: Id<"trips">;
+}
+
+const getTaskFormFor = (item: Doc<"readinessItems"> | null): TaskForm =>
+	item
+		? {
+				assignedToMemberId: item.assignedToMemberId ?? "",
+				category: item.category,
+				description: item.description,
+				dueDate: item.dueDate,
+				priority: item.priority,
+				title: item.title,
+			}
+		: initialTaskForm;
+
+const getRiskFormFor = (risk: Doc<"risks"> | null): RiskForm =>
+	risk
+		? {
+				message: risk.message,
+				relatedEntityKey: getRelatedEntityKey({
+					id: risk.relatedEntityId,
+					type: risk.relatedEntityType,
+				}),
+				severity: risk.severity,
+				suggestedAction: risk.suggestedAction,
+				title: risk.title,
+				type: risk.type,
+			}
+		: initialRiskForm;
+
+/**Add or edit a task or risk. Remounted per open so forms start fresh. */
+function ReadinessSheet({
+	companions,
+	editingRisk,
+	editingTask,
+	initialKind,
+	isOpen,
+	onClose,
+	onDelete,
+	relatedOptions,
+	tripId,
+}: ReadinessSheetProps) {
+	const createReadinessItem = useMutation(api.readiness.createReadinessItem);
+	const updateReadinessItemDetails = useMutation(
+		api.readiness.updateReadinessItemDetails
+	);
+	const createRisk = useMutation(api.risks.createRisk);
+	const updateRisk = useMutation(api.risks.updateRisk);
+	const [kind, setKind] = useState<SheetKind>(initialKind);
+	const [taskForm, setTaskForm] = useState(() => getTaskFormFor(editingTask));
+	const [riskForm, setRiskForm] = useState(() => getRiskFormFor(editingRisk));
+	const [isSaving, setIsSaving] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	const isEditing = Boolean(editingTask || editingRisk);
+	const riskHref = editingRisk
+		? getRiskRelatedHref({
+				relatedEntityType: editingRisk.relatedEntityType,
+				tripId,
+			})
+		: null;
+	const isTask = kind === "task";
+
+	const saveTask = async () => {
+		const title = taskForm.title.trim();
+		const taskPatch = {
+			category: getReadinessCategory(taskForm.category),
+			description: taskForm.description.trim() || title,
+			dueDate: taskForm.dueDate.trim(),
+			priority: getPriority(taskForm.priority),
+			title,
+		};
+		const assignedToMemberId = taskForm.assignedToMemberId.trim() || undefined;
+
+		if (editingTask) {
+			await updateReadinessItemDetails({
+				...taskPatch,
+				assignedToMemberId,
+				readinessItemId: editingTask._id,
+			});
+			return;
+		}
+		await createReadinessItem({ ...taskPatch, assignedToMemberId, tripId });
+	};
+	const saveRisk = async () => {
+		const title = riskForm.title.trim();
+		const riskPatch = {
+			message: riskForm.message.trim() || title,
+			severity: getRiskSeverity(riskForm.severity),
+			suggestedAction: riskForm.suggestedAction.trim(),
+			title,
+			type: getRiskType(riskForm.type),
+		};
+		const relatedEntityFields = getRelatedEntityMutationFields({
+			relatedEntityKey: riskForm.relatedEntityKey,
+			shouldClear: Boolean(editingRisk),
+		});
+
+		if (editingRisk) {
+			await updateRisk({
+				...riskPatch,
+				...relatedEntityFields,
+				riskId: editingRisk._id,
+			});
+			return;
+		}
+		await createRisk({ ...riskPatch, ...relatedEntityFields, tripId });
+	};
+	const handleSave = async () => {
+		if (!(isTask ? taskForm.title : riskForm.title).trim()) {
+			setError("Add a title.");
+			return;
+		}
+
+		setError(null);
+		setIsSaving(true);
+		try {
+			await (isTask ? saveTask() : saveRisk());
+			haptic("success");
+			onClose();
+		} catch {
+			setError("Could not save. Try again.");
+		} finally {
+			setIsSaving(false);
+		}
+	};
+
+	let deleteLabel = "Delete risk";
+	if (editingTask) {
+		deleteLabel =
+			editingTask.source === "system" ? "Mark not needed" : "Delete task";
+	}
+	let title = isTask ? "Add task" : "Add risk";
+	if (editingTask) {
+		title = "Task";
+	} else if (editingRisk) {
+		title = "Risk";
+	}
+
+	return (
+		<RecordSheet
+			errorMessage={error}
+			isOpen={isOpen}
+			isSaving={isSaving}
+			onOpenChange={(open) => {
+				if (!open) {
+					onClose();
+				}
+			}}
+			onSave={() => {
+				handleSave().catch(() => undefined);
+			}}
+			saveLabel={isEditing ? "Save" : "Add"}
+			title={title}
+		>
+			{isEditing ? null : (
+				<Segmented
+					accessibilityLabel="Task or risk"
+					onChange={setKind}
+					options={sheetKindOptions}
+					value={kind}
+				/>
+			)}
+			{isTask ? (
+				<TaskFields
+					companions={companions}
+					form={taskForm}
+					onUpdate={(key, value) => {
+						setError(null);
+						setTaskForm((current) => ({ ...current, [key]: value }));
 					}}
-					enablePanDownToClose={true}
-					snapPoints={["82%"]}
-				>
-					<View
-						style={{
-							gap: spacing.lg,
-							paddingBottom: Math.max(insets.bottom, spacing.lg),
-							paddingHorizontal: spacing.screen,
+				/>
+			) : (
+				<RiskFields
+					form={riskForm}
+					onUpdate={(key, value) => {
+						setError(null);
+						setRiskForm((current) => ({ ...current, [key]: value }));
+					}}
+					relatedOptions={relatedOptions}
+				/>
+			)}
+			{editingTask ? (
+				<TaskLinks
+					ownerName={
+						editingTask.assignedToMemberId
+							? companions.find(
+									(companion) =>
+										companion._id === editingTask.assignedToMemberId
+								)?.name
+							: undefined
+					}
+					task={editingTask}
+					tripId={tripId}
+				/>
+			) : null}
+			{!isTask && editingRisk && riskHref ? (
+				<ListGroup>
+					<Link asChild href={riskHref}>
+						<LinkRow icon="open-outline" label="Open linked item" />
+					</Link>
+				</ListGroup>
+			) : null}
+			{isEditing ? (
+				<ListGroup>
+					<ListRow
+						destructive={true}
+						onPress={onDelete}
+						showChevron={false}
+						title={deleteLabel}
+					/>
+				</ListGroup>
+			) : null}
+		</RecordSheet>
+	);
+}
+
+/** Jump to the module a task belongs to, or to its owner. */
+function TaskLinks({
+	ownerName,
+	task,
+	tripId,
+}: {
+	ownerName?: string;
+	task: Doc<"readinessItems">;
+	tripId: Id<"trips">;
+}) {
+	const categoryLink = getReadinessCategoryHref({
+		category: task.category,
+		tripId,
+	});
+	const ownerHref = task.assignedToMemberId
+		? VIYA_ROUTES.tripCompanions(tripId)
+		: null;
+
+	if (!(categoryLink || ownerHref)) {
+		return null;
+	}
+
+	return (
+		<ListGroup>
+			{categoryLink ? (
+				<Link asChild href={categoryLink.href}>
+					<LinkRow icon="open-outline" label={categoryLink.label} />
+				</Link>
+			) : null}
+			{ownerHref ? (
+				<Link asChild href={ownerHref}>
+					<LinkRow
+						icon="people-outline"
+						label={`Open ${ownerName ?? "owner"}`}
+					/>
+				</Link>
+			) : null}
+		</ListGroup>
+	);
+}
+
+function HeadsUpList({
+	labelByKey,
+	onAdd,
+	onDismiss,
+	onEdit,
+	onMitigate,
+	risks,
+}: {
+	labelByKey: Map<string, string>;
+	onAdd: () => void;
+	onDismiss: (risk: Doc<"risks">) => void;
+	onEdit: (risk: Doc<"risks">) => void;
+	onMitigate: (risk: Doc<"risks">) => void;
+	risks: Doc<"risks">[];
+}) {
+	if (risks.length === 0) {
+		return (
+			<EmptyState
+				action={{ label: "Add risk", onPress: onAdd }}
+				description="Add anything that could disrupt the trip and what you will do instead."
+				icon="shield-checkmark-outline"
+				title="No risks for this trip"
+			/>
+		);
+	}
+
+	return (
+		<ListGroup footer="Swipe right when handled, left to dismiss.">
+			{risks.map((risk) => {
+				const presentation = getSeverityPresentation(risk.severity);
+				const severity =
+					PRIORITY_LABELS[risk.severity as Priority] ??
+					formatEnumLabel(risk.severity);
+				const linkedLabel = getTripRelatedEntityLabel(
+					{
+						relatedEntityId: risk.relatedEntityId,
+						relatedEntityType: risk.relatedEntityType,
+					},
+					labelByKey
+				);
+				const action = risk.suggestedAction.trim()
+					? `What to do: ${risk.suggestedAction.trim()}`
+					: null;
+				const subtitle =
+					[linkedLabel, action].filter(Boolean).join(" · ") || undefined;
+
+				return (
+					<SwipeRow
+						key={risk._id}
+						leading={{
+							icon: "checkmark-circle-outline",
+							label: "Handled",
+							onPress: () => onMitigate(risk),
+							tone: "success",
+						}}
+						trailing={{
+							icon: "close",
+							label: "Dismiss",
+							onPress: () => onDismiss(risk),
+							tone: "danger",
 						}}
 					>
-						<View
-							style={{
-								alignItems: "flex-start",
-								flexDirection: "row",
-								gap: spacing.lg,
-							}}
-						>
-							<View style={{ flex: 1, gap: 2 }}>
-								<BottomSheet.Title>
-									{mode === "edit"
-										? "Edit checklist task"
-										: "Add checklist task"}
-								</BottomSheet.Title>
-								<BottomSheet.Description>
-									Add a concrete requirement before travel.
-								</BottomSheet.Description>
-							</View>
-							<GlassIconButton
-								accessibilityLabel="Close readiness task form"
-								icon="close"
-								onPress={() => onOpenChange(false)}
-							/>
-						</View>
-						<ScrollView
-							contentContainerStyle={{
-								gap: spacing.lg,
-								paddingBottom: spacing.sm,
-							}}
-							keyboardShouldPersistTaps="handled"
-							showsVerticalScrollIndicator={false}
-							style={{ maxHeight: 480 }}
-						>
-							<SheetField
-								label="Task"
-								onChangeText={(value) => onUpdateForm("title", value)}
-								placeholder="Upload passport copy"
-								value={form.title}
-							/>
-							<ReadinessChoiceGroup
-								label="Category"
-								onChange={(value) => onUpdateForm("category", value)}
-								options={readinessCategoryOptions}
-								value={form.category}
-							/>
-							<ReadinessChoiceGroup
-								label="Priority"
-								onChange={(value) => onUpdateForm("priority", value)}
-								options={priorityOptions}
-								value={form.priority}
-							/>
-							<ReadinessAssigneePicker
-								companions={companions}
-								onChange={(value) => onUpdateForm("assignedToMemberId", value)}
-								value={form.assignedToMemberId}
-							/>
-							<SheetField
-								label="Due date"
-								onChangeText={(value) => onUpdateForm("dueDate", value)}
-								placeholder="2026-06-01"
-								value={form.dueDate}
-							/>
-							<SheetTextArea
-								label="Details"
-								onChangeText={(value) => onUpdateForm("description", value)}
-								placeholder="What needs to be true for this to be done?"
-								value={form.description}
-							/>
-						</ScrollView>
-						{errorMessage ? (
-							<Animated.View entering={FadeIn}>
-								<AppText
-									accessibilityRole="alert"
-									tone="danger"
-									variant="subhead"
-								>
-									{errorMessage}
-								</AppText>
-							</Animated.View>
-						) : null}
-						<PrimaryButton
-							disabled={isSaving}
-							isPending={isSaving}
-							label={mode === "edit" ? "Save task" : "Add task"}
-							onPress={onSubmit}
+						<ListRow
+							accessibilityLabel={`${risk.title}, ${severity} severity. Open`}
+							onPress={() => onEdit(risk)}
+							showChevron={false}
+							subtitle={subtitle}
+							title={risk.title}
+							trailing={
+								<StatusLabel
+									icon={presentation.icon}
+									label={severity}
+									tone={presentation.tone}
+								/>
+							}
 						/>
-					</View>
-				</BottomSheet.Content>
-			</BottomSheet.Portal>
-		</BottomSheet>
+					</SwipeRow>
+				);
+			})}
+		</ListGroup>
+	);
+}
+
+function NextUpRow({
+	item,
+	onEdit,
+	onMarkDone,
+}: {
+	item: Doc<"readinessItems">;
+	onEdit: () => void;
+	onMarkDone: () => void;
+}) {
+	return (
+		<ListGroup header="Next up">
+			<ListRow
+				onPress={onEdit}
+				showChevron={false}
+				subtitle={getTaskSubtitle(item) || undefined}
+				title={item.title}
+				trailing={
+					<SecondaryButton
+						fullWidth={false}
+						label="Mark done"
+						onPress={onMarkDone}
+						variant="plain"
+					/>
+				}
+			/>
+		</ListGroup>
+	);
+}
+
+function SegmentContent({
+	doneItems,
+	labelByKey,
+	onAddRisk,
+	onAddTask,
+	onDismissRisk,
+	onEditRisk,
+	onMitigateRisk,
+	openItems,
+	openRisks,
+	renderTask,
+	segment,
+}: {
+	doneItems: Doc<"readinessItems">[];
+	labelByKey: Map<string, string>;
+	onAddRisk: () => void;
+	onAddTask: () => void;
+	onDismissRisk: (risk: Doc<"risks">) => void;
+	onEditRisk: (risk: Doc<"risks">) => void;
+	onMitigateRisk: (risk: Doc<"risks">) => void;
+	openItems: Doc<"readinessItems">[];
+	openRisks: Doc<"risks">[];
+	renderTask: (
+		item: Doc<"readinessItems">,
+		showCategory?: boolean
+	) => ReactNode;
+	segment: Segment;
+}) {
+	if (segment === "heads-up") {
+		return (
+			<HeadsUpList
+				labelByKey={labelByKey}
+				onAdd={onAddRisk}
+				onDismiss={onDismissRisk}
+				onEdit={onEditRisk}
+				onMitigate={onMitigateRisk}
+				risks={openRisks}
+			/>
+		);
+	}
+
+	if (segment === "done") {
+		return doneItems.length === 0 ? (
+			<AppText style={{ textAlign: "center" }} tone="secondary">
+				No finished tasks yet. Tick a task to move it here.
+			</AppText>
+		) : (
+			<ListGroup>{doneItems.map((item) => renderTask(item, true))}</ListGroup>
+		);
+	}
+
+	if (openItems.length === 0) {
+		return (
+			<EmptyState
+				action={{ label: "Add task", onPress: onAddTask }}
+				description="Every task on this trip is done."
+				icon="checkmark-circle-outline"
+				title="Nothing left to do"
+			/>
+		);
+	}
+
+	const orderedItems = readinessCategoryOptions.flatMap((category) =>
+		openItems.filter((item) => item.category === category)
+	);
+
+	return (
+		<ListGroup>{orderedItems.map((item) => renderTask(item, true))}</ListGroup>
 	);
 }
 
 export function ReadinessScreen() {
 	const tripId = useTripIdParam();
+	const params = useLocalSearchParams<{ segment?: string }>();
+	const { confirm } = useFeedback();
 	const readinessItems = useQuery(
 		api.readiness.listReadinessItems,
 		tripId ? { tripId } : "skip"
@@ -812,25 +841,36 @@ export function ReadinessScreen() {
 		api.companions.listTripCompanions,
 		tripId ? { tripId } : "skip"
 	);
+	const workspace = useQuery(
+		api.tripWorkspace.getTripWorkspace,
+		tripId ? { tripId } : "skip"
+	);
 	const ensureBaselineReadinessItems = useMutation(
 		api.readiness.ensureBaselineReadinessItems
 	);
-	const createReadinessItem = useMutation(api.readiness.createReadinessItem);
 	const deleteReadinessItem = useMutation(api.readiness.deleteReadinessItem);
 	const updateReadinessItem = useMutation(api.readiness.updateReadinessItem);
-	const updateReadinessItemDetails = useMutation(
-		api.readiness.updateReadinessItemDetails
+	const deleteRisk = useMutation(api.risks.deleteRisk);
+	const dismissRisk = useMutation(api.risks.dismissRisk);
+	const mitigateRisk = useMutation(api.risks.mitigateRisk);
+	const [segment, setSegment] = useState<Segment>(
+		params.segment === "heads-up" ? "heads-up" : "todo"
 	);
-	const [form, setForm] = useState<ReadinessForm>(initialReadinessForm);
-	const [editingItemId, setEditingItemId] =
-		useState<Id<"readinessItems"> | null>(null);
+	const [sheet, setSheet] = useState<{
+		kind: SheetKind;
+		nonce: number;
+		riskId: Id<"risks"> | null;
+		taskId: Id<"readinessItems"> | null;
+	} | null>(null);
 	const [baselineRequestedTripId, setBaselineRequestedTripId] =
 		useState<Id<"trips"> | null>(null);
-	const [isSheetOpen, setIsSheetOpen] = useState(false);
-	const [isSaving, setIsSaving] = useState(false);
-	const [readinessErrorMessage, setReadinessErrorMessage] = useState<
-		string | null
-	>(null);
+	const [screenError, setScreenError] = useState<string | null>(null);
+
+	useEffect(() => {
+		if (params.segment === "heads-up") {
+			setSegment("heads-up");
+		}
+	}, [params.segment]);
 
 	useEffect(() => {
 		if (!(tripId && readinessItems)) {
@@ -838,13 +878,13 @@ export function ReadinessScreen() {
 		}
 
 		const missingCategories = getMissingRequiredReadinessCategories(
-			readinessItems.map(toDomainReadinessItem)
+			readinessItems.map(toReadinessItem)
 		);
 
 		if (missingCategories.length > 0 && baselineRequestedTripId !== tripId) {
 			setBaselineRequestedTripId(tripId);
 			ensureBaselineReadinessItems({ tripId }).catch(() => {
-				setReadinessErrorMessage("Could not prepare readiness checklist.");
+				setScreenError("Could not prepare the checklist. Try again later.");
 			});
 		}
 	}, [
@@ -856,352 +896,246 @@ export function ReadinessScreen() {
 
 	if (!tripId) {
 		return (
-			<Container className="pb-28">
-				<EmptyState
-					description="Open a saved trip before checking readiness."
-					icon="shield-checkmark-outline"
-					title="Trip not found"
-				/>
-			</Container>
+			<ScreenShell
+				state={{
+					description: "Open a saved trip to check readiness.",
+					icon: "shield-checkmark-outline",
+					kind: "empty",
+					title: "Trip not found",
+				}}
+				title="Readiness"
+			/>
 		);
 	}
 
-	if (readinessItems === undefined || companions === undefined) {
-		return <ScreenLoadingState />;
+	if (
+		readinessItems === undefined ||
+		companions === undefined ||
+		workspace === undefined
+	) {
+		return (
+			<ScreenShell
+				state={{ kind: "loading", title: "Loading readiness" }}
+				title="Readiness"
+			/>
+		);
 	}
 
-	const updateForm = (key: keyof ReadinessForm, value: string) => {
-		setReadinessErrorMessage(null);
-		setForm((currentForm) => ({ ...currentForm, [key]: value }));
-	};
-	const openCreateSheet = () => {
-		setReadinessErrorMessage(null);
-		setEditingItemId(null);
-		setForm(initialReadinessForm);
-		setIsSheetOpen(true);
-	};
-	const openEditSheet = (item: Doc<"readinessItems">) => {
-		setReadinessErrorMessage(null);
-		setEditingItemId(item._id);
-		setForm({
-			assignedToMemberId: item.assignedToMemberId ?? "",
-			category: item.category,
-			description: item.description,
-			dueDate: item.dueDate,
-			priority: item.priority,
-			title: item.title,
-		});
-		setIsSheetOpen(true);
-	};
-	const handleSaveTask = async () => {
-		if (!tripId) {
-			return;
-		}
-
-		const title = form.title.trim();
-		if (!title) {
-			setReadinessErrorMessage("Add a task title.");
-			return;
-		}
-
-		setReadinessErrorMessage(null);
-		setIsSaving(true);
-		try {
-			const taskPatch = {
-				category: getReadinessCategory(form.category),
-				description: form.description.trim() || title,
-				dueDate: form.dueDate.trim(),
-				priority: getPriority(form.priority),
-				title,
-			};
-			const assignedToMemberId = form.assignedToMemberId.trim() || undefined;
-
-			if (editingItemId) {
-				await updateReadinessItemDetails({
-					...taskPatch,
-					assignedToMemberId,
-					readinessItemId: editingItemId,
-				});
-			} else {
-				await createReadinessItem({
-					...taskPatch,
-					assignedToMemberId,
-					tripId,
-				});
-			}
-			setForm(initialReadinessForm);
-			setEditingItemId(null);
-			setIsSheetOpen(false);
-		} catch {
-			setReadinessErrorMessage("Could not save readiness task.");
-		} finally {
-			setIsSaving(false);
-		}
-	};
-	const runReadinessAction = async (action: () => Promise<unknown>) => {
-		setReadinessErrorMessage(null);
-		try {
-			await action();
-		} catch {
-			setReadinessErrorMessage("Could not update readiness task.");
-		}
-	};
-	const sortedReadinessItems = sortReadinessItemsForReview(readinessItems);
-	const domainItems = sortedReadinessItems.map(toDomainReadinessItem);
-	const score = calculateReadinessScore(domainItems);
-	const categories = Object.entries(score.categoryScores) as [
-		ReadinessCategory,
-		number,
-	][];
-	const openItems = sortReadinessItemsForReview(
-		domainItems.filter(
-			(item) => item.status !== "done" && item.status !== "ignored"
-		)
-	);
-	const highestPriorityItem = sortedReadinessItems.find(
-		(item) => item._id === openItems[0]?.id
-	);
-	const urgentOpenCount = openItems.filter(
-		(item) => item.priority === "critical" || item.priority === "high"
-	).length;
-	const completedCount = domainItems.filter(
-		(item) => item.status === "done"
-	).length;
+	const risks = sortTripRisksForReview(workspace?.risks ?? []);
+	const openRisks = risks.filter((risk) => risk.status === "open");
+	const relatedOptions = workspace
+		? getTripRelatedEntityOptions(workspace, {
+				expenseLimit: 6,
+				itineraryItemLimit: 8,
+				vaultItemLimit: 6,
+			})
+		: [];
+	const relatedLabelByKey = workspace
+		? getTripRelatedEntityLabelByKey(workspace)
+		: new Map<string, string>();
+	const sortedItems = sortReadinessItemsForReview(readinessItems);
+	const progress = getReadinessProgress(sortedItems, toLocalDateKey());
+	const openItems = sortedItems.filter(isOpenItem);
+	const doneItems = sortedItems.filter((item) => item.status === "done");
+	const nextUp = openItems[0] ?? null;
+	const { headerLine, headerTitle } = getReadinessHeader(progress);
 	const companionById = new Map<string, string>(
 		companions.map((companion) => [companion._id, companion.name])
 	);
-	const assignedOpenCount = openItems.filter(
-		(item) => item.assignedToMemberId
-	).length;
-	const getAssignedToName = (memberId?: string) =>
-		memberId ? companionById.get(memberId) : undefined;
-	const weakestCategory =
-		[...categories].sort((left, right) => left[1] - right[1]).at(0) ?? null;
-	const weakestCategoryLabel = weakestCategory
-		? READINESS_CATEGORY_LABELS[weakestCategory[0]]
-		: "No category";
-	const highestPriorityDomainItem = openItems[0] ?? null;
-	const highestPriorityCategoryHref = highestPriorityItem
-		? getReadinessCategoryHref({
-				category: highestPriorityItem.category,
-				tripId,
-			})
-		: null;
-	const highestPriorityOwnerHref = highestPriorityItem?.assignedToMemberId
-		? VIYA_ROUTES.tripCompanions(tripId)
-		: null;
-	const highestPriorityAssignedName = getAssignedToName(
-		highestPriorityItem?.assignedToMemberId
-	);
-	const workspaceModules = workspaceModuleGroups.map((module) => {
-		const moduleCategories = new Set<ReadinessCategory>(module.categories);
-		const moduleItems = domainItems.filter((item) =>
-			moduleCategories.has(item.category)
-		);
-		const moduleOpenItems = moduleItems.filter(
-			(item) => item.status !== "done" && item.status !== "ignored"
-		);
-		const moduleScore = Math.round(
-			module.categories.reduce(
-				(total, category) => total + score.categoryScores[category],
-				0
-			) / module.categories.length
-		);
 
-		return {
-			...module,
-			categoryHref: module.route(tripId),
-			highestPriority: getHighestPriority(moduleItems),
-			openCount: moduleOpenItems.length,
-			score: moduleScore,
-		};
-	});
+	const runAction = async (action: () => Promise<unknown>, failure: string) => {
+		setScreenError(null);
+		try {
+			await action();
+		} catch {
+			setScreenError(failure);
+		}
+	};
+	const setTaskStatus = (item: Doc<"readinessItems">, status: WorkStatus) =>
+		runAction(async () => {
+			await updateReadinessItem({ readinessItemId: item._id, status });
+			haptic(status === "done" ? "success" : "selection");
+		}, "Could not update this task. Try again.");
+
+	const closeSheet = () => setSheet(null);
+	const openSheet = (next: {
+		kind: SheetKind;
+		riskId?: Id<"risks">;
+		taskId?: Id<"readinessItems">;
+	}) =>
+		setSheet({
+			kind: next.kind,
+			nonce: Date.now(),
+			riskId: next.riskId ?? null,
+			taskId: next.taskId ?? null,
+		});
+	const editingTask =
+		readinessItems.find((item) => item._id === sheet?.taskId) ?? null;
+	const editingRisk = risks.find((risk) => risk._id === sheet?.riskId) ?? null;
+
+	const confirmDelete = (title: string, noun: string) =>
+		confirm({
+			confirmLabel: `Delete ${noun}`,
+			destructive: true,
+			message: `${title} will be removed from this trip.`,
+			title: `Delete ${noun}`,
+		});
+	const removeTask = async (item: Doc<"readinessItems">) => {
+		if (!(await confirmDelete(item.title, "task"))) {
+			return;
+		}
+		await runAction(async () => {
+			await deleteReadinessItem({ readinessItemId: item._id });
+			haptic("warning");
+			closeSheet();
+		}, "Could not delete this task. Try again.");
+	};
+	const removeRisk = async (risk: Doc<"risks">) => {
+		if (!(await confirmDelete(risk.title, "risk"))) {
+			return;
+		}
+		await runAction(async () => {
+			await deleteRisk({ riskId: risk._id });
+			haptic("warning");
+			closeSheet();
+		}, "Could not delete this risk. Try again.");
+	};
+	const handleDeleteFromSheet = () => {
+		if (editingTask?.source === "system") {
+			setTaskStatus(editingTask, "ignored")
+				.then(closeSheet)
+				.catch(() => undefined);
+		} else if (editingTask) {
+			removeTask(editingTask).catch(() => undefined);
+		} else if (editingRisk) {
+			removeRisk(editingRisk).catch(() => undefined);
+		}
+	};
+
+	const renderTask = (item: Doc<"readinessItems">, showCategory = false) => (
+		<SwipeRow
+			key={item._id}
+			trailing={
+				item.source === "system"
+					? {
+							icon: "remove-circle-outline",
+							label: "Not needed",
+							onPress: () => {
+								setTaskStatus(item, "ignored").catch(() => undefined);
+							},
+							tone: "danger",
+						}
+					: {
+							icon: "trash-outline",
+							label: "Delete",
+							onPress: () => {
+								removeTask(item).catch(() => undefined);
+							},
+							tone: "danger",
+						}
+			}
+		>
+			<ReadinessTaskRow
+				assignedToName={
+					item.assignedToMemberId
+						? companionById.get(item.assignedToMemberId)
+						: undefined
+				}
+				item={item}
+				onEdit={() => openSheet({ kind: "task", taskId: item._id })}
+				onToggle={() => {
+					setTaskStatus(item, item.status === "done" ? "todo" : "done").catch(
+						() => undefined
+					);
+				}}
+				showCategory={showCategory}
+			/>
+		</SwipeRow>
+	);
+
+	const content = (
+		<SegmentContent
+			doneItems={doneItems}
+			labelByKey={relatedLabelByKey}
+			onAddRisk={() => openSheet({ kind: "risk" })}
+			onAddTask={() => openSheet({ kind: "task" })}
+			onDismissRisk={(risk) => {
+				runAction(
+					() => dismissRisk({ riskId: risk._id }),
+					"Could not dismiss this risk. Try again."
+				).catch(() => undefined);
+			}}
+			onEditRisk={(risk) => openSheet({ kind: "risk", riskId: risk._id })}
+			onMitigateRisk={(risk) => {
+				haptic("success");
+				runAction(
+					() => mitigateRisk({ riskId: risk._id }),
+					"Could not update this risk. Try again."
+				).catch(() => undefined);
+			}}
+			openItems={openItems}
+			openRisks={openRisks}
+			renderTask={renderTask}
+			segment={segment}
+		/>
+	);
 
 	return (
-		<TripModuleScreenFrame
-			activeTab="checklist"
-			headerAction={
-				<NavigationIconButton
-					accessibilityLabel="Add readiness task"
-					icon="add"
-					onPress={openCreateSheet}
-				/>
-			}
-			tripId={tripId}
-		>
-			<Container includeBottomInset={false} isScrollable={false}>
-				<ScrollView
-					contentContainerStyle={{
-						flexGrow: 1,
-						gap: spacing.section,
-						paddingBottom: 112,
-						paddingHorizontal: spacing.screen,
-					}}
-					contentInsetAdjustmentBehavior="automatic"
-					keyboardShouldPersistTaps="handled"
-					showsVerticalScrollIndicator={false}
-				>
-					{readinessErrorMessage ? (
-						<Animated.View entering={FadeIn}>
-							<AppText
-								accessibilityRole="alert"
-								tone="danger"
-								variant="subhead"
-							>
-								{readinessErrorMessage}
-							</AppText>
-						</Animated.View>
-					) : null}
-
-					<ReadinessOverview
-						assignedOpenCount={assignedOpenCount}
-						completedCount={completedCount}
-						domainItemCount={domainItems.length}
-						highestPriorityItem={highestPriorityItem}
-						highestPriorityLabel={
-							highestPriorityDomainItem
-								? PRIORITY_LABELS[highestPriorityDomainItem.priority]
-								: "Clear"
-						}
-						onCreateTask={openCreateSheet}
-						onFixTopGap={() => {
-							if (highestPriorityItem) {
-								openEditSheet(highestPriorityItem);
-							}
-						}}
-						openCount={openItems.length}
-						score={score}
-						tripId={tripId}
-						urgentOpenCount={urgentOpenCount}
-						weakestCategoryLabel={weakestCategoryLabel}
-					/>
-
-					<TopReadinessGapSummary
-						assignedToName={highestPriorityAssignedName}
-						categoryHref={highestPriorityCategoryHref}
-						item={highestPriorityItem}
-						onCreateTopGap={openCreateSheet}
+		<>
+			<ScreenShell
+				actions={[
+					{
+						icon: "add",
+						key: "add",
+						label: segment === "heads-up" ? "Add risk" : "Add task",
+						onPress: () =>
+							openSheet({ kind: segment === "heads-up" ? "risk" : "task" }),
+						type: "button",
+					},
+				]}
+				title="Readiness"
+			>
+				<View style={{ gap: spacing.xs }}>
+					<AppText variant="title">{headerTitle}</AppText>
+					<AppText tone="secondary" variant="callout">
+						{headerLine}
+					</AppText>
+				</View>
+				{nextUp ? (
+					<NextUpRow
+						item={nextUp}
+						onEdit={() => openSheet({ kind: "task", taskId: nextUp._id })}
 						onMarkDone={() => {
-							if (highestPriorityItem) {
-								runReadinessAction(() =>
-									updateReadinessItem({
-										readinessItemId: highestPriorityItem._id,
-										status: "done",
-									})
-								).catch(() => undefined);
-							}
+							setTaskStatus(nextUp, "done").catch(() => undefined);
 						}}
-						onReview={() => {
-							if (highestPriorityItem) {
-								openEditSheet(highestPriorityItem);
-							}
-						}}
-						ownerHref={highestPriorityOwnerHref}
 					/>
-
-					<View style={{ gap: spacing.md }}>
-						<View style={{ gap: 2, paddingHorizontal: spacing.xs }}>
-							<AppText accessibilityRole="header" variant="heading">
-								Workspace
-							</AppText>
-							<AppText tone="secondary" variant="subhead">
-								Open the module that owns each gap.
-							</AppText>
-						</View>
-						<View
-							style={{
-								flexDirection: "row",
-								flexWrap: "wrap",
-								gap: spacing.md,
-							}}
-						>
-							{workspaceModules.map((module) => (
-								<ReadinessCategoryCard
-									categoryHref={module.categoryHref}
-									detail={module.detail}
-									highestPriority={module.highestPriority}
-									icon={module.icon}
-									key={module.label}
-									label={module.label}
-									openCount={module.openCount}
-									score={module.score}
-								/>
-							))}
-						</View>
-					</View>
-
-					<View style={{ gap: spacing.md }}>
-						<AppText
-							accessibilityRole="header"
-							style={{ paddingHorizontal: spacing.xs }}
-							variant="heading"
-						>
-							Checklist
-						</AppText>
-						{sortedReadinessItems.length === 0 ? (
-							<Card padding="none">
-								<EmptyState
-									action={{
-										label: "Add readiness task",
-										onPress: openCreateSheet,
-									}}
-									description="Add a concrete requirement to start tracking travel readiness."
-									icon="checkbox-outline"
-									title="No checklist tasks"
-								/>
-							</Card>
-						) : (
-							<ListGroup>
-								{sortedReadinessItems.map((item) => (
-									<ReadinessItemRow
-										assignedToName={getAssignedToName(item.assignedToMemberId)}
-										categoryHref={getReadinessCategoryHref({
-											category: item.category,
-											tripId,
-										})}
-										item={item}
-										key={item._id}
-										onDelete={(readinessItemId) => {
-											runReadinessAction(() =>
-												deleteReadinessItem({ readinessItemId })
-											).catch(() => undefined);
-										}}
-										onEdit={openEditSheet}
-										onStatusChange={(readinessItemId, status) => {
-											runReadinessAction(() =>
-												updateReadinessItem({ readinessItemId, status })
-											).catch(() => undefined);
-										}}
-										ownerHref={
-											item.assignedToMemberId
-												? VIYA_ROUTES.tripCompanions(tripId)
-												: null
-										}
-									/>
-								))}
-							</ListGroup>
-						)}
-					</View>
-				</ScrollView>
-				<ReadinessTaskSheet
-					companions={companions}
-					errorMessage={readinessErrorMessage}
-					form={form}
-					isOpen={isSheetOpen}
-					isSaving={isSaving}
-					mode={editingItemId ? "edit" : "create"}
-					onOpenChange={(isOpen) => {
-						setIsSheetOpen(isOpen);
-						if (!isOpen) {
-							setEditingItemId(null);
-							setReadinessErrorMessage(null);
-							setForm(initialReadinessForm);
-						}
-					}}
-					onSubmit={handleSaveTask}
-					onUpdateForm={updateForm}
+				) : null}
+				<Segmented
+					accessibilityLabel="Readiness view"
+					onChange={setSegment}
+					options={segmentOptions}
+					value={segment}
 				/>
-			</Container>
-		</TripModuleScreenFrame>
+				{screenError ? (
+					<AppText accessibilityRole="alert" tone="danger" variant="subhead">
+						{screenError}
+					</AppText>
+				) : null}
+				{content}
+			</ScreenShell>
+
+			<ReadinessSheet
+				companions={companions}
+				editingRisk={editingRisk}
+				editingTask={editingTask}
+				initialKind={sheet?.kind ?? "task"}
+				isOpen={sheet !== null}
+				key={sheet?.nonce ?? 0}
+				onClose={closeSheet}
+				onDelete={handleDeleteFromSheet}
+				relatedOptions={relatedOptions}
+				tripId={tripId}
+			/>
+		</>
 	);
 }

@@ -1,56 +1,42 @@
 interface TripRecapShareInput {
+	budgetOutcome: string;
 	completedItems: number;
 	confirmedBookings: number;
-	currency: string;
 	dateWindow: string;
 	destination: string;
+	fileCount: number;
 	highlightTitles: readonly string[];
-	remainingAmount: number;
-	savedDocumentCount: number;
 	title: string;
+	totalBookings: number;
 	totalItems: number;
-	totalTrackedSpend: number;
 }
 
-const formatShareMoney = (amount: number, currency: string) =>
-	new Intl.NumberFormat("en-PH", {
-		currency,
-		maximumFractionDigits: 0,
-		style: "currency",
-	})
-		.format(amount)
-		.replace("₱", "PHP ");
-
 export const buildTripRecapShareMessage = ({
+	budgetOutcome,
 	completedItems,
 	confirmedBookings,
-	currency,
 	dateWindow,
 	destination,
+	fileCount,
 	highlightTitles,
-	remainingAmount,
-	savedDocumentCount,
 	title,
+	totalBookings,
 	totalItems,
-	totalTrackedSpend,
 }: TripRecapShareInput) => {
-	const highlights =
+	const highlightLine =
 		highlightTitles.length > 0
-			? highlightTitles.slice(0, 4).join(", ")
-			: "Add moments to complete the trip story";
+			? `Highlights: ${highlightTitles.slice(0, 4).join(", ")}`
+			: null;
 
 	return [
 		title,
-		`${destination} · ${dateWindow}`,
+		[destination, dateWindow].filter(Boolean).join(" · "),
 		"",
-		`Highlights: ${highlights}`,
-		`Itinerary: ${completedItems}/${totalItems} completed`,
-		`Spend tracked: ${formatShareMoney(
-			totalTrackedSpend,
-			currency
-		)} · ${formatShareMoney(remainingAmount, currency)} remaining`,
-		`Bookings and files: ${confirmedBookings} confirmed · ${savedDocumentCount} saved`,
-		"",
-		"Planned with Viya.",
-	].join("\n");
+		highlightLine,
+		`Stops: ${completedItems} of ${totalItems} done`,
+		budgetOutcome,
+		`Bookings: ${confirmedBookings} of ${totalBookings} booked · ${fileCount} ${fileCount === 1 ? "file" : "files"}`,
+	]
+		.filter((line) => line !== null)
+		.join("\n");
 };

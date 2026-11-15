@@ -103,8 +103,11 @@ export const metrics = {
 	minTarget: 44,
 	navBarHeight: 44,
 	rowHeight: 54,
+	segmentHeight: 32,
+	swipeAction: 76,
 	tabBarHeight: 60,
 	tabSlot: 52,
+	thumbnail: 56,
 } as const;
 
 export type TypeVariant =
@@ -150,15 +153,18 @@ export const typeScale: Record<TypeVariant, TypeStyle> = {
 
 export const motion = {
 	/** Durations in ms. */
-	duration: { fast: 120, normal: 220, slow: 360, toast: 2800 },
-	/** Reanimated spring configs. */
+	duration: { fast: 120, normal: 220, toast: 2800 },
+	/** Distance (pt) content rises while entering. */
+	riseDistance: 8,
+	/** Reanimated spring configs. Two springs only, both without bounce. */
 	spring: {
-		/** Press feedback: quick, no overshoot. */
-		press: { damping: 22, mass: 0.6, stiffness: 420 },
-		/** Selection indicators (tab pill). */
-		selection: { damping: 20, mass: 0.8, stiffness: 260 },
-		/** Toasts, dialogs. */
-		surface: { damping: 18, mass: 0.9, stiffness: 220 },
+		/** Layout, entering, progress, selection: critically damped, ~300ms. */
+		layout: { damping: 35, mass: 1, stiffness: 300 },
+		/** Press feedback: fast, no overshoot. */
+		press: { damping: 32, mass: 0.6, stiffness: 500 },
 	},
-	pressScale: 0.96,
+	/** List entrance: max 40ms stagger, first 6 items only. */
+	stagger: { max: 40, maxItems: 6 },
+	pressScale: 0.97,
+	rowPressScale: 0.985,
 } as const;

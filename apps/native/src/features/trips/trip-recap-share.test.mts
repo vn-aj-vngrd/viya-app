@@ -6,38 +6,38 @@ describe("trip recap share message", () => {
 	it("builds a concise shareable trip story from recap metrics", () => {
 		expect(
 			buildTripRecapShareMessage({
+				budgetOutcome: "Spent: ₱52,000 of ₱56,200",
 				completedItems: 5,
 				confirmedBookings: 3,
-				currency: "PHP",
-				dateWindow: "10 Jul - 14 Jul",
+				dateWindow: "10–14 Jul 2026",
 				destination: "Tokyo",
+				fileCount: 4,
 				highlightTitles: ["Tsukiji breakfast", "Ghibli Museum"],
-				remainingAmount: 4200,
-				savedDocumentCount: 4,
 				title: "Japan summer",
+				totalBookings: 4,
 				totalItems: 6,
-				totalTrackedSpend: 52_000,
 			})
 		).toBe(
-			"Japan summer\nTokyo · 10 Jul - 14 Jul\n\nHighlights: Tsukiji breakfast, Ghibli Museum\nItinerary: 5/6 completed\nSpend tracked: PHP 52,000 · PHP 4,200 remaining\nBookings and files: 3 confirmed · 4 saved\n\nPlanned with Viya."
+			"Japan summer\nTokyo · 10–14 Jul 2026\n\nHighlights: Tsukiji breakfast, Ghibli Museum\nStops: 5 of 6 done\nSpent: ₱52,000 of ₱56,200\nBookings: 3 of 4 booked · 4 files"
 		);
 	});
 
-	it("falls back gracefully when there are no highlights yet", () => {
-		expect(
-			buildTripRecapShareMessage({
-				completedItems: 0,
-				confirmedBookings: 0,
-				currency: "PHP",
-				dateWindow: "Dates TBD",
-				destination: "Palawan",
-				highlightTitles: [],
-				remainingAmount: 0,
-				savedDocumentCount: 0,
-				title: "Island trip",
-				totalItems: 0,
-				totalTrackedSpend: 0,
-			})
-		).toContain("Highlights: Add moments to complete the trip story");
+	it("omits the highlights line when there are none", () => {
+		const message = buildTripRecapShareMessage({
+			budgetOutcome: "Spent: ₱0",
+			completedItems: 0,
+			confirmedBookings: 0,
+			dateWindow: "",
+			destination: "Palawan",
+			fileCount: 1,
+			highlightTitles: [],
+			title: "Island trip",
+			totalBookings: 0,
+			totalItems: 0,
+		});
+
+		expect(message).not.toContain("Highlights");
+		expect(message).not.toContain("Planned with Viya");
+		expect(message).toContain("Palawan\n");
 	});
 });

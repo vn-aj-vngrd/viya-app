@@ -1,403 +1,177 @@
----
-name: Viya Mobile Design System
-version: 0.3.0
-status: draft
-source: /Users/vanajvanguardia/Downloads/viya_heroui_mobile_design.md
-platforms:
-  - ios
-  - android
-  - web
-frameworks:
-  - Expo
-  - React Native
-  - HeroUI Native
-description: Premium, minimalist, iOS-native UI with Liquid Glass on compact controls and flat opaque islands for content.
-colors:
-  app:
-    value: "#F4F4F5"
-    role: Primary app canvas. Never use pure white as the full-page default.
-  app-alt:
-    value: "#F7F7F8"
-    role: Lighter nested app area and quiet empty states.
-  surface:
-    value: "#FFFFFF"
-    role: Floating island cards, form panels, bottom action islands.
-  surface-muted:
-    value: "#FAFAFA"
-    role: Inner chips, nested rows, subtle grouped content.
-  foreground:
-    value: "#18181B"
-    role: Primary text and high-emphasis icons.
-  muted:
-    value: "#71717A"
-    role: Secondary text, inactive controls, helper copy.
-  subtle:
-    value: "#A1A1AA"
-    role: Metadata, inactive dots, quiet dividers.
-  border:
-    value: "rgba(24, 24, 27, 0.08)"
-    role: Very soft island separation.
-  viya-blue:
-    value: "#0A84FF"
-    role: Primary actions, selected state, AI guidance.
-  viya-mint:
-    value: "#30D158"
-    role: Completed readiness, safe status, confirmed tasks.
-  viya-orange:
-    value: "#FF9F0A"
-    role: Pending preparation, warnings, travel risk.
-  viya-red:
-    value: "#FF453A"
-    role: Urgent blockers and failed checks.
-  viya-purple:
-    value: "#BF5AF2"
-    role: Memories, Wrapped, AI-generated highlights.
-typography:
-  font-family:
-    value: system
-    role: Platform-native typography through React Native.
-  hero:
-    fontSize: 34
-    lineHeight: 40
-    fontWeight: 700
-    role: Onboarding and primary trip moments only.
-  title1:
-    fontSize: 28
-    lineHeight: 34
-    fontWeight: 700
-    role: Screen titles and major island values.
-  title2:
-    fontSize: 22
-    lineHeight: 28
-    fontWeight: 600
-    role: Card titles and secondary screen titles.
-  body:
-    fontSize: 16
-    lineHeight: 24
-    fontWeight: 400
-    role: Primary explanatory copy.
-  callout:
-    fontSize: 15
-    lineHeight: 21
-    fontWeight: 400
-    role: Compact feature descriptions and AI suggestions.
-  caption:
-    fontSize: 13
-    lineHeight: 18
-    fontWeight: 500
-    role: Chips, metadata, lifecycle labels.
-spacing:
-  screenX: 16
-  sectionGap: 16
-  cardPadding: 20
-  bottomActionPadding: 16
-radius:
-  sm: 12
-  md: 16
-  lg: 20
-  xl: 24
-  island: 28
-  sheet: 32
-  pill: 999
-shadows:
-  soft:
-    shadowColor: "#000000"
-    shadowOpacity: 0.06
-    shadowRadius: 18
-    shadowOffset:
-      width: 0
-      height: 8
-    elevation: 3
-  floating:
-    shadowColor: "#000000"
-    shadowOpacity: 0.10
-    shadowRadius: 24
-    shadowOffset:
-      width: 0
-      height: 12
-    elevation: 6
-components:
-  screen-header: Native title row with optional circular icon actions.
-  island-card: White rounded card on soft app canvas with subtle shadow.
-  primary-island: One dominant card per main screen.
-  compact-list-card: White list island with internal dividers, not row borders.
-  search-command-island: Rounded white search or AI command input.
-  bottom-action-island: Sticky bottom action area for the primary next step.
-  ai-suggestion-card: One actionable Viya recommendation.
-onboarding:
-  maxScreens: 10
-  structure: One welcome/action screen followed by nine fixed-height lifecycle carousel screens.
-  lifecycle:
-    - Welcome
-    - Dream
-    - Plan
-    - Book
-    - Sync
-    - Prepare
-    - Travel
-    - Track
-    - Capture
-    - Wrap Up
----
+# Viya Design Contract
 
-# Viya Mobile Design System
+Single source of truth for UI in `apps/native`. Tokens live in `src/components/ui/tokens.ts`; primitives in `src/components/ui`. Import only from `@/src/components/ui`. If this file and the code disagree, fix the code or this file in the same change.
 
-## Design Intent
+## 1. Rules (read first)
 
-Viya should feel like a premium mobile travel companion: calm, native, modern, and polished. The design direction follows a HeroUI Pro-inspired island UI pattern: soft non-white canvas, floating white content surfaces, large rounded cards, subtle elevation, compact typography, and native-feeling controls.
+1. Content is opaque and flat. Glass is for the functional layer only (section 4).
+2. One primary action per screen, in the thumb zone (section 7).
+3. Build from the primitives in section 3. Do not restyle a primitive inline; extend it.
+4. Every colour, space, radius and size comes from tokens. No hex literals in features.
+5. Every icon is `<Icon/>`. Monochrome, no badge behind it.
+6. Every sheet is `<AppSheet/>`. It owns the single grabber.
+7. Every interactive element is at least 44pt, has an accessibility label, and gives press and haptic feedback.
+8. Text uses `<AppText/>` variants and scales with Dynamic Type. Never fix a container height around text.
+9. Every screen has designed loading, empty and error states.
+10. Copy is short, sentence case, active voice. No emoji. No exclamation marks.
 
-This is not a web dashboard compressed into mobile. Every screen should feel like a focused mobile workflow for planning, readiness, TripSync, Travel Mode, alerts, moments, and wrap-up.
+## 2. Principles (iOS 27 HIG)
 
-## UI Foundation (v0.3, supersedes conflicting rules below)
+- Clarity: one idea per screen, strong hierarchy through size and weight, not colour.
+- Deference: chrome recedes, content leads. Large title collapses to inline on scroll.
+- Depth: layers come from glass over content, sheet detents and motion. Not from shadows.
+- Direct manipulation: swipe actions on rows, context menus on long press, drag the sheet.
+- Progressive disclosure: show the next useful thing, hide the rest behind a row, menu or sheet.
+- Quiet and precise: small type scale, generous space, one accent colour.
 
-Code is the token source: `apps/native/src/components/ui/tokens.ts` (mirrored as CSS variables in `apps/native/global.css`). Import everything from `@/src/components/ui` (index). Hand-built equivalents of these primitives are a defect.
+## 3. Components
 
-### Principles
+| Name | Key props | Use |
+|---|---|---|
+| `AppText` | `variant` largeTitle/title/heading/headline/body/callout/subhead/footnote/eyebrow, `tone` ink/secondary/tertiary/accent/danger/success/warning/onPrimary, `bold` | All text |
+| `Icon` | `name` (Ionicons name), `size=20`, `tone`, `color`, `weight` | All icons |
+| `GlassSurface` | `shape` rounded/pill/circle, `variant` regular/clear, `interactive`, `radius`, `tint` | Functional-layer chrome only |
+| `GlassIconButton` | `icon`, `accessibilityLabel`, `onPress`, `size=44`, `tint`, `disabled` | Nav and toolbar icon actions |
+| `PrimaryButton` | `label`, `onPress`, `icon`, `isPending`, `destructive`, `fullWidth`, `disabled` | The screen's one main action |
+| `SecondaryButton` | `label`, `onPress`, `icon`, `variant` fill/plain, `isPending` | Alternate actions |
+| `PressableScale` | `haptic`, `scaleTo`, Pressable props | Any custom tappable |
+| `Card` / `Island` | `padding` none/md/lg, `radius`, `onPress` | Opaque content container, sparingly |
+| `ListGroup` + `ListRow` | group: `header`, `footer`, `separatorInset`; row: `titleLines`, `subtitleLines`, row: `title`, `subtitle`, `value`, `leading`, `trailing`, `showChevron`, `destructive`, `onPress` | Inset grouped lists, the default for collections |
+| `SectionHeader` | `title`, `eyebrow`, `action` | Heading above a block |
+| `Chip` | `label`, `icon`, `selected`, `onPress` | Filters and static tags |
+| `ScreenHeader` / `CollapsingScreen` | `title`, `subtitle`, `leading`, `trailing`, `footer`, `refreshControl`, `contentContainerStyle` | Large-title screen scaffold |
+| `AppSheet` | `isOpen`, `onOpenChange`, `snapPoints`, `index`, `enableDynamicSizing`, `keyboardBehavior`, gorhom content props | Every bottom sheet |
+| `SheetHeader` | `title`, `subtitle`, `onClose`, `confirm` {label,onPress,isPending,disabled} | Header inside a sheet. Never draws a grabber |
+| `EmptyState` | `title`, `description`, `icon`, `action`, `visual` | Zero-data state |
+| `LoadingState` | `title`, `message`, `delay` | Initial load (skeleton or spinner after a delay) |
+| `FeedbackProvider`, `useFeedback` | `toast({message,tone})`, `confirm({title,message,destructive})` | Toasts and confirmations |
+| `Skeleton` | `width`, `height`, `radius` | Loading placeholder with the shared pulse |
+| `SearchField` | `value`, `onChangeText`, `placeholder` | Opaque pill search in content |
+| `Segmented` | `options` (2 to 4), `value`, `onChange`, `accessibilityLabel` | Exclusive scopes in content, opaque |
+| `SwipeableRow` | `leadingActions`, `trailingActions` | Row swipe actions, mirrored as accessibility actions |
+| `ContextMenu` | `href`, `actions`, `children` | Native iOS long-press menu on a navigating row |
+| `haptic` | `light` `medium` `selection` `success` `warning` `error` | Feedback calls |
 
-- Premium through restraint: quiet opaque content, one accent, precise alignment. No decorative gradients, no heavy shadows, no borders around rows.
-- Glass only on compact controls: header icon buttons, the floating tab bar, toasts, floating actions. Never on cards, rows, fields or on top of other glass. Content islands stay flat and opaque.
-- Native feel: 44pt minimum hit targets, spring press feedback plus a haptic on every tappable, system font with Dynamic Type, large titles that collapse.
-- Dark mode is first class: read colors from `useUITheme().palette` (or CSS variables via className), never hard-code hex in screens.
-- Reduce Transparency and Android: glass becomes a solid translucent surface with a hairline edge. Reduce Motion should favor fades (springs are short and overshoot-free).
+Icon names: `SF_SYMBOL_MAP` in `src/components/ui/icon.tsx` maps every used Ionicons name to an SF Symbol. A name not in the map falls back to Ionicons on iOS, so add the mapping when you add a new icon.
 
-### Glass tiers (`GlassSurface`)
+## 4. Glass tiers
 
-| Platform | Rendering |
+| Tier | Surfaces | Treatment |
+|---|---|---|
+| Glass `regular`, interactive | Nav and toolbar buttons, tab bar, floating action, composer container, confirm pill | `GlassSurface` |
+| Glass `clear` | Floating controls over photos and maps | `GlassSurface variant="clear"` |
+| Glass chrome | Sheet background (via `AppSheet`), toasts, menus, confirm dialogs | System or `GlassSurface` |
+| Never glass | Cards, list rows, forms, fields, text blocks, chips, segmented control in content, buttons with text fill, glass on glass | Opaque `surface` on `canvas` |
+
+Fallbacks: iOS before 26 uses system blur. Android, web and Reduce Transparency use `palette.glassFallback` with a hairline edge. Contrast never depends on blur.
+
+## 5. Tokens (match tokens.ts)
+
+Colour (light / dark): canvas `#F4F4F5` / `#0B0B0C`; surface `#FFFFFF` / `#1C1C1E`; ink `#18181B` / `#F5F5F7`; inkSecondary `#6B6B73` / `#A1A1AA`; inkTertiary `#A1A1AA` / `#71717A`; fill `#EEEEF0` / `#2C2C2E`; accent `#0A84FF`; success `#248A3D` / `#30D158`; warning `#B25E00` / `#FF9F0A`; danger `#D70015` / `#FF453A`. Also `hairline`, `separator`, `selection`, `scrim`, `onPrimary`, `glassFallback`.
+Rules: accent only for the primary action, selection and links. Status colour always pairs with an icon or text. Purple and gradients are not used.
+
+Spacing (pt): xs 4, sm 8, md 12, lg 16, screen 20, xl 24, section 24, 2xl 32, 3xl 40.
+Radius: tile 12, group 14, field 16, card 20, sheet 32, pill 999.
+Metrics: minTarget 44, iconButton 44, actionHeight 50, rowHeight 54, thumbnail 56, swipeAction 76, segmentHeight 32, thumbnail 56, swipeAction 76, segmentHeight 32, chipHeight 34, tabBarHeight 60.
+Type: largeTitle 34/41 bold, title 28/34, heading 22/28, headline 17/22 semibold, body 17/24, callout 16/22, subhead 15/20, footnote 13/18, eyebrow 12/16.
+Motion: see section 10. Tokens in `motion`: durations fast 120, normal 220, slow 360, toast 2800 ms; springs `press` and `layout`; press scale 0.97.
+
+## 6. iOS versus Android
+
+| Concern | iOS | Android |
+|---|---|---|
+| Icons | SF Symbols, monochrome | Ionicons via `Icon` |
+| Glass | Liquid Glass (`expo-glass-effect`) | Solid translucent `glassFallback` |
+| Haptics | `expo-haptics` | Same, lighter |
+| Back and navigation | Glass back button, swipe back | Same structure, system back works |
+| Sheets | `AppSheet` glass chrome, detents | Same, solid chrome |
+| Large title | Collapses to inline | Same pattern |
+
+Structure, hierarchy and copy are identical on both platforms. Only materials differ.
+
+## 7. Navigation and placement
+
+- Tab bar: the official native bar (`NativeTabs` from `expo-router/unstable-native-tabs`: UITabBarController, Liquid Glass on iOS 26+, Material navigation bar on Android), 4 to 5 destinations, icon-only (`Label hidden`, names via `tabBarItemAccessibilityLabel`), Discover first and default, SF Symbol icon (`sf`, Material `md` on Android), current tab filled, `minimizeBehavior="onScrollDown"`, accent tint. Ask Viya is the trailing `role="search"` tab. Never build a custom bar; screens rely on the native inset, no manual bottom clearance.
+- Large title at the top of each tab; it collapses to inline. Pushed screens show a glass back button.
+- Primary action: bottom of the screen in the thumb zone (full-width `PrimaryButton` above the safe area) or a floating glass add button bottom right. One per screen. A top-right glass icon is allowed only for secondary actions.
+- Add on Trips: a top-right glass `+` (the one place a top-right glass icon is the primary action). Elsewhere: floating glass button or the section header `action`. Never an unlabeled plus inside content.
+- Search: native search field below the large title, collapsing with scroll. Never a custom input in a card.
+- Filters: 2 to 4 exclusive scopes use `Segmented`; open-ended filters use a horizontal row of `Chip`s under the title. Sort and extra options live in a `Menu` on a toolbar glass button.
+- Row actions: swipe for common actions (delete, edit), long-press context menu for the rest, tap opens detail.
+- Forms: `AppSheet` with `SheetHeader` (close left, confirm right), fields in an inset group, keyboard-safe.
+- Detents: pickers and quick actions use a medium detent; forms use large; always draggable down.
+
+## 8. State patterns
+
+- Loading: `LoadingState` after 300 ms for first load; keep stale content during refresh. Never a blank screen.
+- Empty: `EmptyState` with a plain sentence about the benefit plus one action that fixes it. First-run empty differs from filtered-empty (offer to clear filters).
+- Error: say what happened and what to do, in one sentence, with a retry action. Inline for forms (below the field), toast for transient, `EmptyState` for full-screen.
+- Success: haptic `success` and a short toast only when the result is not visible. Otherwise the UI change is the confirmation.
+- Confirm: `useFeedback().confirm` for irreversible choices. Title states the action, destructive button repeats the verb ("Delete trip"), cancel is plain. Prefer undo toasts for reversible actions.
+- Destructive: red text via `destructive`, placed last in a group, never the default or primary button.
+- Disabled: 40 percent opacity and a reason nearby when not obvious.
+- Pending: the button shows a spinner and blocks double taps.
+
+## 9. Sheets
+
+- Use only `AppSheet`. It renders glass chrome, one grabber, backdrop, pan-down to close, interactive keyboard handling.
+- Do not pass `handleIndicatorStyle`, `backgroundStyle` or a grabber. They are ignored or forbidden.
+- Layout inside: `SheetHeader`, then content with `paddingHorizontal: spacing.screen` and bottom padding of `max(insets.bottom, spacing.lg)`.
+- Scrollable long content uses `ScrollView` with `keyboardShouldPersistTaps="handled"`.
+- One sheet at a time. Never stack sheets.
+
+## 10. Motion and haptics
+
+Spec: `docs/ux/MOTION-SPEC.md`. Code: `src/components/ui/motion.ts`, `reveal.tsx`, `pressable-scale.tsx`, `skeleton.tsx`. Motion confirms and orients; it never decorates. Features import only these; no ad-hoc `FadeInDown`, `ZoomIn`, `withSpring`, `withTiming`, `withRepeat`, `.delay()`.
+
+- Five things: press spring (0.97, rows 0.985), entering spring (critically damped, ~300 ms), content-swap fade (220 in, 120 out), list entrance (fade plus 8pt rise, 40 ms stagger, first 6, first mount only), skeleton pulse (the only loop).
+- Never: bounce, zoom or scale entrances, edge slide-ins, parallax, shimmer, custom tab, push or sheet transitions.
+- Reduce Motion: no press scale, entrances become fades, no reflow, skeleton static.
+- Haptics: light on `PressableScale`, selection for rows, chips and pickers, medium for commits, success, warning, error for outcomes. One per gesture; never on scroll or appear.
+
+| Need | Use |
 | --- | --- |
-| iOS 26+ | native Liquid Glass (`expo-glass-effect`) |
-| iOS < 26 | system blur (`expo-blur`) + hairline |
-| Android, web, Reduce Transparency | solid translucent surface + hairline |
-
-### Tokens
-
-| Group | Values |
-| --- | --- |
-| Palette (light / dark) | canvas `#F4F4F5` / `#0B0B0C`; surface `#FFFFFF` / `#1C1C1E`; fill `#EEEEF0` / `#2C2C2E`; ink `#18181B` / `#F5F5F7`; inkSecondary `#6B6B73` / `#A1A1AA`; inkTertiary `#A1A1AA` / `#71717A`; accent `#0A84FF`; success `#248A3D` / `#30D158`; warning `#B25E00` / `#FF9F0A`; danger `#D70015` / `#FF453A`; selection, separator, hairline, scrim, glassFallback |
-| Spacing | xs 4, sm 8, md 12, lg 16, screen 20, xl/section 24, 2xl 32, 3xl 40 |
-| Radius | tile 12, group 14, field 16, card 20, sheet 32, pill 999 |
-| Metrics | action 50, chip 34 (44 hit), icon button 44, nav bar 44, row 54, tab bar 60, tab slot 52 |
-| Type | largeTitle 34/700, title 28/700, heading 22/600, headline 17/600, body 17, callout 16, subhead 15, footnote 13, eyebrow 12/600 uppercase |
-| Motion | spring press / selection / surface; durations fast 120, normal 220, slow 360, toast 2800; press scale 0.96 |
-
-Primary actions are ink-filled (near-black in light, near-white in dark); accent blue is for links, selection tint and AI guidance, not button fills.
-
-### Components
-
-| Need | Component |
-| --- | --- |
-| Themed text on the type scale | `AppText` (`variant`, `tone`) |
-| Tappable with spring + haptic | `PressableScale` |
-| Glass container for compact controls | `GlassSurface` |
-| Round header/back/close button | `GlassIconButton` (also `NavigationIconButton`, `NavigationBackButton`) |
-| Primary / secondary 50pt pill with pending spinner | `PrimaryButton`, `SecondaryButton` |
-| Filter / category pill | `Chip` |
-| Opaque content island | `Card` (`Island` alias) |
-| Section title + one action | `SectionHeader` |
-| Grouped rows with inner dividers | `ListGroup` + `ListRow` |
-| Scrolling screen with collapsing large title | `CollapsingScreen`; static: `ScreenHeader` |
-| Bottom sheet / modal header | `SheetHeader` |
-| Empty page | `EmptyState` |
-| Loading page (delayed) | `LoadingState` |
-| Toast and confirm | `FeedbackProvider` + `useFeedback()` -> `showToast`, `confirm`; `ConfirmDialog` |
-| Floating tab bar | `components/navigation/floating-tab-bar.tsx` (glass bar, spring selection pill, separate glass AI button) |
-
-### Rules
-
-- One `PrimaryButton` per screen or footer. While async work runs pass `isPending`: the spinner replaces the label, size is kept and the button is disabled. Never swap the label text for "Saving...".
-- Empty states show symbol, title and one line naming the control that fills the page; no button unless nothing else on screen can.
-- Loading uses `LoadingState` (delayed so fast loads never flash); content already on screen stays and refreshes inline.
-- Destructive or irreversible actions use `useFeedback().confirm({ destructive: true })`, never `Alert`.
-- Success, failure and info acknowledgements use `showToast`.
-- Rows are at least 54pt; tappable rows use `ListRow onPress`. Dividers are hairlines inside the group.
-- Selection is never color alone: selected chips and tabs also change fill.
-- Large title screens use `CollapsingScreen`; give `contentContainerStyle` bottom padding for the floating tab bar (about 96).
-
-## Core Visual Formula
-
-Use three layers:
-
-1. **Soft app canvas**: `#F4F4F5` background, never full-white pages.
-2. **Floating white islands**: primary cards, auth forms, trip cards, bottom actions, and AI suggestions.
-3. **Quiet interaction details**: compact chips, circular icon buttons, dividers inside cards, and one obvious next action.
-
-Default structure:
-
-```text
-Soft App Canvas
-  -> Floating Header / Search / Status Island
-    -> Content Cards
-      -> Compact Native Actions
-```
-
-## Layout Rules
-
-- Screen padding is 16px horizontally.
-- Use one visually dominant primary island per main screen.
-- Use 24-32px radii for top-level surfaces.
-- Use 16-20px radii only inside nested content.
-- Keep rows at least 56px tall when they are tappable.
-- Use bottom action islands for clear next steps.
-- Avoid dense dashboards, heavy borders, and web-style navbars inside mobile screens.
-
-Recommended frame:
-
-```tsx
-<SafeAreaView className="flex-1 bg-background">
-  <ScrollView contentContainerClassName="px-4 pb-28">
-    <ScreenHeader />
-    <PrimaryIsland />
-    <ContentSection />
-  </ScrollView>
-  <BottomActionIsland />
-</SafeAreaView>
-```
-
-## Component Patterns
-
-### Screen Header Island
-
-Use native headers with strong title copy and circular white icon actions. Do not wrap every header in a card unless the header itself is an interactive search/status island.
-
-### Primary Island Card
-
-Each main screen should have one hero island: current trip, readiness score, Travel Mode status, today's plan, TripSync state, or Viya briefing.
-
-Rules:
-
-- Keep it visually dominant.
-- Use `surface` background and soft shadow.
-- Use accent color sparingly for progress, selected state, or AI.
-- Avoid multiple equal-weight hero cards.
-
-### Compact List Cards
-
-Use list cards for itinerary, tasks, risks, and recommendations.
-
-Rules:
-
-- Dividers live inside the card.
-- Do not put borders around every row.
-- Status chips should be subtle and compact.
-
-### Search / Command Island
-
-Planning and AI entry points should use a white rounded command island: "Ask Viya to plan your trip", "Search places", "Find restaurants near my itinerary", or "Generate a 3-day plan".
-
-### Bottom Action Island
-
-Use a sticky bottom island when there is an obvious next step: Start planning, Fix readiness, Sync trip, Start Travel Mode, Generate recap, Save itinerary.
-
-Rules:
-
-- Use dark bottom island treatment for the strongest CTA.
-- Use white bottom island treatment for secondary control groups.
-- Do not show more than two actions.
-
-### AI Suggestion Card
-
-AI cards should feel helpful, not noisy.
-
-Rules:
-
-- Use sparkles only for true AI-generated assistance.
-- Keep the suggestion action-oriented.
-- Show one main suggestion per card.
-
-## Screen Applications
-
-### Home / Trip Dashboard
-
-Show what matters now: greeting, current trip island, readiness island, upcoming timeline card, Viya suggestion card, and a bottom CTA to plan or continue.
-
-### Planning
-
-Make planning conversational but structured: header, search/ask island, trip goal chips, generated itinerary cards, recommendations, and Save Plan CTA.
-
-### Readiness
-
-Make preparation measurable and fixable: hero score island, category list, critical fixes, AI auto-fix suggestion, and Fix My Readiness CTA.
-
-### TripSync
-
-Coordinate people and tasks without looking like project management software: group status island, member readiness rows, shared tasks, missing items, and Notify Group CTA.
-
-### Travel Mode
-
-Focus on the immediate trip state: Now island, next step card, map/transport card, risk radar, and quick actions for Ask Viya, Translate, Navigate, Emergency Info, and Save Moment.
-
-### Moments / Wrap-Up
-
-Use purple accent sparingly for celebration: trip summary island, highlights carousel, AI captions, stats, and Generate Shareable Post CTA.
-
-## Auth & Onboarding
-
-- Onboarding uses 10 screens: one welcome/action screen and nine lifecycle carousel screens.
-- The welcome screen introduces Viya with the tagline `Travel, one step ahead`.
-- The welcome primary action is `Start with Viya`; the secondary action is `Sign in`.
-- Lifecycle screens are Dream, Plan, Book, Sync, Prepare, Travel, Track, Capture, and Wrap Up.
-- The final lifecycle CTA is `Plan my first trip`; the secondary action is `Explore demo trip`.
-- Keep Viya wordmark plain for now.
-- Use a white island card for the active lifecycle step.
-- Use a dark rounded bottom action for primary progression.
-- Sign-in and sign-up use one white auth island on the soft canvas.
-- Social auth appears before email auth.
-- Email/password remains available in the same focused island.
-- Verification screens reuse the same shell and status message island.
-
-## Motion
-
-Use subtle motion only when it clarifies state:
-
-- Card press scales to 0.98.
-- Bottom sheets spring up.
-- Score progress animates from 0 to value.
-- AI suggestion fades and slides up.
-- TripSync updates pulse gently.
-
-Avoid animated backgrounds, long transitions, and multiple simultaneous effects.
-
-## Reusable Component Direction
-
-Create app-level components by composing HeroUI Native primitives:
-
-- `AppScreen`
-- `ScreenHeader`
-- `IslandCard`
-- `PrimaryTripCard`
-- `ReadinessScoreCard`
-- `ViyaSuggestionCard`
-- `TripTimelineCard`
-- `TripSyncMemberRow`
-- `RiskRadarCard`
-- `BottomActionIsland`
-- `StatusChip`
-- `PhaseChip`
-- `MetricPill`
-
-These components should wrap `Card`, `Surface`, `Button`, `Chip`, `Input`, `SearchField`, `BottomSheet`, and other HeroUI Native primitives. Do not rebuild common controls from scratch.
-
-## Do / Don't
-
-Do:
-
-- Use soft gray app backgrounds.
-- Use white cards as islands.
-- Keep cards rounded and spacious.
-- Use native-feeling controls.
-- Make AI suggestions clear and actionable.
-- Use bottom actions for primary flows.
-- Keep each screen focused on one main job.
-
-Don't:
-
-- Use pure white page backgrounds everywhere.
-- Add heavy shadows or thick borders.
-- Use too many gradients.
-- Turn every AI output into chat bubbles.
-- Overload screens with dashboard widgets.
-- Create custom components when HeroUI Native already provides one.
-- Make the UI look like a web admin panel.
-
-## Agent Prompt Guide
-
-> Build a native-feeling travel companion using a soft gray app canvas, white floating island cards, large rounded corners, subtle shadows, compact typography, and HeroUI Native components. Each screen should feel calm, intelligent, and premium. Viya's AI should appear as proactive, action-oriented cards and bottom-sheet guidance, not only as a chat interface.
+| Tap feedback | `PressableScale` (or `usePressScale`) |
+| Screen section on first open | `<Reveal index={i}>` |
+| List rows on first open | `useListEntrance()` then `entering={entrance(i)}` |
+| Row added or removed | `layout={layoutReflow}` `exiting={fadeOut}` |
+| Message, error, panel, toast | `entering={fadeIn}` `exiting={fadeOut}` |
+| Progress or number change | `useLayoutSpring()` |
+| Loading placeholder | `<Skeleton>` |
+| Remote image | `expo-image` `transition={motion.duration.normal}` |
+
+## 11. Accessibility
+
+- Dynamic Type through `AppText`; layouts wrap instead of clip.
+- `accessibilityLabel` on every icon-only control; `accessibilityRole` and `accessibilityState` (selected, busy, disabled) set.
+- Contrast 4.5:1 for text, 3:1 for icons and edges. Never colour alone.
+- Reduce Transparency makes glass solid; Reduce Motion removes movement; Bold Text is respected by the system font.
+
+## 12. Slop guardrails (do not ship)
+
+- A coloured icon inside a tinted rounded badge.
+- Gradient washes, glow, neon, purple accents.
+- Emoji in UI or copy.
+- A card around every item; shadow stacks; nested cards.
+- Decorative pills and badges that carry no state.
+- Glass on content, on text blocks or on glass.
+- Custom grabbers, custom back arrows, custom switches or pickers when a native one exists.
+- Ionicons imported directly in a feature.
+- Placeholder or marketing copy in product UI.
+
+## 13. Pre-merge checklist
+
+- [ ] Uses only `@/src/components/ui` primitives; no hex colours, raw font sizes or magic spacing.
+- [ ] Icons via `Icon`; new names added to `SF_SYMBOL_MAP`.
+- [ ] Sheets via `AppSheet`; exactly one grabber visible.
+- [ ] One primary action, placed per section 7.
+- [ ] Loading, empty, error, destructive confirm states exist.
+- [ ] 44pt targets, labels, roles; checked at the largest Dynamic Type.
+- [ ] Light and dark verified; Reduce Transparency and Android fallback verified.
+- [ ] Haptics on selection and outcomes; motion respects Reduce Motion.
+- [ ] `npx tsc --noEmit` and `npx ultracite fix` clean.
+
+## Open feedback from Van (every builder and QA agent must address and verify on device)
+- Theme: the "+" glass button on Trips renders as a bright grey disc in dark mode and the segmented control/search field do not match the dark palette. Audit every control for theme correctness in light AND dark: glass buttons use the palette tint (never default white/grey), segmented controls, search fields, chips, toolbar buttons, and any HeroUI default colours must come from `useUITheme().palette`. Appearance setting (System/Light/Dark) must switch the whole app, including native tab bar and headers.
+- Detail screens and chat show no tab bar; one shared header shell on every non-tab screen.
+- Content richness (Van: "too plain, too simple, very vague; avoid nonsense labels; enrich the contents; functional and correct"): minimal chrome, rich information. Every screen shows real, specific, useful data from the existing hooks: concrete numbers, dates, names, statuses, progress, next actions, with units and formats (PHP amounts, dates, durations, counts). Titles and labels name the thing precisely ("3 of 7 documents ready", "Flight to Singapore · Fri 21 Nov · 08:40"); vague filler such as "Plan next", "Suggest similar trips", "Dates not set" without an action, "Quick actions", "Stay organised", "Your journey" is deleted or replaced by a specific state and a verb that does the thing. Each row, button and card is wired to a working action and a correct destination; no dead controls, no placeholder values, no lorem or mock numbers presented as real. Empty states say exactly what is missing and offer the one action that fixes it. Derived numbers (readiness %, budget left, days until trip, counts) must be computed correctly from data and shown consistently across screens.

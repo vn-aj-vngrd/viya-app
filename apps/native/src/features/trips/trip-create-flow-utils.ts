@@ -1,4 +1,4 @@
-import { formatReadableTripDateRange } from "@/src/components/date/date-format-utils";
+import { formatMoney, formatTripRange } from "@/src/lib/format";
 
 const isoDatePattern = /^\d{4}-\d{2}-\d{2}$/;
 const whitespacePattern = /\s+/g;
@@ -76,9 +76,11 @@ export interface CreateTripPayload {
 	destination: string;
 	endDate: string;
 	groupType: string;
+	pace: TripPace;
 	startDate: string;
 	summary: string;
 	title: string;
+	travelerCount: number;
 	travelStyle: string;
 }
 
@@ -145,7 +147,19 @@ const getTravelStyle = (styles: readonly TripStyle[], pace: TripPace) => {
 };
 
 const getDefaultTitle = (destination: string) =>
-	destination ? `${destination} Trip` : "New Trip";
+	destination ? `${destination} Trip` : "New trip";
+
+const getTravelerTotal = (state: TripCreateFlowState) => {
+	if (state.travelerType === "solo") {
+		return 1;
+	}
+
+	if (state.travelerType === "couple") {
+		return 2;
+	}
+
+	return parseTravelerCount(state.travelerCount) ?? 2;
+};
 
 export const createInitialTripCreateFlowState = (): TripCreateFlowState =>
 	({
@@ -247,11 +261,7 @@ export const getTripCreateSummary = (state: TripCreateFlowState) => {
 	const budgetAmount = parseBudgetAmount(state.budgetAmount);
 	const dateRangeLabel =
 		state.startDate && state.endDate
-			? formatReadableTripDateRange({
-					endDate: state.endDate,
-					includeYear: true,
-					startDate: state.startDate,
-				})
+			? formatTripRange(state.startDate, state.endDate, { year: "always" })
 			: null;
 	const durationLabel = state.durationPreference
 		? labels.durationPreference[state.durationPreference]
@@ -286,32 +296,53 @@ export const getCreateTripPayload = (
 	const fallbackStartDate =
 		toDateOrEmpty(state.startDate) || toDateOrEmpty(state.endDate);
 
+	const travelerCount = getTravelerTotal(state);
+	const enteredBudget = parseBudgetAmount(state.budgetAmount);
+	const budgetAmount =
+		state.budgetScope === "perPerson" && enteredBudget
+			? enteredBudget * travelerCount
+			: enteredBudget;
+
 	return {
-		budgetAmount: parseBudgetAmount(state.budgetAmount),
+		budgetAmount,
 		budgetCurrency: "PHP",
-		destination: destination || "Destination undecided",
+		destination,
 		endDate: fallbackEndDate,
 		groupType: state.travelerType,
+		pace: state.pace,
 		startDate: fallbackStartDate,
 		summary: getTripCreateSummary(state),
 		title: cleanText(state.title) || getDefaultTitle(destination),
+		travelerCount,
 		travelStyle: getTravelStyle(state.styles, state.pace),
 	};
+};
+
+const getBudgetReviewValue = (
+	state: TripCreateFlowState,
+	amount: number | undefined,
+	travelerCount: number
+) => {
+	if (!amount) {
+		return "Not set";
+	}
+
+	if (state.budgetScope === "perPerson") {
+		return `${formatMoney(amount)} per person · ${formatMoney(amount * travelerCount)} total for ${travelerCount}`;
+	}
+
+	return `${formatMoney(amount)} total · ${labels.budgetStrictness[state.budgetStrictness]}`;
 };
 
 export const getCreateTripReviewRows = (
 	state: TripCreateFlowState
 ): ReviewRow[] => {
 	const budgetAmount = parseBudgetAmount(state.budgetAmount);
-	const travelerCount = parseTravelerCount(state.travelerCount) ?? 1;
-	let dates = "Not decided";
+	const travelerCount = getTravelerTotal(state);
+	let dates = "Not set";
 
 	if (state.startDate && state.endDate) {
-		dates = formatReadableTripDateRange({
-			endDate: state.endDate,
-			includeYear: true,
-			startDate: state.startDate,
-		});
+		dates = formatTripRange(state.startDate, state.endDate, { year: "always" });
 	} else if (state.durationPreference) {
 		dates = labels.durationPreference[state.durationPreference];
 	}
@@ -341,9 +372,7 @@ export const getCreateTripReviewRows = (
 		},
 		{
 			label: "Budget",
-			value: budgetAmount
-				? `PHP ${budgetAmount.toLocaleString()} · ${labels.budgetScope[state.budgetScope]} · ${labels.budgetStrictness[state.budgetStrictness]}`
-				: "Skipped",
+			value: getBudgetReviewValue(state, budgetAmount, travelerCount),
 		},
 	];
 };

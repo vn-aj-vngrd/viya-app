@@ -13,12 +13,11 @@ describe("trip recap wrap-up navigation contract", () => {
 			"apps/native/src/features/trips/trip-recap-screen.tsx"
 		);
 
-		expect(source).toContain("actionHref={VIYA_ROUTES.tripPlaces(tripId)}");
-		expect(source).toContain("actionHref={VIYA_ROUTES.tripVault(tripId)}");
-		expect(source).toContain("actionHref={VIYA_ROUTES.tripBudget(tripId)}");
-		expect(source).toContain('actionLabel="Open route"');
-		expect(source).toContain('actionLabel="Open files"');
-		expect(source).toContain('actionLabel="Open budget"');
-		expect(source).toContain("Link asChild");
+		expect(source).toContain("router.push(VIYA_ROUTES.tripPlaces(tripId))");
+		expect(source).toContain("VIYA_ROUTES.tripVault(tripId)");
+		expect(source).toContain("router.push(VIYA_ROUTES.tripBudget(tripId))");
+		expect(source).toContain('title="Places"');
+		expect(source).toContain('title="Confirmations"');
+		expect(source).toContain('title="Budget outcome"');
 	});
 });

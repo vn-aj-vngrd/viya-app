@@ -1,16 +1,20 @@
-import { Ionicons } from "@expo/vector-icons";
-import { BottomSheet, Input, TextArea, TextField } from "heroui-native";
+import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
+import { Input, TextArea, TextField } from "heroui-native";
 import type { ReactNode } from "react";
-import { ScrollView, View } from "react-native";
-import Animated, { FadeIn } from "react-native-reanimated";
+import { StyleSheet, View } from "react-native";
+import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-sheet/use-compatible-bottom-sheet-aware-handlers";
 import {
+	AppSheet,
 	AppText,
 	Chip,
+	fadeIn,
+	Icon,
+	type IconName,
+	metrics,
 	PressableScale,
-	PrimaryButton,
 	SheetHeader,
 	spacing,
 	useUITheme,
@@ -23,7 +27,7 @@ export function FieldLabel({ children }: { children: string }) {
 		<AppText
 			style={{ paddingHorizontal: spacing.xs }}
 			tone="secondary"
-			variant="eyebrow"
+			variant="footnote"
 		>
 			{children}
 		</AppText>
@@ -52,7 +56,7 @@ export function SheetField({
 			<FieldLabel>{label}</FieldLabel>
 			<Input
 				accessibilityLabel={label}
-				className="h-12 rounded-[16px] border-0 bg-surface px-4"
+				className="h-[50px] rounded-[16px] border-0 bg-surface px-4"
 				onBlur={onBlur}
 				onChangeText={onChangeText}
 				onFocus={onFocus}
@@ -124,7 +128,7 @@ export function InlineMessage({
 	}
 
 	return (
-		<Animated.View entering={FadeIn.duration(180)}>
+		<Animated.View entering={fadeIn}>
 			<AppText accessibilityLiveRegion="polite" tone={tone} variant="subhead">
 				{message}
 			</AppText>
@@ -132,9 +136,12 @@ export function InlineMessage({
 	);
 }
 
+/**
+ * Record form in a large-detent AppSheet: close left, confirm right, fields
+ * scroll underneath. The sheet owns the single grabber.
+ */
 export function FormSheet({
 	children,
-	description,
 	errorMessage,
 	isOpen,
 	isSaving,
@@ -145,7 +152,8 @@ export function FormSheet({
 	title,
 }: {
 	children: ReactNode;
-	description: string;
+	/** Accepted for call-site compatibility; the header stays quiet. */
+	description?: string;
 	errorMessage?: string | null;
 	isOpen: boolean;
 	isSaving: boolean;
@@ -158,77 +166,58 @@ export function FormSheet({
 	const insets = useSafeAreaInsets();
 
 	return (
-		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
-			<BottomSheet.Portal>
-				<BottomSheet.Overlay />
-				<BottomSheet.Content
-					backgroundClassName="rounded-t-[32px] bg-background"
-					enablePanDownToClose={true}
-					snapPoints={[snapPoint]}
-				>
-					<SheetHeader
-						onClose={() => onOpenChange(false)}
-						subtitle={description}
-						title={title}
-					/>
-					<View
-						style={{
-							gap: spacing.lg,
-							paddingBottom: Math.max(insets.bottom, spacing.lg),
-							paddingHorizontal: spacing.screen,
-							paddingTop: spacing.sm,
-						}}
-					>
-						<ScrollView
-							contentContainerStyle={{
-								gap: spacing.lg,
-								paddingBottom: spacing.sm,
-							}}
-							keyboardShouldPersistTaps="handled"
-							showsVerticalScrollIndicator={false}
-							style={{ maxHeight: 480 }}
-						>
-							{children}
-						</ScrollView>
-						<InlineMessage message={errorMessage ?? null} />
-						<PrimaryButton
-							isPending={isSaving}
-							label={saveLabel}
-							onPress={onSubmit}
-						/>
-					</View>
-				</BottomSheet.Content>
-			</BottomSheet.Portal>
-		</BottomSheet>
+		<AppSheet
+			isOpen={isOpen}
+			onOpenChange={onOpenChange}
+			snapPoints={[snapPoint]}
+		>
+			<SheetHeader
+				confirm={{
+					isPending: isSaving,
+					label: saveLabel,
+					onPress: onSubmit,
+				}}
+				onClose={() => onOpenChange(false)}
+				title={title}
+			/>
+			<BottomSheetScrollView
+				contentContainerStyle={{
+					gap: spacing.lg,
+					paddingBottom: Math.max(insets.bottom, spacing.lg),
+					paddingHorizontal: spacing.screen,
+					paddingTop: spacing.md,
+				}}
+				keyboardShouldPersistTaps="handled"
+				showsVerticalScrollIndicator={false}
+			>
+				<InlineMessage message={errorMessage ?? null} />
+				{children}
+			</BottomSheetScrollView>
+		</AppSheet>
 	);
 }
 
 export function MenuTrigger({ label }: { label: string }) {
-	const { palette } = useUITheme();
-
 	return (
 		<PressableScale
 			accessibilityLabel={label}
 			haptic="selection"
 			style={{
 				alignItems: "center",
-				height: 44,
+				height: metrics.minTarget,
 				justifyContent: "center",
 				marginRight: -spacing.sm,
 				marginTop: -spacing.sm,
-				width: 44,
+				width: metrics.minTarget,
 			}}
 		>
-			<Ionicons
-				color={palette.inkSecondary}
-				name="ellipsis-horizontal"
-				size={20}
-			/>
+			<Icon name="ellipsis-horizontal" tone="secondary" />
 		</PressableScale>
 	);
 }
 
 export const menuContentClassName = "rounded-[20px] bg-surface p-2";
+const menuIconSize = 18;
 export const menuItemClassName =
 	"min-h-11 flex-row items-center gap-3 rounded-[14px] p-2.5";
 
@@ -239,7 +228,7 @@ export function MenuDivider() {
 		<View
 			style={{
 				backgroundColor: palette.separator,
-				height: 1,
+				height: StyleSheet.hairlineWidth,
 				marginHorizontal: spacing.sm,
 			}}
 		/>
@@ -251,15 +240,13 @@ export function MenuIcon({
 	name,
 }: {
 	destructive?: boolean;
-	name: keyof typeof Ionicons.glyphMap;
+	name: IconName;
 }) {
-	const { palette } = useUITheme();
-
 	return (
-		<Ionicons
-			color={destructive ? palette.danger : palette.ink}
+		<Icon
 			name={name}
-			size={18}
+			size={menuIconSize}
+			tone={destructive ? "danger" : "primary"}
 		/>
 	);
 }

@@ -902,6 +902,39 @@ export const listTripVaultItems = query({
 	},
 });
 
+export const listVaultCountsByTrip = query({
+	args: {},
+	handler: async (ctx) => {
+		const identity = await getRequiredIdentity(ctx);
+		const items = await ctx.db
+			.query("vaultItems")
+			.withIndex("by_owner", (q) => q.eq("ownerId", identity.subject))
+			.collect();
+		const byTrip = new Map<
+			Id<"trips">,
+			{ files: number; lastAddedAt: number }
+		>();
+
+		for (const item of items) {
+			if (!item.tripId) {
+				continue;
+			}
+
+			const current = byTrip.get(item.tripId) ?? { files: 0, lastAddedAt: 0 };
+
+			byTrip.set(item.tripId, {
+				files: current.files + 1,
+				lastAddedAt: Math.max(current.lastAddedAt, item.createdAt),
+			});
+		}
+
+		return [...byTrip.entries()].map(([tripId, counts]) => ({
+			tripId,
+			...counts,
+		}));
+	},
+});
+
 export const deleteVaultItem = mutation({
 	args: {
 		vaultItemId: v.id("vaultItems"),

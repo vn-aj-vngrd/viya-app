@@ -10,7 +10,7 @@ const readWorkspaceFile = (path: string) =>
 describe("trip risks linked navigation contract", () => {
 	it("keeps linked risk context navigable to the owning trip module", () => {
 		const source = readWorkspaceFile(
-			"apps/native/app/(app)/trips/[tripId]/risks.tsx"
+			"apps/native/src/features/readiness/readiness-screen.tsx"
 		);
 
 		expect(source).toContain("getRiskRelatedHref");

@@ -13,8 +13,8 @@ describe("trip companions empty lead action contract", () => {
 			"apps/native/src/features/trips/trip-companions-screen.tsx"
 		);
 
-		expect(source).toContain("No lead contact yet");
-		expect(source).toContain("Add lead contact");
+		expect(source).toContain("No travelers yet");
+		expect(source).toContain("Add traveler");
 		expect(source).toContain("openLeadContactSheet");
 		expect(source).toContain('role: "organizer"');
 	});

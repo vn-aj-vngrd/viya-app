@@ -1,3 +1,5 @@
+import { isBookingSecured } from "./trip-metrics";
+
 export type TripModuleId =
 	| "itinerary"
 	| "places"
@@ -115,8 +117,8 @@ const getTripModuleSummaryMetrics = ({
 	savedPlaces = [],
 	vaultItems,
 }: TripWorkspaceModuleInput): TripModuleSummaryMetrics => {
-	const confirmedBookingCount = bookings.filter(
-		(booking) => booking.status === "confirmed"
+	const confirmedBookingCount = bookings.filter((booking) =>
+		isBookingSecured(booking.status)
 	).length;
 	const documentCount =
 		documents.length +

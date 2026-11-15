@@ -16,6 +16,6 @@ describe("trip moments itinerary navigation contract", () => {
 		expect(source).toContain("VIYA_ROUTES.tripItinerary");
 		expect(source).toContain("itineraryHref");
 		expect(source).toContain("Open itinerary");
-		expect(source).toContain("asChild");
+		expect(source).toContain("router.push(VIYA_ROUTES.tripItinerary(tripId))");
 	});
 });

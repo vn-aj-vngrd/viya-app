@@ -13,8 +13,8 @@ describe("trip travel mode empty risks action contract", () => {
 			"apps/native/src/features/trips/trip-travel-mode-screen.tsx"
 		);
 
-		expect(source).toContain("No open risks");
-		expect(source).toContain('actionLabel="Review risks"');
-		expect(source).toContain("actionHref={VIYA_ROUTES.tripRisks(tripId)}");
+		expect(source).toContain('title="Risks"');
+		expect(source).toContain('title="Add a risk"');
+		expect(source).toContain("router.push(VIYA_ROUTES.tripRisks(tripId))");
 	});
 });

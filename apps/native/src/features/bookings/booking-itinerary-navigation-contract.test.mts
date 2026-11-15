@@ -12,14 +12,11 @@ describe("booking itinerary navigation contract", () => {
 		const screenSource = readWorkspaceFile(
 			"apps/native/src/features/bookings/booking-hub-screen.tsx"
 		);
-		const cardSource = readWorkspaceFile(
-			"apps/native/src/features/bookings/booking-target-card.tsx"
-		);
 
 		expect(screenSource).toContain("VIYA_ROUTES.tripItinerary");
 		expect(screenSource).toContain("itineraryHref");
-		expect(cardSource).toContain("itineraryHref");
-		expect(cardSource).toContain("Open itinerary");
-		expect(cardSource).toContain("asChild");
+		expect(screenSource).toContain("itineraryHref");
+		expect(screenSource).toContain("Open itinerary");
+		expect(screenSource).toContain("asChild");
 	});
 });

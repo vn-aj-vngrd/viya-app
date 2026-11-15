@@ -1,12 +1,11 @@
 import {
 	calculateReadinessScore,
-	type Priority,
-	type ReadinessCategory,
-	type ReadinessItem,
+	getDateKeyInTimeZone,
+	getReadinessProgress,
 	TRIP_COMPLETED_STATUSES,
 	TRIP_PLANNING_STATUSES,
 	type TripStatus,
-	type WorkStatus,
+	toReadinessItem,
 } from "@viya-app/domain";
 import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
@@ -56,6 +55,8 @@ const joinItems = (items: string[], fallback: string) => {
 	return limitedItems.length > 0 ? limitedItems.join("; ") : fallback;
 };
 
+const TRIP_TIME_ZONE = "Asia/Manila";
+
 const normalizeSearchText = (value: string) =>
 	value.replace(whitespacePattern, " ").trim().toLowerCase();
 
@@ -70,32 +71,25 @@ type TripSearchStatusFilter = `status:${TripStatus}`;
 const getTripStatusFilter = (status: TripStatus): TripSearchStatusFilter =>
 	`status:${status}`;
 
-const toDomainReadinessItem = (item: Doc<"readinessItems">): ReadinessItem => ({
-	aiReason: item.aiReason,
-	assignedToMemberId: item.assignedToMemberId ?? null,
-	category: item.category as ReadinessCategory,
-	description: item.description,
-	dueDate: item.dueDate,
-	id: item._id,
-	priority: item.priority as Priority,
-	source: item.source as ReadinessItem["source"],
-	status: item.status as WorkStatus,
-	title: item.title,
-	tripId: item.tripId,
-});
-
 const withReadinessSnapshot = async (ctx: QueryCtx, trip: Doc<"trips">) => {
 	const readinessItems = await ctx.db
 		.query("readinessItems")
 		.withIndex("by_trip", (q) => q.eq("tripId", trip._id))
 		.collect();
 	const readinessScore = calculateReadinessScore(
-		readinessItems.map(toDomainReadinessItem)
+		readinessItems.map(toReadinessItem)
+	);
+	const progress = getReadinessProgress(
+		readinessItems,
+		getDateKeyInTimeZone(Date.now(), TRIP_TIME_ZONE)
 	);
 
 	return {
 		...trip,
+		readinessActive: progress.active,
+		readinessDone: progress.done,
 		readinessItemCount: readinessItems.length,
+		readinessPercent: progress.percent,
 		readinessScore: readinessScore.overallScore,
 	};
 };
@@ -540,7 +534,7 @@ export const searchTrips = query({
 		const identity = await getRequiredIdentity(ctx);
 		const filters = new Set(args.filters ?? []);
 		const search = normalizeSearchText(args.search ?? "");
-		const today = new Date().toISOString().slice(0, 10);
+		const today = getDateKeyInTimeZone(Date.now(), TRIP_TIME_ZONE);
 		const cursorOffset = Number(args.paginationOpts.cursor ?? 0);
 		const startIndex = Number.isFinite(cursorOffset)
 			? Math.max(0, cursorOffset)
@@ -561,7 +555,9 @@ export const searchTrips = query({
 					trip.status as never
 				);
 				const needsReadiness = trip.readinessScore < 90;
-				const isUpcoming = !!trip.startDate && trip.startDate >= today;
+				const isUpcoming =
+					!TRIP_COMPLETED_STATUSES.includes(trip.status as never) &&
+					(!trip.endDate || trip.endDate >= today);
 				const isCompleted =
 					TRIP_COMPLETED_STATUSES.includes(trip.status as never) ||
 					(!!trip.endDate && trip.endDate < today);
@@ -682,6 +678,7 @@ export const updateTripProfile = mutation({
 		summary: v.optional(v.string()),
 		title: v.optional(v.string()),
 		travelStyle: v.optional(v.string()),
+		travelerCount: v.optional(v.number()),
 	},
 	handler: async (ctx, args) => {
 		const identity = await getRequiredIdentity(ctx);
@@ -715,6 +712,7 @@ export const updateTripProfile = mutation({
 			summary: args.summary,
 			title,
 			travelStyle: args.travelStyle,
+			travelerCount: args.travelerCount,
 			updatedAt: Date.now(),
 		});
 
@@ -1102,7 +1100,9 @@ export const createTrip = mutation({
 		coverImageUrl: v.optional(v.string()),
 		travelStyle: v.optional(v.string()),
 		groupType: v.optional(v.string()),
+		pace: v.optional(v.string()),
 		summary: v.optional(v.string()),
+		travelerCount: v.optional(v.number()),
 	},
 	handler: async (ctx, args) => {
 		const identity = await getRequiredIdentity(ctx);
@@ -1112,7 +1112,9 @@ export const createTrip = mutation({
 		const now = Date.now();
 		const tripId = await ctx.db.insert("trips", {
 			ownerId: identity.subject,
-			title: args.title ?? `${args.destination} Trip`,
+			title:
+				args.title ||
+				(args.destination ? `${args.destination} Trip` : "New trip"),
 			destination: args.destination,
 			startDate: args.startDate,
 			endDate: args.endDate,
@@ -1122,8 +1124,9 @@ export const createTrip = mutation({
 			budgetCurrency: args.budgetCurrency ?? "PHP",
 			coverImageUrl: args.coverImageUrl,
 			travelStyle: args.travelStyle ?? "balanced",
-			pace: "moderate",
+			pace: args.pace ?? "balanced",
 			groupType: args.groupType ?? "solo",
+			travelerCount: args.travelerCount,
 			status: "planning",
 			readinessScore: 0,
 			summary: args.summary ?? "Manual trip planning started in Viya.",

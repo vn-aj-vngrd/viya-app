@@ -10,18 +10,13 @@ import {
 	useState,
 } from "react";
 import { Modal, Pressable, StyleSheet, View } from "react-native";
-import Animated, {
-	FadeIn,
-	FadeOut,
-	SlideInUp,
-	SlideOutUp,
-} from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
 import { AppText } from "./app-text";
 import { PrimaryButton, SecondaryButton } from "./buttons";
 import { GlassSurface } from "./glass-surface";
 import { haptic } from "./haptics";
+import { fadeIn, fadeOut } from "./motion";
 import { motion, radius, spacing } from "./tokens";
 import { useUITheme } from "./use-ui-theme";
 
@@ -76,10 +71,8 @@ function Toast({ message, tone = "neutral" }: ToastOptions) {
 	return (
 		<Animated.View
 			accessibilityLiveRegion="polite"
-			entering={SlideInUp.springify()
-				.damping(motion.spring.surface.damping)
-				.stiffness(motion.spring.surface.stiffness)}
-			exiting={SlideOutUp.duration(motion.duration.normal)}
+			entering={fadeIn}
+			exiting={fadeOut}
 			pointerEvents="none"
 			style={{
 				alignItems: "center",
@@ -139,8 +132,8 @@ export function ConfirmDialog({
 			visible={visible}
 		>
 			<Animated.View
-				entering={FadeIn.duration(motion.duration.fast)}
-				exiting={FadeOut.duration(motion.duration.fast)}
+				entering={fadeIn}
+				exiting={fadeOut}
 				style={{
 					alignItems: "center",
 					flex: 1,

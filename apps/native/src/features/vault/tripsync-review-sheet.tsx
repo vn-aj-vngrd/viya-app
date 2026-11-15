@@ -1,18 +1,17 @@
-import { BottomSheet } from "heroui-native";
-import type { ReactNode } from "react";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
+	AppSheet,
 	AppText,
-	Card,
-	Chip,
+	ListGroup,
+	ListRow,
 	PrimaryButton,
-	SecondaryButton,
 	SheetHeader,
 	spacing,
 } from "@/src/components/ui";
 
+import { formatEnumLabel, formatMoney } from "@/src/lib/format";
 import type { PendingTripSyncReview } from "./tripsync-types";
 
 interface TripSyncReviewSheetProps {
@@ -24,30 +23,6 @@ interface TripSyncReviewSheetProps {
 	review: PendingTripSyncReview | null;
 }
 
-function ReviewSection({
-	children,
-	eyebrow,
-}: {
-	children: ReactNode;
-	eyebrow: string;
-}) {
-	return (
-		<Card padding="md">
-			<View style={{ gap: spacing.xs }}>
-				<AppText tone="secondary" variant="eyebrow">
-					{eyebrow}
-				</AppText>
-				{children}
-			</View>
-		</Card>
-	);
-}
-
-const formatExtractedAmount = (
-	amount?: number | null,
-	currency?: string | null
-) => (amount ? `${currency ?? "PHP"} ${amount.toLocaleString()}` : null);
-
 export function TripSyncReviewSheet({
 	isConfirming,
 	isOpen,
@@ -58,143 +33,99 @@ export function TripSyncReviewSheet({
 }: TripSyncReviewSheetProps) {
 	const insets = useSafeAreaInsets();
 	const extraction = review?.extraction;
-	const bookingAmountLabel = extraction?.booking
-		? formatExtractedAmount(
-				extraction.booking.cost,
-				extraction.booking.currency
-			)
-		: null;
+	const booking = extraction?.booking;
+	const expense = extraction?.expense;
 
 	return (
-		<BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
-			<BottomSheet.Portal>
-				<BottomSheet.Overlay />
-				<BottomSheet.Content
-					backgroundClassName="rounded-t-[32px] bg-background"
-					enablePanDownToClose={!isConfirming}
-					snapPoints={["78%"]}
-				>
-					<SheetHeader
-						onClose={isConfirming ? undefined : onDiscard}
-						subtitle="Confirm the extracted trip updates before saving them."
-						title="Review TripSync"
-					/>
-					<View
-						style={{
-							gap: spacing.lg,
-							paddingBottom: Math.max(insets.bottom, spacing.lg),
-							paddingHorizontal: spacing.screen,
-							paddingTop: spacing.sm,
-						}}
-					>
-						<ScrollView
-							contentContainerStyle={{ gap: spacing.md }}
-							showsVerticalScrollIndicator={false}
-							style={{ maxHeight: 420 }}
-						>
-							{extraction ? (
-								<>
-									<Card padding="md">
-										<View style={{ gap: spacing.sm }}>
-											<View
-												style={{
-													flexDirection: "row",
-													flexWrap: "wrap",
-													gap: spacing.sm,
-												}}
-											>
-												<Chip label={review.upload.kind} />
-												<Chip
-													label={`${Math.round(extraction.confidence * 100)}% confidence`}
-												/>
-											</View>
-											<AppText variant="headline">
-												{extraction.extractedTitle}
-											</AppText>
-											<AppText tone="secondary" variant="subhead">
-												{extraction.summary}
-											</AppText>
-										</View>
-									</Card>
-
-									{extraction.booking ? (
-										<ReviewSection eyebrow="Booking">
-											<AppText variant="headline">
-												{extraction.booking.title}
-											</AppText>
-											<AppText tone="secondary" variant="footnote">
-												{extraction.booking.provider ?? "Provider not detected"}
-											</AppText>
-											<AppText tone="secondary" variant="footnote">
-												{extraction.booking.confirmationCode ??
-													"Confirmation code not detected"}
-											</AppText>
-											{bookingAmountLabel ? (
-												<AppText tone="secondary" variant="footnote">
-													{bookingAmountLabel}
-												</AppText>
-											) : null}
-										</ReviewSection>
-									) : null}
-
-									{extraction.expense ? (
-										<ReviewSection eyebrow="Budget">
-											<AppText variant="headline">
-												{extraction.expense.title}
-											</AppText>
-											<AppText tone="secondary" variant="footnote">
-												{extraction.expense.currency}{" "}
-												{extraction.expense.amount}
-											</AppText>
-											<AppText tone="secondary" variant="footnote">
-												{extraction.expense.category}
-											</AppText>
-										</ReviewSection>
-									) : null}
-
-									<ReviewSection eyebrow="Document">
-										<AppText variant="headline">
-											{extraction.documentType}
-										</AppText>
-									</ReviewSection>
-
-									{extraction.readinessSuggestions.length > 0 ? (
-										<ReviewSection eyebrow="Readiness">
-											<View style={{ gap: spacing.md }}>
-												{extraction.readinessSuggestions.map((suggestion) => (
-													<View key={suggestion.title} style={{ gap: 2 }}>
-														<AppText variant="headline">
-															{suggestion.title}
-														</AppText>
-														<AppText tone="secondary" variant="footnote">
-															{suggestion.reason}
-														</AppText>
-													</View>
-												))}
-											</View>
-										</ReviewSection>
-									) : null}
-								</>
-							) : null}
-						</ScrollView>
-
-						<View style={{ gap: spacing.sm }}>
-							<PrimaryButton
-								disabled={!review}
-								isPending={isConfirming}
-								label="Confirm and sync"
-								onPress={onConfirm}
+		<AppSheet
+			enablePanDownToClose={!isConfirming}
+			isOpen={isOpen}
+			onOpenChange={onOpenChange}
+			snapPoints={["88%"]}
+		>
+			<SheetHeader
+				onClose={isConfirming ? undefined : onDiscard}
+				title="Review changes"
+			/>
+			<ScrollView
+				contentContainerStyle={{
+					gap: spacing.section,
+					paddingBottom: spacing.lg,
+					paddingHorizontal: spacing.screen,
+					paddingTop: spacing.lg,
+				}}
+				showsVerticalScrollIndicator={false}
+				style={{ flexShrink: 1 }}
+			>
+				{extraction ? (
+					<>
+						<AppText tone="secondary" variant="subhead">
+							Viya read this file and found these updates. Nothing is saved
+							until you apply them.
+						</AppText>
+						<ListGroup header="File">
+							<ListRow
+								subtitle={extraction.summary}
+								title={extraction.extractedTitle}
+								value={`${Math.round(extraction.confidence * 100)}% confidence`}
 							/>
-							<SecondaryButton
-								disabled={isConfirming}
-								label="Discard"
-								onPress={onDiscard}
-								variant="plain"
+							<ListRow
+								title="Type"
+								value={formatEnumLabel(extraction.documentType)}
 							/>
-						</View>
-					</View>
-				</BottomSheet.Content>
-			</BottomSheet.Portal>
-		</BottomSheet>
+						</ListGroup>
+						{booking ? (
+							<ListGroup header="Booking">
+								<ListRow
+									subtitle={[
+										booking.provider ?? "Provider not found",
+										booking.confirmationCode ?? "No confirmation code",
+									].join(" · ")}
+									title={booking.title}
+									value={
+										booking.cost
+											? formatMoney(booking.cost, booking.currency ?? "PHP")
+											: undefined
+									}
+								/>
+							</ListGroup>
+						) : null}
+						{expense ? (
+							<ListGroup header="Expense">
+								<ListRow
+									subtitle={formatEnumLabel(expense.category)}
+									title={expense.title}
+									value={formatMoney(expense.amount, expense.currency)}
+								/>
+							</ListGroup>
+						) : null}
+						{extraction.readinessSuggestions.length > 0 ? (
+							<ListGroup header="Checklist">
+								{extraction.readinessSuggestions.map((suggestion) => (
+									<ListRow
+										key={suggestion.title}
+										subtitle={suggestion.reason}
+										title={suggestion.title}
+									/>
+								))}
+							</ListGroup>
+						) : null}
+					</>
+				) : null}
+			</ScrollView>
+			<View
+				style={{
+					paddingBottom: Math.max(insets.bottom, spacing.lg),
+					paddingHorizontal: spacing.screen,
+				}}
+			>
+				<PrimaryButton
+					disabled={!review}
+					isPending={isConfirming}
+					label="Apply changes"
+					onPress={onConfirm}
+				/>
+			</View>
+		</AppSheet>
 	);
 }

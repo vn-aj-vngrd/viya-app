@@ -14,7 +14,7 @@ describe("trip itinerary booking navigation contract", () => {
 		);
 
 		expect(source).toContain("VIYA_ROUTES.tripBookings");
-		expect(source).toContain("asChild");
 		expect(source).toContain("Open booking");
+		expect(source).toContain("onOpenBooking");
 	});
 });

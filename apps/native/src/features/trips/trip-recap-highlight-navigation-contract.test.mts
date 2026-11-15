@@ -13,8 +13,7 @@ describe("trip recap highlight navigation contract", () => {
 			"apps/native/src/features/trips/trip-recap-screen.tsx"
 		);
 
-		expect(source).toContain("tripId,");
-		expect(source).toContain("actionHref={VIYA_ROUTES.tripMoments(tripId)}");
-		expect(source).toContain('actionLabel="Open memory"');
+		expect(source).toContain("router.push(VIYA_ROUTES.tripMoments(tripId))");
+		expect(source).toContain("Open moments");
 	});
 });

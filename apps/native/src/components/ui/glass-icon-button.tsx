@@ -1,12 +1,8 @@
-import { Ionicons } from "@expo/vector-icons";
-import type { ComponentProps } from "react";
-
 import { GlassSurface } from "./glass-surface";
+import { Icon, type IconName } from "./icon";
 import { PressableScale } from "./pressable-scale";
 import { metrics } from "./tokens";
 import { useUITheme } from "./use-ui-theme";
-
-export type IconName = ComponentProps<typeof Ionicons>["name"];
 
 export interface GlassIconButtonProps {
 	accessibilityLabel: string;
@@ -48,6 +44,7 @@ export function GlassIconButton({
 			}}
 		>
 			<GlassSurface
+				interactive
 				shape="circle"
 				style={{
 					alignItems: "center",
@@ -57,12 +54,15 @@ export function GlassIconButton({
 				}}
 				tint={tint}
 			>
-				<Ionicons
+				<Icon
 					color={iconColor ?? palette.ink}
 					name={icon}
-					size={Math.round(dimension * 0.5)}
+					size={Math.round(dimension * 0.45)}
+					weight="medium"
 				/>
 			</GlassSurface>
 		</PressableScale>
 	);
 }
+
+export type { IconName } from "./icon";

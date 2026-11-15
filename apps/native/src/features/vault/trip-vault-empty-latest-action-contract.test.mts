@@ -16,7 +16,7 @@ describe("trip vault add sheet contract", () => {
 		expect(source).toContain("VaultAddSheet");
 		expect(source).toContain("isUploading");
 		expect(source).toContain("Add to vault");
-		expect(source).toContain('accessibilityLabel="Add file to vault"');
+		expect(source).toContain('label: "Add file to vault"');
 		expect(source).toContain('pickDocument({ kind: "document", tripId })');
 	});
 });

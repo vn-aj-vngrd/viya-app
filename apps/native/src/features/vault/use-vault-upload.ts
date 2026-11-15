@@ -1,13 +1,18 @@
 import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
-import { useAction, useMutation } from "convex/react";
+import { useAction, useConvex, useMutation } from "convex/react";
 import { getDocumentAsync } from "expo-document-picker";
 import { launchImageLibraryAsync } from "expo-image-picker";
 import { useState } from "react";
 
 import type { PendingTripSyncReview } from "./tripsync-types";
 
-type TripSyncUploadKind = "booking" | "document" | "receipt" | "other";
+type TripSyncUploadKind =
+	| "booking"
+	| "document"
+	| "momentPhoto"
+	| "receipt"
+	| "other";
 
 interface VaultUploadInput {
 	fileName: string;
@@ -42,7 +47,9 @@ const uploadToStorage = async (uploadUrl: string, input: VaultUploadInput) => {
 export function useVaultUpload() {
 	const [isUploading, setIsUploading] = useState(false);
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
+	const convex = useConvex();
 	const generateUploadUrl = useMutation(api.vault.generateUploadUrl);
+	const saveVaultItem = useMutation(api.vault.saveVaultItem);
 	const extractVaultItemDraft = useAction(
 		api.ai.features.extractVaultItemDraft
 	);
@@ -114,7 +121,13 @@ export function useVaultUpload() {
 		});
 	};
 
-	const pickPhoto = async ({ tripId }: { tripId?: Id<"trips"> } = {}) => {
+	const pickPhoto = async ({
+		kind = "document",
+		tripId,
+	}: {
+		kind?: TripSyncUploadKind;
+		tripId?: Id<"trips">;
+	} = {}) => {
 		const result = await launchImageLibraryAsync({
 			allowsMultipleSelection: false,
 			mediaTypes: ["images"],
@@ -130,17 +143,74 @@ export function useVaultUpload() {
 		return uploadFile({
 			fileName: asset.fileName ?? "trip-file.jpg",
 			fileSize: asset.fileSize ?? 0,
-			kind: "other",
+			kind,
 			mimeType: asset.mimeType ?? "image/jpeg",
 			tripId,
 			uri: asset.uri,
 		});
 	};
 
+	/** Picks a photo, saves it to the trip vault as a moment photo and returns its URL. */
+	const pickMomentPhoto = async ({ tripId }: { tripId: Id<"trips"> }) => {
+		const result = await launchImageLibraryAsync({
+			allowsMultipleSelection: false,
+			mediaTypes: ["images"],
+			quality: 0.85,
+		});
+
+		if (result.canceled || !result.assets[0]) {
+			return null;
+		}
+
+		const asset = result.assets[0];
+		const input: VaultUploadInput = {
+			fileName: asset.fileName ?? "moment.jpg",
+			fileSize: asset.fileSize ?? 0,
+			kind: "momentPhoto",
+			mimeType: asset.mimeType ?? "image/jpeg",
+			tripId,
+			uri: asset.uri,
+		};
+
+		setIsUploading(true);
+		setErrorMessage(null);
+		try {
+			const uploadUrl = await generateUploadUrl();
+			const { storageId } = await uploadToStorage(uploadUrl, input);
+			const { vaultItemId } = await saveVaultItem({
+				fileName: input.fileName,
+				fileSize: input.fileSize,
+				kind: "momentPhoto",
+				mimeType: input.mimeType,
+				storageId,
+				title: input.fileName,
+				tripId,
+			});
+			const items = await convex.query(api.vault.listTripVaultItems, {
+				tripId,
+			});
+			const url = items.find((item) => item._id === vaultItemId)?.url;
+
+			if (!url) {
+				throw new Error("Could not read the saved photo.");
+			}
+
+			return { url };
+		} catch (error) {
+			const message =
+				error instanceof Error ? error.message : "Could not add this photo.";
+			setErrorMessage(message);
+			throw new Error(message);
+		} finally {
+			setIsUploading(false);
+		}
+	};
+
 	return {
 		errorMessage,
 		isUploading,
 		pickDocument,
+		pickMomentPhoto,
 		pickPhoto,
 		uploadFile,
 	};

@@ -1,23 +1,12 @@
 import type { Ionicons } from "@expo/vector-icons";
 import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
-import type { TripModuleSummary } from "@viya-app/domain";
+import type {
+	TripCountdown,
+	TripModuleSummary,
+	TripPhase,
+} from "@viya-app/domain";
 import type { Href } from "expo-router";
 import type { ComponentProps } from "react";
-
-export type TripTab =
-	| "overview"
-	| "itinerary"
-	| "places"
-	| "bookings"
-	| "documents"
-	| "checklist"
-	| "budget"
-	| "risks"
-	| "companions"
-	| "notes"
-	| "travel"
-	| "memories"
-	| "recap";
 
 export type IoniconName = ComponentProps<typeof Ionicons>["name"];
 
@@ -39,40 +28,6 @@ export interface TripWorkspace {
 	vaultItems: Array<Doc<"vaultItems"> & { url: string | null }>;
 }
 
-export interface DashboardAction {
-	href?: Href;
-	icon: IoniconName;
-	label: string;
-	tab?: TripTab;
-}
-
-export interface DashboardTab {
-	icon: IoniconName;
-	id: TripTab;
-	label: string;
-}
-
-export interface DashboardMetric {
-	label: string;
-	tone?: "attention" | "calm" | "good";
-	value: string;
-}
-
-export interface MissingItem {
-	category: string;
-	href: Href;
-	title: string;
-}
-
-export interface RecentUpdate {
-	actionLabel: string;
-	createdAt: number;
-	href: Href;
-	icon: IoniconName;
-	message: string;
-	tab: TripTab;
-}
-
 export interface ScheduledItem {
 	date: string;
 	day?: Doc<"itineraryDays">;
@@ -84,56 +39,43 @@ export interface NextAction {
 	description: string;
 	href: Href;
 	icon: IoniconName;
-	tab: TripTab;
 	title: string;
 }
 
-export interface BudgetDashboardSummary {
-	booked: number;
-	categoryBreakdown: Array<{ amount: number; category: string }>;
-	dailySafeSpend: number;
-	remaining: number;
-	spent: number;
-	status: string;
-	totalTrackedSpend: number;
-}
-
-export interface TripCountdown {
-	label: string;
-	tone: "active" | "complete" | "upcoming";
-}
-
 export interface TripDashboardModel {
-	activeDocuments: string[];
-	bookingsByType: Array<{ items: Doc<"bookings">[]; type: string }>;
-	budget: BudgetDashboardSummary;
+	bookings: { booked: number; nextToBookTitle: string | null; total: number };
+	budget: {
+		amount: number;
+		dailySafeSpend: number;
+		hasBudget: boolean;
+		left: number;
+		over: number;
+		spent: number;
+	};
+	countdown: TripCountdown;
+	countdownLabel: string;
 	currency: string;
-	highlights: string[];
-	missingItems: MissingItem[];
+	itinerary: { plannedDays: number; stops: number; tripDays: number | null };
 	nextAction: NextAction;
 	nextScheduledItem: ScheduledItem | null;
 	nowScheduledItem: ScheduledItem | null;
 	openReadinessItems: Doc<"readinessItems">[];
-	quickActions: DashboardAction[];
+	phase: TripPhase;
+	phaseLabel: string;
+	phaseStatus: string;
+	places: { saved: number; unassigned: number };
 	readiness: {
-		label: string;
+		active: number;
+		done: number;
 		openCount: number;
-		score: number;
-		topBlocker: string;
+		overdue: number;
+		percent: number | null;
 	};
-	readinessByCategory: Array<{
-		category: string;
-		items: Doc<"readinessItems">[];
-	}>;
-	recentUpdates: RecentUpdate[];
-	statusMetrics: DashboardMetric[];
-	tabCounts: Partial<Record<TripTab, number>>;
-	tabs: DashboardTab[];
-	travelAlertCount: number;
-	travelerLabel: string;
-	tripCountdown: TripCountdown | null;
+	risks: { open: number; topTitle: string | null };
+	todayKey: string;
+	travelerCount: number | null;
+	tripFacts: string;
 	tripId: Id<"trips">;
-	tripWindow: string;
-	watchOutItems: string[];
+	vault: { files: number; missingDocuments: number };
 	workspace: TripWorkspace;
 }

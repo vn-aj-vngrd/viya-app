@@ -14,17 +14,16 @@ export interface SheetHeaderProps {
 		label: string;
 		onPress: () => void;
 	};
-	/** Show the drag grabber. Default true. */
+	/** @deprecated The AppSheet container owns the single grabber. Ignored. */
 	grabber?: boolean;
 	onClose?: () => void;
 	subtitle?: string;
 	title: string;
 }
 
-/** Header for bottom sheets/modals: grabber, close, centered title, confirm. */
+/** Header for sheets: close, centered title, confirm. */
 export function SheetHeader({
 	confirm,
-	grabber = true,
 	onClose,
 	subtitle,
 	title,
@@ -32,19 +31,7 @@ export function SheetHeader({
 	const { palette } = useUITheme();
 
 	return (
-		<View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.sm }}>
-			{grabber ? (
-				<View
-					style={{
-						alignSelf: "center",
-						backgroundColor: palette.inkTertiary,
-						borderRadius: radius.pill,
-						height: 5,
-						opacity: 0.5,
-						width: 36,
-					}}
-				/>
-			) : null}
+		<View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.xs }}>
 			<View
 				style={{
 					alignItems: "center",

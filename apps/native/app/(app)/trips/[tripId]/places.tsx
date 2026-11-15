@@ -1,5 +1,5 @@
-import { TripPlacesScreen } from "@/src/features/trips/trip-places-screen";
+import { TripItineraryScreen } from "@/src/features/trips/trip-itinerary-screen";
 
 export default function TripPlacesRoute() {
-	return <TripPlacesScreen />;
+	return <TripItineraryScreen initialSegment="places" />;
 }

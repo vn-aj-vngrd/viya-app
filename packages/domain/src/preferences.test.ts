@@ -17,8 +17,8 @@ describe("getPreferenceSuggestions", () => {
 		});
 		const [primaryPrompt] = suggestions.prompts;
 
-		expect(suggestions.home.title).toBe("Plan a slower beach escape");
-		expect(suggestions.home.subtitle).toContain("room for rest");
+		expect(suggestions.home.title).toBe("Plan a slow beach trip");
+		expect(suggestions.home.subtitle).toContain("time to rest");
 		expect(suggestions.exploreIdeas[0]?.title).toBe("Slow beach escapes");
 		expect(suggestions.countrySuggestions[0]?.country).toBe("Thailand");
 		expect(suggestions.placeSuggestions[0]?.location).toBe(
@@ -37,8 +37,8 @@ describe("getPreferenceSuggestions", () => {
 		});
 		const [primaryPrompt] = suggestions.prompts;
 
-		expect(suggestions.home.title).toBe("Build a fast local discovery plan");
-		expect(suggestions.home.subtitle).toContain("food stops");
+		expect(suggestions.home.title).toBe("Plan a food-first trip");
+		expect(suggestions.home.subtitle).toContain("Food stops");
 		expect(suggestions.exploreIdeas[0]?.title).toBe("Food-led routes");
 		expect(suggestions.countrySuggestions[0]?.country).toBe("Vietnam");
 		expect(suggestions.placeSuggestions[0]?.location).toBe("Hanoi food lanes");
@@ -52,7 +52,7 @@ describe("getPreferenceSuggestions", () => {
 		});
 		const [primaryPrompt] = suggestions.prompts;
 
-		expect(suggestions.home.title).toBe("Check the smartest next risk");
+		expect(suggestions.home.title).toBe("Check what could go wrong");
 		expect(primaryPrompt?.prompt).toContain("readiness risks");
 	});
 
@@ -61,7 +61,7 @@ describe("getPreferenceSuggestions", () => {
 			travelStyle: "balanced",
 		} as Partial<UserPreferences>);
 
-		expect(suggestions.home.title).toBe("Shape a balanced trip plan");
+		expect(suggestions.home.title).toBe("Plan your first trip");
 		expect(suggestions.exploreIdeas).toHaveLength(4);
 		expect(suggestions.countrySuggestions).toHaveLength(4);
 		expect(suggestions.placeSuggestions).toHaveLength(3);

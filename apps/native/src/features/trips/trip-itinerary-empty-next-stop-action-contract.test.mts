@@ -13,10 +13,10 @@ describe("trip itinerary empty next stop action contract", () => {
 			"apps/native/src/features/trips/trip-itinerary-screen.tsx"
 		);
 
-		expect(source).toContain("No scheduled stop yet");
-		expect(source).toContain("onCreateNextStop");
-		expect(source).toContain("Add next stop");
-		expect(source).toContain("handleCreateNextStop");
-		expect(source).toContain("openItemSheet(firstItineraryDay._id)");
+		expect(source).toContain("Nothing planned");
+		expect(source).toContain("Plan this day");
+		expect(source).toContain("handleAddDay");
+		expect(source).toContain("Plan this day to add stops");
+		expect(source).toContain("openCreateItem");
 	});
 });

@@ -8,7 +8,11 @@ const buildPrompt = (name: string, duration: string) =>
  * `country` doubles as the Wikipedia lookup title for the photo (see
  * useDestinationImages), so names must match a resolvable Wikipedia page.
  */
-export const philippineDestinations: PreferenceCountrySuggestion[] = [
+export type PhilippineDestination = PreferenceCountrySuggestion & {
+	imageQuery?: string;
+};
+
+export const philippineDestinations: PhilippineDestination[] = [
 	{
 		accent: "#0A84FF",
 		country: "Palawan",
@@ -23,6 +27,7 @@ export const philippineDestinations: PreferenceCountrySuggestion[] = [
 		detail: "Surf breaks, palm roads, quiet lagoons",
 		duration: "3-5 days",
 		icon: "sunny-outline",
+		imageQuery: "General Luna, Surigao del Norte",
 		prompt: buildPrompt("Siargao", "3-5 day"),
 	},
 	{

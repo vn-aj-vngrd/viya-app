@@ -54,7 +54,7 @@ Key design instructions:
 
 ### Code Quality Instructions
 
-The project follows Ultracite and Biome standards from `AGENTS.md` and `biome.json`.
+The project follows Ultracite and Biome standards from `CLAUDE.md` and `biome.json`.
 
 Core standards:
 

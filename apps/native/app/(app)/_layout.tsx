@@ -4,13 +4,18 @@ import { useQuery } from "convex/react";
 import { Redirect, Stack, useSegments } from "expo-router";
 import { View } from "react-native";
 
-import { LoadingState, useUITheme } from "@/src/components/ui";
+import {
+	LoadingState,
+	useShellScreenOptions,
+	useUITheme,
+} from "@/src/components/ui";
 
 function AppLayout() {
 	const { isLoaded, isSignedIn } = useAuth();
 	const segments = useSegments();
 	const routeSegments = segments as readonly string[];
 	const { palette } = useUITheme();
+	const screenOptions = useShellScreenOptions();
 	const preferences = useQuery(
 		api.preferences.getCurrentPreferences,
 		isLoaded && isSignedIn ? {} : "skip"
@@ -44,82 +49,25 @@ function AppLayout() {
 	}
 
 	return (
-		<Stack
-			screenOptions={{
-				contentStyle: { backgroundColor: palette.canvas },
-				headerBackButtonDisplayMode: "minimal",
-				headerShadowVisible: false,
-				headerStyle: { backgroundColor: palette.canvas },
-				headerTintColor: palette.ink,
-				headerTitleStyle: {
-					color: palette.ink,
-					fontWeight: "600",
-				},
-			}}
-		>
+		<Stack screenOptions={screenOptions}>
 			<Stack.Screen name="index" options={{ headerShown: false }} />
 			<Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-			<Stack.Screen name="ai" options={{ headerShown: false }} />
+			<Stack.Screen name="ai" options={{ presentation: "fullScreenModal" }} />
 			<Stack.Screen
 				name="onboarding/preferences"
-				options={{ headerShown: false }}
-			/>
-			<Stack.Screen name="trips/new" options={{ headerShown: false }} />
-			<Stack.Screen
-				name="trips/[tripId]/index"
-				options={{ headerShown: false }}
-			/>
-			<Stack.Screen
-				name="trips/[tripId]/itinerary"
-				options={{ headerShown: false }}
+				options={{
+					animation: "fade",
+					gestureEnabled: false,
+					presentation: "fullScreenModal",
+				}}
 			/>
 			<Stack.Screen
-				name="trips/[tripId]/itinerary-day"
-				options={{ headerShown: false }}
-			/>
-			<Stack.Screen
-				name="trips/[tripId]/bookings"
-				options={{ headerShown: false }}
-			/>
-			<Stack.Screen
-				name="trips/[tripId]/places"
-				options={{ headerShown: false }}
-			/>
-			<Stack.Screen
-				name="trips/[tripId]/readiness"
-				options={{ headerShown: false }}
-			/>
-			<Stack.Screen
-				name="trips/[tripId]/budget"
-				options={{ headerShown: false }}
-			/>
-			<Stack.Screen
-				name="trips/[tripId]/companions"
-				options={{ headerShown: false }}
-			/>
-			<Stack.Screen
-				name="trips/[tripId]/notes"
-				options={{ headerShown: false }}
-			/>
-			<Stack.Screen
-				name="trips/[tripId]/risks"
-				options={{ headerShown: false }}
+				name="trips/new"
+				options={{ presentation: "fullScreenModal" }}
 			/>
 			<Stack.Screen
 				name="trips/[tripId]/travel-mode"
-				options={{ headerShown: false }}
-			/>
-			<Stack.Screen
-				name="trips/[tripId]/moments"
-				options={{ headerShown: false }}
-			/>
-			<Stack.Screen
-				name="trips/[tripId]/wrapped"
-				options={{ headerShown: false }}
-			/>
-			<Stack.Screen
-				name="trips/[tripId]/vault"
-				options={{ headerShown: false }}
+				options={{ presentation: "fullScreenModal" }}
 			/>
 		</Stack>
 	);

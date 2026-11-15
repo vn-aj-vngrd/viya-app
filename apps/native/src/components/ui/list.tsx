@@ -1,10 +1,10 @@
-import { Ionicons } from "@expo/vector-icons";
 import { Children, type ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { AppText } from "./app-text";
+import { Icon } from "./icon";
 import { PressableScale } from "./pressable-scale";
-import { metrics, radius, spacing } from "./tokens";
+import { metrics, motion, radius, spacing } from "./tokens";
 import { useUITheme } from "./use-ui-theme";
 
 export interface ListGroupProps {
@@ -14,6 +14,8 @@ export interface ListGroupProps {
 	footer?: string;
 	/** Small uppercase label above the group. */
 	header?: string;
+	/** Divider left inset. Default `spacing.lg`. */
+	separatorInset?: number;
 }
 
 /** One opaque rounded surface; dividers live between rows, not around them. */
@@ -22,6 +24,7 @@ export function ListGroup({
 	className,
 	footer,
 	header,
+	separatorInset = spacing.lg,
 }: ListGroupProps) {
 	const { palette } = useUITheme();
 	const rows = Children.toArray(children);
@@ -51,7 +54,7 @@ export function ListGroup({
 								style={{
 									backgroundColor: palette.separator,
 									height: StyleSheet.hairlineWidth,
-									marginLeft: spacing.lg,
+									marginLeft: separatorInset,
 								}}
 							/>
 						) : null}
@@ -73,6 +76,7 @@ export function ListGroup({
 }
 
 export interface ListRowProps {
+	accessibilityHint?: string;
 	accessibilityLabel?: string;
 	destructive?: boolean;
 	/** Leading icon/avatar/thumbnail. */
@@ -81,7 +85,11 @@ export interface ListRowProps {
 	/** Chevron for navigation rows. Default: true when onPress is set. */
 	showChevron?: boolean;
 	subtitle?: string;
+	/** Max lines for the subtitle. Default: wrap. */
+	subtitleLines?: number;
 	title: string;
+	/** Max lines for the title. Default: wrap. */
+	titleLines?: number;
 	/** Custom trailing content (switch, chip). */
 	trailing?: ReactNode;
 	/** Quiet trailing value text. */
@@ -90,17 +98,19 @@ export interface ListRowProps {
 
 /** 54pt minimum row for use inside ListGroup (or any Card). */
 export function ListRow({
+	accessibilityHint,
 	accessibilityLabel,
 	destructive,
 	leading,
 	onPress,
 	showChevron,
 	subtitle,
+	subtitleLines,
 	title,
+	titleLines,
 	trailing,
 	value,
 }: ListRowProps) {
-	const { palette } = useUITheme();
 	const chevron = showChevron ?? Boolean(onPress);
 	const content = (
 		<View
@@ -115,9 +125,18 @@ export function ListRow({
 		>
 			{leading}
 			<View style={{ flex: 1, gap: 2 }}>
-				<AppText tone={destructive ? "danger" : "ink"}>{title}</AppText>
+				<AppText
+					numberOfLines={titleLines}
+					tone={destructive ? "danger" : "ink"}
+				>
+					{title}
+				</AppText>
 				{subtitle ? (
-					<AppText tone="secondary" variant="subhead">
+					<AppText
+						numberOfLines={subtitleLines}
+						tone="secondary"
+						variant="subhead"
+					>
 						{subtitle}
 					</AppText>
 				) : null}
@@ -129,10 +148,11 @@ export function ListRow({
 			) : null}
 			{trailing}
 			{chevron ? (
-				<Ionicons
-					color={palette.inkTertiary}
+				<Icon
 					name="chevron-forward"
-					size={16}
+					size={14}
+					tone="tertiary"
+					weight="semibold"
 				/>
 			) : null}
 		</View>
@@ -144,10 +164,11 @@ export function ListRow({
 
 	return (
 		<PressableScale
+			accessibilityHint={accessibilityHint}
 			accessibilityLabel={accessibilityLabel ?? title}
 			haptic="selection"
 			onPress={onPress}
-			scaleTo={0.985}
+			scaleTo={motion.rowPressScale}
 		>
 			{content}
 		</PressableScale>

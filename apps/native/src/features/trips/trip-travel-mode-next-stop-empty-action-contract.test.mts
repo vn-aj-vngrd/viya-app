@@ -13,8 +13,8 @@ describe("trip travel mode next stop empty action contract", () => {
 			"apps/native/src/features/trips/trip-travel-mode-screen.tsx"
 		);
 
-		expect(source).toContain("No upcoming item found.");
-		expect(source).toContain("Plan next stop");
-		expect(source).toContain("href={VIYA_ROUTES.tripItinerary(tripId)}");
+		expect(source).toContain("No stops planned");
+		expect(source).toContain("Open itinerary");
+		expect(source).toContain("VIYA_ROUTES.tripItinerary(tripId)");
 	});
 });

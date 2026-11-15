@@ -12,12 +12,6 @@ describe("readiness category navigation contract", () => {
 		const screenSource = readWorkspaceFile(
 			"apps/native/src/features/readiness/readiness-screen.tsx"
 		);
-		const rowSource = readWorkspaceFile(
-			"apps/native/src/features/readiness/readiness-item-row.tsx"
-		);
-		const cardSource = readWorkspaceFile(
-			"apps/native/src/features/readiness/readiness-category-card.tsx"
-		);
 
 		expect(screenSource).toContain("getReadinessCategoryHref");
 		expect(screenSource).toContain("VIYA_ROUTES.tripVault");
@@ -25,12 +19,8 @@ describe("readiness category navigation contract", () => {
 		expect(screenSource).toContain("VIYA_ROUTES.tripBudget");
 		expect(screenSource).toContain("VIYA_ROUTES.tripItinerary");
 		expect(screenSource).toContain("VIYA_ROUTES.tripCompanions");
-		expect(screenSource).toContain("VIYA_ROUTES.tripRisks");
-		expect(rowSource).toContain("categoryHref");
-		expect(rowSource).toContain("Open category");
-		expect(rowSource).toContain("Link asChild");
-		expect(cardSource).toContain("categoryHref");
-		expect(cardSource).toContain("Open module");
-		expect(cardSource).toContain("Link asChild");
+		expect(screenSource).toContain("categoryLink");
+		expect(screenSource).toContain("Open Vault");
+		expect(screenSource).toContain("Link asChild");
 	});
 });

@@ -120,7 +120,7 @@ describe("trip create flow payload", () => {
 
 		expect(getTripCreateSummary(state)).toContain("Mode: Guided trip setup.");
 		expect(getTripCreateSummary(state)).toContain("Destination: Hong Kong.");
-		expect(getTripCreateSummary(state)).toContain("Dates: May 29 - 30, 2026.");
+		expect(getTripCreateSummary(state)).toContain("Dates: 29–30 May 2026.");
 		expect(getTripCreateSummary(state)).toContain("Budget: PHP 60,000");
 	});
 
@@ -140,10 +140,10 @@ describe("trip create flow payload", () => {
 		expect(getCreateTripReviewRows(state)).toEqual(
 			expect.arrayContaining([
 				{ label: "Destination", value: "Seoul" },
-				{ label: "Dates", value: "May 29 - 30, 2026" },
+				{ label: "Dates", value: "29–30 May 2026" },
 				{ label: "Travelers", value: "Family · 3 travelers" },
 				{ label: "Style", value: "Culture, Nature" },
-				{ label: "Budget", value: "PHP 12,000 · Total · Moderate" },
+				{ label: "Budget", value: "₱12,000 total · Moderate" },
 			])
 		);
 	});

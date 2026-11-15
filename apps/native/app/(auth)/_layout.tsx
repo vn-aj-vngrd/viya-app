@@ -17,7 +17,7 @@ export default function AuthRoutesLayout() {
 	}
 
 	if (isSignedIn) {
-		return <Redirect href="/(app)/(tabs)" />;
+		return <Redirect href="/(app)/(tabs)/(discover)" />;
 	}
 
 	return (

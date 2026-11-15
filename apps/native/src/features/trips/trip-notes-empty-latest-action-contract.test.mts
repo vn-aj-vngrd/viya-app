@@ -13,9 +13,8 @@ describe("trip notes empty latest action contract", () => {
 			"apps/native/src/features/trips/trip-notes-screen.tsx"
 		);
 
-		expect(source).toContain("No context captured yet");
-		expect(source).toContain("Add first note");
-		expect(source).toContain("onPress={openCreateSheet}");
-		expect(source).toContain("Review latest");
+		expect(source).toContain("No notes yet");
+		expect(source).toContain("Add note");
+		expect(source).toContain("onPress: openCreateSheet");
 	});
 });

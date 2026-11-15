@@ -13,11 +13,7 @@ describe("trip places empty assignment itinerary action contract", () => {
 			"apps/native/src/features/trips/trip-places-screen.tsx"
 		);
 
-		expect(source).toContain("Add itinerary days first");
-		expect(source).toContain("itineraryHref");
-		expect(source).toContain("Plan itinerary days");
-		expect(source).toContain(
-			"itineraryHref={VIYA_ROUTES.tripItinerary(tripId)}"
-		);
+		expect(source).toContain("No itinerary days yet");
+		expect(source).toContain("Plan a day in Itinerary");
 	});
 });

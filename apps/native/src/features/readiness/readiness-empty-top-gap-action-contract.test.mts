@@ -13,9 +13,9 @@ describe("readiness empty top gap action contract", () => {
 			"apps/native/src/features/readiness/readiness-screen.tsx"
 		);
 
-		expect(source).toContain("No open gap");
-		expect(source).toContain("onCreateTopGap");
-		expect(source).toContain("Add readiness task");
-		expect(source).toContain("openCreateSheet");
+		expect(source).toContain("Nothing left to do");
+		expect(source).toContain("onAddTask");
+		expect(source).toContain("Add task");
+		expect(source).toContain("openSheet");
 	});
 });

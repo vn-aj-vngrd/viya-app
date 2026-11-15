@@ -13,11 +13,11 @@ describe("readiness top gap actions contract", () => {
 			"apps/native/src/features/readiness/readiness-screen.tsx"
 		);
 
-		expect(source).toContain("TopReadinessGapSummary");
-		expect(source).toContain("Review top gap");
-		expect(source).toContain("Open top category");
-		expect(source).toContain("Open top owner");
-		expect(source).toContain("Mark top done");
-		expect(source).toContain("openEditSheet(highestPriorityItem)");
+		expect(source).toContain("NextUpRow");
+		expect(source).toContain("Next up");
+		expect(source).toContain("Open Vault");
+		expect(source).toContain("Open travelers");
+		expect(source).toContain("Mark done");
+		expect(source).toContain('openSheet({ kind: "task", taskId: nextUp._id })');
 	});
 });

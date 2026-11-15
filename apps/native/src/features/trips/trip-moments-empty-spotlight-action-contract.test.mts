@@ -13,9 +13,8 @@ describe("trip moments empty spotlight action contract", () => {
 			"apps/native/src/features/trips/trip-moments-screen.tsx"
 		);
 
-		expect(source).toContain("No spotlight yet");
-		expect(source).toContain("Add first moment");
-		expect(source).toContain("onCreateSpotlight");
-		expect(source).toContain("onCreateSpotlight={openCreateSheet}");
+		expect(source).toContain("No moments yet");
+		expect(source).toContain("Add moment");
+		expect(source).toContain("onPress: openCreateSheet");
 	});
 });

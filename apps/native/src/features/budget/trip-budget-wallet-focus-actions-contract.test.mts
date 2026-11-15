@@ -13,11 +13,11 @@ describe("trip budget overview actions contract", () => {
 			"apps/native/src/features/budget/trip-budget-screen.tsx"
 		);
 
-		expect(source).toContain("BudgetOverviewCard");
-		expect(source).toContain("NavigationIconButton");
-		expect(source).toContain('accessibilityLabel="Add expense"');
+		expect(source).toContain("BudgetFigure");
+		expect(source).toContain("ScreenShell");
+		expect(source).toContain('label: "Add expense"');
 		expect(source).toContain("openNewExpenseForm");
-		expect(source).toContain("ALL EXPENSES");
-		expect(source).toContain("Edit budget");
+		expect(source).toContain("By category");
+		expect(source).toContain("Total budget");
 	});
 });

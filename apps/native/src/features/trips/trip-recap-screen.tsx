@@ -1,334 +1,164 @@
-import { Ionicons } from "@expo/vector-icons";
 import { api } from "@viya-app/backend/convex/_generated/api";
-import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
-import { getBudgetWalletSummary } from "@viya-app/domain";
+import type { Doc } from "@viya-app/backend/convex/_generated/dataModel";
+import {
+	getBookingCounts,
+	getBudgetWalletSummary,
+	getPlaceCounts,
+	getTripDayCount,
+	getTripPhase,
+	getVaultCounts,
+} from "@viya-app/domain";
 import { useMutation, useQuery } from "convex/react";
-import { type Href, Link, useRouter } from "expo-router";
-import type { ComponentProps } from "react";
+import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { Share, View } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
-
-import { Container } from "@/components/container";
+import { ActivityIndicator, Share, View } from "react-native";
 import {
 	AppText,
-	Card,
-	EmptyState,
-	LoadingState,
+	Icon,
+	ListGroup,
+	ListRow,
 	PrimaryButton,
-	radius,
-	SecondaryButton,
-	SectionHeader,
+	ScreenShell,
 	spacing,
 	useFeedback,
-	useUITheme,
 } from "@/src/components/ui";
 import { VIYA_ROUTES } from "@/src/constants/routes";
-import { formatMoney } from "./trip-dashboard-utils";
-import { TripModuleScreenFrame } from "./trip-module-floating-bar";
-import { InlineMessage, TagRow } from "./trip-module-form-kit";
-import { TripModuleManualEntryCard } from "./trip-module-manual-entry-card";
+import { FormError } from "@/src/features/bookings/module-kit";
+import {
+	formatCount,
+	formatMoney,
+	formatShortDate,
+	formatTripRange,
+	toLocalDateKey,
+} from "@/src/lib/format";
 import { buildTripRecapShareMessage } from "./trip-recap-share";
 import { useTripIdParam } from "./use-trip-id-param";
 
-const dayMs = 86_400_000;
-
-const getTripDayCount = (startDate: string, endDate: string) => {
-	const start = new Date(`${startDate}T00:00:00.000Z`);
-	const end = new Date(`${endDate}T00:00:00.000Z`);
-
-	if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-		return 1;
-	}
-
-	return Math.max(1, Math.floor((end.getTime() - start.getTime()) / dayMs) + 1);
-};
-
-const formatShortDate = (date: string) => {
-	const parsedDate = new Date(`${date}T00:00:00.000Z`);
-
-	if (Number.isNaN(parsedDate.getTime())) {
-		return date;
-	}
-
-	return new Intl.DateTimeFormat(undefined, {
-		day: "numeric",
-		month: "short",
-		timeZone: "UTC",
-	}).format(parsedDate);
-};
-
-function RecapStat({
-	detail,
-	icon,
-	label,
-	value,
-}: {
-	detail?: string;
-	icon: ComponentProps<typeof Ionicons>["name"];
-	label: string;
-	value: string;
-}) {
-	const { palette } = useUITheme();
-
-	return (
-		<View
-			style={{
-				backgroundColor: palette.fill,
-				borderRadius: radius.group,
-				flexBasis: "47%",
-				flexGrow: 1,
-				gap: spacing.sm,
-				padding: spacing.lg,
-			}}
-		>
-			<Ionicons color={palette.accent} name={icon} size={20} />
-			<View style={{ gap: 2 }}>
-				<AppText tone="secondary" variant="eyebrow">
-					{label}
-				</AppText>
-				<AppText variant="heading">{value}</AppText>
-				{detail ? (
-					<AppText tone="secondary" variant="footnote">
-						{detail}
-					</AppText>
-				) : null}
-			</View>
-		</View>
-	);
-}
-
-function RecapRow({
-	actionHref,
-	actionLabel,
-	detail,
-	icon,
-	label,
-}: {
-	actionHref?: Href;
-	actionLabel?: string;
-	detail?: string;
-	icon: ComponentProps<typeof Ionicons>["name"];
-	label: string;
-}) {
-	const { palette } = useUITheme();
-	const actionContent =
-		actionHref && actionLabel ? (
-			<Link asChild href={actionHref}>
-				<SecondaryButton
-					fullWidth={false}
-					icon="open-outline"
-					label={actionLabel}
-					onPress={() => undefined}
-					variant="plain"
-				/>
-			</Link>
-		) : null;
-
-	return (
-		<View
-			style={{
-				backgroundColor: palette.fill,
-				borderRadius: radius.group,
-				gap: spacing.sm,
-				padding: spacing.lg,
-			}}
-		>
-			<View
-				style={{
-					alignItems: "flex-start",
-					flexDirection: "row",
-					gap: spacing.md,
-				}}
-			>
-				<Ionicons color={palette.accent} name={icon} size={20} />
-				<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-					<AppText variant="headline">{label}</AppText>
-					{detail ? (
-						<AppText tone="secondary" variant="subhead">
-							{detail}
-						</AppText>
-					) : null}
-				</View>
-			</View>
-			{actionContent}
-		</View>
-	);
-}
-
-function StoryFocus({
-	actionHref,
-	actionLabel,
-	detail,
-	label,
-}: {
-	actionHref?: Href;
-	actionLabel?: string;
-	detail: string;
-	label: string;
-}) {
-	const { palette } = useUITheme();
-	const actionContent =
-		actionHref && actionLabel ? (
-			<Link asChild href={actionHref}>
-				<SecondaryButton
-					fullWidth={false}
-					icon="open-outline"
-					label={actionLabel}
-					onPress={() => undefined}
-				/>
-			</Link>
-		) : null;
-
-	return (
-		<View
-			style={{
-				backgroundColor: palette.fill,
-				borderRadius: radius.group,
-				gap: spacing.md,
-				padding: spacing.lg,
-			}}
-		>
-			<AppText tone="secondary" variant="eyebrow">
-				Wrap-up focus
-			</AppText>
-			<View style={{ gap: 2 }}>
-				<AppText variant="headline">{label}</AppText>
-				<AppText tone="secondary" variant="subhead">
-					{detail}
-				</AppText>
-			</View>
-			{actionContent}
-		</View>
-	);
-}
-
-function getStoryFocus({
-	dayLinkedMomentCount,
-	completedItems,
-	highlightCount,
-	missingDocumentCount,
-	tripId,
-	totalItems,
-	unconfirmedBookings,
-}: {
-	dayLinkedMomentCount: number;
-	completedItems: number;
-	highlightCount: number;
-	missingDocumentCount: number;
-	tripId: Id<"trips">;
-	totalItems: number;
-	unconfirmedBookings: number;
-}) {
-	if (highlightCount === 0) {
-		return {
-			actionHref: VIYA_ROUTES.tripMoments(tripId),
-			actionLabel: "Open moments",
-			detail:
-				"Mark at least one moment as a highlight so the recap has a story anchor.",
-			label: "Choose a highlight",
-		};
-	}
-
-	if (dayLinkedMomentCount === 0) {
-		return {
-			actionHref: VIYA_ROUTES.tripMoments(tripId),
-			actionLabel: "Open moments",
-			detail:
-				"Assign key moments to itinerary days so the recap reads like a trip timeline.",
-			label: "Link moments to days",
-		};
-	}
-
-	if (totalItems > completedItems) {
-		return {
-			actionHref: VIYA_ROUTES.tripItinerary(tripId),
-			actionLabel: "Open itinerary",
-			detail: `${totalItems - completedItems} itinerary items still need completion before the trip story is clean.`,
-			label: "Complete itinerary items",
-		};
-	}
-
-	if (unconfirmedBookings > 0) {
-		return {
-			actionHref: VIYA_ROUTES.tripBookings(tripId),
-			actionLabel: "Open bookings",
-			detail: `${unconfirmedBookings} booking targets still need confirmation or proof.`,
-			label: "Close booking proof",
-		};
-	}
-
-	if (missingDocumentCount > 0) {
-		return {
-			actionHref: VIYA_ROUTES.tripVault(tripId),
-			actionLabel: "Open files",
-			detail: `${missingDocumentCount} travel documents are still marked missing.`,
-			label: "Resolve missing documents",
-		};
-	}
-
-	return {
-		detail:
-			"Core story inputs are ready. Mark the trip complete when the recap reads right.",
-		label: "Ready to wrap",
-	};
-}
+const MAX_HIGHLIGHTS = 5;
 
 const getDayLabel = (days: Doc<"itineraryDays">[], dayId?: string) => {
 	const day = days.find((itineraryDay) => itineraryDay._id === dayId);
 
-	if (!day) {
-		return "Unassigned";
-	}
-
-	return `Day ${day.dayNumber}`;
+	return day ? `Day ${day.dayNumber}` : undefined;
 };
 
-function HighlightRows({
-	days,
-	moments,
-	tripId,
-}: {
-	days: Doc<"itineraryDays">[];
-	moments: Doc<"moments">[];
-	tripId: Id<"trips">;
-}) {
-	const highlights = moments.filter((moment) => moment.isHighlight).slice(0, 4);
-	const visibleMoments =
-		highlights.length > 0 ? highlights : moments.slice(0, 4);
+function RecapStat({ label, value }: { label: string; value: string }) {
+	return (
+		<View style={{ flexBasis: "45%", flexGrow: 1, gap: 2 }}>
+			<AppText variant="heading">{value}</AppText>
+			<AppText tone="secondary" variant="footnote">
+				{label}
+			</AppText>
+		</View>
+	);
+}
 
-	if (visibleMoments.length === 0) {
-		return (
-			<RecapRow
-				actionHref={VIYA_ROUTES.tripMoments(tripId)}
-				actionLabel="Add memory"
-				detail="Save moments during or after the trip to build a richer recap."
-				icon="images-outline"
-				label="No moments captured yet"
-			/>
-		);
-	}
+function WrapUpRow({
+	detail,
+	isDone,
+	onPress,
+	title,
+}: {
+	detail: string;
+	isDone: boolean;
+	onPress: () => void;
+	title: string;
+}) {
+	return (
+		<ListRow
+			accessibilityLabel={`${title}, ${isDone ? "done" : "needs attention"}. ${detail}`}
+			leading={
+				<Icon
+					name={isDone ? "checkmark-circle" : "ellipse-outline"}
+					size={22}
+					tone={isDone ? "success" : "tertiary"}
+				/>
+			}
+			onPress={onPress}
+			subtitle={detail}
+			title={title}
+		/>
+	);
+}
+
+function LifecycleGroup({
+	isCompleted,
+	onArchive,
+	onComplete,
+	pendingAction,
+}: {
+	isCompleted: boolean;
+	onArchive: () => void;
+	onComplete: () => void;
+	pendingAction: "archive" | "complete" | null;
+}) {
+	const isIdle = pendingAction === null;
 
 	return (
-		<>
-			{visibleMoments.map((moment) => (
-				<RecapRow
-					actionHref={VIYA_ROUTES.tripMoments(tripId)}
-					actionLabel="Open memory"
-					detail={[
-						getDayLabel(days, moment.dayId),
-						moment.locationName,
-						moment.note || moment.caption,
-					]
-						.filter(Boolean)
-						.join(" · ")}
-					icon={moment.isHighlight ? "star-outline" : "image-outline"}
-					key={moment._id}
-					label={moment.title}
-				/>
-			))}
-		</>
+		<ListGroup
+			footer={
+				isCompleted
+					? undefined
+					: "Archiving removes the trip from active planning. History is kept."
+			}
+		>
+			<ListRow
+				onPress={isCompleted || !isIdle ? undefined : onComplete}
+				showChevron={false}
+				title="Mark complete"
+				trailing={
+					pendingAction === "complete" ? (
+						<ActivityIndicator />
+					) : (
+						<Icon
+							name={isCompleted ? "checkmark-circle" : "ellipse-outline"}
+							size={22}
+							tone={isCompleted ? "success" : "tertiary"}
+						/>
+					)
+				}
+			/>
+			<ListRow
+				destructive={true}
+				onPress={isIdle ? onArchive : undefined}
+				showChevron={false}
+				title="Archive trip"
+				trailing={
+					pendingAction === "archive" ? <ActivityIndicator /> : undefined
+				}
+			/>
+		</ListGroup>
 	);
+}
+
+function getBudgetOutcomeText({
+	budget,
+	currency,
+	overAmount,
+	spent,
+}: {
+	budget: number;
+	currency: string;
+	overAmount: number;
+	spent: number;
+}) {
+	const spentText = `Spent: ${formatMoney(spent, currency)}`;
+
+	if (budget <= 0) {
+		return spentText;
+	}
+
+	return overAmount > 0
+		? `${spentText}, ${formatMoney(overAmount, currency)} over budget`
+		: `${spentText} of ${formatMoney(budget, currency)}`;
+}
+
+function getPendingSummary(endDate: string | undefined, hasEnded: boolean) {
+	if (!endDate) {
+		return "Mark the trip complete to share the recap.";
+	}
+
+	return `${hasEnded ? "Ended" : "Ends"} ${formatShortDate(endDate)}. Mark the trip complete to share the recap.`;
 }
 
 export function TripRecapScreen() {
@@ -343,9 +173,7 @@ export function TripRecapScreen() {
 	const [pendingAction, setPendingAction] = useState<
 		"archive" | "complete" | null
 	>(null);
-	const [lifecycleErrorMessage, setLifecycleErrorMessage] = useState<
-		string | null
-	>(null);
+	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const { confirm } = useFeedback();
 	const [isSharingRecap, setIsSharingRecap] = useState(false);
 
@@ -360,39 +188,32 @@ export function TripRecapScreen() {
 			budgetCurrency: workspace.trip.budgetCurrency,
 			expenses: workspace.expenses,
 			itineraryItems: workspace.itineraryItems,
-			remainingTripDays: getTripDayCount(
-				workspace.trip.startDate,
-				workspace.trip.endDate
-			),
+			remainingTripDays:
+				getTripDayCount(workspace.trip.startDate, workspace.trip.endDate) ?? 1,
 		});
 	}, [workspace]);
 
-	if (!tripId) {
+	if (!tripId || workspace === null) {
 		return (
-			<Container className="px-4 pb-28">
-				<EmptyState
-					description="Open a saved trip before reviewing its story."
-					icon="sparkles-outline"
-					title="Trip not found"
-				/>
-			</Container>
-		);
-	}
-
-	if (workspace === null) {
-		return (
-			<Container className="px-4 pb-28">
-				<EmptyState
-					description="This trip was deleted or is no longer available."
-					icon="sparkles-outline"
-					title="Trip not found"
-				/>
-			</Container>
+			<ScreenShell
+				state={{
+					description: "This trip was deleted or is no longer available.",
+					icon: "sparkles-outline",
+					kind: "empty",
+					title: "Trip not found",
+				}}
+				title="Recap"
+			/>
 		);
 	}
 
 	if (workspace === undefined || !wallet) {
-		return <LoadingState title="Loading recap" />;
+		return (
+			<ScreenShell
+				state={{ kind: "loading", title: "Loading recap" }}
+				title="Recap"
+			/>
+		);
 	}
 
 	const currency = workspace.trip.budgetCurrency ?? "PHP";
@@ -400,293 +221,216 @@ export function TripRecapScreen() {
 		(item) => item.status === "completed"
 	).length;
 	const totalItems = workspace.itineraryItems.length;
-	const confirmedBookings = workspace.bookings.filter(
-		(booking) => booking.status === "confirmed"
+	const bookingCounts = getBookingCounts(workspace.bookings, currency);
+	const confirmedBookings = bookingCounts.booked;
+	const vaultCounts = getVaultCounts(workspace.vaultItems, workspace.documents);
+	const fileCount = vaultCounts.files;
+	const placeCounts = getPlaceCounts(workspace.savedPlaces);
+	const plannedDays = workspace.itineraryDays.filter((day) =>
+		workspace.itineraryItems.some((item) => item.dayId === day._id)
 	).length;
-	const unconfirmedBookings = workspace.bookings.length - confirmedBookings;
-	const savedDocumentCount =
-		workspace.documents.filter((document) => document.status !== "missing")
-			.length + workspace.vaultItems.length;
-	const missingDocumentCount = workspace.documents.filter(
-		(document) => document.status === "missing"
-	).length;
-	const highlightCount = workspace.moments.filter(
-		(moment) => moment.isHighlight
-	).length;
-	const dayLinkedMomentCount = workspace.moments.filter(
-		(moment) => moment.dayId
-	).length;
-	const coveredStoryDayCount = new Set(
-		workspace.moments
-			.map((moment) => moment.dayId)
-			.filter((dayId): dayId is string => Boolean(dayId))
-	).size;
-	const openStoryGaps =
-		Math.max(totalItems - completedItems, 0) +
-		unconfirmedBookings +
-		missingDocumentCount +
-		(highlightCount > 0 ? 0 : 1) +
-		(dayLinkedMomentCount > 0 ? 0 : 1);
-	const storyFocus = getStoryFocus({
-		dayLinkedMomentCount,
-		completedItems,
-		highlightCount,
-		missingDocumentCount,
-		tripId,
-		totalItems,
-		unconfirmedBookings,
+	const budget = workspace.trip.budgetAmount ?? 0;
+	const spent = wallet.totalTrackedSpend;
+	const overAmount = wallet.overAmount;
+	const budgetOutcome = getBudgetOutcomeText({
+		budget,
+		currency,
+		overAmount,
+		spent,
 	});
-	const dateWindow = `${formatShortDate(workspace.trip.startDate)} - ${formatShortDate(
-		workspace.trip.endDate
-	)}`;
+	const highlightMoments = workspace.moments.filter(
+		(moment) => moment.isHighlight
+	);
+	const visibleMoments = (
+		highlightMoments.length > 0 ? highlightMoments : workspace.moments
+	).slice(0, MAX_HIGHLIGHTS);
+	const isCompleted = workspace.trip.status === "completed";
+	const { startDate, endDate } = workspace.trip;
+	const dateWindow =
+		startDate && endDate
+			? formatTripRange(startDate, endDate, { year: "always" })
+			: undefined;
+	const tripMeta = [workspace.trip.destination, dateWindow]
+		.filter(Boolean)
+		.join(" · ");
+	const phase = getTripPhase(workspace.trip, toLocalDateKey());
+	const pendingSummary = getPendingSummary(endDate, phase === "ended");
 
 	const completeTrip = async () => {
-		setLifecycleErrorMessage(null);
+		setErrorMessage(null);
 		setPendingAction("complete");
 		try {
 			await updateTripLifecycle({ status: "completed", tripId });
 		} catch {
-			setLifecycleErrorMessage("Could not mark trip complete.");
+			setErrorMessage("Could not mark the trip complete. Try again.");
 		} finally {
 			setPendingAction(null);
 		}
 	};
 
 	const archiveCurrentTrip = async () => {
-		setLifecycleErrorMessage(null);
+		setErrorMessage(null);
 		setPendingAction("archive");
 		try {
 			await archiveTrip({ tripId });
 			router.replace(VIYA_ROUTES.trips);
 		} catch {
-			setLifecycleErrorMessage("Could not archive trip.");
+			setErrorMessage("Could not archive the trip. Try again.");
 		} finally {
 			setPendingAction(null);
 		}
 	};
 	const confirmArchive = async () => {
 		const confirmed = await confirm({
-			confirmLabel: "Archive",
+			confirmLabel: "Archive trip",
 			destructive: true,
 			message: "The trip leaves active planning. Its history is kept.",
-			title: "Archive this trip?",
+			title: "Archive trip?",
 		});
 		if (confirmed) {
 			await archiveCurrentTrip();
 		}
 	};
 	const shareRecap = async () => {
-		const highlightTitles = workspace.moments
-			.filter((moment) => moment.isHighlight)
-			.map((moment) => moment.title);
-
-		setLifecycleErrorMessage(null);
+		setErrorMessage(null);
 		setIsSharingRecap(true);
 		try {
 			await Share.share({
 				message: buildTripRecapShareMessage({
 					completedItems,
+					budgetOutcome,
 					confirmedBookings,
-					currency,
-					dateWindow,
+					dateWindow: dateWindow ?? "",
 					destination: workspace.trip.destination,
-					highlightTitles,
-					remainingAmount: wallet.remainingAmount,
-					savedDocumentCount,
+					fileCount,
+					highlightTitles: highlightMoments.map((moment) => moment.title),
 					title: workspace.trip.title,
+					totalBookings: bookingCounts.total,
 					totalItems,
-					totalTrackedSpend: wallet.totalTrackedSpend,
 				}),
 				title: workspace.trip.title,
 			});
 		} catch {
-			setLifecycleErrorMessage("Could not open the share sheet.");
+			setErrorMessage("Could not open the share sheet.");
 		} finally {
 			setIsSharingRecap(false);
 		}
 	};
 
 	return (
-		<TripModuleScreenFrame activeTab="recap" tripId={tripId}>
-			<Container
-				className="px-4 pb-28"
-				scrollViewProps={{ contentInsetAdjustmentBehavior: "never" }}
-			>
-				<Animated.View
-					entering={FadeInDown.duration(220)}
-					style={{ gap: spacing.lg, paddingBottom: spacing.lg }}
-				>
-					<TripModuleManualEntryCard
-						description="Review the trip story from saved itinerary items, moments, files, bookings, and spend."
-						moduleLabel="recap"
-						onPrimaryPress={() => {
-							router.push(VIYA_ROUTES.tripMoments(tripId));
-						}}
-						onSecondaryPress={() => {
+		<ScreenShell
+			footer={
+				isCompleted ? (
+					<PrimaryButton
+						icon="share-outline"
+						isPending={isSharingRecap}
+						label="Share recap"
+						onPress={() => {
 							shareRecap().catch(() => undefined);
 						}}
-						primaryActionIcon="images-outline"
-						primaryActionLabel="Edit moments"
-						secondaryActionIcon="share-outline"
-						secondaryActionLabel="Share recap"
 					/>
-					<InlineMessage message={lifecycleErrorMessage} />
+				) : undefined
+			}
+			summary={isCompleted ? tripMeta : pendingSummary}
+			title="Recap"
+		>
+			<FormError message={errorMessage} />
 
-					<Card>
-						<View style={{ gap: spacing.lg }}>
-							<View style={{ gap: spacing.sm }}>
-								<TagRow
-									labels={[
-										workspace.trip.destination,
-										dateWindow,
-										openStoryGaps === 0
-											? "Story ready"
-											: `${openStoryGaps} story gaps`,
-									]}
-								/>
-								<AppText accessibilityRole="header" variant="title">
-									{workspace.trip.title}
-								</AppText>
-								<AppText tone="secondary" variant="subhead">
-									{workspace.trip.summary ||
-										"Capture the trip outcome once itinerary, spend, and moments are ready."}
-								</AppText>
-							</View>
-							<StoryFocus
-								actionHref={storyFocus.actionHref}
-								actionLabel={storyFocus.actionLabel}
-								detail={storyFocus.detail}
-								label={storyFocus.label}
-							/>
-							<SecondaryButton
-								disabled={isSharingRecap}
-								icon="share-outline"
-								isPending={isSharingRecap}
-								label="Share recap"
-								onPress={() => {
-									shareRecap().catch(() => undefined);
-								}}
-							/>
-							<View
-								style={{
-									flexDirection: "row",
-									flexWrap: "wrap",
-									gap: spacing.md,
-								}}
-							>
-								<RecapStat
-									detail={`${completedItems} completed`}
-									icon="calendar-outline"
-									label="Itinerary"
-									value={totalItems ? `${completedItems}/${totalItems}` : "0"}
-								/>
-								<RecapStat
-									detail={`${workspace.expenses.length} expenses logged`}
-									icon="wallet-outline"
-									label="Tracked spend"
-									value={formatMoney(wallet.totalTrackedSpend, currency)}
-								/>
-								<RecapStat
-									detail={`${dayLinkedMomentCount} day-linked`}
-									icon="images-outline"
-									label="Highlights"
-									value={`${highlightCount}`}
-								/>
-								<RecapStat
-									detail={`${savedDocumentCount} docs or files`}
-									icon="ticket-outline"
-									label="Bookings"
-									value={`${confirmedBookings}`}
-								/>
-							</View>
-						</View>
-					</Card>
+			<View
+				style={{
+					flexDirection: "row",
+					flexWrap: "wrap",
+					gap: spacing.lg,
+				}}
+			>
+				<RecapStat
+					label="Days"
+					value={`${getTripDayCount(startDate, endDate) ?? workspace.itineraryDays.length}`}
+				/>
+				<RecapStat label="Places" value={`${placeCounts.saved}`} />
+				<RecapStat
+					label="Stops done"
+					value={`${completedItems} of ${totalItems}`}
+				/>
+				<RecapStat label="Spent" value={formatMoney(spent, currency)} />
+				<RecapStat label="Moments" value={`${workspace.moments.length}`} />
+			</View>
 
-					<Card>
-						<View style={{ gap: spacing.md }}>
-							<SectionHeader
-								action={{
-									label: "Open",
-									onPress: () => router.push(VIYA_ROUTES.tripMoments(tripId)),
-								}}
-								title="Moments"
-							/>
-							<AppText tone="secondary" variant="subhead">
-								Highlights become the recap source by trip day.
-							</AppText>
-							<RecapRow
-								actionHref={VIYA_ROUTES.tripMoments(tripId)}
-								actionLabel="Review story coverage"
-								detail={`${coveredStoryDayCount}/${workspace.itineraryDays.length} days have linked memory context`}
-								icon="calendar-number-outline"
-								label="Story coverage"
-							/>
-							<HighlightRows
-								days={workspace.itineraryDays}
-								moments={workspace.moments}
-								tripId={tripId}
-							/>
-						</View>
-					</Card>
+			<ListGroup header="Highlights">
+				{visibleMoments.length === 0 ? (
+					<ListRow
+						leading={<Icon name="images-outline" size={22} tone="secondary" />}
+						onPress={() => router.push(VIYA_ROUTES.tripMoments(tripId))}
+						subtitle="Save a moment and it shows here."
+						title="No moments yet"
+					/>
+				) : (
+					visibleMoments.map((moment) => (
+						<ListRow
+							accessibilityLabel={`${moment.title}. Open moments`}
+							key={moment._id}
+							onPress={() => router.push(VIYA_ROUTES.tripMoments(tripId))}
+							subtitle={
+								[
+									getDayLabel(workspace.itineraryDays, moment.dayId),
+									moment.locationName,
+								]
+									.filter(Boolean)
+									.join(" · ") || undefined
+							}
+							title={moment.title}
+						/>
+					))
+				)}
+			</ListGroup>
 
-					<Card>
-						<View style={{ gap: spacing.md }}>
-							<SectionHeader title="Wrap-up checklist" />
-							<RecapRow
-								actionHref={VIYA_ROUTES.tripPlaces(tripId)}
-								actionLabel="Open route"
-								detail={`${workspace.savedPlaces.length} saved places, ${workspace.itineraryDays.length} planned days`}
-								icon="map-outline"
-								label="Route and places"
-							/>
-							<RecapRow
-								actionHref={VIYA_ROUTES.tripVault(tripId)}
-								actionLabel="Open files"
-								detail={`${confirmedBookings} confirmed bookings, ${savedDocumentCount} saved documents`}
-								icon="file-tray-full-outline"
-								label="Confirmations and documents"
-							/>
-							<RecapRow
-								actionHref={VIYA_ROUTES.tripBudget(tripId)}
-								actionLabel="Open budget"
-								detail={`${formatMoney(wallet.remainingAmount, currency)} remaining from planned budget`}
-								icon="cash-outline"
-								label="Budget outcome"
-							/>
-						</View>
-					</Card>
+			<ListGroup header="Wrap-up">
+				<WrapUpRow
+					detail={`${placeCounts.saved} saved · ${plannedDays} days planned`}
+					isDone={placeCounts.saved > 0 && plannedDays > 0}
+					onPress={() => router.push(VIYA_ROUTES.tripPlaces(tripId))}
+					title="Places"
+				/>
+				<WrapUpRow
+					detail={`${completedItems} of ${totalItems} stops done`}
+					isDone={totalItems > 0 && completedItems === totalItems}
+					onPress={() => router.push(VIYA_ROUTES.tripItinerary(tripId))}
+					title="Itinerary"
+				/>
+				<WrapUpRow
+					detail={`${confirmedBookings} of ${bookingCounts.total} booked · ${formatCount(fileCount, "file")}`}
+					isDone={
+						bookingCounts.total > 0 &&
+						bookingCounts.toBook === 0 &&
+						vaultCounts.missingDocuments === 0
+					}
+					onPress={() =>
+						router.push(
+							bookingCounts.toBook > 0
+								? VIYA_ROUTES.tripBookings(tripId)
+								: VIYA_ROUTES.tripVault(tripId)
+						)
+					}
+					title="Confirmations"
+				/>
+				<WrapUpRow
+					detail={budgetOutcome}
+					isDone={budget > 0 && spent > 0 && overAmount === 0}
+					onPress={() => router.push(VIYA_ROUTES.tripBudget(tripId))}
+					title="Budget outcome"
+				/>
+			</ListGroup>
 
-					<Card>
-						<View style={{ gap: spacing.md }}>
-							<SectionHeader title="Trip lifecycle" />
-							<AppText tone="secondary" variant="subhead">
-								Mark complete when the recap is ready. Archive hides the trip
-								from active planning without deleting the history.
-							</AppText>
-							<PrimaryButton
-								disabled={
-									pendingAction !== null ||
-									workspace.trip.status === "completed"
-								}
-								isPending={pendingAction === "complete"}
-								label="Mark complete"
-								onPress={() => {
-									completeTrip().catch(() => undefined);
-								}}
-							/>
-							<SecondaryButton
-								disabled={pendingAction !== null}
-								isPending={pendingAction === "archive"}
-								label="Archive"
-								onPress={() => {
-									confirmArchive().catch(() => undefined);
-								}}
-								variant="plain"
-							/>
-						</View>
-					</Card>
-				</Animated.View>
-			</Container>
-		</TripModuleScreenFrame>
+			<LifecycleGroup
+				isCompleted={isCompleted}
+				onArchive={() => {
+					confirmArchive().catch(() => undefined);
+				}}
+				onComplete={() => {
+					completeTrip().catch(() => undefined);
+				}}
+				pendingAction={pendingAction}
+			/>
+		</ScreenShell>
 	);
 }

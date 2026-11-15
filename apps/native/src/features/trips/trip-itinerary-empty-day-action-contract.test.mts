@@ -13,9 +13,8 @@ describe("trip itinerary empty day action contract", () => {
 			"apps/native/src/features/trips/trip-itinerary-screen.tsx"
 		);
 
-		expect(source).toContain("No scheduled items yet");
-		expect(source).toContain("Add timed stop");
-		expect(source).toContain("openItemSheet(day._id)");
-		expect(source).toContain('icon="add-circle-outline"');
+		expect(source).toContain("Tap to add the first stop");
+		expect(source).toContain("Add stop");
+		expect(source).toContain("openCreateItem");
 	});
 });

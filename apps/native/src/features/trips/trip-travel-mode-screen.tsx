@@ -1,53 +1,60 @@
 import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
-import { getBudgetWalletSummary } from "@viya-app/domain";
+import {
+	getBookingCounts,
+	getBudgetDayCount,
+	getBudgetWalletSummary,
+	getItineraryNowNext,
+	getTripCountdown,
+	isBookingSecured,
+} from "@viya-app/domain";
 import { useMutation, useQuery } from "convex/react";
-import { type Href, Link, useRouter } from "expo-router";
-import { Input, Label, TextArea, TextField } from "heroui-native";
-import type { Dispatch, SetStateAction } from "react";
+import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { Linking, View } from "react-native";
 import {
-	ActionPill,
-	GroupLabel,
-	IconBadge,
+	EmptyPrimary,
+	FieldRow,
+	FormGroup,
+	FormSheet,
 	InlineError,
-	MetaTag,
-	ModuleLoading,
-	ModuleMissing,
-	ModuleScroll,
-	Reveal,
-	type Tone,
+	NotesRow,
 } from "@/src/components/itinerary/trip-module-ui";
 import {
 	AppText,
-	Card,
 	haptic,
-	type IconName,
+	Icon,
 	ListGroup,
 	ListRow,
-	metrics,
 	PrimaryButton,
-	radius,
+	ScreenShell,
 	SecondaryButton,
 	spacing,
-	useUITheme,
 } from "@/src/components/ui";
 import { VIYA_ROUTES } from "@/src/constants/routes";
+import { vaultKindLabels } from "@/src/features/vault/vault-preview-card";
 
-import { formatMoney } from "./trip-dashboard-utils";
+import {
+	formatCount,
+	formatDay,
+	formatEnumLabel,
+	formatFileSize,
+	formatMoney,
+	formatShortDate,
+	formatTime,
+	formatTimeRange,
+	formatTripCountdown,
+	toLocalDateKey,
+	toLocalTimeKey,
+} from "@/src/lib/format";
 import {
 	getTripMapSearchUrl,
 	hasTripMapSearchTarget,
 } from "./trip-map-link-utils";
-import { TripModuleScreenFrame } from "./trip-module-floating-bar";
-import {
-	getTripRelatedEntityLabel,
-	getTripRelatedEntityLabelByKey,
-} from "./trip-related-entities";
 import { useTripIdParam } from "./use-trip-id-param";
 
-const dateMs = 86_400_000;
+const MAX_UPCOMING_STOPS = 4;
+const MAX_REFERENCES = 5;
 
 interface QuickExpenseForm {
 	amount: string;
@@ -111,45 +118,8 @@ const quickExpenseCategoryByItineraryCategory: Partial<
 	transport: "transport",
 };
 
-const todayIsoDate = () => new Date().toISOString().slice(0, 10);
-
-const getTripBudgetDayCount = (startDate: string, endDate: string) => {
-	const start = new Date(`${startDate}T00:00:00.000Z`);
-	const end = new Date(`${endDate}T00:00:00.000Z`);
-	const today = new Date(`${todayIsoDate()}T00:00:00.000Z`);
-
-	if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-		return 1;
-	}
-
-	const tripDayCount = Math.max(
-		1,
-		Math.ceil((end.getTime() - start.getTime()) / dateMs) + 1
-	);
-
-	if (today.getTime() < start.getTime()) {
-		return tripDayCount;
-	}
-
-	return Math.max(1, Math.ceil((end.getTime() - today.getTime()) / dateMs) + 1);
-};
-
 const getTimeRange = (item: Doc<"itineraryItems">) =>
-	item.endTime ? `${item.startTime} - ${item.endTime}` : item.startTime;
-
-const getTravelCurrentStatus = (
-	entry: { item: Doc<"itineraryItems"> } | null
-) => {
-	if (!entry) {
-		return "Unset";
-	}
-
-	if (entry.item.status === "completed") {
-		return "Done";
-	}
-
-	return "Active";
-};
+	formatTimeRange(item.startTime, item.endTime || undefined) || item.startTime;
 
 const getQuickNoteRelatedContext = (
 	entry: { item: Doc<"itineraryItems"> } | null
@@ -191,9 +161,7 @@ const getQuickExpenseContext = (
 ): QuickExpenseContext => {
 	const bookingId = getQuickExpenseBookingId(entry, bookings);
 	const category = getQuickExpenseCategory(entry);
-	const categoryLabel = `${category.slice(0, 1).toUpperCase()}${category.slice(
-		1
-	)} spend`;
+	const categoryLabel = formatEnumLabel(category);
 
 	return {
 		bookingId,
@@ -204,21 +172,6 @@ const getQuickExpenseContext = (
 	};
 };
 
-const getRiskTravelDetail = (
-	risk: Doc<"risks">,
-	relatedEntityLabelByKey: Map<string, string>
-) => {
-	const relatedEntityLabel = getTripRelatedEntityLabel(
-		{
-			relatedEntityId: risk.relatedEntityId,
-			relatedEntityType: risk.relatedEntityType,
-		},
-		relatedEntityLabelByKey
-	);
-
-	return [relatedEntityLabel, risk.suggestedAction].filter(Boolean).join(" - ");
-};
-
 const getNowAndNext = ({
 	days,
 	items,
@@ -227,313 +180,126 @@ const getNowAndNext = ({
 	items: Doc<"itineraryItems">[];
 }) => {
 	const dayById = new Map(days.map((day) => [day._id, day]));
-	const nowKey = new Date().toISOString().slice(0, 16);
-	const scheduledItems: TravelTimelineEntry[] = items
-		.map((item) => {
+	const entryByItemId = new Map<string, TravelTimelineEntry>(
+		items.map((item) => {
 			const day = dayById.get(item.dayId);
 
-			return {
-				day,
-				item,
-				sortKey: `${day?.date ?? ""}T${item.startTime || "00:00"}`,
-			};
+			return [
+				item._id,
+				{
+					day,
+					item,
+					sortKey: `${day?.date ?? ""}T${item.startTime || "00:00"}`,
+				},
+			];
 		})
-		.sort((left, right) => left.sortKey.localeCompare(right.sortKey));
-	const nextIndex = scheduledItems.findIndex(
-		(entry) => entry.sortKey >= nowKey
 	);
+	const result = getItineraryNowNext({
+		days: days.map((day) => ({ date: day.date, id: day._id })),
+		items,
+		maxUpcoming: MAX_UPCOMING_STOPS,
+		nowTime: toLocalTimeKey(),
+		todayKey: toLocalDateKey(),
+	});
+	const toEntry = (item: Doc<"itineraryItems"> | null) =>
+		item ? (entryByItemId.get(item._id) ?? null) : null;
+	const nowEntry = toEntry(result.now);
+	const nextEntry = toEntry(result.next);
+	const upcomingEntries = result.upcoming.flatMap((item) => {
+		const entry = toEntry(item);
 
-	if (nextIndex === -1) {
+		return entry ? [entry] : [];
+	});
+
+	if (nowEntry) {
 		return {
-			next: null,
-			now: scheduledItems.at(-1) ?? null,
+			hero: nowEntry,
+			heroKind: "now" as const,
+			upcoming: (nextEntry ? [nextEntry, ...upcomingEntries] : []).slice(
+				0,
+				MAX_UPCOMING_STOPS
+			),
 		};
 	}
 
 	return {
-		next: scheduledItems[nextIndex + 1] ?? null,
-		now: scheduledItems[nextIndex] ?? null,
+		hero: nextEntry,
+		heroKind: "next" as const,
+		upcoming: upcomingEntries,
 	};
 };
 
-function TravelInfoRow({
-	actionHref,
-	actionIcon,
-	actionLabel,
-	detail,
-	icon,
-	label,
-	onAction,
-	tone = "accent",
-}: {
-	actionHref?: Href;
-	actionIcon?: IconName;
-	actionLabel?: string;
-	detail?: string;
-	icon: IconName;
-	label: string;
-	onAction?: () => void;
-	tone?: Tone;
-}) {
-	const canShowAction = Boolean(actionLabel && (actionHref || onAction));
-	const actionButton = (
-		<ActionPill
-			icon={actionIcon ?? "open-outline"}
-			label={actionLabel ?? ""}
-			onPress={onAction}
-		/>
-	);
-	const actionContent = actionHref ? (
-		<Link asChild href={actionHref}>
-			{actionButton}
-		</Link>
-	) : (
-		actionButton
-	);
-
-	return (
-		<Card padding="md">
-			<View style={{ gap: spacing.md }}>
-				<View
-					style={{
-						alignItems: "flex-start",
-						flexDirection: "row",
-						gap: spacing.md,
-					}}
-				>
-					<IconBadge icon={icon} tone={tone} />
-					<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-						<AppText variant="headline">{label}</AppText>
-						{detail ? (
-							<AppText tone="secondary" variant="subhead">
-								{detail}
-							</AppText>
-						) : null}
-					</View>
-				</View>
-				{canShowAction ? (
-					<View style={{ alignSelf: "flex-start" }}>{actionContent}</View>
-				) : null}
-			</View>
-		</Card>
-	);
-}
-
-function TravelMetric({ label, value }: { label: string; value: string }) {
-	const { palette } = useUITheme();
-
-	return (
-		<View
-			style={{
-				backgroundColor: palette.fill,
-				borderRadius: radius.tile,
-				flexBasis: "47%",
-				flexGrow: 1,
-				gap: 2,
-				padding: spacing.md,
-			}}
-		>
-			<AppText tone="secondary" variant="eyebrow">
-				{label}
-			</AppText>
-			<AppText numberOfLines={1} variant="headline">
-				{value}
-			</AppText>
-		</View>
-	);
-}
-
-function TravelTimelineRow({
-	detail,
-	icon,
-	label,
-}: {
-	detail: string;
-	icon: IconName;
-	label: string;
-}) {
-	return (
-		<View
-			style={{
-				alignItems: "center",
-				flexDirection: "row",
-				gap: spacing.md,
-			}}
-		>
-			<IconBadge icon={icon} />
-			<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-				<AppText numberOfLines={1} variant="headline">
-					{label}
-				</AppText>
-				<AppText numberOfLines={2} tone="secondary" variant="subhead">
-					{detail}
-				</AppText>
-			</View>
-		</View>
-	);
-}
-
-function TravelStopMapButton({
-	item,
-	label,
-	onOpenMaps,
-	variant = "secondary",
-}: {
-	item?: Doc<"itineraryItems">;
-	label: string;
-	onOpenMaps: (item: Doc<"itineraryItems">) => void;
-	variant?: "primary" | "secondary";
-}) {
-	if (
-		!(
-			item &&
-			hasTripMapSearchTarget({
-				address: item.address,
-				latitude: item.latitude,
-				locationName: item.locationName,
-				longitude: item.longitude,
-			})
-		)
-	) {
-		return null;
-	}
-
-	return (
-		<ActionPill
-			icon="map-outline"
-			label={label}
-			onPress={() => onOpenMaps(item)}
-			variant={variant}
-		/>
-	);
-}
-
-function TravelCurrentActions({
-	currentItemActionLabel,
+const getHeroEyebrow = ({
 	entry,
-	isUpdatingCurrentItem,
-	onOpenMaps,
-	onToggleCurrentItem,
+	heroKind,
+	today,
 }: {
-	currentItemActionLabel: string;
-	entry: TravelTimelineEntry | null;
-	isUpdatingCurrentItem: boolean;
-	onOpenMaps: (item: Doc<"itineraryItems">) => void;
-	onToggleCurrentItem: () => void;
-}) {
-	if (!entry) {
-		return null;
+	entry: TravelTimelineEntry;
+	heroKind: "next" | "now";
+	today: string;
+}) => {
+	const { item } = entry;
+
+	if (item.status === "completed") {
+		return `Done · ${getTimeRange(item)}`;
 	}
 
-	return (
-		<View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
-			<TravelStopMapButton
-				item={entry.item}
-				label="Open Maps"
-				onOpenMaps={onOpenMaps}
-				variant="primary"
-			/>
-			<ActionPill
-				disabled={isUpdatingCurrentItem}
-				icon="checkmark-circle-outline"
-				label={currentItemActionLabel}
-				onPress={onToggleCurrentItem}
-			/>
-		</View>
-	);
+	if (heroKind === "now") {
+		return item.endTime ? `Now · until ${formatTime(item.endTime)}` : "Now";
+	}
+
+	return entry.day && entry.day.date !== today
+		? `Next · ${formatDay(entry.day.date)}, ${formatTime(item.startTime)}`
+		: `Next · ${formatTime(item.startTime)} today`;
+};
+
+interface TravelEmptyState {
+	actionLabel: string;
+	description: string;
+	onPress: () => void;
+	title: string;
 }
 
-/** Plain field for in-page forms (not inside a bottom sheet). */
-function QuickField({
-	keyboardType,
-	label,
-	multiline,
-	onChangeText,
-	placeholder,
-	value,
-}: {
-	keyboardType?: "default" | "numeric";
-	label: string;
-	multiline?: boolean;
-	onChangeText: (value: string) => void;
-	placeholder: string;
-	value: string;
-}) {
-	const { palette } = useUITheme();
-	const fieldStyle = {
-		backgroundColor: palette.fill,
-		borderRadius: radius.field,
-		borderWidth: 0,
-	} as const;
-
-	return (
-		<TextField className="gap-1.5">
-			<Label>
-				<Label.Text>{label}</Label.Text>
-			</Label>
-			{multiline ? (
-				<TextArea
-					className="px-4 py-3"
-					onChangeText={onChangeText}
-					placeholder={placeholder}
-					style={{ ...fieldStyle, minHeight: 96 }}
-					value={value}
-					variant="secondary"
-				/>
-			) : (
-				<Input
-					className="px-4"
-					keyboardType={keyboardType}
-					onChangeText={onChangeText}
-					placeholder={placeholder}
-					style={{ ...fieldStyle, height: metrics.actionHeight }}
-					value={value}
-					variant="secondary"
-				/>
-			)}
-		</TextField>
-	);
-}
-
-function QuickExpensePanel({
+function QuickExpenseSheet({
 	error,
 	form,
-	linkedBookingLabel,
-	plannedCategoryLabel,
+	isOpen,
 	isSaving,
+	linkedBookingLabel,
+	onOpenChange,
 	onSubmit,
+	plannedCategoryLabel,
 	setForm,
-	tripId,
 }: {
 	error: string | null;
 	form: QuickExpenseForm;
-	linkedBookingLabel: string | null;
-	plannedCategoryLabel: string;
+	isOpen: boolean;
 	isSaving: boolean;
+	linkedBookingLabel: string | null;
+	onOpenChange: (isOpen: boolean) => void;
 	onSubmit: () => void;
-	setForm: Dispatch<SetStateAction<QuickExpenseForm>>;
-	tripId: Id<"trips">;
+	plannedCategoryLabel: string;
+	setForm: (updater: (current: QuickExpenseForm) => QuickExpenseForm) => void;
 }) {
-	const router = useRouter();
-
 	return (
-		<Card>
-			<View style={{ gap: spacing.md }}>
-				<AppText accessibilityRole="header" variant="heading">
-					Quick expense
-				</AppText>
-				<View
-					style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}
-				>
-					<MetaTag icon="pricetag-outline" label={plannedCategoryLabel} />
-					{linkedBookingLabel ? (
-						<MetaTag
-							icon="ticket-outline"
-							label={`Links to ${linkedBookingLabel}`}
-						/>
-					) : null}
-				</View>
-				<QuickField
+		<FormSheet
+			errorMessage={error}
+			isOpen={isOpen}
+			isPending={isSaving}
+			onOpenChange={onOpenChange}
+			onSubmit={onSubmit}
+			size="medium"
+			submitLabel="Log"
+			title="Log expense"
+		>
+			<FormGroup
+				footer={
+					linkedBookingLabel
+						? `Counted as ${plannedCategoryLabel.toLowerCase()}, linked to ${linkedBookingLabel}.`
+						: `Counted as ${plannedCategoryLabel.toLowerCase()}.`
+				}
+			>
+				<FieldRow
 					label="Title"
 					onChangeText={(title) =>
 						setForm((current) => ({ ...current, title }))
@@ -541,7 +307,7 @@ function QuickExpensePanel({
 					placeholder="Taxi, snack, ticket"
 					value={form.title}
 				/>
-				<QuickField
+				<FieldRow
 					keyboardType="numeric"
 					label="Amount"
 					onChangeText={(amount) =>
@@ -550,98 +316,140 @@ function QuickExpensePanel({
 					placeholder="500"
 					value={form.amount}
 				/>
-				<InlineError message={error} />
-				<PrimaryButton
-					isPending={isSaving}
-					label="Log expense"
-					onPress={() => {
-						onSubmit();
-					}}
-				/>
-				<SecondaryButton
-					label="Open budget"
-					onPress={() => router.push(VIYA_ROUTES.tripBudget(tripId))}
-					variant="plain"
-				/>
-			</View>
-		</Card>
+			</FormGroup>
+		</FormSheet>
 	);
 }
 
-function QuickNotePanel({
+function QuickNoteSheet({
 	error,
 	form,
+	isOpen,
 	isSaving,
-	noteCount,
+	onOpenChange,
 	onSubmit,
 	relatedLabel,
 	setForm,
-	tripId,
 }: {
 	error: string | null;
 	form: QuickNoteForm;
+	isOpen: boolean;
 	isSaving: boolean;
-	noteCount: number;
+	onOpenChange: (isOpen: boolean) => void;
 	onSubmit: () => void;
 	relatedLabel: string | null;
-	setForm: Dispatch<SetStateAction<QuickNoteForm>>;
-	tripId: Id<"trips">;
+	setForm: (updater: (current: QuickNoteForm) => QuickNoteForm) => void;
 }) {
-	const router = useRouter();
-
 	return (
-		<Card>
-			<View style={{ gap: spacing.md }}>
-				<View
-					style={{
-						alignItems: "flex-start",
-						flexDirection: "row",
-						gap: spacing.md,
-					}}
-				>
-					<View style={{ flex: 1, gap: 2 }}>
-						<AppText accessibilityRole="header" variant="heading">
-							Quick note
-						</AppText>
-						<AppText tone="secondary" variant="subhead">
-							Capture travel-day decisions, reminders, and issues.
-						</AppText>
-					</View>
-					<MetaTag label={`${noteCount} notes`} />
-				</View>
-				{relatedLabel ? (
-					<MetaTag icon="link-outline" label={`Links to ${relatedLabel}`} />
-				) : null}
-				<QuickField
+		<FormSheet
+			errorMessage={error}
+			isOpen={isOpen}
+			isPending={isSaving}
+			onOpenChange={onOpenChange}
+			onSubmit={onSubmit}
+			size="medium"
+			submitLabel="Save"
+			title="Add note"
+		>
+			<FormGroup
+				footer={relatedLabel ? `Linked to ${relatedLabel}.` : undefined}
+			>
+				<FieldRow
 					label="Title"
 					onChangeText={(title) =>
 						setForm((current) => ({ ...current, title }))
 					}
-					placeholder="Gate changed, hotel request, reminder"
+					placeholder="Gate changed"
 					value={form.title}
 				/>
-				<QuickField
+				<NotesRow
 					label="Note"
-					multiline={true}
 					onChangeText={(body) => setForm((current) => ({ ...current, body }))}
 					placeholder="What should you remember from today?"
 					value={form.body}
 				/>
-				<InlineError message={error} />
+			</FormGroup>
+		</FormSheet>
+	);
+}
+
+function NowSection({
+	canOpenMaps,
+	empty,
+	entry,
+	eyebrow,
+	isUpdating,
+	onOpenBooking,
+	onOpenMaps,
+	onToggle,
+}: {
+	canOpenMaps: boolean;
+	empty: TravelEmptyState;
+	entry: TravelTimelineEntry | null;
+	eyebrow: string;
+	isUpdating: boolean;
+	onOpenBooking: () => void;
+	onOpenMaps: (item: Doc<"itineraryItems">) => void;
+	onToggle: () => void;
+}) {
+	if (!entry) {
+		return (
+			<EmptyPrimary
+				actionLabel={empty.actionLabel}
+				description={empty.description}
+				onPress={empty.onPress}
+				title={empty.title}
+			/>
+		);
+	}
+
+	const { item } = entry;
+	const isCompleted = item.status === "completed";
+	const toggleLabel = isCompleted ? "Mark as planned" : "Mark done";
+
+	return (
+		<View style={{ gap: spacing.md }}>
+			<View style={{ gap: spacing.xs }}>
+				<AppText tone="secondary" variant="eyebrow">
+					{eyebrow}
+				</AppText>
+				<AppText accessibilityRole="header" variant="title">
+					{item.title}
+				</AppText>
+				<AppText tone="secondary" variant="callout">
+					{[getTimeRange(item), item.locationName].filter(Boolean).join(" · ")}
+				</AppText>
+			</View>
+			{canOpenMaps ? (
+				<>
+					<PrimaryButton
+						icon="navigate-outline"
+						label="Directions"
+						onPress={() => onOpenMaps(item)}
+					/>
+					<SecondaryButton
+						icon="checkmark-circle-outline"
+						isPending={isUpdating}
+						label={toggleLabel}
+						onPress={onToggle}
+					/>
+				</>
+			) : (
 				<PrimaryButton
-					isPending={isSaving}
-					label="Save note"
-					onPress={() => {
-						onSubmit();
-					}}
+					icon="checkmark-circle-outline"
+					isPending={isUpdating}
+					label={toggleLabel}
+					onPress={onToggle}
 				/>
+			)}
+			{item.bookingId ? (
 				<SecondaryButton
-					label="Open notes"
-					onPress={() => router.push(VIYA_ROUTES.tripNotes(tripId))}
+					label="Open booking"
+					onPress={onOpenBooking}
 					variant="plain"
 				/>
-			</View>
-		</Card>
+			) : null}
+		</View>
 	);
 }
 
@@ -663,6 +471,8 @@ export function TripTravelModeScreen() {
 		body: "",
 		title: "",
 	});
+	const [isExpenseOpen, setIsExpenseOpen] = useState(false);
+	const [isNoteOpen, setIsNoteOpen] = useState(false);
 	const [isSavingExpense, setIsSavingExpense] = useState(false);
 	const [isSavingNote, setIsSavingNote] = useState(false);
 	const [isUpdatingCurrentItem, setIsUpdatingCurrentItem] = useState(false);
@@ -685,44 +495,110 @@ export function TripTravelModeScreen() {
 			budgetCurrency: workspace.trip.budgetCurrency,
 			expenses: workspace.expenses,
 			itineraryItems: workspace.itineraryItems,
-			remainingTripDays: getTripBudgetDayCount(
-				workspace.trip.startDate,
-				workspace.trip.endDate
-			),
+			remainingTripDays: getBudgetDayCount(workspace.trip, toLocalDateKey()),
 		});
 	}, [workspace]);
 
 	if (!tripId) {
 		return (
-			<ModuleMissing
-				description="Open a saved trip before using Travel Mode."
-				icon="navigate-outline"
+			<ScreenShell
+				leading="close"
+				state={{
+					description: "Open a saved trip before using Travel Mode.",
+					icon: "navigate-outline",
+					kind: "empty",
+					title: "Trip not found",
+				}}
+				title="Today"
 			/>
 		);
 	}
 
 	if (workspace === null) {
 		return (
-			<ModuleMissing
-				description="This trip was deleted or is no longer available."
-				icon="navigate-outline"
+			<ScreenShell
+				leading="close"
+				state={{
+					description: "This trip was deleted or is no longer available.",
+					icon: "navigate-outline",
+					kind: "empty",
+					title: "Trip not found",
+				}}
+				title="Today"
 			/>
 		);
 	}
 
 	if (workspace === undefined || !wallet) {
-		return <ModuleLoading title="Loading Travel Mode" />;
+		return (
+			<ScreenShell
+				leading="close"
+				state={{ kind: "loading", title: "Loading Travel Mode" }}
+				title="Today"
+			/>
+		);
 	}
 
 	const currency = workspace.trip.budgetCurrency ?? "PHP";
-	const { next, now } = getNowAndNext({
+	const today = toLocalDateKey();
+	const {
+		hero: now,
+		heroKind,
+		upcoming,
+	} = getNowAndNext({
 		days: workspace.itineraryDays,
 		items: workspace.itineraryItems,
 	});
-	const activeBookings = workspace.bookings.filter(
-		(booking) => booking.status === "confirmed"
+	const budgetDays = getBudgetDayCount(workspace.trip, today);
+	const countdown = getTripCountdown(workspace.trip, today);
+	const bookingCounts = getBookingCounts(workspace.bookings, currency);
+	const activeBookings = workspace.bookings.filter((booking) =>
+		isBookingSecured(booking.status)
 	);
-	const relatedEntityLabelByKey = getTripRelatedEntityLabelByKey(workspace);
+	const openItinerary = () => router.push(VIYA_ROUTES.tripItinerary(tripId));
+	const heroEmpty = ((): TravelEmptyState => {
+		if (countdown.phase === "upcoming") {
+			const firstStop = upcoming.at(0)?.item ?? now?.item;
+
+			return {
+				actionLabel: "Open itinerary",
+				description: `Day 1 is ${formatDay(workspace.trip.startDate ?? "")}.${
+					firstStop
+						? ` First stop: ${firstStop.title} at ${formatTime(firstStop.startTime)}.`
+						: ""
+				}`,
+				onPress: openItinerary,
+				title: `Trip starts ${formatTripCountdown(countdown).toLowerCase()}`,
+			};
+		}
+		if (countdown.phase === "ended" || countdown.phase === "completed") {
+			return {
+				actionLabel: "Open recap",
+				description: "See what you did and spent.",
+				onPress: () => router.push(VIYA_ROUTES.tripWrapped(tripId)),
+				title: workspace.trip.endDate
+					? `This trip ended ${formatShortDate(workspace.trip.endDate)}`
+					: "This trip has ended",
+			};
+		}
+
+		return {
+			actionLabel: "Open itinerary",
+			description: "Add stops with times to see them here.",
+			onPress: openItinerary,
+			title:
+				workspace.itineraryItems.length === 0
+					? "No stops planned"
+					: "Nothing more planned",
+		};
+	})();
+	const showHero =
+		Boolean(now) &&
+		countdown.phase !== "upcoming" &&
+		countdown.phase !== "ended" &&
+		countdown.phase !== "completed";
+	const heroEntry = showHero ? now : null;
+	const upcomingStops = showHero ? upcoming : [];
 	const vaultItemById = new Map(
 		workspace.vaultItems.map((item) => [item._id, item])
 	);
@@ -735,9 +611,16 @@ export function TripTravelModeScreen() {
 			return {
 				booking,
 				detail: [
-					booking.provider ?? "Provider TBD",
-					booking.confirmationCode ?? "No code",
-					proofItem?.fileName,
+					booking.startDateTime
+						? [
+								formatDay(booking.startDateTime.slice(0, 10)),
+								formatTime(booking.startDateTime.slice(11, 16)),
+							]
+								.filter(Boolean)
+								.join(", ")
+						: null,
+					booking.provider,
+					booking.confirmationCode ? `Ref ${booking.confirmationCode}` : null,
 				]
 					.filter(Boolean)
 					.join(" · "),
@@ -745,39 +628,59 @@ export function TripTravelModeScreen() {
 			};
 		}
 	);
-	const activeDocuments: TravelDocumentReference[] = [
+	const allDocuments: TravelDocumentReference[] = [
 		...workspace.documents
 			.filter((document) => document.status !== "missing")
 			.map((document) => ({
-				detail: `${document.status} checklist item`,
+				detail: document.expiryDate
+					? `Expires ${formatDay(document.expiryDate, { year: "always" })}`
+					: formatEnumLabel(document.type),
 				key: `document:${document._id}`,
 				title: document.title,
 			})),
 		...workspace.vaultItems
 			.filter((item) => item.kind === "booking" || item.kind === "document")
 			.map((item) => ({
-				detail: item.fileName,
+				detail: [vaultKindLabels[item.kind], formatFileSize(item.fileSize)]
+					.filter(Boolean)
+					.join(" · "),
 				key: `vault:${item._id}`,
 				title: item.title,
 				url: item.url,
 			})),
-	].slice(0, 5);
+	];
+	const activeDocuments = allDocuments.slice(0, MAX_REFERENCES);
 	const openRisks = workspace.risks.filter((risk) => risk.status === "open");
-	const currentStatus = getTravelCurrentStatus(now);
-	const quickNoteRelatedContext = getQuickNoteRelatedContext(now);
-	const quickExpenseContext = getQuickExpenseContext(now, workspace.bookings);
+	const urgentRisks = openRisks.filter(
+		(risk) => risk.severity === "high" || risk.severity === "critical"
+	);
+	const quickNoteRelatedContext = getQuickNoteRelatedContext(heroEntry);
+	const quickExpenseContext = getQuickExpenseContext(
+		heroEntry,
+		workspace.bookings
+	);
+	const canOpenNowInMaps = Boolean(
+		heroEntry &&
+			hasTripMapSearchTarget({
+				address: heroEntry.item.address,
+				latitude: heroEntry.item.latitude,
+				locationName: heroEntry.item.locationName,
+				longitude: heroEntry.item.longitude,
+			})
+	);
+	const isNowCompleted = heroEntry?.item.status === "completed";
 
 	const handleQuickExpense = async () => {
 		const amount = Number(expenseForm.amount.replaceAll(",", ""));
 		const title = expenseForm.title.trim();
 
 		if (!title) {
-			setExpenseError("Add a short expense title.");
+			setExpenseError("Add a short title.");
 			return;
 		}
 
 		if (!(Number.isFinite(amount) && amount > 0)) {
-			setExpenseError("Amount must be positive.");
+			setExpenseError("Enter an amount above zero.");
 			return;
 		}
 
@@ -791,16 +694,17 @@ export function TripTravelModeScreen() {
 					: {}),
 				category: quickExpenseContext.category,
 				currency,
-				spentAt: todayIsoDate(),
+				spentAt: toLocalDateKey(),
 				title,
 				tripId,
 			});
 			setExpenseForm({ amount: "", title: "" });
+			setIsExpenseOpen(false);
 			haptic("success");
 		} catch (error) {
 			haptic("error");
 			setExpenseError(
-				error instanceof Error ? error.message : "Could not log expense."
+				error instanceof Error ? error.message : "Could not log the expense."
 			);
 		} finally {
 			setIsSavingExpense(false);
@@ -809,10 +713,11 @@ export function TripTravelModeScreen() {
 
 	const handleQuickNote = async () => {
 		const body = noteForm.body.trim();
-		const title = noteForm.title.trim() || `Travel note ${todayIsoDate()}`;
+		const title =
+			noteForm.title.trim() || `Note · ${formatDay(toLocalDateKey())}`;
 
 		if (!body) {
-			setNoteError("Add the note details first.");
+			setNoteError("Write the note first.");
 			return;
 		}
 
@@ -828,11 +733,12 @@ export function TripTravelModeScreen() {
 				tripId,
 			});
 			setNoteForm({ body: "", title: "" });
+			setIsNoteOpen(false);
 			haptic("success");
 		} catch (error) {
 			haptic("error");
 			setNoteError(
-				error instanceof Error ? error.message : "Could not save note."
+				error instanceof Error ? error.message : "Could not save the note."
 			);
 		} finally {
 			setIsSavingNote(false);
@@ -840,7 +746,7 @@ export function TripTravelModeScreen() {
 	};
 
 	const handleToggleCurrentItem = async () => {
-		if (!now) {
+		if (!heroEntry) {
 			return;
 		}
 
@@ -848,15 +754,13 @@ export function TripTravelModeScreen() {
 		setCurrentItemError(null);
 		try {
 			await updateItineraryItem({
-				itemId: now.item._id,
-				status: now.item.status === "completed" ? "planned" : "completed",
+				itemId: heroEntry.item._id,
+				status: isNowCompleted ? "planned" : "completed",
 			});
-			haptic(now.item.status === "completed" ? "selection" : "success");
+			haptic(isNowCompleted ? "selection" : "success");
 		} catch (error) {
 			setCurrentItemError(
-				error instanceof Error
-					? error.message
-					: "Could not update the current item."
+				error instanceof Error ? error.message : "Could not update this stop."
 			);
 		} finally {
 			setIsUpdatingCurrentItem(false);
@@ -886,207 +790,102 @@ export function TripTravelModeScreen() {
 			setDocumentOpenError("Could not open this document.");
 		}
 	};
-	const currentItemActionLabel = (() => {
-		if (isUpdatingCurrentItem) {
-			return "Updating...";
-		}
-
-		if (now?.item.status === "completed") {
-			return "Mark current planned";
-		}
-
-		return "Complete current";
-	})();
 
 	return (
-		<TripModuleScreenFrame activeTab="travel" tripId={tripId}>
-			<ModuleScroll>
+		<>
+			<ScreenShell leading="close" summary={workspace.trip.title} title="Today">
 				<InlineError message={currentItemError} />
 				<InlineError message={mapError} />
 				<InlineError message={documentOpenError} />
 
-				<Reveal>
-					<Card>
-						<View style={{ gap: spacing.lg }}>
-							<View
-								style={{
-									alignItems: "center",
-									flexDirection: "row",
-									gap: spacing.md,
-								}}
-							>
-								<IconBadge icon="navigate-outline" size={44} />
-								<View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-									<AppText accessibilityRole="header" variant="heading">
-										Day command center
-									</AppText>
-									<AppText numberOfLines={1} tone="secondary" variant="subhead">
-										{workspace.trip.destination}
-									</AppText>
-								</View>
-								<MetaTag
-									label={currentStatus}
-									tone={currentStatus === "Active" ? "accent" : "neutral"}
-								/>
-							</View>
-							<View
-								style={{
-									flexDirection: "row",
-									flexWrap: "wrap",
-									gap: spacing.sm,
-								}}
-							>
-								<TravelMetric
-									label="Daily safe"
-									value={formatMoney(wallet.dailySafeSpend, currency)}
-								/>
-								<TravelMetric
-									label="Bookings"
-									value={`${activeBookings.length} confirmed`}
-								/>
-								<TravelMetric
-									label="Documents"
-									value={`${activeDocuments.length} ready`}
-								/>
-								<TravelMetric
-									label="Risks"
-									value={`${openRisks.length} open`}
-								/>
-							</View>
-							<TravelTimelineRow
-								detail={
-									now
-										? `${getTimeRange(now.item)} · ${
-												now.item.locationName || "Location TBD"
-											}`
-										: "Add timed itinerary items to power Travel Mode."
-								}
-								icon="play-circle-outline"
-								label={now?.item.title ?? "No current item"}
-							/>
-							<TravelCurrentActions
-								currentItemActionLabel={currentItemActionLabel}
-								entry={now}
-								isUpdatingCurrentItem={isUpdatingCurrentItem}
-								onOpenMaps={(item) => {
-									handleOpenMaps(item).catch(() => undefined);
-								}}
-								onToggleCurrentItem={() => {
-									handleToggleCurrentItem().catch(() => undefined);
-								}}
-							/>
-							<TravelTimelineRow
-								detail={
-									next
-										? `${getTimeRange(next.item)} · ${
-												next.item.locationName || "Location TBD"
-											}`
-										: "No upcoming item found."
-								}
-								icon="play-forward-outline"
-								label={next?.item.title ?? "No next item"}
-							/>
-							<View
-								style={{
-									flexDirection: "row",
-									flexWrap: "wrap",
-									gap: spacing.sm,
-								}}
-							>
-								<TravelStopMapButton
-									item={next?.item}
-									label="Open Maps for next stop"
-									onOpenMaps={(item) => {
-										handleOpenMaps(item).catch(() => undefined);
-									}}
-								/>
-								{next ? null : (
-									<Link asChild href={VIYA_ROUTES.tripItinerary(tripId)}>
-										<ActionPill
-											icon="calendar-outline"
-											label="Plan next stop"
-										/>
-									</Link>
-								)}
-							</View>
-						</View>
-					</Card>
-				</Reveal>
+				<NowSection
+					canOpenMaps={canOpenNowInMaps}
+					empty={heroEmpty}
+					entry={heroEntry}
+					eyebrow={
+						heroEntry
+							? getHeroEyebrow({ entry: heroEntry, heroKind, today })
+							: ""
+					}
+					isUpdating={isUpdatingCurrentItem}
+					onOpenBooking={() => router.push(VIYA_ROUTES.tripBookings(tripId))}
+					onOpenMaps={(item) => {
+						handleOpenMaps(item).catch(() => undefined);
+					}}
+					onToggle={() => {
+						handleToggleCurrentItem().catch(() => undefined);
+					}}
+				/>
 
-				<ListGroup header="Jump to">
+				{urgentRisks.length > 0 ? (
+					<ListGroup>
+						<ListRow
+							leading={<Icon name="warning-outline" size={20} tone="warning" />}
+							onPress={() => router.push(VIYA_ROUTES.tripRisks(tripId))}
+							subtitle={urgentRisks[0]?.title}
+							title={formatCount(urgentRisks.length, "urgent risk")}
+						/>
+					</ListGroup>
+				) : null}
+
+				{upcomingStops.length > 0 ? (
+					<ListGroup header="Up next">
+						{upcomingStops.map((entry) => (
+							<ListRow
+								key={entry.item._id}
+								onPress={() => router.push(VIYA_ROUTES.tripItinerary(tripId))}
+								subtitle={
+									[
+										entry.item.locationName,
+										entry.day && entry.day.date !== today
+											? formatDay(entry.day.date)
+											: null,
+									]
+										.filter(Boolean)
+										.join(" · ") || undefined
+								}
+								title={entry.item.title}
+								value={formatTime(entry.item.startTime)}
+							/>
+						))}
+					</ListGroup>
+				) : null}
+
+				<ListGroup header="Add">
 					<ListRow
-						leading={<IconBadge icon="calendar-outline" size={30} />}
-						onPress={() => router.push(VIYA_ROUTES.tripItinerary(tripId))}
-						title="Itinerary"
+						leading={<Icon name="wallet-outline" size={20} />}
+						onPress={() => {
+							setExpenseError(null);
+							setIsExpenseOpen(true);
+						}}
+						showChevron={false}
+						title="Log expense"
 					/>
 					<ListRow
-						leading={<IconBadge icon="documents-outline" size={30} />}
-						onPress={() => router.push(VIYA_ROUTES.tripVault(tripId))}
-						title="Documents"
+						leading={<Icon name="create-outline" size={20} />}
+						onPress={() => {
+							setNoteError(null);
+							setIsNoteOpen(true);
+						}}
+						showChevron={false}
+						title="Add note"
 					/>
 					<ListRow
-						leading={
-							<IconBadge icon="warning-outline" size={30} tone="warning" />
-						}
+						leading={<Icon name="warning-outline" size={20} />}
 						onPress={() => router.push(VIYA_ROUTES.tripRisks(tripId))}
-						title="Risks"
-					/>
-					<ListRow
-						leading={<IconBadge icon="document-text-outline" size={30} />}
-						onPress={() => router.push(VIYA_ROUTES.tripNotes(tripId))}
-						title="Notes"
+						title="Add a risk"
 					/>
 				</ListGroup>
 
-				<QuickExpensePanel
-					error={expenseError}
-					form={expenseForm}
-					isSaving={isSavingExpense}
-					linkedBookingLabel={quickExpenseContext.bookingLabel}
-					onSubmit={() => {
-						handleQuickExpense().catch(() => undefined);
-					}}
-					plannedCategoryLabel={quickExpenseContext.categoryLabel}
-					setForm={setExpenseForm}
-					tripId={tripId}
-				/>
-
-				<QuickNotePanel
-					error={noteError}
-					form={noteForm}
-					isSaving={isSavingNote}
-					noteCount={workspace.notes.length}
-					onSubmit={() => {
-						handleQuickNote().catch(() => undefined);
-					}}
-					relatedLabel={quickNoteRelatedContext?.label ?? null}
-					setForm={setNoteForm}
-					tripId={tripId}
-				/>
-
-				<View style={{ gap: spacing.sm }}>
-					<GroupLabel>TICKETS AND CONFIRMATIONS</GroupLabel>
-					{activeBookings.length === 0 ? (
-						<TravelInfoRow
-							actionHref={VIYA_ROUTES.tripBookings(tripId)}
-							actionIcon="ticket-outline"
-							actionLabel="Review bookings"
-							detail="Upload confirmations or mark booking targets confirmed."
-							icon="ticket-outline"
-							label="No confirmed bookings"
-						/>
-					) : (
-						activeBookingReferences
-							.slice(0, 5)
+				{activeBookingReferences.length > 0 ? (
+					<ListGroup header="Tickets">
+						{activeBookingReferences
+							.slice(0, MAX_REFERENCES)
 							.map(({ booking, detail, proofUrl }) => (
-								<TravelInfoRow
-									actionIcon="open-outline"
-									actionLabel={proofUrl ? "Open proof" : undefined}
-									detail={detail}
-									icon="ticket-outline"
+								<ListRow
 									key={booking._id}
-									label={booking.title}
-									onAction={
+									leading={<Icon name="ticket-outline" size={20} />}
+									onPress={
 										proofUrl
 											? () => {
 													handleOpenTravelDocument(proofUrl).catch(
@@ -1095,35 +894,29 @@ export function TripTravelModeScreen() {
 												}
 											: undefined
 									}
+									showChevron={false}
+									subtitle={detail}
+									title={booking.title}
+									trailing={
+										proofUrl ? (
+											<Icon name="open-outline" size={18} tone="secondary" />
+										) : undefined
+									}
 								/>
-							))
-					)}
-				</View>
+							))}
+					</ListGroup>
+				) : null}
 
-				<View style={{ gap: spacing.sm }}>
-					<GroupLabel>IMPORTANT DOCUMENTS</GroupLabel>
-					{activeDocuments.length === 0 ? (
-						<TravelInfoRow
-							actionHref={VIYA_ROUTES.tripVault(tripId)}
-							actionIcon="cloud-upload-outline"
-							actionLabel="Upload documents"
-							detail="Upload IDs, tickets, vouchers, and insurance before travel."
-							icon="documents-outline"
-							label="No documents uploaded"
-						/>
-					) : (
-						activeDocuments.map((document) => {
+				{activeDocuments.length > 0 ? (
+					<ListGroup header="Documents">
+						{activeDocuments.map((document) => {
 							const documentUrl = document.url;
 
 							return (
-								<TravelInfoRow
-									actionIcon="open-outline"
-									actionLabel={documentUrl ? "Open file" : undefined}
-									detail={document.detail}
-									icon="document-outline"
+								<ListRow
 									key={document.key}
-									label={document.title}
-									onAction={
+									leading={<Icon name="document-outline" size={20} />}
+									onPress={
 										documentUrl
 											? () => {
 													handleOpenTravelDocument(documentUrl).catch(
@@ -1132,42 +925,80 @@ export function TripTravelModeScreen() {
 												}
 											: undefined
 									}
+									showChevron={false}
+									subtitle={document.detail}
+									title={document.title}
+									trailing={
+										documentUrl ? (
+											<Icon name="open-outline" size={18} tone="secondary" />
+										) : undefined
+									}
 								/>
 							);
-						})
-					)}
-				</View>
+						})}
+					</ListGroup>
+				) : null}
 
-				<View style={{ gap: spacing.sm }}>
-					<GroupLabel>OPEN RISKS</GroupLabel>
-					{openRisks.length === 0 ? (
-						<TravelInfoRow
-							actionHref={VIYA_ROUTES.tripRisks(tripId)}
-							actionIcon="shield-checkmark-outline"
-							actionLabel="Review risks"
-							detail="Travel Mode will surface risk alerts here."
-							icon="checkmark-circle-outline"
-							label="No open risks"
-							tone="success"
+				<ListGroup header="Trip">
+					<ListRow
+						onPress={() => router.push(VIYA_ROUTES.tripBookings(tripId))}
+						title="Bookings"
+						value={`${bookingCounts.booked} of ${bookingCounts.total} booked`}
+					/>
+					<ListRow
+						onPress={() => router.push(VIYA_ROUTES.tripVault(tripId))}
+						title="Documents"
+						value={`${allDocuments.length} ready`}
+					/>
+					<ListRow
+						onPress={() => router.push(VIYA_ROUTES.tripRisks(tripId))}
+						title="Risks"
+						value={`${openRisks.length} open`}
+					/>
+					<ListRow
+						onPress={() => router.push(VIYA_ROUTES.tripNotes(tripId))}
+						title="Notes"
+						value={formatCount(workspace.notes.length, "note")}
+					/>
+					{workspace.trip.budgetAmount ? (
+						<ListRow
+							showChevron={false}
+							subtitle={`${formatMoney(wallet.leftAmount, currency)} left for ${formatCount(budgetDays, "day")}`}
+							title="Budget for today"
+							value={
+								wallet.overAmount > 0
+									? `Over by ${formatMoney(wallet.overAmount, currency)}`
+									: formatMoney(wallet.dailySafeSpend, currency)
+							}
 						/>
-					) : (
-						openRisks
-							.slice(0, 4)
-							.map((risk) => (
-								<TravelInfoRow
-									actionHref={VIYA_ROUTES.tripRisks(tripId)}
-									actionIcon="warning-outline"
-									actionLabel="Open risk"
-									detail={getRiskTravelDetail(risk, relatedEntityLabelByKey)}
-									icon="warning-outline"
-									key={risk._id}
-									label={risk.title}
-									tone="warning"
-								/>
-							))
-					)}
-				</View>
-			</ModuleScroll>
-		</TripModuleScreenFrame>
+					) : null}
+				</ListGroup>
+			</ScreenShell>
+			<QuickExpenseSheet
+				error={expenseError}
+				form={expenseForm}
+				isOpen={isExpenseOpen}
+				isSaving={isSavingExpense}
+				linkedBookingLabel={quickExpenseContext.bookingLabel}
+				onOpenChange={setIsExpenseOpen}
+				onSubmit={() => {
+					handleQuickExpense().catch(() => undefined);
+				}}
+				plannedCategoryLabel={quickExpenseContext.categoryLabel}
+				setForm={setExpenseForm}
+			/>
+			<QuickNoteSheet
+				error={noteError}
+				form={noteForm}
+				isOpen={isNoteOpen}
+				isSaving={isSavingNote}
+				onOpenChange={setIsNoteOpen}
+				onSubmit={() => {
+					handleQuickNote().catch(() => undefined);
+				}}
+				relatedLabel={quickNoteRelatedContext?.label ?? null}
+				setForm={setNoteForm}
+			/>
+		</>
 	);
 }
