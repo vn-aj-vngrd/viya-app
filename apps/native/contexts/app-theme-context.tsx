@@ -8,7 +8,7 @@ import {
 	useMemo,
 	useState,
 } from "react";
-import { Platform } from "react-native";
+import { Appearance, Platform } from "react-native";
 import { Uniwind, useUniwind } from "uniwind";
 
 type ThemeName = "light" | "dark";
@@ -91,6 +91,14 @@ export const AppThemeProvider = ({ children }: { children: ReactNode }) => {
 			isMounted = false;
 		};
 	}, []);
+
+	// Native chrome (glass toolbars, search, tab bar, keyboard, sheets) follows
+	// UIKit's appearance, not Uniwind: keep both on the same scheme.
+	useEffect(() => {
+		Appearance.setColorScheme(
+			themePreference === "system" ? "unspecified" : themePreference
+		);
+	}, [themePreference]);
 
 	const isLight = useMemo(() => theme === "light", [theme]);
 

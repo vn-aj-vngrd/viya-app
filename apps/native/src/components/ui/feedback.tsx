@@ -1,4 +1,3 @@
-import { Ionicons } from "@expo/vector-icons";
 import {
 	createContext,
 	type ReactNode,
@@ -16,6 +15,7 @@ import { AppText } from "./app-text";
 import { PrimaryButton, SecondaryButton } from "./buttons";
 import { GlassSurface } from "./glass-surface";
 import { haptic } from "./haptics";
+import { Icon, type IconTone } from "./icon";
 import { fadeIn, fadeOut } from "./motion";
 import { motion, radius, spacing } from "./tokens";
 import { useUITheme } from "./use-ui-theme";
@@ -51,6 +51,13 @@ const toastIcon = {
 	warning: "warning",
 } as const;
 
+const toastTone: Record<ToastTone, IconTone> = {
+	error: "danger",
+	neutral: "secondary",
+	success: "success",
+	warning: "warning",
+};
+
 const toastHaptic = {
 	error: "error",
 	neutral: "none",
@@ -59,14 +66,7 @@ const toastHaptic = {
 } as const;
 
 function Toast({ message, tone = "neutral" }: ToastOptions) {
-	const { palette } = useUITheme();
 	const insets = useSafeAreaInsets();
-	const colors = {
-		error: palette.danger,
-		neutral: palette.inkSecondary,
-		success: palette.success,
-		warning: palette.warning,
-	};
 
 	return (
 		<Animated.View
@@ -93,7 +93,7 @@ function Toast({ message, tone = "neutral" }: ToastOptions) {
 					paddingVertical: spacing.md,
 				}}
 			>
-				<Ionicons color={colors[tone]} name={toastIcon[tone]} size={20} />
+				<Icon name={toastIcon[tone]} size={20} tone={toastTone[tone]} />
 				<AppText numberOfLines={2} style={{ flexShrink: 1 }} variant="subhead">
 					{message}
 				</AppText>

@@ -39,6 +39,7 @@ export const SF_SYMBOL_MAP: Partial<Record<IconName, SFSymbol>> = {
 	airplane: "airplane",
 	"alert-circle": "exclamationmark.circle.fill",
 	"alert-circle-outline": "exclamationmark.circle",
+	"information-circle": "info.circle.fill",
 	"information-circle-outline": "info.circle",
 	"archive-outline": "archivebox",
 	"arrow-forward": "arrow.right",

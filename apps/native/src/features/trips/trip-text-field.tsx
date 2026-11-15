@@ -2,6 +2,7 @@ import { TextInput, type TextInputProps, View } from "react-native";
 
 import {
 	AppText,
+	inputThemeProps,
 	metrics,
 	radius,
 	spacing,
@@ -43,8 +44,7 @@ export function TripTextField({
 			<TextInput
 				accessibilityLabel={label}
 				accessibilityState={{ disabled: inputProps.editable === false }}
-				placeholderTextColor={palette.inkTertiary}
-				selectionColor={palette.accent}
+				{...inputThemeProps(palette)}
 				style={{
 					backgroundColor: palette.surface,
 					borderColor: isInvalid ? palette.danger : "transparent",

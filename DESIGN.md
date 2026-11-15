@@ -67,7 +67,7 @@ Fallbacks: iOS before 26 uses system blur. Android, web and Reduce Transparency 
 
 ## 5. Tokens (match tokens.ts)
 
-Colour (light / dark): canvas `#F4F4F5` / `#0B0B0C`; surface `#FFFFFF` / `#1C1C1E`; ink `#18181B` / `#F5F5F7`; inkSecondary `#6B6B73` / `#A1A1AA`; inkTertiary `#A1A1AA` / `#71717A`; fill `#EEEEF0` / `#2C2C2E`; accent `#0A84FF`; success `#248A3D` / `#30D158`; warning `#B25E00` / `#FF9F0A`; danger `#D70015` / `#FF453A`. Also `hairline`, `separator`, `selection`, `scrim`, `onPrimary`, `glassFallback`.
+Colour (light / dark): canvas `#F4F4F5` / `#0B0B0C`; surface `#FFFFFF` / `#1C1C1E`; ink `#18181B` / `#F5F5F7`; inkSecondary `#6B6B73` / `#A1A1AA`; inkTertiary `#8E8E93` / `#8E8E93`; fill `#EEEEF0` / `#2C2C2E`; accent `#0A84FF`; success `#248A3D` / `#30D158`; warning `#B25E00` / `#FF9F0A`; danger `#D70015` / `#FF453A`. Also `hairline`, `separator`, `selection`, `scrim`, `onPrimary`, `glassFallback`.
 Rules: accent only for the primary action, selection and links. Status colour always pairs with an icon or text. Purple and gradients are not used.
 
 Spacing (pt): xs 4, sm 8, md 12, lg 16, screen 20, xl 24, section 24, 2xl 32, 3xl 40.

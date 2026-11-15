@@ -12,6 +12,11 @@ export default function TabLayout() {
 	return (
 		<NativeTabs
 			backgroundColor={Platform.OS === "android" ? palette.surface : undefined}
+			iconColor={{ default: palette.inkSecondary, selected: palette.accent }}
+			labelStyle={{
+				default: { color: palette.inkSecondary },
+				selected: { color: palette.accent },
+			}}
 			labelVisibilityMode="unlabeled"
 			minimizeBehavior="onScrollDown"
 			screenListeners={({ route }) => ({

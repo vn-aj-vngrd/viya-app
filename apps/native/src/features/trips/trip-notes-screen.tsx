@@ -9,6 +9,7 @@ import {
 	Chip,
 	EmptyState,
 	Icon,
+	inputThemeProps,
 	ListGroup,
 	ListRow,
 	metrics,
@@ -142,7 +143,7 @@ function NoteBodyField({
 			onChangeText={onChangeText}
 			onFocus={onFocus}
 			placeholder="What should the group remember?"
-			placeholderTextColor={palette.inkTertiary}
+			{...inputThemeProps(palette)}
 			style={{
 				color: palette.ink,
 				fontSize: BODY_FONT_SIZE,

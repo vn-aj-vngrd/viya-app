@@ -13,6 +13,7 @@ import { useCompatibleBottomSheetAwareHandlers } from "@/src/components/bottom-s
 import {
 	AppSheet,
 	AppText,
+	inputThemeProps,
 	ListGroup,
 	metrics,
 	SecondaryButton,
@@ -219,7 +220,7 @@ function NameField({
 			onChangeText={onChangeText}
 			onFocus={onFocus}
 			placeholder={label}
-			placeholderTextColor={palette.inkTertiary}
+			{...inputThemeProps(palette)}
 			style={{
 				color: palette.ink,
 				fontSize: typeScale.body.fontSize,

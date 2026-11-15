@@ -23,7 +23,7 @@ export function DestinationCard({
 	onPress,
 }: {
 	imageUrl?: string;
-	item: PreferenceCountrySuggestion;
+	item: Omit<PreferenceCountrySuggestion, "accent">;
 	onPress: (prompt: string) => void;
 }) {
 	const { palette } = useUITheme();

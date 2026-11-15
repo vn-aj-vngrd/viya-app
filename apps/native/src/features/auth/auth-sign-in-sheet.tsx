@@ -13,6 +13,7 @@ import {
 	fadeOut,
 	haptic,
 	Icon,
+	inputThemeProps,
 	metrics,
 	PrimaryButton,
 	radius,
@@ -130,7 +131,7 @@ function SheetInput({
 					onFocus(event);
 				}}
 				placeholder={placeholder}
-				placeholderTextColor={palette.inkTertiary}
+				{...inputThemeProps(palette)}
 				style={{
 					backgroundColor: palette.fill,
 					borderColor,

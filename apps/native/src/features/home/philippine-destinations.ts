@@ -8,13 +8,15 @@ const buildPrompt = (name: string, duration: string) =>
  * `country` doubles as the Wikipedia lookup title for the photo (see
  * useDestinationImages), so names must match a resolvable Wikipedia page.
  */
-export type PhilippineDestination = PreferenceCountrySuggestion & {
+export type PhilippineDestination = Omit<
+	PreferenceCountrySuggestion,
+	"accent"
+> & {
 	imageQuery?: string;
 };
 
 export const philippineDestinations: PhilippineDestination[] = [
 	{
-		accent: "#0A84FF",
 		country: "Palawan",
 		detail: "Lagoons, limestone cliffs, island hopping",
 		duration: "4-6 days",
@@ -22,7 +24,6 @@ export const philippineDestinations: PhilippineDestination[] = [
 		prompt: buildPrompt("Palawan", "4-6 day"),
 	},
 	{
-		accent: "#0F766E",
 		country: "Siargao",
 		detail: "Surf breaks, palm roads, quiet lagoons",
 		duration: "3-5 days",
@@ -31,7 +32,6 @@ export const philippineDestinations: PhilippineDestination[] = [
 		prompt: buildPrompt("Siargao", "3-5 day"),
 	},
 	{
-		accent: "#059669",
 		country: "Bohol",
 		detail: "Chocolate Hills, tarsiers, white sand",
 		duration: "3-4 days",
@@ -39,7 +39,6 @@ export const philippineDestinations: PhilippineDestination[] = [
 		prompt: buildPrompt("Bohol", "3-4 day"),
 	},
 	{
-		accent: "#E97816",
 		country: "Cebu",
 		detail: "City energy, waterfalls, whale sharks",
 		duration: "4-6 days",
@@ -47,7 +46,6 @@ export const philippineDestinations: PhilippineDestination[] = [
 		prompt: buildPrompt("Cebu", "4-6 day"),
 	},
 	{
-		accent: "#DB2777",
 		country: "Boracay",
 		detail: "Powder sand, sunsets, easy nightlife",
 		duration: "3-4 days",
@@ -55,7 +53,6 @@ export const philippineDestinations: PhilippineDestination[] = [
 		prompt: buildPrompt("Boracay", "3-4 day"),
 	},
 	{
-		accent: "#7C3AED",
 		country: "Batanes",
 		detail: "Rolling hills, stone houses, sea cliffs",
 		duration: "3-4 days",
@@ -63,7 +60,6 @@ export const philippineDestinations: PhilippineDestination[] = [
 		prompt: buildPrompt("Batanes", "3-4 day"),
 	},
 	{
-		accent: "#16A34A",
 		country: "Baguio",
 		detail: "Cool air, pine ridges, market finds",
 		duration: "2-3 days",
@@ -71,7 +67,6 @@ export const philippineDestinations: PhilippineDestination[] = [
 		prompt: buildPrompt("Baguio", "2-3 day"),
 	},
 	{
-		accent: "#C2410C",
 		country: "Vigan",
 		detail: "Heritage streets, food, slow mornings",
 		duration: "2-3 days",

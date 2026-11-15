@@ -42,6 +42,7 @@ export {
 	type IconWeight,
 	SF_SYMBOL_MAP,
 } from "./icon";
+export { inputThemeProps } from "./input-theme";
 export {
 	ListGroup,
 	type ListGroupProps,

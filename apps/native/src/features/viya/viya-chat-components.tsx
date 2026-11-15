@@ -18,6 +18,7 @@ import {
 	fadeIn,
 	Icon,
 	type IconName,
+	inputThemeProps,
 	ListGroup,
 	ListRow,
 	PressableScale,
@@ -227,7 +228,7 @@ export function ChatHistorySheet({
 						clearButtonMode="while-editing"
 						onChangeText={setQuery}
 						placeholder="Search"
-						placeholderTextColor={palette.inkSecondary}
+						{...inputThemeProps(palette)}
 						returnKeyType="search"
 						style={{
 							backgroundColor: palette.fill,
@@ -627,7 +628,7 @@ export function QuestionOptionsDock({
 						multiline={true}
 						onChangeText={setCustomAnswer}
 						placeholder="Type your answer"
-						placeholderTextColor={palette.inkSecondary}
+						{...inputThemeProps(palette)}
 						style={{
 							color: palette.ink,
 							fontSize: 17,

@@ -12,16 +12,13 @@ export type UiChatMessages = NonNullable<
 export type ReturnTabName = "index" | "trips";
 
 export interface PromptSuggestion {
-	accent: string;
 	icon: SuggestionIconName;
 	prompt: string;
-	soft: string;
 	summary?: string;
 	title: string;
 }
 
 export interface ChatModeOption {
-	accent: string;
 	description: string;
 	emptyDescription: string;
 	emptyTitle: string;
@@ -30,7 +27,6 @@ export interface ChatModeOption {
 	label: string;
 	placeholder: string;
 	requiresTrip?: boolean;
-	soft: string;
 }
 
 export interface ChatHistoryItem {
@@ -83,7 +79,6 @@ export interface ActiveSlashCommand {
 }
 
 export interface SlashCommandOption {
-	accent: string;
 	action?: "newChat";
 	description: string;
 	icon: SuggestionIconName;

@@ -16,6 +16,7 @@ import {
 	haptic,
 	Icon,
 	type IconName,
+	inputThemeProps,
 	metrics,
 	PressableScale,
 	radius,
@@ -264,7 +265,7 @@ export function FieldRow({
 				onChangeText={onChangeText}
 				onFocus={onFocus}
 				placeholder={placeholder}
-				placeholderTextColor={palette.inkTertiary}
+				{...inputThemeProps(palette)}
 				style={{
 					color: palette.ink,
 					flex: 1,

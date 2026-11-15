@@ -10,7 +10,7 @@ export function DestinationCarousel({
 	onPress,
 }: {
 	imageUrls: Record<string, string | undefined>;
-	items: PreferenceCountrySuggestion[];
+	items: Omit<PreferenceCountrySuggestion, "accent">[];
 	onPress: (prompt: string) => void;
 }) {
 	return (

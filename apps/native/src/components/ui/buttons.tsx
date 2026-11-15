@@ -1,7 +1,6 @@
-import { Ionicons } from "@expo/vector-icons";
 import { ActivityIndicator, View } from "react-native";
 import { AppText } from "./app-text";
-import type { IconName } from "./icon";
+import { Icon, type IconName } from "./icon";
 import { PressableScale } from "./pressable-scale";
 import { metrics, radius, spacing } from "./tokens";
 import { useUITheme } from "./use-ui-theme";
@@ -74,7 +73,7 @@ function ButtonShell({
 					opacity: isPending ? 0 : 1,
 				}}
 			>
-				{icon ? <Ionicons color={foreground} name={icon} size={20} /> : null}
+				{icon ? <Icon color={foreground} name={icon} size={20} /> : null}
 				<AppText
 					numberOfLines={1}
 					style={{ color: foreground, fontWeight: "600" }}
@@ -110,7 +109,7 @@ export function PrimaryButton({ destructive, ...props }: PrimaryButtonProps) {
 		<ButtonShell
 			{...props}
 			background={destructive ? palette.danger : palette.ink}
-			foreground={destructive ? "#FFFFFF" : palette.onPrimary}
+			foreground={palette.onPrimary}
 		/>
 	);
 }

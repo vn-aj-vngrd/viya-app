@@ -25,6 +25,7 @@ import {
 	GlassIconButton,
 	GlassSurface,
 	Icon,
+	inputThemeProps,
 	PressableScale,
 	radius,
 	ShellHeader,
@@ -309,7 +310,6 @@ export function ViyaChatScreen() {
 	const chatSessionIdRef = useRef(0);
 	const hasAppliedRouteThreadResetRef = useRef(false);
 	const { palette } = useUITheme();
-	const mutedColor = palette.inkSecondary;
 	const trips = useQuery(api.trips.listTrips);
 	const selectableTripContexts = getSelectableTripContexts(trips);
 	const currentTrip = selectedTripId
@@ -1090,7 +1090,7 @@ export function ViyaChatScreen() {
 										runAsyncTask(handleSubmit());
 									}}
 									placeholder="Ask Viya"
-									placeholderTextColor={mutedColor}
+									{...inputThemeProps(palette)}
 									returnKeyType="send"
 									scrollEnabled={composerInputLayout.isScrollable}
 									style={{

@@ -1,7 +1,7 @@
 import { Stack, useRouter } from "expo-router";
 import type { NativeStackNavigationOptions } from "expo-router/build/react-navigation/native-stack";
 import { Menu } from "heroui-native";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { Platform, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -236,6 +236,8 @@ function HeaderActions({ actions }: { actions: ShellAction[] }) {
 }
 
 function IosToolbarRight({ actions }: { actions: ShellAction[] }) {
+	const { palette } = useUITheme();
+
 	return (
 		<Stack.Toolbar placement="right">
 			{actions.map((action) => {
@@ -247,6 +249,7 @@ function IosToolbarRight({ actions }: { actions: ShellAction[] }) {
 							icon={sfSymbolFor(action.icon)}
 							key={action.key}
 							onPress={action.onPress}
+							tintColor={palette.ink}
 						/>
 					);
 				}
@@ -268,6 +271,7 @@ function IosToolbarRight({ actions }: { actions: ShellAction[] }) {
 						accessibilityLabel={action.label}
 						icon={sfSymbolFor(action.icon)}
 						key={action.key}
+						tintColor={palette.ink}
 					>
 						{action.items.map((item) => (
 							<Stack.Toolbar.MenuAction
@@ -296,6 +300,7 @@ export function ShellHeader({
 	titleMode = "inline",
 }: ShellHeaderProps) {
 	const router = useRouter();
+	const { palette } = useUITheme();
 	const isIos = Platform.OS === "ios";
 	const customLeading = typeof leading === "object" ? leading : null;
 	const closeLeading =
@@ -345,15 +350,21 @@ export function ShellHeader({
 						accessibilityLabel={leadingButton.label}
 						icon={sfSymbolFor(leadingButton.icon)}
 						onPress={leadingButton.onPress}
+						tintColor={palette.ink}
 					/>
 				</Stack.Toolbar>
 			) : null}
 			{search ? (
 				<Stack.SearchBar
 					autoCapitalize="none"
+					barTintColor={palette.fill}
+					headerIconColor={palette.inkSecondary}
 					hideWhenScrolling={false}
+					hintTextColor={palette.inkTertiary}
 					onChangeText={(event) => search.onChangeText(event.nativeEvent.text)}
 					placeholder={search.placeholder}
+					textColor={palette.ink}
+					tintColor={palette.accent}
 				/>
 			) : null}
 		</>
@@ -383,15 +394,26 @@ function ShellStateView({ state }: { state: ShellState }) {
 	);
 }
 
-function ShellFooter({ children }: { children: ReactNode }) {
+function ShellFooter({
+	children,
+	onLayout,
+}: {
+	children: ReactNode;
+	onLayout: (height: number) => void;
+}) {
 	const insets = useSafeAreaInsets();
 	const { palette } = useUITheme();
 
 	return (
 		<View
+			onLayout={(event) => onLayout(event.nativeEvent.layout.height)}
 			style={{
 				backgroundColor: palette.canvas,
+				bottom: 0,
 				gap: spacing.sm,
+				left: 0,
+				position: "absolute",
+				right: 0,
 				paddingBottom: Math.max(insets.bottom, spacing.lg),
 				paddingHorizontal: spacing.screen,
 				paddingTop: spacing.md,
@@ -414,7 +436,11 @@ export interface ScreenShellProps extends ShellHeaderProps {
 	/** Keep false: the shell already owns the scroll view. */
 }
 
-/** One layout shell: native header, scroll, optional footer, states, sheets. */
+/**
+ * One layout shell: native header, scroll, optional footer, states, sheets.
+ * The ScrollView must stay the screen's first direct child (no wrapping View):
+ * react-native-screens ties the large-title collapse and blur to it.
+ */
 export function ScreenShell({
 	children,
 	footer,
@@ -424,57 +450,57 @@ export function ScreenShell({
 	summary,
 	...headerProps
 }: ScreenShellProps) {
-	const { palette } = useUITheme();
 	const insets = useSafeAreaInsets();
 	const isLarge = headerProps.titleMode === "large";
+	const [footerHeight, setFooterHeight] = useState(0);
+	const hasFooter = Boolean(footer) && !state;
 
 	return (
 		<>
+			<ScrollView
+				automaticallyAdjustsScrollIndicatorInsets={true}
+				contentContainerStyle={{
+					flexGrow: 1,
+					paddingBottom: hasFooter
+						? footerHeight + spacing.xl
+						: spacing["2xl"] + (Platform.OS === "android" ? insets.bottom : 0),
+					paddingTop: isLarge ? spacing.sm : spacing.lg,
+				}}
+				contentInsetAdjustmentBehavior="automatic"
+				keyboardDismissMode="interactive"
+				keyboardShouldPersistTaps="handled"
+				showsVerticalScrollIndicator={false}
+			>
+				{summary && !state ? (
+					<AppText
+						style={{
+							marginBottom: spacing.lg,
+							paddingHorizontal: spacing.screen,
+						}}
+						tone="secondary"
+						variant="subhead"
+					>
+						{summary}
+					</AppText>
+				) : null}
+				{state ? (
+					<ShellStateView state={state} />
+				) : (
+					<View
+						style={{
+							gap: spacing.section,
+							paddingHorizontal: inset ? spacing.screen : 0,
+						}}
+					>
+						{children}
+					</View>
+				)}
+			</ScrollView>
+			{hasFooter ? (
+				<ShellFooter onLayout={setFooterHeight}>{footer}</ShellFooter>
+			) : null}
+			{sheets}
 			<ShellHeader {...headerProps} />
-			<View style={{ backgroundColor: palette.canvas, flex: 1 }}>
-				<ScrollView
-					automaticallyAdjustsScrollIndicatorInsets={true}
-					contentContainerStyle={{
-						flexGrow: 1,
-						paddingBottom: footer
-							? spacing.xl
-							: spacing["2xl"] +
-								(Platform.OS === "android" ? insets.bottom : 0),
-						paddingTop: isLarge ? spacing.sm : spacing.lg,
-					}}
-					contentInsetAdjustmentBehavior="automatic"
-					keyboardDismissMode="interactive"
-					keyboardShouldPersistTaps="handled"
-					showsVerticalScrollIndicator={false}
-				>
-					{summary && !state ? (
-						<AppText
-							style={{
-								marginBottom: spacing.lg,
-								paddingHorizontal: spacing.screen,
-							}}
-							tone="secondary"
-							variant="subhead"
-						>
-							{summary}
-						</AppText>
-					) : null}
-					{state ? (
-						<ShellStateView state={state} />
-					) : (
-						<View
-							style={{
-								gap: spacing.section,
-								paddingHorizontal: inset ? spacing.screen : 0,
-							}}
-						>
-							{children}
-						</View>
-					)}
-				</ScrollView>
-				{footer && !state ? <ShellFooter>{footer}</ShellFooter> : null}
-				{sheets}
-			</View>
 		</>
 	);
 }

@@ -21,6 +21,7 @@ import {
 	haptic,
 	Icon,
 	type IconName,
+	inputThemeProps,
 	metrics,
 	radius,
 	SecondaryButton,
@@ -256,7 +257,7 @@ export function FieldRow({
 				keyboardType={keyboardType}
 				onChangeText={onChangeText}
 				placeholder={placeholder}
-				placeholderTextColor={palette.inkTertiary}
+				{...inputThemeProps(palette)}
 				style={{
 					color: palette.ink,
 					flex: 1,
@@ -290,7 +291,7 @@ export function NotesRow({
 			multiline={true}
 			onChangeText={onChangeText}
 			placeholder={placeholder}
-			placeholderTextColor={palette.inkTertiary}
+			{...inputThemeProps(palette)}
 			style={{
 				color: palette.ink,
 				fontSize: 17,

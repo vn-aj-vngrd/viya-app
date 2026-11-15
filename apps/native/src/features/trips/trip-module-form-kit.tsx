@@ -13,6 +13,7 @@ import {
 	fadeIn,
 	Icon,
 	type IconName,
+	inputThemeProps,
 	metrics,
 	PressableScale,
 	SheetHeader,
@@ -50,11 +51,13 @@ export function SheetField({
 	value: string;
 }) {
 	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
+	const { palette } = useUITheme();
 
 	return (
 		<TextField className="gap-2">
 			<FieldLabel>{label}</FieldLabel>
 			<Input
+				{...inputThemeProps(palette)}
 				accessibilityLabel={label}
 				className="h-[50px] rounded-[16px] border-0 bg-surface px-4"
 				onBlur={onBlur}
@@ -81,11 +84,13 @@ export function SheetTextArea({
 	value: string;
 }) {
 	const { onBlur, onFocus } = useCompatibleBottomSheetAwareHandlers();
+	const { palette } = useUITheme();
 
 	return (
 		<TextField className="gap-2">
 			<FieldLabel>{label}</FieldLabel>
 			<TextArea
+				{...inputThemeProps(palette)}
 				accessibilityLabel={label}
 				className="min-h-24 rounded-[16px] border-0 bg-surface px-4 py-3"
 				onBlur={onBlur}

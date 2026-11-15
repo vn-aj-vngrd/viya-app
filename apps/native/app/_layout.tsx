@@ -5,7 +5,8 @@ import { tokenCache } from "@clerk/expo/token-cache";
 import { env } from "@viya-app/env/native";
 import { ConvexReactClient } from "convex/react";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
-import { Stack } from "expo-router";
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import { HeroUINativeProvider } from "heroui-native";
 import { View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -23,26 +24,41 @@ const convex = new ConvexReactClient(env.EXPO_PUBLIC_CONVEX_URL, {
 });
 
 function StackLayout() {
-	const { palette } = useUITheme();
+	const { isDark, palette } = useUITheme();
+	const navigationTheme = {
+		...(isDark ? DarkTheme : DefaultTheme),
+		colors: {
+			...(isDark ? DarkTheme : DefaultTheme).colors,
+			background: palette.canvas,
+			border: palette.separator,
+			card: palette.canvas,
+			notification: palette.danger,
+			primary: palette.accent,
+			text: palette.ink,
+		},
+	};
 
 	return (
-		<View className="flex-1" style={{ backgroundColor: palette.canvas }}>
-			<Stack
-				screenOptions={{
-					contentStyle: { backgroundColor: palette.canvas },
-				}}
-			>
-				<Stack.Screen name="(app)" options={{ headerShown: false }} />
-				<Stack.Screen
-					name="(auth)"
-					options={{
-						animation: "fade",
-						gestureEnabled: false,
-						headerShown: false,
+		<ThemeProvider value={navigationTheme}>
+			<View className="flex-1" style={{ backgroundColor: palette.canvas }}>
+				<StatusBar style={isDark ? "light" : "dark"} />
+				<Stack
+					screenOptions={{
+						contentStyle: { backgroundColor: palette.canvas },
 					}}
-				/>
-			</Stack>
-		</View>
+				>
+					<Stack.Screen name="(app)" options={{ headerShown: false }} />
+					<Stack.Screen
+						name="(auth)"
+						options={{
+							animation: "fade",
+							gestureEnabled: false,
+							headerShown: false,
+						}}
+					/>
+				</Stack>
+			</View>
+		</ThemeProvider>
 	);
 }
 

@@ -23,6 +23,17 @@
 			--border: rgba(24, 24, 27, 0.1);
 			--separator: rgba(24, 24, 27, 0.08);
 			--field-background: #ffffff;
+			--field-foreground: #18181b;
+			--field-placeholder: #a1a1aa;
+			--overlay: #ffffff;
+			--overlay-foreground: #18181b;
+			--surface-secondary: #eeeef0;
+			--surface-tertiary: #e6e6ea;
+			--segment: #ffffff;
+			--segment-foreground: #18181b;
+			--danger: #d70015;
+			--success: #248a3d;
+			--warning: #b25e00;
 		}
 
 		@variant dark {
@@ -36,6 +47,17 @@
 			--border: rgba(255, 255, 255, 0.14);
 			--separator: rgba(255, 255, 255, 0.1);
 			--field-background: #1c1c1e;
+			--field-foreground: #f5f5f7;
+			--field-placeholder: #71717a;
+			--overlay: #2c2c2e;
+			--overlay-foreground: #f5f5f7;
+			--surface-secondary: #2c2c2e;
+			--surface-tertiary: #3a3a3c;
+			--segment: #3a3a3c;
+			--segment-foreground: #f5f5f7;
+			--danger: #ff453a;
+			--success: #30d158;
+			--warning: #ff9f0a;
 		}
 	}
 }

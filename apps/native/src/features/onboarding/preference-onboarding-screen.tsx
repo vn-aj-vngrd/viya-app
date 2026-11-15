@@ -30,6 +30,7 @@ import {
 	Chip,
 	fadeIn,
 	Icon,
+	inputThemeProps,
 	ListGroup,
 	ListRow,
 	PrimaryButton,
@@ -342,7 +343,7 @@ export function PreferenceOnboardingScreen() {
 								accessibilityLabel="Note about your needs"
 								onChangeText={(value) => update("specialNeedsNote", value)}
 								placeholder="Add a note (optional)"
-								placeholderTextColor={palette.inkTertiary}
+								{...inputThemeProps(palette)}
 								style={{
 									backgroundColor: palette.surface,
 									borderRadius: radius.field,

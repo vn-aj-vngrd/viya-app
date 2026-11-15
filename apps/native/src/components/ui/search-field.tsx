@@ -1,6 +1,7 @@
 import { TextInput, View } from "react-native";
 
 import { Icon } from "./icon";
+import { inputThemeProps } from "./input-theme";
 import { metrics, radius, spacing, typeScale } from "./tokens";
 import { useUITheme } from "./use-ui-theme";
 
@@ -43,7 +44,7 @@ export function SearchField({
 				enablesReturnKeyAutomatically={true}
 				onChangeText={onChangeText}
 				placeholder={placeholder}
-				placeholderTextColor={palette.inkTertiary}
+				{...inputThemeProps(palette)}
 				returnKeyType="search"
 				style={{
 					color: palette.ink,
