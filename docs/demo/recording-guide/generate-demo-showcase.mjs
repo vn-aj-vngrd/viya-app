@@ -1,0 +1,495 @@
+import fs from "node:fs/promises";
+import { createRequire } from "node:module";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const guideDir = path.dirname(__filename);
+const rootDir = path.resolve(guideDir, "../../..");
+const screenshotDir = path.join(rootDir, "docs", "demo", "screenshots");
+const htmlPath = path.join(guideDir, "viya-singapore-demo-recording-plan.html");
+const pdfPath = path.join(guideDir, "viya-singapore-demo-recording-plan.pdf");
+const require = createRequire(import.meta.url);
+const workspaceNodeModules =
+	process.env.WORKSPACE_NODE_MODULES ??
+	"/Users/vanajvanguardia/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules";
+const importBundledPackage = async (packageName) =>
+	import(
+		pathToFileURL(
+			require.resolve(packageName, { paths: [workspaceNodeModules] })
+		).href
+	);
+const playwrightModule = await importBundledPackage("playwright");
+const playwright = playwrightModule.default ?? playwrightModule;
+const { chromium } = playwright;
+
+const screenshot = (fileName) =>
+	pathToFileURL(path.join(screenshotDir, fileName)).href;
+
+const phone = (fileName, caption) => `
+	<figure class="phone">
+		<img alt="${caption}" src="${screenshot(fileName)}">
+		<figcaption>${caption}</figcaption>
+	</figure>
+`;
+
+const html = `<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>Viya Demo Flow Guide</title>
+		<style>
+		@page {
+			margin: 0;
+			size: A4;
+		}
+		* {
+			box-sizing: border-box;
+		}
+		body {
+			margin: 0;
+			font-family:
+				Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+				"Segoe UI", sans-serif;
+			color: #121417;
+			background: #e8edf3;
+		}
+		.page {
+			position: relative;
+			display: flex;
+			flex-direction: column;
+			gap: 24px;
+			width: 210mm;
+			height: 297mm;
+			padding: 19mm 18mm;
+			overflow: hidden;
+			background: #f7f8fa;
+			page-break-after: always;
+		}
+		.cover {
+			display: grid;
+			grid-template-columns: 1.05fr 0.95fr;
+			gap: 20px;
+			align-items: center;
+			background: #f7f8fa;
+		}
+		.cover-copy,
+		.stack {
+			display: flex;
+			flex-direction: column;
+			gap: 16px;
+		}
+		.cover-copy {
+			max-width: 440px;
+		}
+		.eyebrow {
+			margin: 0;
+			font-size: 11px;
+			font-weight: 800;
+			color: #0a84ff;
+			text-transform: uppercase;
+			letter-spacing: 0.08em;
+		}
+		h1,
+		h2,
+		h3,
+		p {
+			margin: 0;
+		}
+		h1 {
+			font-size: 58px;
+			line-height: 0.96;
+			letter-spacing: 0;
+		}
+		h2 {
+			max-width: 560px;
+			font-size: 38px;
+			line-height: 1.04;
+			letter-spacing: 0;
+		}
+		h3 {
+			margin-bottom: 8px;
+			font-size: 18px;
+			line-height: 1.18;
+		}
+		p {
+			font-size: 15px;
+			line-height: 1.55;
+			color: #626873;
+		}
+		.dek {
+			max-width: 440px;
+			font-size: 23px;
+			font-weight: 650;
+			line-height: 1.22;
+			color: #31363d;
+		}
+		.card,
+		.callout,
+		.tip-band,
+		.footer-note,
+		.stat,
+		.flow-card {
+			padding: 16px;
+			background: #ffffff;
+			border: 1px solid #dde3ea;
+			border-radius: 18px;
+			box-shadow: 0 12px 32px rgba(24, 37, 56, 0.07);
+		}
+		.card span,
+		.callout,
+		.tip-band,
+		.footer-note {
+			font-size: 14px;
+			line-height: 1.45;
+			color: #4c535d;
+		}
+		.meta-grid {
+			display: grid;
+			grid-template-columns: repeat(3, 1fr);
+			gap: 10px;
+			margin-top: 8px;
+		}
+		.meta-grid div {
+			padding: 12px;
+			background: rgba(255, 255, 255, 0.72);
+			border: 1px solid #e0e5eb;
+			border-radius: 14px;
+		}
+		.meta-grid span {
+			display: block;
+			font-size: 9px;
+			font-weight: 800;
+			color: #7b828d;
+			text-transform: uppercase;
+			letter-spacing: 0.08em;
+		}
+		.meta-grid strong {
+			display: block;
+			margin-top: 5px;
+			font-size: 12px;
+			line-height: 1.25;
+		}
+		.phone {
+			align-self: center;
+			width: 245px;
+			padding: 8px;
+			margin: 0;
+			overflow: hidden;
+			background: #101114;
+			border-radius: 35px;
+			box-shadow: 0 20px 54px rgba(21, 31, 46, 0.24);
+		}
+		.phone img {
+			display: block;
+			width: 100%;
+			height: auto;
+			border-radius: 28px;
+		}
+		.phone figcaption {
+			padding: 9px 7px 5px;
+			font-size: 10px;
+			line-height: 1.35;
+			color: #d8dde5;
+			background: #101114;
+		}
+		.cover .phone {
+			justify-self: end;
+			width: 248px;
+		}
+		.cover .card,
+		.cover .meta-grid div,
+		.cover .phone {
+			box-shadow: none;
+		}
+		.header-row {
+			display: grid;
+			grid-template-columns: 1fr 245px;
+			gap: 18px;
+			align-items: end;
+		}
+		.split {
+			display: grid;
+			grid-template-columns: 1fr 300px;
+			gap: 24px;
+			align-items: start;
+		}
+		.split.visual {
+			grid-template-columns: 300px 1fr;
+			align-items: center;
+		}
+		.phone-grid {
+			display: grid;
+			gap: 24px;
+			align-items: start;
+			justify-content: center;
+		}
+		.phone-grid.two {
+			grid-template-columns: repeat(2, 245px);
+		}
+		.phone-grid.three {
+			grid-template-columns: repeat(3, 188px);
+			gap: 16px;
+		}
+		.phone-grid.three .phone {
+			width: 188px;
+			border-radius: 28px;
+		}
+		.phone-grid.three .phone img {
+			border-radius: 22px;
+		}
+		.bullets {
+			display: grid;
+			gap: 9px;
+			padding: 0;
+			margin: 0;
+			list-style: none;
+		}
+		.bullets li,
+		.steps li {
+			padding: 11px 13px;
+			font-size: 13px;
+			line-height: 1.4;
+			color: #4e5560;
+			background: #ffffff;
+			border: 1px solid #e0e5eb;
+			border-radius: 13px;
+		}
+		.bullets strong,
+		.steps strong {
+			color: #16191d;
+		}
+		.steps {
+			display: grid;
+			grid-template-columns: repeat(2, 1fr);
+			gap: 10px;
+			padding: 0;
+			margin: 18px 0 0;
+			list-style: none;
+			counter-reset: item;
+		}
+		.flow {
+			display: grid;
+			grid-template-columns: repeat(3, 1fr);
+			gap: 14px;
+			margin-top: 16px;
+		}
+		.flow-card {
+			min-height: 142px;
+			box-shadow: none;
+		}
+		.flow-card span {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			width: 30px;
+			height: 30px;
+			margin-bottom: 18px;
+			font-size: 13px;
+			font-weight: 800;
+			color: #fff;
+			background: #0a84ff;
+			border-radius: 999px;
+		}
+		.flow-card strong {
+			display: block;
+			margin-bottom: 8px;
+			font-size: 17px;
+		}
+		.flow-card p {
+			font-size: 12px;
+			line-height: 1.4;
+		}
+		.stat-grid {
+			display: grid;
+			grid-template-columns: repeat(4, 1fr);
+			gap: 10px;
+		}
+		.stat {
+			position: relative;
+			min-height: 86px;
+			padding-left: 18px;
+			box-shadow: none;
+		}
+		.stat::before {
+			position: absolute;
+			top: 16px;
+			bottom: 16px;
+			left: 10px;
+			width: 5px;
+			content: "";
+			background: #0a84ff;
+			border-radius: 999px;
+		}
+		.stat strong {
+			display: block;
+			font-size: 22px;
+			line-height: 1.1;
+		}
+		.stat span {
+			display: block;
+			margin-top: 5px;
+			font-size: 11px;
+			line-height: 1.25;
+			color: #626873;
+		}
+		.tip-band {
+			background: #eef7ff;
+			border-color: #cfe6ff;
+			box-shadow: none;
+		}
+		.final {
+			justify-content: center;
+		}
+		</style>
+	</head>
+	<body>
+		<section class="page cover">
+			<div class="cover-copy">
+				<p class="eyebrow">Demo flow guide</p>
+				<h1>Viya Singapore Workspace</h1>
+				<p class="dek">A viewer companion for the recorded walkthrough: from Home to a prepared trip workspace.</p>
+				<div class="card">
+					<strong>How to use this guide</strong>
+					<span>Follow the screens in order. The demo starts at Home, creates a trip, uses Ask Viya, opens the workspace modules, and ends in Readiness.</span>
+				</div>
+				<div class="meta-grid">
+					<div><span>Trip</span><strong>Singapore group travel</strong></div>
+					<div><span>Focus</span><strong>Workspace readiness</strong></div>
+					<div><span>Screens</span><strong>iOS Simulator</strong></div>
+				</div>
+			</div>
+			${phone("current-simulator-slide8-last.png", "Final overview: the trip workspace is prepared.")}
+		</section>
+
+		<section class="page">
+			<div class="header-row">
+				<div>
+					<p class="eyebrow">Flow at a glance</p>
+					<h2>The walkthrough follows one connected path.</h2>
+					<p>The recording is easiest to follow as a single workspace journey. Each step adds context that the next module can use.</p>
+				</div>
+				<div class="callout">
+					This is a demo scenario using synthetic Singapore trip data. It is meant to show the product flow, not real reservations.
+				</div>
+			</div>
+			<div class="flow">
+				<div class="flow-card"><span>1</span><strong>Home</strong><p>Start from the dashboard and open the trip planning entry point.</p></div>
+				<div class="flow-card"><span>2</span><strong>Create Trip</strong><p>Answer the destination, dates, travelers, budget, and trip style questions.</p></div>
+				<div class="flow-card"><span>3</span><strong>Ask Viya</strong><p>Use the trip agent to ask, generate, adjust, and stage workspace updates.</p></div>
+				<div class="flow-card"><span>4</span><strong>Workspace</strong><p>Open the trip overview and confirm the core modules are connected.</p></div>
+				<div class="flow-card"><span>5</span><strong>Modules</strong><p>Review itinerary, budget, Vault files, and linked trip evidence.</p></div>
+				<div class="flow-card"><span>6</span><strong>Readiness</strong><p>Finish by checking that the trip is prepared for travel.</p></div>
+			</div>
+			<div class="tip-band"><strong>Viewer note:</strong> The important shift is that chat output does not stay in chat. Viya turns answers and files into workspace state.</div>
+		</section>
+
+		<section class="page">
+			<div class="header-row">
+				<div>
+					<p class="eyebrow">Start the trip</p>
+					<h2>Home and Create Trip set the structure.</h2>
+					<p>The first part of the recording shows the user entering the trip flow and giving Viya enough information to create a useful workspace.</p>
+				</div>
+				<div class="callout">
+					Watch for the question flow: destination first, then the details needed to organize the workspace.
+				</div>
+			</div>
+			<div class="phone-grid three">
+				${phone("home-dashboard.png", "Home: context and suggestions before planning.")}
+				${phone("create-trip-question-destination.png", "Create trip: structured questions start the workspace.")}
+				${phone("trip-overview-current.png", "Trip overview: the workspace becomes the main surface.")}
+			</div>
+			<ol class="steps">
+				<li><strong>Home.</strong> Open the Trips area from the dashboard.</li>
+				<li><strong>Create Trip.</strong> Answer the planning questions instead of starting from a blank chat.</li>
+				<li><strong>Trip overview.</strong> Confirm that the trip now has a workspace with connected modules.</li>
+				<li><strong>Next action.</strong> Move into Ask Viya to generate and refine the workspace content.</li>
+			</ol>
+		</section>
+
+		<section class="page">
+			<div class="header-row">
+				<div>
+					<p class="eyebrow">Use Ask Viya</p>
+					<h2>The agent updates the workspace, not just the conversation.</h2>
+					<p>Ask Viya can answer trip questions, organize files, create drafts, and stage changes that the user can review before applying.</p>
+				</div>
+				<div class="callout">
+					Use Ask Mode for questions. Use Agent Mode when Viya should generate, adjust, audit, or stage workspace updates.
+				</div>
+			</div>
+			<div class="phone-grid three">
+				${phone("current-simulator-slide3.png", "Ask Viya: the trip agent works inside this trip only.")}
+				${phone("singapore-workspace-switcher.png", "Workspace switcher: jump between modules quickly.")}
+				${phone("current-simulator-slide8-last.png", "Overview: generated content is visible in the trip workspace.")}
+			</div>
+			<div class="tip-band"><strong>Viewer note:</strong> The user stays in control. Viya proposes changes, and the workspace shows what has been created or updated.</div>
+		</section>
+
+		<section class="page">
+			<div class="header-row">
+				<div class="stack">
+					<p class="eyebrow">Open the core modules</p>
+					<h2>Itinerary, Budget, Vault, and Readiness each carry part of the trip.</h2>
+					<p>This section of the recording shows the user moving through the workspace and checking the practical travel details.</p>
+				</div>
+				<div class="callout">
+					The Vault is the proof layer. Budget tracks spend. Itinerary gives the schedule. Readiness confirms what is still missing or complete.
+				</div>
+			</div>
+			<div class="phone-grid three">
+				${phone("singapore-itinerary.png", "Itinerary: days, stops, and pacing.")}
+				${phone("singapore-budget.png", "Budget: planned spend and receipt evidence.")}
+				${phone("current-simulator-slide6.png", "Readiness: checks tied to the trip.")}
+			</div>
+			<div class="stat-grid">
+				<div class="stat"><strong>Itinerary</strong><span>Shows the plan in days, stops, and timing.</span></div>
+				<div class="stat"><strong>Budget</strong><span>Keeps trip costs visible and grounded.</span></div>
+				<div class="stat"><strong>Vault</strong><span>Stores documents and proof for the trip.</span></div>
+				<div class="stat"><strong>Readiness</strong><span>Turns the workspace into a final travel check.</span></div>
+			</div>
+		</section>
+
+		<section class="page final">
+			<div class="split visual">
+				${phone("current-simulator-slide8-last.png", "Final screen: workspace is ready for travel.")}
+				<div class="stack">
+					<p class="eyebrow">End state</p>
+					<h2>The recording ends when the trip is prepared.</h2>
+					<ul class="bullets">
+						<li><strong>Overview.</strong> The trip workspace shows progress and module status.</li>
+						<li><strong>Itinerary.</strong> The traveler can see what happens each day.</li>
+						<li><strong>Budget.</strong> The traveler can see the spend plan and linked receipt evidence.</li>
+						<li><strong>Vault.</strong> The traveler can keep trip documents in one place.</li>
+						<li><strong>Readiness.</strong> The traveler can confirm whether anything still needs attention.</li>
+					</ul>
+					<div class="tip-band"><strong>Closing note:</strong> This PDF is the companion to the Viya User Guide. Use it to follow the demo recording screen by screen.</div>
+				</div>
+			</div>
+		</section>
+	</body>
+</html>`;
+
+await fs.writeFile(htmlPath, html);
+
+const chromeExecutable =
+	"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const browser = await chromium.launch({
+	executablePath: chromeExecutable,
+	headless: true,
+});
+try {
+	const page = await browser.newPage();
+	await page.goto(pathToFileURL(htmlPath).href, { waitUntil: "networkidle" });
+	await page.pdf({
+		path: pdfPath,
+		format: "A4",
+		printBackground: true,
+		preferCSSPageSize: true,
+	});
+} finally {
+	await browser.close();
+}
+
+console.log(pdfPath);

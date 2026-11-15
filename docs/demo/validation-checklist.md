@@ -39,51 +39,43 @@ Use the iOS Simulator for the full demo path. If the simulator is already authen
 4. Confirm Home loads after onboarding.
 5. Go to the Trips screen.
 6. Tap Create trip.
-7. Send the Singapore demo prompt.
-8. Confirm Viya enters Ask Mode and asks only the key Trip creation questions for dates, budget comfort, hotel preference, and free-time style.
-9. Answer with the Singapore demo details:
+7. Use the manual trip form, not the AI conversation path.
+8. Enter the Singapore demo details:
    - September 28 to October 1, 2026.
    - Conference days September 29 and September 30.
    - PHP 90,000 planning ceiling.
    - Hotel near Marina Bay or City Hall.
    - Light food, skyline, networking, and no packed evenings.
-10. Confirm the Trip Blueprint creates a Singapore group trip without depending on hardcoded Singapore product behavior.
-11. Confirm the new trip opens to Trip Workspace Overview.
-12. Confirm `Open Viya for this trip` is visible.
-13. Confirm `Complete this trip` appears above the workspace modules.
-14. Confirm the `Complete this trip` card copy is generic and does not mention Singapore unless the opened trip itself is the Singapore demo trip.
-15. Tap `Complete this trip`.
-16. Confirm Viya stages reviewable Agent Mode drafts on the Overview card for itinerary, Vault/documents, budget, and readiness.
-17. Tap `Ask Viya` and confirm Trip mode opens with a prompt generated from the current trip profile and workspace state.
-18. Confirm Viya can explain the staged changes, ask only for missing decisions, and avoid inventing uploaded documents.
-19. Upload or inject the fixture files:
-    - `singapore-flight-confirmation.txt`
-    - `singapore-hotel-voucher.txt`
-    - `singapore-tech-week-pass.txt`
-    - `singapore-expense-receipt.txt`
-    - `singapore-readiness-note.txt`
-20. Confirm TripSync review extracts Singapore details for each fixture.
-21. Confirm the Vault review creates linked documents, expenses, and readiness items.
-22. Ask these questions to Viya:
-    - "What is missing before this is travel-ready?"
-    - "Can you make the conference days less exhausting?"
-    - "What is still blocking 100% readiness?"
-    - "Act on the missing prep, but stage anything I should review."
-23. Confirm Viya can answer questions in Ask Mode and generate, adjust, and act in Agent Mode.
-24. Generate and apply the itinerary draft.
-25. Apply readiness drafts.
-26. Run readiness audit.
-27. Open each module and confirm:
-    - Itinerary: 4 days with arrival, conference blocks, buffers, light recovery, and departure.
+9. Confirm the manual trip review creates a Singapore group trip without depending on hardcoded Singapore product behavior.
+10. Confirm the new trip opens to Trip Workspace Overview.
+11. Confirm `Open Viya for this trip` is visible.
+12. Open Itinerary, tap the module Viya chat button, and run the first `TRY ASKING` action: `Generate itinerary`.
+13. Confirm the generated itinerary has multiple filled days, not only Day 1. Full days should have 5-6 timed stops, and arrival or departure days should have at least 4 timed stops.
+14. Upload or inject the fixture files:
+    - `singapore-flight-confirmation.txt`: booking proof / flight ticket.
+    - `singapore-hotel-voucher.txt`: booking proof / hotel voucher.
+    - `singapore-tech-week-pass.txt`: event proof / permit.
+    - `singapore-expense-receipt.txt`: receipt / budget evidence.
+    - `singapore-readiness-note.txt`: readiness note / checklist evidence.
+15. Confirm TripSync review extracts Singapore details for each fixture.
+16. Confirm the Vault review creates linked bookings, documents, expenses, and readiness items.
+17. Open Budget, tap the module Viya chat button, and run the first `TRY ASKING` action: `Sync budget`.
+18. Open Readiness, tap the module Viya chat button, and run the first `TRY ASKING` action: `Complete readiness`.
+19. Ask these two questions in the main bottom-bar Viya chat with the Singapore trip selected:
+    - "For my Singapore Tech Week trip, what is the smartest next thing to check before departure, and what evidence are you using from the workspace?"
+    - "Now that readiness is at 100%, what should I watch on travel day so the conference schedule stays light and the budget stays on track?"
+20. Confirm Viya answers from selected trip context and workspace evidence, not generic Singapore advice.
+21. Open each module and confirm:
+    - Itinerary: 4 days with arrival, conference blocks, buffers, light recovery, departure, 5-6 timed stops on full days, and at least 4 timed stops on arrival or departure days.
     - Vault: 5 fixture files saved.
     - Budget: PHP planning budget, PHP confirmed costs, and SGD 82 tracked expense.
-    - Readiness: passport, SG Arrival Card, event badge, hotel, flight, budget, schedule, outfit, and document checks.
-28. Return to Overview and confirm the workspace shows 100% travel preparedness.
+    - Readiness: 100% with passport, SG Arrival Card, event badge, hotel, flight, budget, schedule, outfit, weather, safety, group, and backup-plan checks complete.
+22. Return to Overview and confirm the workspace shows 100% travel preparedness.
 
 ## Acceptance Criteria
 
 - The demo works without live AI keys for known fixture filenames.
-- The product autopilot entry is trip-agnostic; Singapore appears only in demo docs, fixture filenames, fixture extraction, or a Singapore trip's actual profile.
+- Product AI actions are trip-agnostic; Singapore appears only in demo docs, fixture filenames, fixture extraction, or a Singapore trip's actual profile.
 - Viya uses Ask Mode for missing decisions and Agent Mode for reviewable workspace actions.
 - Persistent changes are reviewable before applying.
 - The final visible workspace proves that Home suggestions, AI chat, trip creation, itinerary, Vault, budget, and readiness are connected.

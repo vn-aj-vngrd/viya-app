@@ -26,10 +26,21 @@ End with 100% travel preparedness for a Singapore group reward trip. Every conne
 - Budget: PHP planning budget, confirmed costs, and SGD receipt evidence.
 - Readiness: passport, SG Arrival Card, badge pickup, flight, hotel, budget, schedule, and outfit checks.
 
-## Opening Prompt
+## Manual Trip Setup
+
+Use manual trip creation for the recording so the workspace starts from structured trip facts instead of a planning conversation.
 
 ```txt
-Viya, plan my Singapore group business-conference reward trip. I'm going for Tech Week, want it polished but not exhausting, and I need the workspace to handle flights, hotel, event pass, budget, itinerary, readiness, and a little victory lap. Ask only what you need, then build the trip.
+Trip name: Singapore Group Tech Week Reward
+Destination: Singapore
+Dates: September 28 to October 1, 2026
+Travelers: 4
+Budget: PHP 90,000
+Pace: balanced, polished, not exhausting
+Purpose: Tech Week Singapore business-conference reward trip
+Hotel preference: Marina Bay or City Hall
+Free time: light food, skyline, one victory-lap moment, no packed evenings
+Readiness needs: passport validity, SG Arrival Card, event badge pickup, airport transfer buffers, conference outfit, weather backup, emergency contacts, and team handoff
 ```
 
 ## Presenter Script
@@ -45,53 +56,29 @@ Viya, plan my Singapore group business-conference reward trip. I'm going for Tec
 4. Land on Home and point out that Viya has enough profile context to personalize travel planning without hardcoding a destination.
 5. Go to the Trips screen.
 6. Tap Create trip.
-7. Send the opening prompt.
-8. Viya enters Ask Mode and asks Trip creation questions one at a time:
-   - "What dates should I use?"
-   - "What budget comfort should I plan around?"
-   - "Do you want the hotel optimized for the conference venue, recovery, or price?"
-   - "What should free time feel like: food, sights, quiet reset, or networking?"
-9. Answer with the Singapore demo details:
-   - Dates: September 28 to October 1, 2026.
-   - Conference days: September 29 and September 30, 2026.
-   - Budget: PHP 90,000 planning ceiling.
-   - Hotel preference: near Marina Bay or City Hall.
-   - Free-time style: light food, one skyline moment, no packed evenings.
-10. Viya generates a Trip Blueprint with:
-    - Destination: Singapore.
-    - Travelers: small team.
-    - Purpose: business conference reward trip.
-    - Event anchor: Tech Week Singapore at Marina Bay Sands.
-    - Pace: polished but not exhausting.
-    - Required modules: itinerary, Vault, budget, and readiness.
-11. Confirm trip creation.
-12. The app opens the Trip Workspace Overview.
-13. Confirm `Open Viya for this trip` is visible.
-14. Confirm `Complete this trip` appears above the workspace modules. The card is generic in-product; it becomes a Singapore demo only because this trip profile and fixture set are Singapore-specific.
-15. Tap `Complete this trip`.
-16. Viya enters Agent Mode directly on the Overview card and stages reviewable workspace drafts:
-    - Create itinerary.
-    - Prepare Vault.
-    - Track budget.
-    - Run readiness audit.
-17. Upload or inject the demo fixture files in Vault:
-    - `singapore-flight-confirmation.txt`
-    - `singapore-hotel-voucher.txt`
-    - `singapore-tech-week-pass.txt`
-    - `singapore-expense-receipt.txt`
-    - `singapore-readiness-note.txt`
-18. Confirm each TripSync review.
-19. Show Vault creating linked booking, document, expense, and readiness updates from extracted Singapore data.
-20. Tap `Ask Viya` and ask questions to prove the collaboration loop:
-    - "What is missing before this is travel-ready?"
-    - "Can you make the conference days less exhausting?"
-    - "Act on the missing prep, but stage anything I should review."
-21. Viya answers in Ask Mode when explaining tradeoffs, then switches to Agent Mode when staging itinerary, budget, Vault, and readiness updates.
-22. Apply the itinerary draft.
-23. Apply the readiness and risk drafts.
-24. Run the readiness audit.
-25. Open each module and show final coverage.
-26. Return to Overview and show the connected final state at 100% travel preparedness.
+7. Use the manual trip form and enter the Singapore demo details.
+8. Review the structured trip summary and create the trip.
+9. The app opens the Trip Workspace Overview.
+10. Confirm `Open Viya for this trip` is visible.
+11. Open Itinerary, tap the module Viya chat button, and run the first `TRY ASKING` action: `Generate itinerary`.
+12. Return to Itinerary and show four filled days. Full days should have 5-6 timed stops, and arrival or departure days should have at least 4 timed stops.
+13. Open Vault and upload or inject the demo fixture files:
+    - `singapore-flight-confirmation.txt`: booking proof / flight ticket.
+    - `singapore-hotel-voucher.txt`: booking proof / hotel voucher.
+    - `singapore-tech-week-pass.txt`: event proof / permit.
+    - `singapore-expense-receipt.txt`: receipt / budget evidence.
+    - `singapore-readiness-note.txt`: readiness note / checklist evidence.
+14. Confirm each TripSync review.
+15. Show Vault creating linked booking, document, expense, and readiness evidence from the extracted Singapore data.
+16. Open Budget, tap the module Viya chat button, and run the first `TRY ASKING` action: `Sync budget`.
+17. Show the PHP 90,000 planning ceiling, confirmed flight and hotel costs, SGD 82 receipt evidence, and remaining budget.
+18. Open Readiness, tap the module Viya chat button, and run the first `TRY ASKING` action: `Complete readiness`.
+19. Show readiness at 100% after the five reviewed files ground every readiness category.
+20. Use the main bottom-bar Viya chat and ask two questions:
+    - "For my Singapore Tech Week trip, what is the smartest next thing to check before departure, and what evidence are you using from the workspace?"
+    - "Now that readiness is at 100%, what should I watch on travel day so the conference schedule stays light and the budget stays on track?"
+21. Confirm Viya answers from the selected trip's itinerary, Vault files, budget, and readiness state.
+22. Return to Overview or Readiness and show the connected final state at 100% travel preparedness.
 
 ## Voiceover Beats
 
@@ -100,6 +87,7 @@ Viya, plan my Singapore group business-conference reward trip. I'm going for Tec
 - "The Vault is the grounding layer: flight, hotel, event pass, receipt, and readiness notes become linked trip data."
 - "The itinerary is generated after the trip has context, so the plan is not floating in a blank chat."
 - "Readiness is the final proof. Viya checks the workspace, not just the conversation."
+- "Singapore fixture extraction is deterministic for the recording; the AI actions remain trip-agnostic and use whatever trip context and evidence the workspace contains."
 
 ## Expected Final State
 
