@@ -26,6 +26,7 @@ import type * as itinerary from "../itinerary.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_tripContext from "../lib/tripContext.js";
 import type * as lib_tripLinks from "../lib/tripLinks.js";
+import type * as lib_tripdays from "../lib/tripdays.js";
 import type * as locations from "../locations.js";
 import type * as moments from "../moments.js";
 import type * as notes from "../notes.js";
@@ -65,6 +66,7 @@ declare const fullApi: ApiFromModules<{
   "lib/auth": typeof lib_auth;
   "lib/tripContext": typeof lib_tripContext;
   "lib/tripLinks": typeof lib_tripLinks;
+  "lib/tripdays": typeof lib_tripdays;
   locations: typeof locations;
   moments: typeof moments;
   notes: typeof notes;

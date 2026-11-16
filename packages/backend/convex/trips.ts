@@ -27,7 +27,7 @@ import {
 	ensureUserRecord,
 	getRequiredIdentity,
 } from "./lib/auth";
-import { syncItineraryDaysToTripRange } from "./lib/trip-days";
+import { syncItineraryDaysToTripRange } from "./lib/tripdays";
 import { clearDeletedTripEntityReferences } from "./lib/tripLinks";
 import {
 	seedBaselineReadinessItems,
