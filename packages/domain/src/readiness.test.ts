@@ -15,14 +15,33 @@ describe("calculateReadinessScore", () => {
 		expect(score.summary).toBe("Readiness has not been checked yet.");
 	});
 
-	it("returns the seeded Palawan readiness score before fixes", () => {
-		const score = calculateReadinessScore(palawanDemoTrip.readinessItems);
+	const TODAY = "2026-06-01";
+	const baseItem = {
+		aiReason: "",
+		assignedToMemberId: null,
+		category: "documents",
+		description: "",
+		dueDate: "2026-07-10",
+		id: "i",
+		priority: "medium",
+		source: "system",
+		status: "todo",
+		title: "Item",
+		tripId: "trip-1",
+	} satisfies ReadinessItem;
 
-		expect(score.overallScore).toBe(68);
+	it("scores the seeded Palawan readiness below the ready threshold", () => {
+		const score = calculateReadinessScore(
+			palawanDemoTrip.readinessItems,
+			TODAY
+		);
+
+		// done 2 of (3 + 4*1.5 blocked + 3 + 2) weight
+		expect(score.overallScore).toBe(14);
 		expect(score.categoryScores.transport).toBeLessThan(100);
 		expect(score.categoryScores.bookings).toBeLessThan(80);
 		expect(score.summary).toBe(
-			"68% ready. Fix 3 high-priority gaps before departure."
+			"14% ready. Fix 3 high-priority gaps before departure."
 		);
 	});
 
@@ -33,31 +52,55 @@ describe("calculateReadinessScore", () => {
 				: item
 		);
 
-		const score = calculateReadinessScore(fixedItems);
-
-		expect(score.overallScore).toBe(84);
-		expect(score.summary).toBe("84% ready. Core travel risks are reduced.");
+		expect(calculateReadinessScore(fixedItems, TODAY).overallScore).toBe(100);
 	});
 
-	it("penalizes missing required readiness categories", () => {
-		const score = calculateReadinessScore([
-			{
-				aiReason: "Flight is confirmed.",
-				assignedToMemberId: null,
-				category: "bookings",
-				description: "Flight confirmation uploaded.",
-				dueDate: "2026-07-10",
-				id: "booking-flight",
-				priority: "medium",
-				source: "system",
-				status: "done",
-				title: "Flight confirmed",
-				tripId: "trip-1",
-			},
-		]);
+	it("lets a trip reach 100 when every item is done or ignored", () => {
+		const score = calculateReadinessScore(
+			[
+				{ ...baseItem, id: "a", status: "done" },
+				{ ...baseItem, id: "b", category: "bookings", status: "ignored" },
+			],
+			TODAY
+		);
 
-		expect(score.overallScore).toBeLessThan(80);
+		expect(score.overallScore).toBe(100);
+		expect(score.summary).toBe("100% ready. Everything is done.");
+	});
+
+	it("does not penalise categories without items", () => {
+		const score = calculateReadinessScore(
+			[{ ...baseItem, category: "bookings", status: "done" }],
+			TODAY
+		);
+
+		expect(score.overallScore).toBe(100);
 		expect(score.categoryScores.documents).toBe(100);
+	});
+
+	it("weighs overdue and blocked work harder than plain todo", () => {
+		const done = {
+			...baseItem,
+			id: "d",
+			priority: "high",
+			status: "done",
+		} as const;
+		const todo = calculateReadinessScore(
+			[done, { ...baseItem, id: "t", priority: "high" }],
+			TODAY
+		);
+		const overdue = calculateReadinessScore(
+			[done, { ...baseItem, id: "t", priority: "high", dueDate: "2026-05-01" }],
+			TODAY
+		);
+		const blocked = calculateReadinessScore(
+			[done, { ...baseItem, id: "t", priority: "high", status: "blocked" }],
+			TODAY
+		);
+
+		expect(todo.overallScore).toBe(50);
+		expect(overdue.overallScore).toBeLessThan(todo.overallScore);
+		expect(blocked.overallScore).toBe(overdue.overallScore);
 	});
 
 	it("orders readiness items by action urgency", () => {

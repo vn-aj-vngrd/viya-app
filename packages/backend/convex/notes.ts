@@ -1,3 +1,4 @@
+import { cleanMultilineText, cleanText } from "@viya-app/domain";
 import { ConvexError, v } from "convex/values";
 
 import type { Id } from "./_generated/dataModel";
@@ -12,6 +13,26 @@ import {
 
 const touchTrip = async (ctx: MutationCtx, tripId: Id<"trips">) => {
 	await ctx.db.patch(tripId, { updatedAt: Date.now() });
+};
+
+const getRequiredNoteTitle = (title: string) => {
+	const cleaned = cleanText(title);
+
+	if (!cleaned) {
+		throw new ConvexError("INVALID_NOTE_TITLE");
+	}
+
+	return cleaned;
+};
+
+const getRequiredNoteBody = (body: string) => {
+	const cleaned = cleanMultilineText(body);
+
+	if (!cleaned) {
+		throw new ConvexError("INVALID_NOTE_BODY");
+	}
+
+	return cleaned;
 };
 
 const getRequiredTripNote = async (
@@ -66,14 +87,14 @@ export const createTripNote = mutation({
 		});
 		const now = Date.now();
 		const noteId = await ctx.db.insert("tripNotes", {
-			body: args.body,
-			category: args.category,
+			body: getRequiredNoteBody(args.body),
+			category: cleanText(args.category) || "general",
 			createdAt: now,
 			...getLinkedTripEntityFields({
 				linkedEntityId: args.relatedEntityId,
 				linkedEntityType: args.relatedEntityType,
 			}),
-			title: args.title,
+			title: getRequiredNoteTitle(args.title),
 			tripId: args.tripId,
 			updatedAt: now,
 		});
@@ -104,6 +125,15 @@ export const updateTripNote = mutation({
 		const { noteId, relatedEntityId, relatedEntityType, ...patch } = args;
 		await ctx.db.patch(noteId, {
 			...patch,
+			...(args.body === undefined
+				? {}
+				: { body: getRequiredNoteBody(args.body) }),
+			...(args.category === undefined
+				? {}
+				: { category: cleanText(args.category) || "general" }),
+			...(args.title === undefined
+				? {}
+				: { title: getRequiredNoteTitle(args.title) }),
 			...getLinkedTripEntityUpdatePatch({
 				linkedEntityId: relatedEntityId,
 				linkedEntityType: relatedEntityType,

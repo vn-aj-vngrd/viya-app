@@ -1,5 +1,9 @@
 import type { Doc } from "@viya-app/backend/convex/_generated/dataModel";
-import { getTripCountdown, getTripDayCount } from "@viya-app/domain";
+import {
+	getTripCountdown,
+	getTripDayCount,
+	getTripTodayKey,
+} from "@viya-app/domain";
 import { Image } from "expo-image";
 import { StyleSheet, View } from "react-native";
 import Animated from "react-native-reanimated";
@@ -22,7 +26,6 @@ import {
 	formatCount,
 	formatTripCountdown,
 	formatTripRange,
-	toLocalDateKey,
 } from "@/src/lib/format";
 
 /** A trip row, with the readiness snapshot `searchTrips` adds when present. */
@@ -96,23 +99,7 @@ export function TripThumbnail({
 	);
 }
 
-export function TripRow({
-	entering,
-	onArchive,
-	onDelete,
-	onFavorite,
-	replacementCoverImageUrl,
-	trip,
-}: {
-	entering?: ReturnType<typeof import("@/src/components/ui").enterRise>;
-	onArchive: (trip: Trip) => void;
-	onDelete: (trip: Trip) => void;
-	onFavorite: (trip: Trip) => void;
-	replacementCoverImageUrl?: string;
-	trip: Trip;
-}) {
-	const isFavorite = trip.isFavorite ?? false;
-	const isArchived = trip.status === "archived";
+const getTripRowFacts = (trip: Trip) => {
 	const days = getTripDayCount(trip.startDate, trip.endDate);
 	const factsLine = [
 		shouldShowDestinationLine(trip.title, trip.destination)
@@ -123,7 +110,7 @@ export function TripRow({
 	]
 		.filter(Boolean)
 		.join(" · ");
-	const countdown = getTripCountdown(trip, toLocalDateKey());
+	const countdown = getTripCountdown(trip, getTripTodayKey());
 	const countdownLabel =
 		countdown.phase === "undated" ? undefined : formatTripCountdown(countdown);
 	const readinessActive = trip.readinessActive ?? 0;
@@ -133,6 +120,32 @@ export function TripRow({
 		trip.readinessPercent != null
 			? `${trip.readinessPercent}% ready · ${trip.readinessDone ?? 0} of ${readinessActive} done`
 			: null;
+
+	return { countdownLabel, factsLine, readinessLine };
+};
+
+export function TripRow({
+	entering,
+	onArchive,
+	onDelete,
+	onDuplicate,
+	onFavorite,
+	onRestore,
+	replacementCoverImageUrl,
+	trip,
+}: {
+	entering?: ReturnType<typeof import("@/src/components/ui").enterRise>;
+	onArchive: (trip: Trip) => void;
+	onDelete: (trip: Trip) => void;
+	onDuplicate?: (trip: Trip) => void;
+	onFavorite: (trip: Trip) => void;
+	onRestore?: (trip: Trip) => void;
+	replacementCoverImageUrl?: string;
+	trip: Trip;
+}) {
+	const isFavorite = trip.isFavorite ?? false;
+	const isArchived = trip.status === "archived";
+	const { countdownLabel, factsLine, readinessLine } = getTripRowFacts(trip);
 	const subtitle = readinessLine ? `${factsLine}\n${readinessLine}` : factsLine;
 	const accessibilityLabel = [
 		trip.title,
@@ -156,6 +169,17 @@ export function TripRow({
 					},
 				]}
 				trailingActions={[
+					...(isArchived && onRestore
+						? [
+								{
+									icon: "arrow-undo-outline" as const,
+									key: "restore",
+									label: "Restore",
+									onPress: () => onRestore(trip),
+									tone: "accent" as const,
+								},
+							]
+						: []),
 					...(isArchived
 						? []
 						: [
@@ -184,6 +208,26 @@ export function TripRow({
 							sfSymbol: isFavorite ? "heart.slash" : "heart",
 							title: isFavorite ? "Remove from favorites" : "Favorite",
 						},
+						...(isArchived && onRestore
+							? [
+									{
+										key: "restore",
+										onPress: () => onRestore(trip),
+										sfSymbol: "arrow.uturn.backward" as const,
+										title: "Restore",
+									},
+								]
+							: []),
+						...(onDuplicate
+							? [
+									{
+										key: "duplicate",
+										onPress: () => onDuplicate(trip),
+										sfSymbol: "plus.square.on.square" as const,
+										title: "Duplicate",
+									},
+								]
+							: []),
 						...(isArchived
 							? []
 							: [

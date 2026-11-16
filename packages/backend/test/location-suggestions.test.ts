@@ -5,6 +5,7 @@ import {
 	fetchGeoapifyLocationSuggestions,
 	getGeoapifyAutocompleteUrl,
 	parseGeoapifyAutocompleteResponse,
+	parseRankedGeoapifyResponse,
 } from "../src/location-suggestions";
 
 describe("Geoapify location suggestions", () => {
@@ -111,5 +112,76 @@ describe("Geoapify location suggestions", () => {
 
 		assert.deepEqual(suggestions, []);
 		assert.equal(wasFetcherCalled, false);
+	});
+
+	it("adds a country filter and bias when asked", () => {
+		const url = getGeoapifyAutocompleteUrl({
+			apiKey: "k",
+			countryFilter: "PH",
+			limit: 5,
+			text: "Cebu",
+		});
+
+		assert.ok(url.includes("filter=countrycode%3Aph"));
+		assert.ok(url.includes("bias=countrycode%3Aph"));
+	});
+
+	it("sorts Philippine cities ahead of streets and foreign results", () => {
+		const response = {
+			features: [
+				{
+					properties: {
+						country_code: "us",
+						formatted: "Cebu St, US",
+						result_type: "street",
+					},
+				},
+				{
+					properties: {
+						country_code: "ph",
+						formatted: "Cebu Rd, Cebu",
+						result_type: "street",
+					},
+				},
+				{
+					properties: {
+						country_code: "ph",
+						formatted: "Cebu City, Philippines",
+						result_type: "city",
+					},
+				},
+			],
+		};
+
+		assert.deepEqual(
+			parseRankedGeoapifyResponse(response, "ph").map((item) => item.value),
+			["Cebu City, Philippines", "Cebu Rd, Cebu", "Cebu St, US"]
+		);
+	});
+
+	it("falls back to a global search when the Philippines has no match", async () => {
+		const urls: string[] = [];
+		const fetcher = ((url: string) => {
+			urls.push(url);
+			const features = url.includes("filter=")
+				? []
+				: [{ properties: { country_code: "jp", formatted: "Osaka, Japan" } }];
+
+			return Promise.resolve({
+				json: () => Promise.resolve({ features }),
+				ok: true,
+			});
+		}) as unknown as typeof fetch;
+
+		const suggestions = await fetchGeoapifyLocationSuggestions({
+			apiKey: "k",
+			fetcher,
+			limit: 5,
+			preferredCountryCode: "ph",
+			text: "Osaka",
+		});
+
+		assert.equal(urls.length, 2);
+		assert.equal(suggestions[0]?.value, "Osaka, Japan");
 	});
 });

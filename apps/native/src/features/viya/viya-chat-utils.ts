@@ -263,6 +263,25 @@ export const getUiMessageText = (message: {
 		.join("")
 		.trim();
 
+const draftToolPartPattern = /^tool-propose/;
+
+/** Number of Viya drafts a message's tool calls saved for review. */
+export const getDraftReadyCount = (message: {
+	parts?: Array<{ output?: unknown; state?: string; type: string }>;
+}) =>
+	(message.parts ?? []).filter((part) => {
+		if (
+			!draftToolPartPattern.test(part.type) ||
+			part.state !== "output-available"
+		) {
+			return false;
+		}
+
+		const output = part.output as { draftId?: unknown } | null | undefined;
+
+		return typeof output?.draftId === "string";
+	}).length;
+
 export const getNormalizedChatInput = (value: string) =>
 	value.replace(whitespacePattern, " ").trim();
 

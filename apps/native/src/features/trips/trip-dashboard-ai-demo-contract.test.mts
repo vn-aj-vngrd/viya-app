@@ -18,7 +18,7 @@ describe("trip dashboard AI demo entry contract", () => {
 		expect(source).toContain("api.ai.tripAgent.generateTripAgentDraft");
 		expect(source).toContain("api.ai.tripAgent.applyTripAgentDraft");
 		expect(source).toContain("api.ai.tripAgent.dismissTripAgentDraft");
-		expect(source).toContain("useFallback: true");
+		expect(source).not.toContain("useFallback");
 		expect(source).toContain('newThread: "1"');
 		expect(source).toContain("workspace.agentDrafts");
 		expect(source).toContain("vaultCoverageCount");

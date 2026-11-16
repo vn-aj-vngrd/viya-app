@@ -45,6 +45,7 @@ import type {
 } from "./viya-chat-types";
 import {
 	extractTripBlueprint,
+	getDraftReadyCount,
 	getPendingPromptInsertionIndex,
 	getSingleQuestionDisplayText,
 	getTripBlueprintActionPrompt,
@@ -844,6 +845,34 @@ function TripBlueprintActions({
 	);
 }
 
+function DraftReadyCard({
+	count,
+	onReview,
+}: {
+	count: number;
+	onReview?: () => void;
+}) {
+	return (
+		<View style={{ gap: spacing.sm, marginTop: spacing.md }}>
+			<AppText variant="callout">
+				{count === 1
+					? "Draft ready to review"
+					: `${count} drafts ready to review`}
+			</AppText>
+			<AppText tone="secondary" variant="subhead">
+				Nothing is changed until you apply it.
+			</AppText>
+			{onReview ? (
+				<SecondaryButton
+					accessibilityLabel="Review drafts from Viya"
+					label="Review drafts"
+					onPress={onReview}
+				/>
+			) : null}
+		</View>
+	);
+}
+
 function AssistantMessage({
 	isCreatingTripFromBlueprint,
 	isStreaming,
@@ -904,6 +933,7 @@ export function ViyaMessageList({
 	isCreatingTripFromBlueprint,
 	messages,
 	onCreateTripFromBlueprint,
+	onReviewDrafts,
 	onSubmitBlueprintAction,
 	pendingPrompt,
 	pendingPromptMessageIndex,
@@ -913,6 +943,7 @@ export function ViyaMessageList({
 	isCreatingTripFromBlueprint: boolean;
 	messages: UiChatMessages;
 	onCreateTripFromBlueprint: (blueprint: TripBlueprint) => void;
+	onReviewDrafts?: () => void;
 	onSubmitBlueprintAction: (prompt: string) => void;
 	pendingPrompt: string | null;
 	pendingPromptMessageIndex?: number | null;
@@ -954,6 +985,7 @@ export function ViyaMessageList({
 				}
 
 				let body: ReactNode = null;
+				const draftCount = isUser ? 0 : getDraftReadyCount(message);
 
 				if (isUser) {
 					body = <UserMessage text={messageText} />;
@@ -967,7 +999,7 @@ export function ViyaMessageList({
 							text={messageText}
 						/>
 					);
-				} else {
+				} else if (draftCount === 0) {
 					body = <ThinkingRow />;
 				}
 
@@ -977,6 +1009,9 @@ export function ViyaMessageList({
 							<UserMessage text={pendingPrompt} />
 						) : null}
 						{body}
+						{draftCount > 0 ? (
+							<DraftReadyCard count={draftCount} onReview={onReviewDrafts} />
+						) : null}
 					</View>
 				);
 			})}

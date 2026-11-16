@@ -1,11 +1,13 @@
 import {
 	createThread,
+	getThreadMetadata,
 	listUIMessages,
 	saveMessage,
 	syncStreams,
 	vStreamArgs,
 } from "@convex-dev/agent";
 import { formatPreferenceContext } from "@viya-app/domain";
+import { stepCountIs } from "ai";
 import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
 
@@ -17,11 +19,29 @@ import {
 	internalQuery,
 	type MutationCtx,
 	mutation,
+	type QueryCtx,
 	query,
 } from "./_generated/server";
-import { chatAgent } from "./agent";
+import { getChatAgent } from "./agent";
+import { buildTripChatTools, CHAT_MAX_STEPS } from "./ai/chatTools";
 import { buildChatModeSystemPrompt, type ChatMode } from "./ai/prompts";
 import { ensureTripAccess, getRequiredIdentity } from "./lib/auth";
+import { loadTripContext } from "./lib/tripContext";
+
+/** Threads belong to the user that created them; anything else is not found. */
+const assertThreadOwner = async (
+	ctx: MutationCtx | QueryCtx,
+	threadId: string,
+	ownerId: string
+) => {
+	const thread = await getThreadMetadata(ctx, components.agent, {
+		threadId,
+	}).catch(() => null);
+
+	if (!thread || thread.userId !== ownerId) {
+		throw new ConvexError("THREAD_NOT_FOUND");
+	}
+};
 
 const chatModeValidator = v.union(
 	v.literal("chat"),
@@ -45,22 +65,6 @@ const terminalPunctuationPattern = /[.!?]+$/;
 const typeSomethingElsePattern =
 	/^(?:type\s+)?(?:something\s+else|other|custom answer)$/i;
 const lineBreakPattern = /\r\n|\r|\n/g;
-const spendIntentPattern = /\b(?:i\s+)?(?:spent|paid|bought|purchased)\b/i;
-const spendAmountPattern =
-	/(?:₱|PHP\s*)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*(?:php|pesos?)?/i;
-const spendTitleAfterConnectorPattern =
-	/\b(?:on|for)\s+(.+?)(?:\s+(?:for|at)\s+(?:₱|PHP\s*)?[0-9]|$)/i;
-const spendTitleBeforeAmountPattern =
-	/\b(?:spent|paid|bought|purchased)\s+(.+?)\s+(?:for|at)?\s*(?:₱|PHP\s*)?[0-9]/i;
-const foodExpensePattern =
-	/\b(?:breakfast|brunch|lunch|dinner|meal|coffee|food|restaurant|snack|drink)\b/i;
-const hotelExpensePattern =
-	/\b(?:hotel|hostel|stay|accommodation|airbnb|lodging)\b/i;
-const shoppingExpensePattern = /\b(?:shopping|souvenir|gift|mall)\b/i;
-const transportExpensePattern =
-	/\b(?:taxi|grab|uber|train|bus|ferry|flight|transport|transfer|fare|gas|fuel)\b/i;
-const documentExpensePattern =
-	/\b(?:passport|visa|permit|document|insurance)\b/i;
 
 const getPromptSnippet = (prompt: string, maxLength: number) => {
 	const normalizedPrompt = prompt.replace(/\s+/g, " ").trim();
@@ -183,39 +187,6 @@ const clearPendingQuestionsForThread = async (
 	}
 };
 
-const compactTripContext = ({
-	bookings,
-	documents,
-	expenses,
-	itineraryDays,
-	itineraryItems,
-	readinessItems,
-	risks,
-	trip,
-	vaultItems,
-}: {
-	bookings: unknown[];
-	documents: unknown[];
-	expenses: unknown[];
-	itineraryDays: unknown[];
-	itineraryItems: unknown[];
-	readinessItems: unknown[];
-	risks: unknown[];
-	trip: unknown;
-	vaultItems: unknown[];
-}) =>
-	JSON.stringify({
-		bookings,
-		documents,
-		expenses,
-		itineraryDays,
-		itineraryItems,
-		readinessItems,
-		risks,
-		trip,
-		vaultItems,
-	});
-
 export const createNewThread = mutation({
 	args: {},
 	handler: async (ctx) => {
@@ -226,114 +197,6 @@ export const createNewThread = mutation({
 		return threadId;
 	},
 });
-
-const getExpenseCategory = (title: string) => {
-	if (foodExpensePattern.test(title)) {
-		return "food";
-	}
-
-	if (hotelExpensePattern.test(title)) {
-		return "hotel";
-	}
-
-	if (shoppingExpensePattern.test(title)) {
-		return "shopping";
-	}
-
-	if (transportExpensePattern.test(title)) {
-		return "transport";
-	}
-
-	if (documentExpensePattern.test(title)) {
-		return "documents";
-	}
-
-	return "other";
-};
-
-const cleanExpenseTitle = (value: string) => {
-	const title = value
-		.replace(/[.!?]+$/g, "")
-		.replace(/\s+/g, " ")
-		.trim();
-
-	if (!title) {
-		return "Trip expense";
-	}
-
-	return `${title.charAt(0).toUpperCase()}${title.slice(1)}`;
-};
-
-const getExpenseTitleFromPrompt = (prompt: string) => {
-	const titleAfterConnector = spendTitleAfterConnectorPattern.exec(prompt)?.[1];
-
-	if (titleAfterConnector) {
-		return cleanExpenseTitle(titleAfterConnector);
-	}
-
-	const titleBeforeAmount = spendTitleBeforeAmountPattern.exec(prompt)?.[1];
-
-	if (titleBeforeAmount && !spendAmountPattern.test(titleBeforeAmount)) {
-		return cleanExpenseTitle(titleBeforeAmount);
-	}
-
-	return "Trip expense";
-};
-
-const getSpendExpenseDraft = (prompt: string) => {
-	if (!spendIntentPattern.test(prompt)) {
-		return null;
-	}
-
-	const amountMatch = spendAmountPattern.exec(prompt);
-	const amount = amountMatch
-		? Number.parseFloat(amountMatch[1].replaceAll(",", ""))
-		: Number.NaN;
-
-	if (!(Number.isFinite(amount) && amount > 0)) {
-		return null;
-	}
-
-	const title = getExpenseTitleFromPrompt(prompt);
-
-	return {
-		amount,
-		category: getExpenseCategory(title),
-		currency: "PHP",
-		notes: "Logged from Viya chat.",
-		spentAt: new Date().toISOString().slice(0, 10),
-		title,
-	};
-};
-
-const maybeLogTripChatExpense = async (
-	ctx: MutationCtx,
-	{
-		prompt,
-		tripId,
-	}: {
-		prompt: string;
-		tripId: Id<"trips">;
-	}
-) => {
-	const expense = getSpendExpenseDraft(prompt);
-
-	if (!expense) {
-		return null;
-	}
-
-	const now = Date.now();
-	const expenseId = await ctx.db.insert("expenses", {
-		...expense,
-		createdAt: now,
-		source: "manual" as const,
-		tripId,
-		updatedAt: now,
-	});
-	await ctx.db.patch(tripId, { updatedAt: now });
-
-	return expenseId;
-};
 
 export const listHistory = query({
 	args: {
@@ -400,7 +263,8 @@ export const listMessages = query({
 		streamArgs: vStreamArgs,
 	},
 	handler: async (ctx, args) => {
-		await getRequiredIdentity(ctx);
+		const identity = await getRequiredIdentity(ctx);
+		await assertThreadOwner(ctx, args.threadId, identity.subject);
 		const paginated = await listUIMessages(ctx, components.agent, args);
 		const streams = await syncStreams(ctx, components.agent, args);
 		return { ...paginated, streams };
@@ -476,6 +340,7 @@ export const sendMessage = mutation({
 	},
 	handler: async (ctx, { mode, prompt, threadId, tripId }) => {
 		const identity = await getRequiredIdentity(ctx);
+		await assertThreadOwner(ctx, threadId, identity.subject);
 		const now = Date.now();
 		const trimmedPrompt = prompt.trim();
 
@@ -497,10 +362,6 @@ export const sendMessage = mutation({
 			}
 
 			await ensureTripAccess(ctx, tripId, identity.subject);
-			await maybeLogTripChatExpense(ctx, {
-				prompt: trimmedPrompt,
-				tripId,
-			});
 		}
 
 		await clearPendingQuestionsForThread(ctx, {
@@ -561,6 +422,7 @@ export const linkThreadToTrip = mutation({
 	handler: async (ctx, args) => {
 		const identity = await getRequiredIdentity(ctx);
 		await ensureTripAccess(ctx, args.tripId, identity.subject);
+		await assertThreadOwner(ctx, args.threadId, identity.subject);
 		const now = Date.now();
 
 		const existingThread = await ctx.db
@@ -664,146 +526,7 @@ export const getTripChatContext = internalQuery({
 		ownerId: v.string(),
 		tripId: v.id("trips"),
 	},
-	handler: async (ctx, args) => {
-		const trip = await ctx.db.get(args.tripId);
-
-		if (!trip || trip.ownerId !== args.ownerId) {
-			throw new ConvexError("TRIP_NOT_FOUND");
-		}
-
-		const [
-			itineraryDays,
-			itineraryItems,
-			readinessItems,
-			risks,
-			vaultItems,
-			documents,
-			bookings,
-			expenses,
-		] = await Promise.all([
-			ctx.db
-				.query("itineraryDays")
-				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
-				.collect(),
-			ctx.db
-				.query("itineraryItems")
-				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
-				.collect(),
-			ctx.db
-				.query("readinessItems")
-				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
-				.collect(),
-			ctx.db
-				.query("risks")
-				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
-				.collect(),
-			ctx.db
-				.query("vaultItems")
-				.withIndex("by_owner_trip", (q) =>
-					q.eq("ownerId", args.ownerId).eq("tripId", args.tripId)
-				)
-				.collect(),
-			ctx.db
-				.query("travelDocuments")
-				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
-				.collect(),
-			ctx.db
-				.query("bookings")
-				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
-				.collect(),
-			ctx.db
-				.query("expenses")
-				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
-				.collect(),
-		]);
-
-		return compactTripContext({
-			bookings: bookings.map((booking) => ({
-				cost: booking.cost,
-				currency: booking.currency,
-				endDateTime: booking.endDateTime,
-				locationName: booking.locationName,
-				provider: booking.provider,
-				startDateTime: booking.startDateTime,
-				status: booking.status,
-				title: booking.title,
-				type: booking.type,
-			})),
-			documents: documents.map((document) => ({
-				expiryDate: document.expiryDate,
-				notes: document.notes,
-				status: document.status,
-				title: document.title,
-				type: document.type,
-			})),
-			expenses: expenses.map((expense) => ({
-				amount: expense.amount,
-				category: expense.category,
-				currency: expense.currency,
-				notes: expense.notes,
-				spentAt: expense.spentAt,
-				title: expense.title,
-			})),
-			itineraryDays: itineraryDays.map((day) => ({
-				date: day.date,
-				dayNumber: day.dayNumber,
-				pace: day.pace,
-				summary: day.summary,
-				title: day.title,
-				weatherNote: day.weatherNote,
-			})),
-			itineraryItems: itineraryItems.map((item) => ({
-				category: item.category,
-				dayId: item.dayId,
-				durationMinutes: item.durationMinutes,
-				endTime: item.endTime,
-				locationName: item.locationName,
-				priority: item.priority,
-				startTime: item.startTime,
-				status: item.status,
-				title: item.title,
-			})),
-			readinessItems: readinessItems.map((item) => ({
-				category: item.category,
-				description: item.description,
-				dueDate: item.dueDate,
-				priority: item.priority,
-				status: item.status,
-				title: item.title,
-			})),
-			risks: risks.map((risk) => ({
-				message: risk.message,
-				severity: risk.severity,
-				status: risk.status,
-				suggestedAction: risk.suggestedAction,
-				title: risk.title,
-				type: risk.type,
-			})),
-			trip: {
-				arrivalTime: trip.arrivalTime,
-				budgetAmount: trip.budgetAmount,
-				budgetCurrency: trip.budgetCurrency,
-				departureTime: trip.departureTime,
-				destination: trip.destination,
-				endDate: trip.endDate,
-				groupType: trip.groupType,
-				pace: trip.pace,
-				readinessScore: trip.readinessScore,
-				startDate: trip.startDate,
-				status: trip.status,
-				summary: trip.summary,
-				title: trip.title,
-				travelStyle: trip.travelStyle,
-			},
-			vaultItems: vaultItems.map((item) => ({
-				extractedSummary: item.extractedSummary,
-				kind: item.kind,
-				note: item.note,
-				status: item.status,
-				title: item.title,
-			})),
-		});
-	},
+	handler: async (ctx, args) => (await loadTripContext(ctx, args)).contextJson,
 });
 
 export const generateResponseAsync = internalAction({
@@ -832,22 +555,41 @@ export const generateResponseAsync = internalAction({
 			? formatPreferenceContext(preferences)
 			: undefined;
 
-		await chatAgent.streamText(
-			ctx,
-			{ threadId },
-			{
-				promptMessageId,
-				system: buildChatModeSystemPrompt(
-					mode as ChatMode,
-					tripContext,
-					undefined,
-					{
-						preferenceContext,
-					}
-				),
-			},
-			{ saveStreamDeltas: true }
-		);
+		try {
+			await getChatAgent().streamText(
+				ctx,
+				{ threadId },
+				{
+					promptMessageId,
+					...(mode === "trip" && tripId
+						? {
+								stopWhen: stepCountIs(CHAT_MAX_STEPS),
+								tools: buildTripChatTools({ ownerId, tripId }),
+							}
+						: {}),
+					system: buildChatModeSystemPrompt(
+						mode as ChatMode,
+						tripContext,
+						undefined,
+						{
+							preferenceContext,
+						}
+					),
+				},
+				{ saveStreamDeltas: true }
+			);
+		} catch (error) {
+			console.error("Viya chat generation failed", error);
+			await saveMessage(ctx, components.agent, {
+				message: {
+					content:
+						"I couldn't reach the AI service just now, so I haven't changed anything. Please try again in a moment.",
+					role: "assistant",
+				},
+				threadId,
+			});
+			return;
+		}
 
 		const messages = await listUIMessages(ctx, components.agent, {
 			paginationOpts: { cursor: null, numItems: recentMessageLookupCount },

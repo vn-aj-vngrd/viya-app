@@ -1,11 +1,20 @@
 import {
-	calculateReadinessScore,
-	getDateKeyInTimeZone,
+	addDaysToKey,
+	cleanText,
+	type EffectiveTripStatus,
+	getBlueprintBookingType,
+	getBlueprintGroupType,
+	getBlueprintPace,
+	getBlueprintReadinessCategory,
+	getBlueprintRiskSeverity,
+	getBlueprintRiskType,
+	getBlueprintTravelStyle,
+	getEffectiveTripStatus,
 	getReadinessProgress,
-	TRIP_COMPLETED_STATUSES,
-	TRIP_PLANNING_STATUSES,
+	getTripDayCount,
+	getTripTodayKey,
+	resolveBlueprintDateRange,
 	type TripStatus,
-	toReadinessItem,
 } from "@viya-app/domain";
 import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
@@ -18,11 +27,17 @@ import {
 	ensureUserRecord,
 	getRequiredIdentity,
 } from "./lib/auth";
+import { syncItineraryDaysToTripRange } from "./lib/trip-days";
 import { clearDeletedTripEntityReferences } from "./lib/tripLinks";
+import {
+	seedBaselineReadinessItems,
+	updateTripReadinessScore,
+} from "./readiness";
 
 const maxBlueprintItems = 8;
 const maxTripsPageSize = 24;
-const isoDatePattern = /\b(20\d{2}-\d{2}-\d{2})\b/g;
+const NEEDS_READINESS_BELOW = 90;
+const PLACEHOLDER_TRIP_NOTE = "Dates are placeholders until you set them.";
 const pesoAmountPattern = /(?:₱|PHP\s*)\s?([0-9][0-9,]*)/i;
 const whitespacePattern = /\s+/g;
 const expenseCategoryValidator = v.union(
@@ -55,8 +70,6 @@ const joinItems = (items: string[], fallback: string) => {
 	return limitedItems.length > 0 ? limitedItems.join("; ") : fallback;
 };
 
-const TRIP_TIME_ZONE = "Asia/Manila";
-
 const normalizeSearchText = (value: string) =>
 	value.replace(whitespacePattern, " ").trim().toLowerCase();
 
@@ -66,31 +79,49 @@ const assertValidDateRange = (startDate: string, endDate: string) => {
 	}
 };
 
+const assertRealDateRange = (startDate: string, endDate: string) => {
+	if (getTripDayCount(startDate, endDate) === null || startDate > endDate) {
+		throw new ConvexError("INVALID_TRIP_DATE_RANGE");
+	}
+};
+
+const assertValidTravelerCount = (count: number | undefined) => {
+	if (count !== undefined && !(Number.isInteger(count) && count >= 1)) {
+		throw new ConvexError("INVALID_TRAVELER_COUNT");
+	}
+};
+
+const assertValidBudget = (amount: number | undefined) => {
+	if (amount !== undefined && !(Number.isFinite(amount) && amount >= 0)) {
+		throw new ConvexError("INVALID_TRIP_BUDGET");
+	}
+};
+
 type TripSearchStatusFilter = `status:${TripStatus}`;
 
 const getTripStatusFilter = (status: TripStatus): TripSearchStatusFilter =>
 	`status:${status}`;
 
-const withReadinessSnapshot = async (ctx: QueryCtx, trip: Doc<"trips">) => {
+const withReadinessSnapshot = async (
+	ctx: QueryCtx,
+	trip: Doc<"trips">,
+	todayKey: string
+) => {
 	const readinessItems = await ctx.db
 		.query("readinessItems")
 		.withIndex("by_trip", (q) => q.eq("tripId", trip._id))
 		.collect();
-	const readinessScore = calculateReadinessScore(
-		readinessItems.map(toReadinessItem)
-	);
-	const progress = getReadinessProgress(
-		readinessItems,
-		getDateKeyInTimeZone(Date.now(), TRIP_TIME_ZONE)
-	);
+	const progress = getReadinessProgress(readinessItems, todayKey);
 
 	return {
 		...trip,
+		effectiveStatus: getEffectiveTripStatus(trip, todayKey),
 		readinessActive: progress.active,
 		readinessDone: progress.done,
 		readinessItemCount: readinessItems.length,
 		readinessPercent: progress.percent,
-		readinessScore: readinessScore.overallScore,
+		// Same formula as readinessPercent; 0 until there is something to score.
+		readinessScore: progress.percent ?? 0,
 	};
 };
 
@@ -218,17 +249,6 @@ const getTripSearchText = ({
 			.join(" ")
 	);
 
-const getDateRangeFromItems = (items: string[]) => {
-	const matches = Array.from(items.join(" ").matchAll(isoDatePattern)).map(
-		(match) => match[1]
-	);
-
-	return {
-		endDate: matches[1] ?? matches[0] ?? "",
-		startDate: matches[0] ?? "",
-	};
-};
-
 const getBudgetAmountFromItems = (items: string[]) => {
 	const match = pesoAmountPattern.exec(items.join(" "));
 
@@ -239,81 +259,6 @@ const getBudgetAmountFromItems = (items: string[]) => {
 	const amount = Number(match[1].replaceAll(",", ""));
 
 	return Number.isFinite(amount) ? amount : undefined;
-};
-
-const getTravelStyleFromItems = (items: string[]) => {
-	const text = items.join(" ").toLowerCase();
-
-	if (text.includes("luxury") || text.includes("premium")) {
-		return "luxury";
-	}
-
-	if (text.includes("budget")) {
-		return "budget";
-	}
-
-	if (text.includes("adventure")) {
-		return "adventure";
-	}
-
-	if (
-		text.includes("relaxed") ||
-		text.includes("laid-back") ||
-		text.includes("slow")
-	) {
-		return "relaxed";
-	}
-
-	if (text.includes("packed") || text.includes("fast")) {
-		return "packed";
-	}
-
-	return "balanced";
-};
-
-const getPaceFromItems = (items: string[]) => {
-	const text = items.join(" ").toLowerCase();
-
-	if (
-		text.includes("relaxed") ||
-		text.includes("laid-back") ||
-		text.includes("slow") ||
-		text.includes("light")
-	) {
-		return "slow";
-	}
-
-	if (text.includes("packed") || text.includes("fast")) {
-		return "fast";
-	}
-
-	return "moderate";
-};
-
-const getGroupTypeFromItems = (items: string[]) => {
-	const text = items.join(" ").toLowerCase();
-
-	if (text.includes("family")) {
-		return "family";
-	}
-
-	if (text.includes("friend")) {
-		return "friends";
-	}
-
-	if (text.includes("work") || text.includes("business")) {
-		return "work";
-	}
-
-	if (
-		text.includes("couple") ||
-		text.includes("partner") ||
-		text.includes("2")
-	) {
-		return "couple";
-	}
-
-	return "solo";
 };
 
 const getItineraryPaceFromTripPace = (pace: string) => {
@@ -328,173 +273,24 @@ const getItineraryPaceFromTripPace = (pace: string) => {
 	return "balanced";
 };
 
-const getReadinessCategory = (item: string) => {
-	const text = item.toLowerCase();
-
-	if (
-		text.includes("passport") ||
-		text.includes("visa") ||
-		text.includes("id")
-	) {
-		return "documents";
-	}
-
-	if (
-		text.includes("booking") ||
-		text.includes("book ") ||
-		text.includes("reserve")
-	) {
-		return "bookings";
-	}
-
-	if (
-		text.includes("flight") ||
-		text.includes("ferry") ||
-		text.includes("transfer") ||
-		text.includes("transport")
-	) {
-		return "transport";
-	}
-
-	if (
-		text.includes("budget") ||
-		text.includes("cash") ||
-		text.includes("cost")
-	) {
-		return "budget";
-	}
-
-	if (text.includes("weather") || text.includes("rain")) {
-		return "weather";
-	}
-
-	if (text.includes("safety") || text.includes("emergency")) {
-		return "safety";
-	}
-
-	if (text.includes("pack")) {
-		return "packing";
-	}
-
-	return "schedule";
-};
-
-const getBookingType = (item: string) => {
-	const text = item.toLowerCase();
-
-	if (text.includes("flight")) {
-		return "flight";
-	}
-
-	if (
-		text.includes("hotel") ||
-		text.includes("stay") ||
-		text.includes("accommodation")
-	) {
-		return "hotel";
-	}
-
-	if (
-		text.includes("tour") ||
-		text.includes("activity") ||
-		text.includes("ticket")
-	) {
-		return "activity";
-	}
-
-	if (
-		text.includes("ferry") ||
-		text.includes("transfer") ||
-		text.includes("transport")
-	) {
-		return "transport";
-	}
-
-	return "other";
-};
-
-const getRiskType = (item: string) => {
-	const text = item.toLowerCase();
-
-	if (text.includes("weather") || text.includes("rain")) {
-		return "weather";
-	}
-
-	if (text.includes("budget") || text.includes("cost")) {
-		return "budget";
-	}
-
-	if (
-		text.includes("booking") ||
-		text.includes("hotel") ||
-		text.includes("availability")
-	) {
-		return "booking";
-	}
-
-	if (
-		text.includes("flight") ||
-		text.includes("ferry") ||
-		text.includes("transfer") ||
-		text.includes("transport")
-	) {
-		return "transport";
-	}
-
-	if (text.includes("tired") || text.includes("fatigue")) {
-		return "fatigue";
-	}
-
-	if (text.includes("safety")) {
-		return "safety";
-	}
-
-	return "unknown";
-};
-
-const getRiskSeverity = (item: string) => {
-	const text = item.toLowerCase();
-
-	if (text.includes("critical") || text.includes("major")) {
-		return "critical";
-	}
-
-	if (text.includes("high")) {
-		return "high";
-	}
-
-	if (text.includes("low")) {
-		return "low";
-	}
-
-	return "medium";
-};
-
 const matchesTripFilters = ({
+	effectiveStatus,
 	filters,
-	isCompleted,
 	isFavorite,
-	isPlanning,
-	isUpcoming,
-	needsReadiness,
-	tripStatus,
 }: {
+	effectiveStatus: EffectiveTripStatus;
 	filters: Set<string>;
-	isCompleted: boolean;
 	isFavorite: boolean;
-	isPlanning: boolean;
-	isUpcoming: boolean;
-	needsReadiness: boolean;
-	tripStatus: TripStatus;
 }) =>
 	[
-		filters.has("planning") && isPlanning,
-		filters.has("traveling") && tripStatus === "traveling",
-		filters.has("needsReadiness") && needsReadiness,
+		filters.has("planning") && effectiveStatus === "planning",
+		filters.has("traveling") && effectiveStatus === "traveling",
 		filters.has("favorites") && isFavorite,
-		filters.has("upcoming") && isUpcoming,
-		filters.has("completed") && isCompleted,
-		filters.has(getTripStatusFilter(tripStatus)),
+		filters.has("upcoming") &&
+			(effectiveStatus === "planning" || effectiveStatus === "traveling"),
+		filters.has("completed") &&
+			(effectiveStatus === "completed" || effectiveStatus === "archived"),
+		filters.has(getTripStatusFilter(effectiveStatus)),
 	].some(Boolean);
 
 export const listTrips = query({
@@ -534,7 +330,7 @@ export const searchTrips = query({
 		const identity = await getRequiredIdentity(ctx);
 		const filters = new Set(args.filters ?? []);
 		const search = normalizeSearchText(args.search ?? "");
-		const today = getDateKeyInTimeZone(Date.now(), TRIP_TIME_ZONE);
+		const today = getTripTodayKey();
 		const cursorOffset = Number(args.paginationOpts.cursor ?? 0);
 		const startIndex = Number.isFinite(cursorOffset)
 			? Math.max(0, cursorOffset)
@@ -545,53 +341,62 @@ export const searchTrips = query({
 			.withIndex("by_owner", (q) => q.eq("ownerId", identity.subject))
 			.order("desc")
 			.collect();
-		const filteredTrips = trips.filter((trip) => {
+		const wantsNeedsReadiness = filters.has("needsReadiness");
+		const matchesState = (trip: Doc<"trips">) =>
+			matchesTripFilters({
+				effectiveStatus: getEffectiveTripStatus(trip, today),
+				filters,
+				isFavorite: trip.isFavorite ?? false,
+			});
+		const candidates = trips.filter((trip) => {
 			if (trip.isDemo) {
 				return false;
 			}
 
-			if (filters.size > 0) {
-				const isPlanning = TRIP_PLANNING_STATUSES.includes(
-					trip.status as never
-				);
-				const needsReadiness = trip.readinessScore < 90;
-				const isUpcoming =
-					!TRIP_COMPLETED_STATUSES.includes(trip.status as never) &&
-					(!trip.endDate || trip.endDate >= today);
-				const isCompleted =
-					TRIP_COMPLETED_STATUSES.includes(trip.status as never) ||
-					(!!trip.endDate && trip.endDate < today);
-				const isFavorite = trip.isFavorite ?? false;
-				if (
-					!matchesTripFilters({
-						filters,
-						isCompleted,
-						isFavorite,
-						isPlanning,
-						isUpcoming,
-						needsReadiness,
-						tripStatus: trip.status as TripStatus,
-					})
-				) {
-					return false;
-				}
+			if (filters.size > 0 && !wantsNeedsReadiness && !matchesState(trip)) {
+				return false;
 			}
 
-			if (!search) {
-				return true;
-			}
-
-			return getTripSearchText(trip).includes(search);
+			return !search || getTripSearchText(trip).includes(search);
 		});
-		const page = filteredTrips.slice(startIndex, startIndex + pageSize);
-		const pageWithReadiness = await Promise.all(
-			page.map((trip) => withReadinessSnapshot(ctx, trip))
+		if (!wantsNeedsReadiness) {
+			// Snapshots read every readiness row of a trip, so build them for the
+			// requested page only.
+			const pageTrips = candidates.slice(startIndex, startIndex + pageSize);
+			const page = await Promise.all(
+				pageTrips.map((trip) => withReadinessSnapshot(ctx, trip, today))
+			);
+			const nextIndex = startIndex + page.length;
+
+			return {
+				continueCursor: nextIndex.toString(),
+				isDone: nextIndex >= candidates.length,
+				page,
+			};
+		}
+
+		// The readiness filter needs the live snapshot of every candidate, the
+		// same numbers the trip list and dashboard show, not the stored score.
+		const snapshots = (
+			await Promise.all(
+				candidates.map((trip) => withReadinessSnapshot(ctx, trip, today))
+			)
+		).filter(
+			(snapshot) =>
+				matchesState(snapshot) ||
+				(snapshot.readinessScore < NEEDS_READINESS_BELOW &&
+					snapshot.effectiveStatus !== "completed" &&
+					snapshot.effectiveStatus !== "archived")
 		);
-		const nextIndex = startIndex + page.length;
+		const pageWithReadiness = snapshots.slice(
+			startIndex,
+			startIndex + pageSize
+		);
+		const nextIndex = startIndex + pageWithReadiness.length;
 
 		return {
 			continueCursor: nextIndex.toString(),
-			isDone: nextIndex >= filteredTrips.length,
+			isDone: nextIndex >= snapshots.length,
 			page: pageWithReadiness,
 		};
 	},
@@ -620,24 +425,30 @@ export const getTripBudget = query({
 	handler: async (ctx, args) => {
 		const identity = await getRequiredIdentity(ctx);
 		const trip = await ensureTripAccess(ctx, args.tripId, identity.subject);
-		const [bookings, expenses, itineraryItems] = await Promise.all([
-			ctx.db
-				.query("bookings")
-				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
-				.collect(),
-			ctx.db
-				.query("expenses")
-				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
-				.collect(),
-			ctx.db
-				.query("itineraryItems")
-				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
-				.collect(),
-		]);
+		const [bookings, expenses, itineraryItems, itineraryDays] =
+			await Promise.all([
+				ctx.db
+					.query("bookings")
+					.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+					.collect(),
+				ctx.db
+					.query("expenses")
+					.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+					.collect(),
+				ctx.db
+					.query("itineraryItems")
+					.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+					.collect(),
+				ctx.db
+					.query("itineraryDays")
+					.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+					.collect(),
+			]);
 
 		return {
 			bookings,
 			expenses,
+			itineraryDays,
 			itineraryItems,
 			trip,
 		};
@@ -653,9 +464,11 @@ export const updateTripBudget = mutation({
 	handler: async (ctx, args) => {
 		const identity = await getRequiredIdentity(ctx);
 		await ensureTripAccess(ctx, args.tripId, identity.subject);
+		assertValidBudget(args.budgetAmount);
 		await ctx.db.patch(args.tripId, {
 			budgetAmount: args.budgetAmount,
-			budgetCurrency: args.budgetCurrency ?? "PHP",
+			budgetCurrency:
+				(args.budgetCurrency ?? "PHP").trim().toUpperCase() || "PHP",
 			updatedAt: Date.now(),
 		});
 
@@ -683,8 +496,9 @@ export const updateTripProfile = mutation({
 	handler: async (ctx, args) => {
 		const identity = await getRequiredIdentity(ctx);
 		const trip = await ensureTripAccess(ctx, args.tripId, identity.subject);
-		const title = args.title?.trim();
-		const destination = args.destination?.trim();
+		const title = args.title === undefined ? undefined : cleanText(args.title);
+		const destination =
+			args.destination === undefined ? undefined : cleanText(args.destination);
 
 		if (args.title !== undefined && !title) {
 			throw new ConvexError("INVALID_TRIP_TITLE");
@@ -699,7 +513,18 @@ export const updateTripProfile = mutation({
 			args.endDate ?? trip.endDate
 		);
 
-		await ctx.db.patch(args.tripId, {
+		if (args.startDate !== undefined || args.endDate !== undefined) {
+			assertRealDateRange(
+				args.startDate ?? trip.startDate,
+				args.endDate ?? trip.endDate
+			);
+		}
+
+		assertValidTravelerCount(args.travelerCount);
+		assertValidBudget(args.budgetAmount);
+
+		// Convex removes a field patched with `undefined`, so only send provided keys.
+		const patch: Record<string, unknown> = {
 			arrivalTime: args.arrivalTime,
 			budgetAmount: args.budgetAmount,
 			budgetCurrency: args.budgetCurrency,
@@ -713,8 +538,22 @@ export const updateTripProfile = mutation({
 			title,
 			travelStyle: args.travelStyle,
 			travelerCount: args.travelerCount,
-			updatedAt: Date.now(),
-		});
+		};
+		for (const key of Object.keys(patch)) {
+			if (patch[key] === undefined) {
+				delete patch[key];
+			}
+		}
+
+		await ctx.db.patch(args.tripId, { ...patch, updatedAt: Date.now() });
+
+		if (args.startDate !== undefined || args.endDate !== undefined) {
+			await syncItineraryDaysToTripRange(ctx, args.tripId, {
+				endDate: args.endDate ?? trip.endDate,
+				previousStartDate: trip.startDate,
+				startDate: args.startDate ?? trip.startDate,
+			});
+		}
 
 		return ctx.db.get(args.tripId);
 	},
@@ -770,6 +609,172 @@ export const archiveTrip = mutation({
 		});
 
 		return ctx.db.get(args.tripId);
+	},
+});
+
+export const restoreTrip = mutation({
+	args: {
+		tripId: v.id("trips"),
+	},
+	handler: async (ctx, args) => {
+		const identity = await getRequiredIdentity(ctx);
+		const trip = await ensureTripAccess(ctx, args.tripId, identity.subject);
+
+		if (trip.status !== "archived") {
+			return trip;
+		}
+
+		// Back to planning; the date rule derives traveling/completed from there.
+		await ctx.db.patch(args.tripId, {
+			status: "planning",
+			updatedAt: Date.now(),
+		});
+
+		return ctx.db.get(args.tripId);
+	},
+});
+
+export const duplicateTrip = mutation({
+	args: {
+		startDate: v.optional(v.string()),
+		title: v.optional(v.string()),
+		tripId: v.id("trips"),
+	},
+	handler: async (ctx, args) => {
+		const identity = await getRequiredIdentity(ctx);
+		const trip = await ensureTripAccess(ctx, args.tripId, identity.subject);
+		const shift = args.startDate;
+		let startDate = trip.startDate;
+		let endDate = trip.endDate;
+
+		if (shift !== undefined) {
+			const length = getTripDayCount(trip.startDate, trip.endDate) ?? 1;
+			assertRealDateRange(shift, addDaysToKey(shift, length - 1));
+			startDate = shift;
+			endDate = addDaysToKey(shift, length - 1);
+		}
+
+		const now = Date.now();
+		const newTripId = await ctx.db.insert("trips", {
+			arrivalTime: trip.arrivalTime,
+			budgetAmount: trip.budgetAmount,
+			budgetCurrency: trip.budgetCurrency,
+			coverImageUrl: trip.coverImageUrl,
+			createdAt: now,
+			departureTime: trip.departureTime,
+			destination: trip.destination,
+			endDate,
+			groupType: trip.groupType,
+			isDemo: false,
+			ownerId: identity.subject,
+			pace: trip.pace,
+			readinessScore: 0,
+			startDate,
+			status: "planning",
+			summary: trip.summary,
+			title: cleanText(args.title ?? "") || `${trip.title} (copy)`,
+			travelStyle: trip.travelStyle,
+			travelerCount: trip.travelerCount,
+			updatedAt: now,
+		});
+		await syncItineraryDaysToTripRange(ctx, newTripId, { endDate, startDate });
+		const newTrip = await ctx.db.get(newTripId);
+
+		if (newTrip) {
+			await seedBaselineReadinessItems(ctx, newTrip);
+		}
+
+		const [sourceDays, sourceItems, sourcePlaces, newDays] = await Promise.all([
+			ctx.db
+				.query("itineraryDays")
+				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+				.collect(),
+			ctx.db
+				.query("itineraryItems")
+				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+				.collect(),
+			ctx.db
+				.query("savedPlaces")
+				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+				.collect(),
+			ctx.db
+				.query("itineraryDays")
+				.withIndex("by_trip", (q) => q.eq("tripId", newTripId))
+				.collect(),
+		]);
+		const newDayByNumber = new Map(newDays.map((day) => [day.dayNumber, day]));
+		const dayIdMap = new Map<Id<"itineraryDays">, Id<"itineraryDays">>();
+
+		for (const sourceDay of sourceDays) {
+			const target = newDayByNumber.get(sourceDay.dayNumber);
+
+			if (!target) {
+				continue;
+			}
+
+			dayIdMap.set(sourceDay._id, target._id);
+			await ctx.db.patch(target._id, {
+				estimatedCost: sourceDay.estimatedCost,
+				pace: sourceDay.pace,
+				summary: sourceDay.summary,
+				theme: sourceDay.theme,
+				title: sourceDay.title,
+				weatherNote: sourceDay.weatherNote,
+			});
+		}
+
+		for (const item of sourceItems) {
+			const dayId = dayIdMap.get(item.dayId);
+
+			if (!dayId) {
+				continue;
+			}
+
+			await ctx.db.insert("itineraryItems", {
+				address: item.address,
+				aiReason: item.aiReason,
+				category: item.category,
+				dayId,
+				description: item.description,
+				durationMinutes: item.durationMinutes,
+				endTime: item.endTime,
+				estimatedCost: item.estimatedCost,
+				latitude: item.latitude,
+				locationName: item.locationName,
+				longitude: item.longitude,
+				priority: item.priority,
+				startTime: item.startTime,
+				status: "planned",
+				title: item.title,
+				tripId: newTripId,
+			});
+		}
+
+		for (const place of sourcePlaces) {
+			const {
+				_creationTime,
+				_id,
+				assignedDayId,
+				tripId: _tripId,
+				...rest
+			} = place;
+
+			await ctx.db.insert("savedPlaces", {
+				...rest,
+				assignedDayId: assignedDayId ? dayIdMap.get(assignedDayId) : undefined,
+				createdAt: now,
+				tripId: newTripId,
+				updatedAt: now,
+			});
+		}
+
+		const created = await ctx.db.get(newTripId);
+
+		if (created) {
+			await seedBaselineReadinessItems(ctx, created);
+		}
+
+		return { tripId: newTripId };
 	},
 });
 
@@ -1107,15 +1112,20 @@ export const createTrip = mutation({
 	handler: async (ctx, args) => {
 		const identity = await getRequiredIdentity(ctx);
 		await ensureUserRecord(ctx);
-		assertValidDateRange(args.startDate, args.endDate);
+		assertRealDateRange(args.startDate, args.endDate);
+		assertValidTravelerCount(args.travelerCount);
+		assertValidBudget(args.budgetAmount);
+		const destination = cleanText(args.destination);
+
+		if (!destination) {
+			throw new ConvexError("INVALID_TRIP_DESTINATION");
+		}
 
 		const now = Date.now();
 		const tripId = await ctx.db.insert("trips", {
 			ownerId: identity.subject,
-			title:
-				args.title ||
-				(args.destination ? `${args.destination} Trip` : "New trip"),
-			destination: args.destination,
+			title: cleanText(args.title ?? "") || `${destination} Trip`,
+			destination,
 			startDate: args.startDate,
 			endDate: args.endDate,
 			arrivalTime: args.arrivalTime,
@@ -1129,11 +1139,21 @@ export const createTrip = mutation({
 			travelerCount: args.travelerCount,
 			status: "planning",
 			readinessScore: 0,
-			summary: args.summary ?? "Manual trip planning started in Viya.",
+			summary: args.summary ?? "",
 			isDemo: false,
 			createdAt: now,
 			updatedAt: now,
 		});
+
+		await syncItineraryDaysToTripRange(ctx, tripId, {
+			endDate: args.endDate,
+			startDate: args.startDate,
+		});
+		const created = await ctx.db.get(tripId);
+
+		if (created) {
+			await seedBaselineReadinessItems(ctx, created);
+		}
 
 		return { tripId };
 	},
@@ -1159,7 +1179,10 @@ export const createTripFromBlueprint = mutation({
 		await ensureUserRecord(ctx);
 
 		const now = Date.now();
-		const { endDate, startDate } = getDateRangeFromItems(args.dates);
+		const { endDate, isPlaceholder, startDate } = resolveBlueprintDateRange(
+			args.dates,
+			getTripTodayKey(now)
+		);
 		const budgetAmount = getBudgetAmountFromItems(args.budgetAllocation);
 		const travelers = getLimitedItems(args.travelers ?? []);
 		const paceItems = getLimitedItems(args.pace ?? []);
@@ -1176,8 +1199,8 @@ export const createTripFromBlueprint = mutation({
 			0,
 			maxBlueprintItems
 		);
-		const tripPace = getPaceFromItems([...paceItems, ...args.itineraryStyle]);
-		const groupType = getGroupTypeFromItems(travelers);
+		const tripPace = getBlueprintPace([...paceItems, ...args.itineraryStyle]);
+		const groupType = getBlueprintGroupType(travelers);
 		const travelerSummary = joinItems(travelers, "Solo traveler.");
 		const tripId = await ctx.db.insert("trips", {
 			arrivalTime: undefined,
@@ -1195,26 +1218,32 @@ export const createTripFromBlueprint = mutation({
 			readinessScore: 0,
 			startDate,
 			status: "planning",
-			summary: `${routeSummary}. ${travelerSummary}. ${itinerarySummary}`,
-			title: args.title,
-			travelStyle: getTravelStyleFromItems([
+			summary: `${routeSummary}. ${travelerSummary}. ${itinerarySummary}${isPlaceholder ? ` ${PLACEHOLDER_TRIP_NOTE}` : ""}`,
+			title: cleanText(args.title) || `${cleanText(args.destination)} Trip`,
+			travelStyle: getBlueprintTravelStyle([
 				...args.itineraryStyle,
 				...paceItems,
 			]),
 			updatedAt: now,
 		});
 
-		await ctx.db.insert("itineraryDays", {
-			date: startDate,
-			dayNumber: 1,
-			estimatedCost: budgetAmount ?? 0,
-			pace: getItineraryPaceFromTripPace(tripPace),
-			summary: routeSummary,
-			theme: "Planning blueprint",
-			title: "Route and planning outline",
-			tripId,
-			weatherNote: "Confirm forecast closer to departure.",
-		});
+		await syncItineraryDaysToTripRange(ctx, tripId, { endDate, startDate });
+		const firstDay = await ctx.db
+			.query("itineraryDays")
+			.withIndex("by_trip", (q) => q.eq("tripId", tripId))
+			.collect()
+			.then((days) => days.find((day) => day.dayNumber === 1));
+
+		if (firstDay) {
+			await ctx.db.patch(firstDay._id, {
+				estimatedCost: 0,
+				pace: getItineraryPaceFromTripPace(tripPace),
+				summary: routeSummary,
+				theme: "Planning blueprint",
+				title: "Route and planning outline",
+				weatherNote: "Confirm forecast closer to departure.",
+			});
+		}
 
 		for (const target of bookingTargets) {
 			await ctx.db.insert("bookings", {
@@ -1225,7 +1254,7 @@ export const createTripFromBlueprint = mutation({
 				status: "target",
 				title: target,
 				tripId,
-				type: getBookingType(target),
+				type: getBlueprintBookingType(target),
 				updatedAt: now,
 			});
 		}
@@ -1233,7 +1262,7 @@ export const createTripFromBlueprint = mutation({
 		for (const item of readinessItems) {
 			await ctx.db.insert("readinessItems", {
 				aiReason: "Created from the agreed Trip Blueprint.",
-				category: getReadinessCategory(item),
+				category: getBlueprintReadinessCategory(item),
 				description: item,
 				dueDate: startDate,
 				priority: "medium",
@@ -1249,13 +1278,20 @@ export const createTripFromBlueprint = mutation({
 				aiReason: "Identified during planning agreement.",
 				createdAt: now,
 				message: risk,
-				severity: getRiskSeverity(risk),
+				severity: getBlueprintRiskSeverity(risk),
 				status: "open",
 				suggestedAction: "Review before booking externally.",
 				title: risk,
 				tripId,
-				type: getRiskType(risk),
+				type: getBlueprintRiskType(risk),
 			});
+		}
+
+		const created = await ctx.db.get(tripId);
+
+		if (created) {
+			await seedBaselineReadinessItems(ctx, created);
+			await updateTripReadinessScore(ctx, tripId);
 		}
 
 		return { tripId };

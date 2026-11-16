@@ -60,8 +60,9 @@ export function TripSyncReviewSheet({
 				{extraction ? (
 					<>
 						<AppText tone="secondary" variant="subhead">
-							Viya read this file and found these updates. Nothing is saved
-							until you apply them.
+							{extraction.source === "fallback"
+								? "Viya couldn't read this file, so this is a generic template. Check it carefully. Nothing is saved until you apply it."
+								: "Viya read this file and found these updates. Nothing is saved until you apply them."}
 						</AppText>
 						<ListGroup header="File">
 							<ListRow

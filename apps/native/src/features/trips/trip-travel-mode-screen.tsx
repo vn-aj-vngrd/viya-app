@@ -6,6 +6,7 @@ import {
 	getBudgetWalletSummary,
 	getItineraryNowNext,
 	getTripCountdown,
+	getTripTodayKey,
 	isBookingSecured,
 } from "@viya-app/domain";
 import { useMutation, useQuery } from "convex/react";
@@ -44,7 +45,6 @@ import {
 	formatTime,
 	formatTimeRange,
 	formatTripCountdown,
-	toLocalDateKey,
 	toLocalTimeKey,
 } from "@/src/lib/format";
 import {
@@ -199,7 +199,7 @@ const getNowAndNext = ({
 		items,
 		maxUpcoming: MAX_UPCOMING_STOPS,
 		nowTime: toLocalTimeKey(),
-		todayKey: toLocalDateKey(),
+		todayKey: getTripTodayKey(),
 	});
 	const toEntry = (item: Doc<"itineraryItems"> | null) =>
 		item ? (entryByItemId.get(item._id) ?? null) : null;
@@ -495,7 +495,7 @@ export function TripTravelModeScreen() {
 			budgetCurrency: workspace.trip.budgetCurrency,
 			expenses: workspace.expenses,
 			itineraryItems: workspace.itineraryItems,
-			remainingTripDays: getBudgetDayCount(workspace.trip, toLocalDateKey()),
+			remainingTripDays: getBudgetDayCount(workspace.trip, getTripTodayKey()),
 		});
 	}, [workspace]);
 
@@ -540,7 +540,7 @@ export function TripTravelModeScreen() {
 	}
 
 	const currency = workspace.trip.budgetCurrency ?? "PHP";
-	const today = toLocalDateKey();
+	const today = getTripTodayKey();
 	const {
 		hero: now,
 		heroKind,
@@ -694,7 +694,7 @@ export function TripTravelModeScreen() {
 					: {}),
 				category: quickExpenseContext.category,
 				currency,
-				spentAt: toLocalDateKey(),
+				spentAt: getTripTodayKey(),
 				title,
 				tripId,
 			});
@@ -714,7 +714,7 @@ export function TripTravelModeScreen() {
 	const handleQuickNote = async () => {
 		const body = noteForm.body.trim();
 		const title =
-			noteForm.title.trim() || `Note · ${formatDay(toLocalDateKey())}`;
+			noteForm.title.trim() || `Note · ${formatDay(getTripTodayKey())}`;
 
 		if (!body) {
 			setNoteError("Write the note first.");

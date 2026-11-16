@@ -56,6 +56,8 @@ export default function TripsScreen() {
 	const entrance = useListEntrance();
 	const toggleFavorite = useMutation(api.trips.toggleTripFavorite);
 	const archiveTrip = useMutation(api.trips.archiveTrip);
+	const restoreTrip = useMutation(api.trips.restoreTrip);
+	const duplicateTrip = useMutation(api.trips.duplicateTrip);
 	const deleteTrip = useMutation(api.trips.deleteTrip);
 	const [search, setSearch] = useState("");
 	const [scope, setScope] = useState<Scope>("all");
@@ -108,6 +110,23 @@ export default function TripsScreen() {
 			showToast({ message: "Trip archived.", tone: "success" });
 		} catch {
 			showToast({ message: "Could not archive trip.", tone: "error" });
+		}
+	};
+	const handleRestore = async (trip: Trip) => {
+		try {
+			await restoreTrip({ tripId: trip._id });
+			showToast({ message: "Trip restored.", tone: "success" });
+		} catch {
+			showToast({ message: "Could not restore trip.", tone: "error" });
+		}
+	};
+	const handleDuplicate = async (trip: Trip) => {
+		try {
+			const { tripId } = await duplicateTrip({ tripId: trip._id });
+			showToast({ message: "Trip duplicated.", tone: "success" });
+			router.push(VIYA_ROUTES.tripDashboard(tripId));
+		} catch {
+			showToast({ message: "Could not duplicate trip.", tone: "error" });
 		}
 	};
 	const handleDelete = async (trip: Trip) => {
@@ -200,7 +219,9 @@ export default function TripsScreen() {
 								key={trip._id}
 								onArchive={handleArchive}
 								onDelete={handleDelete}
+								onDuplicate={handleDuplicate}
 								onFavorite={handleFavorite}
+								onRestore={handleRestore}
 								replacementCoverImageUrl={
 									replacementCoverImageUrls[trip.destination]
 								}

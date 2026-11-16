@@ -9,6 +9,7 @@ import {
 	getTravelerCount,
 	getTripCountdown,
 	getTripDayCount,
+	getTripTodayKey,
 	getVaultCounts,
 	READINESS_CATEGORY_LABELS,
 	sortReadinessItemsForReview,
@@ -25,7 +26,6 @@ import {
 	formatShortDate,
 	formatTripCountdown,
 	formatTripRange,
-	toLocalDateKey,
 	toLocalTimeKey,
 } from "@/src/lib/format";
 
@@ -100,7 +100,10 @@ const phaseStatus = {
 	upcoming: "planning",
 } as const satisfies Record<TripPhase, string>;
 
+const DEPARTURE_SOON_DAYS = 7;
+
 const getNextAction = ({
+	budgetAlert,
 	countdown,
 	hasVault,
 	nextToBook,
@@ -110,6 +113,7 @@ const getNextAction = ({
 	trip,
 	tripId,
 }: {
+	budgetAlert: ReturnType<typeof getBudgetWalletSummary>["alert"];
 	countdown: TripCountdown;
 	hasVault: boolean;
 	nextToBook: Doc<"bookings"> | null;
@@ -143,6 +147,40 @@ const getNextAction = ({
 			href: VIYA_ROUTES.tripRisks(tripId),
 			icon: "warning-outline",
 			title: topUrgentRisk.title,
+		};
+	}
+
+	if (budgetAlert.level === "over") {
+		return {
+			description: `Spent and planned costs are ${Math.round(budgetAlert.ratio * 100)}% of your budget.`,
+			href: VIYA_ROUTES.tripBudget(tripId),
+			icon: "wallet-outline",
+			title: "Review your budget",
+		};
+	}
+
+	if (
+		countdown.phase === "upcoming" &&
+		countdown.daysUntil !== null &&
+		countdown.daysUntil <= DEPARTURE_SOON_DAYS &&
+		readinessProgress.open > 0
+	) {
+		const days = countdown.daysUntil;
+
+		return {
+			description: `${formatCount(days, "day")} to go · ${readinessProgress.open} checklist ${readinessProgress.open === 1 ? "item" : "items"} left${readinessProgress.overdue > 0 ? `, ${readinessProgress.overdue} overdue` : ""}`,
+			href: VIYA_ROUTES.tripReadiness(tripId),
+			icon: "alarm-outline",
+			title: "Finish your prep",
+		};
+	}
+
+	if (budgetAlert.level === "near") {
+		return {
+			description: `Spent and planned costs are ${Math.round(budgetAlert.ratio * 100)}% of your budget.`,
+			href: VIYA_ROUTES.tripBudget(tripId),
+			icon: "wallet-outline",
+			title: "Budget is nearly used",
 		};
 	}
 
@@ -237,7 +275,7 @@ export const createTripDashboardModel = ({
 	const sortedReadinessItems = sortReadinessItemsForReview(
 		workspace.readinessItems
 	);
-	const todayKey = toLocalDateKey();
+	const todayKey = getTripTodayKey();
 	const readinessProgress = getReadinessProgress(
 		sortedReadinessItems,
 		todayKey
@@ -257,6 +295,7 @@ export const createTripDashboardModel = ({
 		budgetAmount: trip.budgetAmount,
 		budgetCurrency: currency,
 		expenses: workspace.expenses,
+		itineraryDays: workspace.itineraryDays,
 		itineraryItems: workspace.itineraryItems,
 		remainingTripDays: getBudgetDayCount(trip, todayKey),
 	});
@@ -299,6 +338,7 @@ export const createTripDashboardModel = ({
 			tripDays: getTripDayCount(trip.startDate, trip.endDate),
 		},
 		nextAction: getNextAction({
+			budgetAlert: budgetWallet.alert,
 			countdown,
 			hasVault: vaultCounts.files > 0,
 			nextToBook: bookingCounts.nextToBook,

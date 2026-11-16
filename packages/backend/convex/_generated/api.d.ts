@@ -9,6 +9,8 @@
  */
 
 import type * as agent from "../agent.js";
+import type * as ai_chatTools from "../ai/chatTools.js";
+import type * as ai_chatToolsInternals from "../ai/chatToolsInternals.js";
 import type * as ai_fallbacks from "../ai/fallbacks.js";
 import type * as ai_features from "../ai/features.js";
 import type * as ai_prompts from "../ai/prompts.js";
@@ -22,6 +24,7 @@ import type * as companions from "../companions.js";
 import type * as healthCheck from "../healthCheck.js";
 import type * as itinerary from "../itinerary.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_tripContext from "../lib/tripContext.js";
 import type * as lib_tripLinks from "../lib/tripLinks.js";
 import type * as locations from "../locations.js";
 import type * as moments from "../moments.js";
@@ -45,6 +48,8 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   agent: typeof agent;
+  "ai/chatTools": typeof ai_chatTools;
+  "ai/chatToolsInternals": typeof ai_chatToolsInternals;
   "ai/fallbacks": typeof ai_fallbacks;
   "ai/features": typeof ai_features;
   "ai/prompts": typeof ai_prompts;
@@ -58,6 +63,7 @@ declare const fullApi: ApiFromModules<{
   healthCheck: typeof healthCheck;
   itinerary: typeof itinerary;
   "lib/auth": typeof lib_auth;
+  "lib/tripContext": typeof lib_tripContext;
   "lib/tripLinks": typeof lib_tripLinks;
   locations: typeof locations;
   moments: typeof moments;

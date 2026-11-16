@@ -7,6 +7,7 @@ import {
 	getCompanionCounts,
 	getDateKeyInTimeZone,
 	getDayOffset,
+	getEffectiveTripStatus,
 	getItineraryNowNext,
 	getPlaceCounts,
 	getReadinessProgress,
@@ -90,7 +91,8 @@ describe("readiness", () => {
 			highOpen: 1,
 			open: 2,
 			overdue: 1,
-			percent: 50,
+			// weights: high 3, overdue low 1.5, done 1 + 1
+			percent: 31,
 		});
 		expect(getReadinessProgress([], "2026-11-15").percent).toBeNull();
 	});
@@ -229,5 +231,56 @@ describe("getItineraryNowNext", () => {
 			todayKey: "2026-11-21",
 		});
 		expect(idle.now).toBeNull();
+	});
+});
+
+describe("effective trip status", () => {
+	const dated = { endDate: "2026-11-25", startDate: "2026-11-21" };
+
+	it("derives planning, traveling and completed from dates", () => {
+		expect(
+			getEffectiveTripStatus({ ...dated, status: "planning" }, "2026-11-15")
+		).toBe("planning");
+		expect(
+			getEffectiveTripStatus({ ...dated, status: "planning" }, "2026-11-21")
+		).toBe("traveling");
+		expect(
+			getEffectiveTripStatus({ ...dated, status: "planning" }, "2026-11-25")
+		).toBe("traveling");
+		expect(
+			getEffectiveTripStatus({ ...dated, status: "planning" }, "2026-11-26")
+		).toBe("completed");
+	});
+
+	it("keeps archived and manually completed trips, and undated trips planning", () => {
+		expect(
+			getEffectiveTripStatus({ ...dated, status: "archived" }, "2026-11-23")
+		).toBe("archived");
+		expect(
+			getEffectiveTripStatus({ ...dated, status: "completed" }, "2026-11-15")
+		).toBe("completed");
+		expect(
+			getEffectiveTripStatus(
+				{ endDate: "", startDate: "", status: "planning" },
+				"2026-11-15"
+			)
+		).toBe("planning");
+	});
+});
+
+describe("traveler count fallback", () => {
+	it("ignores invalid stored counts", () => {
+		expect(
+			getTravelerCount({ groupType: "friends", travelerCount: 0 }, [
+				{ role: "traveler" },
+				{ role: "traveler" },
+			])
+		).toBe(2);
+		expect(
+			getTravelerCount({ groupType: "solo", travelerCount: Number.NaN }, [])
+		).toBe(1);
+		expect(
+			getTravelerCount({ groupType: "friends", travelerCount: 4 }, [])
+		).toBe(4);
 	});
 });

@@ -1,3 +1,5 @@
+import { compareTimesOfDay } from "./trip-schedule";
+
 interface TripItineraryTimelineSortInput {
 	dayId: string;
 	startTime: string;
@@ -27,7 +29,7 @@ export const sortTripItineraryItemsForTimeline = <
 		}
 
 		return (
-			firstItem.startTime.localeCompare(secondItem.startTime) ||
+			compareTimesOfDay(firstItem.startTime, secondItem.startTime) ||
 			firstItem.title.localeCompare(secondItem.title)
 		);
 	});

@@ -1,13 +1,11 @@
 import {
 	INCOMPLETE_READINESS_STATUSES,
 	READINESS_CATEGORIES,
-	READINESS_PRIORITY_PENALTY,
 } from "./constants";
+import { getReadinessPercent, getTripTodayKey } from "./trip-metrics";
 import type { ReadinessCategory, ReadinessItem, ReadinessScore } from "./types";
 
 const incompleteStatuses = new Set<string>(INCOMPLETE_READINESS_STATUSES);
-const ACTIVE_GAP_SCORE_WEIGHT = 0.25;
-const UNCOVERED_CATEGORY_SCORE_PENALTY = 8 / 3;
 const readinessReviewStatusPriority: Record<string, number> = {
 	blocked: 0,
 	inProgress: 1,
@@ -36,14 +34,6 @@ export const REQUIRED_READINESS_CATEGORIES = [
 	"safety",
 	"backupPlan",
 ] as const satisfies readonly ReadinessCategory[];
-
-const getItemPenalty = (item: ReadinessItem): number => {
-	if (!incompleteStatuses.has(item.status)) {
-		return 0;
-	}
-
-	return READINESS_PRIORITY_PENALTY[item.priority];
-};
 
 const getReadinessReviewStatusPriority = (status: string) =>
 	readinessReviewStatusPriority[status] ?? 5;
@@ -88,6 +78,10 @@ const summarizeScore = (
 	overallScore: number,
 	highPriorityGapCount: number
 ): string => {
+	if (overallScore >= 100) {
+		return "100% ready. Everything is done.";
+	}
+
 	if (overallScore >= 90) {
 		return `${overallScore}% ready. Final checks are in good shape.`;
 	}
@@ -99,8 +93,14 @@ const summarizeScore = (
 	return `${overallScore}% ready. Fix ${highPriorityGapCount} high-priority gaps before departure.`;
 };
 
+/**
+ * Readiness score for a trip. Uses the same weighted formula as the dashboard
+ * percent (see getReadinessPercent), so the stored trip score, the list filter
+ * and the readiness screen always agree, and a trip can reach 100.
+ */
 export const calculateReadinessScore = (
-	items: ReadinessItem[]
+	items: ReadinessItem[],
+	todayKey: string = getTripTodayKey()
 ): ReadinessScore => {
 	if (items.length === 0) {
 		return {
@@ -115,37 +115,16 @@ export const calculateReadinessScore = (
 	}
 
 	const categoryScores = Object.fromEntries(
-		READINESS_CATEGORIES.map((category) => {
-			const categoryItems = items.filter((item) => item.category === category);
-			const penalty = categoryItems.reduce(
-				(total, item) => total + getItemPenalty(item),
-				0
-			);
-			const score =
-				categoryItems.length === 0 ? 100 : Math.max(0, 100 - penalty);
-
-			return [category, score];
-		})
+		READINESS_CATEGORIES.map((category) => [
+			category,
+			getReadinessPercent(
+				items.filter((item) => item.category === category),
+				todayKey
+			) ?? 100,
+		])
 	) as Record<ReadinessCategory, number>;
-
-	const activePenalties = items.reduce(
-		(total, item) => total + getItemPenalty(item),
-		0
-	);
-	const representedCategories = new Set(items.map((item) => item.category));
-	const uncoveredCategoryCount =
-		READINESS_CATEGORIES.length - representedCategories.size;
-	const coveragePenalty =
-		uncoveredCategoryCount * UNCOVERED_CATEGORY_SCORE_PENALTY;
-	const overallScore = Math.round(
-		Math.max(
-			0,
-			Math.min(
-				100,
-				100 - activePenalties * ACTIVE_GAP_SCORE_WEIGHT - coveragePenalty
-			)
-		)
-	);
+	// No items means nothing has been checked yet, not that the trip is ready.
+	const overallScore = getReadinessPercent(items, todayKey) ?? 0;
 	const highPriorityGapCount = items.filter(
 		(item) =>
 			incompleteStatuses.has(item.status) &&

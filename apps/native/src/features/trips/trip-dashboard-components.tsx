@@ -417,6 +417,7 @@ export function useTripHeaderActions(model: TripDashboardModel) {
 	const updateTripProfile = useMutation(api.trips.updateTripProfile);
 	const toggleTripFavorite = useMutation(api.trips.toggleTripFavorite);
 	const archiveTrip = useMutation(api.trips.archiveTrip);
+	const restoreTrip = useMutation(api.trips.restoreTrip);
 	const deleteTrip = useMutation(api.trips.deleteTrip);
 	const lastViyaPressRef = useRef(0);
 	const { trip } = model.workspace;
@@ -508,6 +509,17 @@ export function useTripHeaderActions(model: TripDashboardModel) {
 			});
 	};
 
+	const handleRestorePress = () => {
+		restoreTrip({ tripId: model.tripId })
+			.then(() => {
+				haptic("success");
+				showToast({ message: "Trip restored.", tone: "success" });
+			})
+			.catch(() => {
+				showToast({ message: "Could not restore trip.", tone: "error" });
+			});
+	};
+
 	const handleDeletePress = async () => {
 		const isConfirmed = await confirm({
 			confirmLabel: "Delete trip",
@@ -573,11 +585,10 @@ export function useTripHeaderActions(model: TripDashboardModel) {
 					title: isFavorite ? "Remove from favorites" : "Add to favorites",
 				},
 				{
-					disabled: isArchived,
-					icon: "archive-outline",
-					key: "archive",
-					onPress: handleArchivePress,
-					title: isArchived ? "Archived" : "Archive",
+					icon: isArchived ? "arrow-undo-outline" : "archive-outline",
+					key: isArchived ? "restore" : "archive",
+					onPress: isArchived ? handleRestorePress : handleArchivePress,
+					title: isArchived ? "Restore trip" : "Archive",
 				},
 				{
 					destructive: true,
@@ -1202,9 +1213,17 @@ function TripAgentDraftRow({
 			}}
 		>
 			<AppText tone="secondary" variant="footnote">
-				{tripAgentModuleLabels[draft.module]}
+				{draft.source === "fallback"
+					? `${tripAgentModuleLabels[draft.module]} · Template`
+					: tripAgentModuleLabels[draft.module]}
 			</AppText>
 			<AppText variant="callout">{draft.title}</AppText>
+			{draft.source === "fallback" ? (
+				<AppText tone="secondary" variant="footnote">
+					Template, not AI. A generic starter you should edit before relying on
+					it.
+				</AppText>
+			) : null}
 			<AppText numberOfLines={3} tone="secondary" variant="subhead">
 				{draft.rationale}
 			</AppText>
@@ -1316,7 +1335,6 @@ export function TripDraftsSheet({
 						module: config.module,
 						prompt,
 						tripId: model.tripId,
-						useFallback: true,
 					})
 				)
 			);
@@ -1325,9 +1343,9 @@ export function TripDraftsSheet({
 		} catch (error) {
 			haptic("error");
 			setAgentErrorMessage(
-				error instanceof Error
-					? error.message
-					: "Viya could not draft this trip. Try again."
+				error instanceof Error && error.message.includes("AI_NOT_CONFIGURED")
+					? "Viya's AI isn't set up on this server yet, so no draft was made."
+					: "Viya couldn't draft this trip right now. Nothing was changed. Try again."
 			);
 		} finally {
 			setIsGeneratingDrafts(false);
@@ -1338,9 +1356,9 @@ export function TripDraftsSheet({
 		setPendingDraftId(draftId);
 
 		try {
-			await applyTripAgentDraft({ draftId });
+			const applied = await applyTripAgentDraft({ draftId });
 			haptic("success");
-			setAgentMessage("Draft applied.");
+			setAgentMessage(applied?.applySummary ?? "Draft applied.");
 		} catch (error) {
 			setAgentErrorMessage(
 				error instanceof Error ? error.message : "Could not apply the draft."

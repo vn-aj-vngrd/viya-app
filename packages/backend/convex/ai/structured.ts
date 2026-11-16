@@ -7,6 +7,8 @@ interface StructuredOptions<TSchema extends z.ZodType> {
 	prompt: string;
 	schema: TSchema;
 	schemaName: string;
+	/** Rethrow model errors instead of returning the fallback. */
+	strict?: boolean;
 }
 
 export const generateStructuredObject = async <TSchema extends z.ZodType>({
@@ -15,6 +17,7 @@ export const generateStructuredObject = async <TSchema extends z.ZodType>({
 	prompt,
 	schema,
 	schemaName,
+	strict,
 }: StructuredOptions<TSchema>): Promise<z.infer<TSchema>> => {
 	try {
 		const result = await generateObject({
@@ -25,7 +28,13 @@ export const generateStructuredObject = async <TSchema extends z.ZodType>({
 		});
 
 		return result.object as z.infer<TSchema>;
-	} catch {
+	} catch (error) {
+		console.error(`Structured generation failed (${schemaName})`, error);
+
+		if (strict) {
+			throw error;
+		}
+
 		return fallback;
 	}
 };

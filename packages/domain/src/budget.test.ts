@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { getBudgetWalletSummary, sortTripExpensesForReview } from "./budget";
+import {
+	getBudgetAlert,
+	getBudgetWalletSummary,
+	sortTripExpensesForReview,
+} from "./budget";
 
 describe("budget wallet selectors", () => {
 	it("combines confirmed bookings and manual expenses", () => {
@@ -21,10 +25,11 @@ describe("budget wallet selectors", () => {
 
 		expect(summary).toMatchObject({
 			confirmedBookingCosts: 8000,
-			dailySafeSpend: 2100,
+			dailySafeSpend: 1600,
+			leftBeforePlanned: 10_500,
 			manualExpenses: 1500,
 			plannedCosts: 2500,
-			remainingAmount: 10_500,
+			remainingAmount: 8000,
 			totalTrackedSpend: 9500,
 		});
 	});
@@ -151,5 +156,115 @@ describe("budget wallet selectors", () => {
 			"newer-date",
 			"same-date-older-edit",
 		]);
+	});
+});
+
+describe("budget math guards", () => {
+	const base = {
+		budgetAmount: 10_000,
+		budgetCurrency: "PHP",
+		remainingTripDays: 2,
+	};
+
+	it("does not double count an expense linked to a booking", () => {
+		const summary = getBudgetWalletSummary({
+			...base,
+			bookings: [
+				{
+					_id: "b1",
+					cost: 5000,
+					currency: "PHP",
+					status: "confirmed",
+					type: "hotel",
+				},
+			],
+			expenses: [
+				{ amount: 4800, bookingId: "b1", category: "hotel", currency: "PHP" },
+			],
+			itineraryItems: [],
+		});
+
+		expect(summary.totalTrackedSpend).toBe(4800);
+		expect(summary.linkedBookingCount).toBe(1);
+		expect(summary.categoryBreakdown).toEqual([
+			{ amount: 4800, category: "hotel" },
+		]);
+	});
+
+	it("skips planned items that are skipped or backed by a secured booking", () => {
+		const summary = getBudgetWalletSummary({
+			...base,
+			bookings: [{ _id: "b1", cost: 3000, status: "confirmed", type: "hotel" }],
+			expenses: [],
+			itineraryItems: [
+				{ bookingId: "b1", category: "hotel", estimatedCost: 3000 },
+				{ category: "food", estimatedCost: 500, status: "skipped" },
+				{ category: "food", estimatedCost: 700 },
+			],
+		});
+
+		expect(summary.plannedCosts).toBe(700);
+		expect(summary.leftAmount).toBe(6300);
+	});
+
+	it("flags foreign currency instead of dropping it silently", () => {
+		const summary = getBudgetWalletSummary({
+			...base,
+			bookings: [],
+			expenses: [{ amount: 20, category: "food", currency: "usd" }],
+			itineraryItems: [],
+		});
+
+		expect(summary.hasForeignCurrency).toBe(true);
+		expect(summary.foreignCurrencyTotals).toEqual([
+			{ amount: 20, currency: "USD" },
+		]);
+	});
+
+	it("summarises per category and per day", () => {
+		const summary = getBudgetWalletSummary({
+			...base,
+			bookings: [],
+			expenses: [
+				{
+					amount: 400,
+					category: "food",
+					currency: "PHP",
+					spentAt: "2026-11-02",
+				},
+			],
+			itineraryDays: [
+				{ date: "2026-11-02", id: "d1" },
+				{ date: "2026-11-03", id: "d2" },
+			],
+			itineraryItems: [
+				{ category: "food", dayId: "d1", estimatedCost: 100 },
+				{ category: "activity", dayId: "d2", estimatedCost: 900 },
+			],
+		});
+
+		expect(summary.categorySummaries).toEqual([
+			{ category: "activity", planned: 900, spent: 0, total: 900 },
+			{ category: "food", planned: 100, spent: 400, total: 500 },
+		]);
+		expect(summary.daySummaries).toEqual([
+			{ date: "2026-11-02", planned: 100, spent: 400, total: 500 },
+			{ date: "2026-11-03", planned: 900, spent: 0, total: 900 },
+		]);
+	});
+
+	it("raises near and over alerts from committed spend", () => {
+		expect(getBudgetAlert(0, 500).level).toBe("none");
+		expect(getBudgetAlert(1000, 500).level).toBe("ok");
+		expect(getBudgetAlert(1000, 900).level).toBe("near");
+		expect(getBudgetAlert(1000, 1001).level).toBe("over");
+		expect(
+			getBudgetWalletSummary({
+				...base,
+				bookings: [],
+				expenses: [{ amount: 9500, category: "food" }],
+				itineraryItems: [],
+			}).alert.level
+		).toBe("near");
 	});
 });

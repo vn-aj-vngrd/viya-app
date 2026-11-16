@@ -14,9 +14,10 @@ const currentModeHistoryArgsPattern = /mode: chatMode/;
 const currentTripIdArgPattern = /tripId: currentTripId/;
 const questionMarkerEmDashPattern = /\\s\\-–—/;
 const markerLineQuestionPattern = /markerLineQuestion\?\.includes\("\?"\)/;
-const spendIntentPattern = /spendIntentPattern/;
+const spendIntentPattern = /spendIntentPattern|insert\("expenses"/;
+const loadTripContextPattern = /loadTripContext/;
+const expensesQueryPattern = /query\("expenses"\)/;
 const maybeLogTripChatExpensePattern = /maybeLogTripChatExpense/;
-const expensesContextPattern = /expenses: expenses\.map/;
 
 const readWorkspaceFile = (path: string) =>
 	readFileSync(resolve(rootPath, path), "utf8");
@@ -49,12 +50,16 @@ describe("chat history trip scoping", () => {
 		assert.match(source, currentModeHistoryArgsPattern);
 	});
 
-	it("logs clear spend messages and includes expenses in trip chat context", () => {
+	it("never writes expenses from chat text and shares the trip context loader", () => {
 		const source = readWorkspaceFile("packages/backend/convex/chat.ts");
+		const contextSource = readWorkspaceFile(
+			"packages/backend/convex/lib/tripContext.ts"
+		);
 
-		assert.match(source, spendIntentPattern);
-		assert.match(source, maybeLogTripChatExpensePattern);
-		assert.match(source, expensesContextPattern);
+		assert.doesNotMatch(source, spendIntentPattern);
+		assert.doesNotMatch(source, maybeLogTripChatExpensePattern);
+		assert.match(source, loadTripContextPattern);
+		assert.match(contextSource, expensesQueryPattern);
 	});
 
 	it("recognizes inline question labels from assistant output", () => {

@@ -1,10 +1,14 @@
 // biome-ignore-all lint/performance/noBarrelFile: This is the public package entry point.
 
+export * from "./blueprint";
 export * from "./bookings";
 export * from "./budget";
 export * from "./constants";
 export * from "./dashboard";
 export * from "./demo/palawan";
+export * from "./itinerary-validation";
+export * from "./ph-destination-suggestions";
+export * from "./ph-destinations";
 export * from "./preferences";
 export * from "./readiness";
 export * from "./schemas/budget-suggestion";
@@ -19,5 +23,7 @@ export * from "./trip-metrics";
 export * from "./trip-modules";
 export * from "./trip-places";
 export * from "./trip-risks";
+export * from "./trip-schedule";
 export * from "./trip-workspace";
 export * from "./types";
+export * from "./validation";

@@ -263,9 +263,10 @@ describe("trip dashboard model module coverage", () => {
 
 		const model = createTripDashboardModel({ tripId, workspace });
 
-		expect(model.budget.left).toBe(35_800);
+		// Planned itinerary costs (3,000) now reduce what is left.
+		expect(model.budget.left).toBe(32_800);
 		expect(model.budget.spent).toBe(54_200);
-		expect(model.budget.dailySafeSpend).toBe(8950);
+		expect(model.budget.dailySafeSpend).toBe(8200);
 	});
 
 	test("leads Next up with the urgent risk and keeps open risks uncapped", () => {
@@ -346,5 +347,62 @@ describe("trip dashboard model module coverage", () => {
 				"readiness_done_critical",
 			]
 		);
+	});
+});
+
+describe("trip dashboard next action rules", () => {
+	const withDates = (startOffset: number, endOffset: number) => {
+		const workspace = createWorkspace();
+		const today = new Date();
+		workspace.trip = {
+			...workspace.trip,
+			endDate: toIsoDate(addDays(today, endOffset)),
+			startDate: toIsoDate(addDays(today, startOffset)),
+		};
+		workspace.risks = [];
+		workspace.bookings = [];
+		workspace.itineraryItems = [];
+
+		return workspace;
+	};
+
+	test("flags an over-budget trip before routine prep", () => {
+		const workspace = withDates(30, 35);
+		workspace.expenses = [
+			{
+				...workspace.expenses[0],
+				amount: 80_000,
+			} as unknown as TripWorkspace["expenses"][number],
+		];
+		const model = createTripDashboardModel({ tripId, workspace });
+
+		expect(model.nextAction.title).toBe("Review your budget");
+	});
+
+	test("counts down open checklist items when departure is close", () => {
+		const model = createTripDashboardModel({
+			tripId,
+			workspace: withDates(3, 8),
+		});
+
+		expect(model.nextAction.title).toBe("Finish your prep");
+		expect(model.nextAction.description).toContain("to go");
+	});
+
+	test("asks to complete a trip that already ended", () => {
+		const model = createTripDashboardModel({
+			tripId,
+			workspace: withDates(-12, -6),
+		});
+
+		expect(model.nextAction.title).toBe("Mark this trip complete");
+	});
+
+	test("surfaces the top urgent risk first", () => {
+		const workspace = withDates(30, 35);
+		workspace.risks = createWorkspace().risks;
+		const model = createTripDashboardModel({ tripId, workspace });
+
+		expect(model.nextAction.title).toBe("Tight transfer");
 	});
 });

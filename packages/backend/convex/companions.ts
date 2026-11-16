@@ -1,4 +1,9 @@
-import { sortTripCompanionsForCoordination } from "@viya-app/domain";
+import {
+	cleanMultilineText,
+	cleanText,
+	normalizeOptionalContact,
+	sortTripCompanionsForCoordination,
+} from "@viya-app/domain";
 import { ConvexError, v } from "convex/values";
 
 import type { Id } from "./_generated/dataModel";
@@ -8,6 +13,31 @@ import { clearDeletedTripEntityReferences } from "./lib/tripLinks";
 
 const touchTrip = async (ctx: MutationCtx, tripId: Id<"trips">) => {
 	await ctx.db.patch(tripId, { updatedAt: Date.now() });
+};
+
+const getContactFields = (input: { email?: string; phone?: string }) => {
+	const email = normalizeOptionalContact(input.email, "email");
+	const phone = normalizeOptionalContact(input.phone, "phone");
+
+	if (email === undefined) {
+		throw new ConvexError("INVALID_COMPANION_EMAIL");
+	}
+
+	if (phone === undefined) {
+		throw new ConvexError("INVALID_COMPANION_PHONE");
+	}
+
+	return { email: email ?? undefined, phone: phone ?? undefined };
+};
+
+const getRequiredName = (name: string) => {
+	const cleaned = cleanText(name);
+
+	if (!cleaned) {
+		throw new ConvexError("INVALID_COMPANION_NAME");
+	}
+
+	return cleaned;
 };
 
 const getRequiredCompanion = async (
@@ -74,6 +104,11 @@ export const createTripCompanion = mutation({
 		const now = Date.now();
 		const companionId = await ctx.db.insert("tripCompanions", {
 			...args,
+			...getContactFields(args),
+			name: getRequiredName(args.name),
+			notes: args.notes
+				? cleanMultilineText(args.notes) || undefined
+				: undefined,
 			createdAt: now,
 			updatedAt: now,
 		});
@@ -100,8 +135,27 @@ export const updateTripCompanion = mutation({
 			identity.subject
 		);
 		const { companionId, ...patch } = args;
+		const contactPatch: { email?: string; phone?: string } = {};
+
+		if (args.email !== undefined || args.phone !== undefined) {
+			const contacts = getContactFields(args);
+
+			if (args.email !== undefined) {
+				contactPatch.email = contacts.email;
+			}
+
+			if (args.phone !== undefined) {
+				contactPatch.phone = contacts.phone;
+			}
+		}
+
 		await ctx.db.patch(companionId, {
 			...patch,
+			...contactPatch,
+			...(args.name === undefined ? {} : { name: getRequiredName(args.name) }),
+			...(args.notes === undefined
+				? {}
+				: { notes: cleanMultilineText(args.notes) || undefined }),
 			updatedAt: Date.now(),
 		});
 		await touchTrip(ctx, companion.tripId);

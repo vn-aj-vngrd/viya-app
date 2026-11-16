@@ -6,6 +6,8 @@ import type {
 	ViyaDemoTrip,
 } from "./types";
 
+const HIGH_RISK_RANK = RISK_SEVERITY_RANK.high;
+
 export const getCriticalOpenRisks = (risks: Risk[]): Risk[] =>
 	risks
 		.filter((risk) => risk.status === "open" && risk.severity === "critical")
@@ -40,11 +42,11 @@ export const getNextBestAction = (demoTrip: ViyaDemoTrip): NextBestAction => {
 			(a, b) => RISK_SEVERITY_RANK[b.severity] - RISK_SEVERITY_RANK[a.severity]
 		)[0];
 
-	if (openRisk?.relatedEntityId === "ready-final-hotel") {
+	if (openRisk && RISK_SEVERITY_RANK[openRisk.severity] >= HIGH_RISK_RANK) {
 		return {
-			label: "Confirm final night hotel",
+			label: openRisk.suggestedAction || `Review risk: ${openRisk.title}`,
 			reason: openRisk.message,
-			target: "readiness",
+			target: "risks",
 		};
 	}
 

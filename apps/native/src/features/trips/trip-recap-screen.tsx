@@ -6,6 +6,7 @@ import {
 	getPlaceCounts,
 	getTripDayCount,
 	getTripPhase,
+	getTripTodayKey,
 	getVaultCounts,
 } from "@viya-app/domain";
 import { useMutation, useQuery } from "convex/react";
@@ -29,7 +30,6 @@ import {
 	formatMoney,
 	formatShortDate,
 	formatTripRange,
-	toLocalDateKey,
 } from "@/src/lib/format";
 import { buildTripRecapShareMessage } from "./trip-recap-share";
 import { useTripIdParam } from "./use-trip-id-param";
@@ -253,7 +253,7 @@ export function TripRecapScreen() {
 	const tripMeta = [workspace.trip.destination, dateWindow]
 		.filter(Boolean)
 		.join(" · ");
-	const phase = getTripPhase(workspace.trip, toLocalDateKey());
+	const phase = getTripPhase(workspace.trip, getTripTodayKey());
 	const pendingSummary = getPendingSummary(endDate, phase === "ended");
 
 	const completeTrip = async () => {

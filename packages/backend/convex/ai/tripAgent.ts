@@ -2,11 +2,14 @@
 
 import { ConvexError, v } from "convex/values";
 import {
-	buildItineraryDayRecords,
-	buildItineraryItemRecords,
 	buildSimpleDraftRecords,
 	cleanString,
+	describeBudgetChange,
+	isDraftStale,
+	planItineraryMerge,
+	summarizeApply,
 	type TripAgentDraftPayload,
+	type TripAgentDraftSource,
 	tripAgentDraftPayloadSchema,
 } from "../../src/ai/trip-agent-draft-apply";
 
@@ -85,7 +88,7 @@ const createFallbackDraft = ({
 	const commonChange = {
 		detail: `Generated from ${trip.title} details for ${trip.destination}.`,
 		title: "Review before applying",
-		type: "review",
+		type: "review" as const,
 	};
 
 	if (module === "itinerary") {
@@ -106,7 +109,7 @@ const createFallbackDraft = ({
 							endTime: "12:00",
 							estimatedCost: 1500,
 							locationName: trip.destination,
-							priority: "high",
+							priority: "required",
 							startTime: "10:00",
 							title: `Explore ${trip.destination}`,
 						},
@@ -278,7 +281,8 @@ const buildTripAgentPrompt = ({
 		"For vault or documents work, classify files as bookings or documents and create readiness gaps for missing passport, ID, ticket, confirmation, receipt, permit, or insurance coverage.",
 		"For readiness work, prioritize by current trip status, dates, open checklist items, booking coverage, vault coverage, budget state, and risks.",
 		"Never invent confirmed bookings, uploaded documents, live availability, weather, traffic, or paid reservations.",
-		"Keep output concise. Return no more than six items per list.",
+		"Keep output concise. Return no more than six items per list and no more than eight timed stops per day.",
+		"Use ISO dates (YYYY-MM-DD) inside the trip dates and 24-hour HH:MM times. Reuse existing titles when refining so matching items are updated instead of duplicated.",
 		"For documents, create readiness items only; the user must upload real files.",
 		`Module: ${module}.`,
 		`Action: ${action}.`,
@@ -366,8 +370,14 @@ export const generateTripAgentDraft = action({
 			module: args.module,
 			trip: context.trip,
 		});
-		const shouldUseFallback = args.useFallback || !hasConfiguredAiProvider();
-		const payload: TripAgentDraftPayload = shouldUseFallback
+		const shouldUseFallback = args.useFallback === true;
+
+		if (!(shouldUseFallback || hasConfiguredAiProvider())) {
+			throw new ConvexError("AI_NOT_CONFIGURED");
+		}
+
+		const source: TripAgentDraftSource = shouldUseFallback ? "fallback" : "ai";
+		const generated: TripAgentDraftPayload = shouldUseFallback
 			? fallback
 			: await generateStructuredObject({
 					fallback,
@@ -380,7 +390,26 @@ export const generateTripAgentDraft = action({
 					}),
 					schema: tripAgentDraftPayloadSchema,
 					schemaName: "TripAgentDraftPayload",
+					strict: true,
 				});
+		const budgetChange = describeBudgetChange({
+			currency: context.trip.budgetCurrency,
+			current: context.trip.budgetAmount,
+			next: generated.budgetAmount,
+		});
+		const payload: TripAgentDraftPayload = budgetChange
+			? {
+					...generated,
+					changes: [
+						...generated.changes,
+						{
+							detail: `This replaces the current trip budget: ${budgetChange}.`,
+							title: "Budget will change",
+							type: "budget",
+						},
+					],
+				}
+			: generated;
 
 		return await ctx.runMutation(
 			internal.ai.tripAgentInternals.saveGeneratedTripAgentDraft,
@@ -390,6 +419,7 @@ export const generateTripAgentDraft = action({
 				ownerId: identity.subject,
 				payloadJson: JSON.stringify(payload),
 				rationale: cleanString(payload.rationale, fallback.rationale),
+				source,
 				title: cleanString(payload.title, fallback.title),
 				tripId: args.tripId,
 			}
@@ -423,47 +453,116 @@ const parseDraftPayload = (payloadJson: string): TripAgentDraftPayload => {
 	}
 };
 
+interface ApplyCounts {
+	added: number;
+	skippedDuplicates: number;
+	skippedOutOfRange: number;
+	updated: number;
+}
+
 const applyItineraryDraft = async (
 	ctx: MutationCtx,
-	tripId: Id<"trips">,
+	trip: Doc<"trips">,
+	action: Doc<"tripAgentDrafts">["action"],
 	payload: TripAgentDraftPayload
-) => {
-	const existingDayCount = (
-		await ctx.db
+): Promise<ApplyCounts> => {
+	const tripId = trip._id;
+	const [existingDays, existingItems] = await Promise.all([
+		ctx.db
 			.query("itineraryDays")
 			.withIndex("by_trip", (q) => q.eq("tripId", tripId))
-			.collect()
-	).length;
-	const dayRecords = buildItineraryDayRecords({
-		existingDayCount,
+			.collect(),
+		ctx.db
+			.query("itineraryItems")
+			.withIndex("by_trip", (q) => q.eq("tripId", tripId))
+			.collect(),
+	]);
+	const plan = planItineraryMerge({
+		action,
+		existingDays: existingDays.map((day) => ({
+			date: day.date,
+			dayNumber: day.dayNumber,
+			id: day._id,
+		})),
+		existingItems: existingItems.map((item) => ({
+			dayId: item.dayId,
+			id: item._id,
+			startTime: item.startTime,
+			title: item.title,
+		})),
 		payload,
-		tripId,
+		trip,
 	});
+	const newDayIds = new Map<string, Id<"itineraryDays">>();
 
-	for (const [index, dayRecord] of dayRecords.entries()) {
-		const dayId = await ctx.db.insert("itineraryDays", dayRecord);
-		const day = payload.days[index];
+	for (const newDay of plan.newDays) {
+		newDayIds.set(
+			newDay.date,
+			await ctx.db.insert("itineraryDays", { ...newDay, tripId })
+		);
+	}
 
-		if (!day) {
+	for (const insert of plan.itemInserts) {
+		const dayId =
+			"existingId" in insert.day
+				? insert.day.existingId
+				: newDayIds.get(insert.day.createDate);
+
+		if (!dayId) {
 			continue;
 		}
 
-		for (const itemRecord of buildItineraryItemRecords({
-			day,
+		await ctx.db.insert("itineraryItems", {
+			...insert.fields,
+			address: "",
 			dayId,
+			status: "planned",
 			tripId,
-		})) {
-			await ctx.db.insert("itineraryItems", itemRecord);
-		}
+		});
 	}
+
+	for (const update of plan.itemUpdates) {
+		await ctx.db.patch(update.id, update.fields);
+	}
+
+	return {
+		added: plan.itemInserts.length,
+		skippedDuplicates: plan.skippedDuplicates,
+		skippedOutOfRange: plan.skippedOutOfRange,
+		updated: plan.itemUpdates.length,
+	};
 };
 
 const applySimpleModuleDraft = async (
 	ctx: MutationCtx,
-	tripId: Id<"trips">,
+	trip: Doc<"trips">,
 	payload: TripAgentDraftPayload
-) => {
+): Promise<{ added: number; budgetChange: string | null; skipped: number }> => {
+	const tripId = trip._id;
+	const [bookings, places, readinessItems, risks, moments] = await Promise.all([
+		ctx.db
+			.query("bookings")
+			.withIndex("by_trip", (q) => q.eq("tripId", tripId))
+			.collect(),
+		ctx.db
+			.query("savedPlaces")
+			.withIndex("by_trip", (q) => q.eq("tripId", tripId))
+			.collect(),
+		ctx.db
+			.query("readinessItems")
+			.withIndex("by_trip", (q) => q.eq("tripId", tripId))
+			.collect(),
+		ctx.db
+			.query("risks")
+			.withIndex("by_trip", (q) => q.eq("tripId", tripId))
+			.collect(),
+		ctx.db
+			.query("moments")
+			.withIndex("by_trip", (q) => q.eq("tripId", tripId))
+			.collect(),
+	]);
 	const records = buildSimpleDraftRecords({
+		existing: { bookings, moments, places, readinessItems, risks },
 		now: Date.now(),
 		payload,
 		tripId,
@@ -489,12 +588,33 @@ const applySimpleModuleDraft = async (
 		await ctx.db.insert("moments", moment);
 	}
 
-	if (records.budgetAmount) {
+	const budgetChange = describeBudgetChange({
+		currency: trip.budgetCurrency,
+		current: trip.budgetAmount,
+		next: records.budgetAmount,
+	});
+
+	if (records.budgetAmount && budgetChange) {
 		await ctx.db.patch(tripId, {
 			budgetAmount: records.budgetAmount,
 			updatedAt: Date.now(),
 		});
 	}
+
+	const requested =
+		Math.min(payload.bookingTargets.length, 6) +
+		Math.min(payload.places.length, 6) +
+		Math.min(payload.readinessItems.length, 6) +
+		Math.min(payload.risks.length, 6) +
+		Math.min(payload.moments.length, 6);
+	const added =
+		records.bookings.length +
+		records.places.length +
+		records.readinessItems.length +
+		records.risks.length +
+		records.moments.length;
+
+	return { added, budgetChange, skipped: Math.max(0, requested - added) };
 };
 
 export const applyTripAgentDraft = mutation({
@@ -514,14 +634,50 @@ export const applyTripAgentDraft = mutation({
 			throw new ConvexError("TRIP_AGENT_DRAFT_ALREADY_REVIEWED");
 		}
 
-		const payload = parseDraftPayload(draft.payloadJson);
+		const trip = await ctx.db.get(draft.tripId);
 
-		if (draft.module === "itinerary") {
-			await applyItineraryDraft(ctx, draft.tripId, payload);
+		if (!trip || trip.ownerId !== identity.subject) {
+			throw new ConvexError("TRIP_NOT_FOUND");
 		}
 
-		await applySimpleModuleDraft(ctx, draft.tripId, payload);
+		const payload = parseDraftPayload(draft.payloadJson);
+		const siblingDrafts = await ctx.db
+			.query("tripAgentDrafts")
+			.withIndex("by_trip_status", (q) =>
+				q.eq("tripId", draft.tripId).eq("status", "applied")
+			)
+			.collect();
+		const lastDraftAppliedAt = siblingDrafts.reduce<number | undefined>(
+			(latest, sibling) =>
+				latest === undefined || sibling.updatedAt > latest
+					? sibling.updatedAt
+					: latest,
+			undefined
+		);
+		const itineraryCounts: ApplyCounts =
+			draft.module === "itinerary"
+				? await applyItineraryDraft(ctx, trip, draft.action, payload)
+				: { added: 0, skippedDuplicates: 0, skippedOutOfRange: 0, updated: 0 };
+		// An itinerary draft only changes the itinerary; other records it might
+		// carry are ignored so one module's draft can't write into another's.
+		const simple =
+			draft.module === "itinerary"
+				? { added: 0, budgetChange: null, skipped: 0 }
+				: await applySimpleModuleDraft(ctx, trip, payload);
+
 		await ctx.db.patch(args.draftId, {
+			applySummary: summarizeApply({
+				added: itineraryCounts.added + simple.added,
+				budgetChange: simple.budgetChange,
+				isStale: isDraftStale({
+					draftCreatedAt: draft.createdAt,
+					lastDraftAppliedAt,
+					tripUpdatedAt: trip.updatedAt,
+				}),
+				skippedDuplicates: itineraryCounts.skippedDuplicates + simple.skipped,
+				skippedOutOfRange: itineraryCounts.skippedOutOfRange,
+				updated: itineraryCounts.updated,
+			}),
 			status: "applied",
 			updatedAt: Date.now(),
 		});
@@ -542,13 +698,12 @@ export const dismissTripAgentDraft = mutation({
 			throw new ConvexError("AUTH_REQUIRED");
 		}
 
-		const draft = await getRequiredDraft(ctx, args.draftId, identity.subject);
+		await getRequiredDraft(ctx, args.draftId, identity.subject);
 
 		await ctx.db.patch(args.draftId, {
 			status: "dismissed",
 			updatedAt: Date.now(),
 		});
-		await touchTrip(ctx, draft.tripId);
 
 		return ctx.db.get(args.draftId);
 	},

@@ -1,8 +1,8 @@
 import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
 import {
-	getMissingRequiredReadinessCategories,
 	getReadinessProgress,
+	getTripTodayKey,
 	PRIORITY_LABELS,
 	type Priority,
 	READINESS_CATEGORY_LABELS,
@@ -11,7 +11,6 @@ import {
 	type RiskType,
 	sortReadinessItemsForReview,
 	sortTripRisksForReview,
-	toReadinessItem,
 	type WorkStatus,
 } from "@viya-app/domain";
 import { useMutation, useQuery } from "convex/react";
@@ -53,7 +52,7 @@ import {
 	getTripRelatedEntityOptions,
 } from "@/src/features/trips/trip-related-entities";
 import { useTripIdParam } from "@/src/features/trips/use-trip-id-param";
-import { formatDay, formatEnumLabel, toLocalDateKey } from "@/src/lib/format";
+import { formatDay, formatEnumLabel } from "@/src/lib/format";
 
 import { getTaskSubtitle, ReadinessTaskRow } from "./readiness-item-row";
 
@@ -845,9 +844,6 @@ export function ReadinessScreen() {
 		api.tripWorkspace.getTripWorkspace,
 		tripId ? { tripId } : "skip"
 	);
-	const ensureBaselineReadinessItems = useMutation(
-		api.readiness.ensureBaselineReadinessItems
-	);
 	const deleteReadinessItem = useMutation(api.readiness.deleteReadinessItem);
 	const updateReadinessItem = useMutation(api.readiness.updateReadinessItem);
 	const deleteRisk = useMutation(api.risks.deleteRisk);
@@ -862,8 +858,6 @@ export function ReadinessScreen() {
 		riskId: Id<"risks"> | null;
 		taskId: Id<"readinessItems"> | null;
 	} | null>(null);
-	const [baselineRequestedTripId, setBaselineRequestedTripId] =
-		useState<Id<"trips"> | null>(null);
 	const [screenError, setScreenError] = useState<string | null>(null);
 
 	useEffect(() => {
@@ -871,28 +865,6 @@ export function ReadinessScreen() {
 			setSegment("heads-up");
 		}
 	}, [params.segment]);
-
-	useEffect(() => {
-		if (!(tripId && readinessItems)) {
-			return;
-		}
-
-		const missingCategories = getMissingRequiredReadinessCategories(
-			readinessItems.map(toReadinessItem)
-		);
-
-		if (missingCategories.length > 0 && baselineRequestedTripId !== tripId) {
-			setBaselineRequestedTripId(tripId);
-			ensureBaselineReadinessItems({ tripId }).catch(() => {
-				setScreenError("Could not prepare the checklist. Try again later.");
-			});
-		}
-	}, [
-		baselineRequestedTripId,
-		ensureBaselineReadinessItems,
-		readinessItems,
-		tripId,
-	]);
 
 	if (!tripId) {
 		return (
@@ -934,7 +906,7 @@ export function ReadinessScreen() {
 		? getTripRelatedEntityLabelByKey(workspace)
 		: new Map<string, string>();
 	const sortedItems = sortReadinessItemsForReview(readinessItems);
-	const progress = getReadinessProgress(sortedItems, toLocalDateKey());
+	const progress = getReadinessProgress(sortedItems, getTripTodayKey());
 	const openItems = sortedItems.filter(isOpenItem);
 	const doneItems = sortedItems.filter((item) => item.status === "done");
 	const nextUp = openItems[0] ?? null;

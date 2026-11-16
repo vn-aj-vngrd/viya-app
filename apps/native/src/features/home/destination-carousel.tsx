@@ -1,8 +1,11 @@
-import type { PreferenceCountrySuggestion } from "@viya-app/domain";
 import { ScrollView } from "react-native";
 
 import { spacing } from "@/src/components/ui";
-import { DESTINATION_CARD_WIDTH, DestinationCard } from "./destination-card";
+import {
+	DESTINATION_CARD_WIDTH,
+	DestinationCard,
+	type DestinationCardItem,
+} from "./destination-card";
 
 export function DestinationCarousel({
 	imageUrls,
@@ -10,8 +13,8 @@ export function DestinationCarousel({
 	onPress,
 }: {
 	imageUrls: Record<string, string | undefined>;
-	items: Omit<PreferenceCountrySuggestion, "accent">[];
-	onPress: (prompt: string) => void;
+	items: DestinationCardItem[];
+	onPress: (key: string) => void;
 }) {
 	return (
 		<ScrollView
@@ -28,9 +31,9 @@ export function DestinationCarousel({
 		>
 			{items.map((item) => (
 				<DestinationCard
-					imageUrl={imageUrls[item.country]}
+					imageUrl={imageUrls[item.imageKey]}
 					item={item}
-					key={item.country}
+					key={item.key}
 					onPress={onPress}
 				/>
 			))}

@@ -23,9 +23,11 @@ const getProviderName = (): AiProviderName => {
 	return "openrouter";
 };
 
+const getPurposeModel = (purpose: AiModelPurpose): string | undefined =>
+	process.env[`AI_MODEL_${purpose.toUpperCase()}`] || undefined;
+
 const getModelId = (purpose: AiModelPurpose): string => {
-	const purposeKey = `AI_MODEL_${purpose.toUpperCase()}`;
-	const purposeModel = process.env[purposeKey];
+	const purposeModel = getPurposeModel(purpose);
 
 	if (purposeModel) {
 		return purposeModel;
@@ -43,7 +45,11 @@ export const getLanguageModel = (purpose: AiModelPurpose): LanguageModel => {
 	const modelId = getModelId(purpose);
 
 	if (provider === "google") {
-		return google(process.env.GOOGLE_GENERATIVE_AI_MODEL ?? "gemini-2.5-flash");
+		return google(
+			getPurposeModel(purpose) ??
+				process.env.GOOGLE_GENERATIVE_AI_MODEL ??
+				"gemini-2.5-flash"
+		);
 	}
 
 	const openrouter = createOpenAICompatible({

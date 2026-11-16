@@ -21,9 +21,6 @@ describe("getPreferenceSuggestions", () => {
 		expect(suggestions.home.subtitle).toContain("time to rest");
 		expect(suggestions.exploreIdeas[0]?.title).toBe("Slow beach escapes");
 		expect(suggestions.countrySuggestions[0]?.country).toBe("Thailand");
-		expect(suggestions.placeSuggestions[0]?.location).toBe(
-			"Koh Samui slow coast"
-		);
 		expect(primaryPrompt?.prompt).toContain("slow beach trip");
 	});
 
@@ -41,7 +38,6 @@ describe("getPreferenceSuggestions", () => {
 		expect(suggestions.home.subtitle).toContain("Food stops");
 		expect(suggestions.exploreIdeas[0]?.title).toBe("Food-led routes");
 		expect(suggestions.countrySuggestions[0]?.country).toBe("Vietnam");
-		expect(suggestions.placeSuggestions[0]?.location).toBe("Hanoi food lanes");
 		expect(primaryPrompt?.prompt).toContain("hidden gems");
 	});
 
@@ -64,7 +60,7 @@ describe("getPreferenceSuggestions", () => {
 		expect(suggestions.home.title).toBe("Plan your first trip");
 		expect(suggestions.exploreIdeas).toHaveLength(4);
 		expect(suggestions.countrySuggestions).toHaveLength(4);
-		expect(suggestions.placeSuggestions).toHaveLength(3);
+		expect(suggestions.philippineSuggestions).toHaveLength(8);
 		expect(suggestions.prompts).toHaveLength(4);
 	});
 });

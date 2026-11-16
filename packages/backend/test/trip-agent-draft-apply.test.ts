@@ -5,9 +5,16 @@ import {
 	buildItineraryDayRecords,
 	buildItineraryItemRecords,
 	buildSimpleDraftRecords,
+	describeBudgetChange,
+	isDraftStale,
+	planItineraryMerge,
+	summarizeApply,
 	type TripAgentDraftPayload,
 	tripAgentDraftPayloadSchema,
 } from "../src/ai/trip-agent-draft-apply";
+
+const applySummaryPattern =
+	/Added 2 items.*skipped 1 already in the trip.*budget a -> b.*changed/;
 
 const createPayload = (
 	overrides: Partial<TripAgentDraftPayload> = {}
@@ -34,13 +41,13 @@ describe("trip agent draft apply helpers", () => {
 					items: [
 						{
 							aiReason: "",
-							category: "",
+							category: "" as "activity",
 							description: "Walk the old town",
 							durationMinutes: -30,
 							endTime: "11:00",
 							estimatedCost: -100,
 							locationName: "Intramuros",
-							priority: "",
+							priority: "" as "medium",
 							startTime: "09:00",
 							title: "",
 						},
@@ -83,7 +90,7 @@ describe("trip agent draft apply helpers", () => {
 		const payload = createPayload({
 			bookingTargets: Array.from({ length: 8 }, (_, index) => ({
 				title: index === 0 ? "" : `Booking ${index}`,
-				type: index === 0 ? "" : "hotel",
+				type: (index === 0 ? "" : "hotel") as "hotel",
 			})),
 			budgetAmount: -100,
 			moments: Array.from({ length: 7 }, (_, index) => ({
@@ -119,5 +126,246 @@ describe("trip agent draft apply helpers", () => {
 		assert.deepEqual(payload.bookingTargets, []);
 		assert.deepEqual(payload.days, []);
 		assert.deepEqual(payload.readinessItems, []);
+	});
+});
+
+const makeDay = (
+	date: string,
+	items: { startTime?: string; title: string }[]
+): TripAgentDraftPayload["days"][number] => ({
+	date,
+	estimatedCost: 0,
+	items: items.map((item) => ({
+		aiReason: "",
+		category: "activity" as const,
+		description: "",
+		durationMinutes: 60,
+		endTime: "10:00",
+		estimatedCost: 0,
+		locationName: "Cebu",
+		priority: "medium" as const,
+		startTime: item.startTime ?? "09:00",
+		title: item.title,
+	})),
+	pace: "balanced",
+	summary: "",
+	theme: "",
+	title: "",
+	weatherNote: "",
+});
+
+describe("itinerary merge", () => {
+	const trip = { endDate: "2026-06-03", startDate: "2026-06-01" };
+	const existingDays = [{ date: "2026-06-02", dayNumber: 2, id: "d2" }];
+	const existingItems = [
+		{ dayId: "d2", id: "i1", startTime: "09:00", title: "Kawasan Falls" },
+	];
+
+	it("merges into the day matched by date and numbers new days from the trip start", () => {
+		const plan = planItineraryMerge({
+			action: "generate",
+			existingDays,
+			existingItems: [],
+			payload: createPayload({
+				days: [
+					makeDay("2026-06-02", [{ title: "Lunch" }]),
+					makeDay("2026-06-03", [{ title: "Beach" }]),
+				],
+			}),
+			trip,
+		});
+
+		assert.equal(plan.newDays.length, 1);
+		assert.equal(plan.newDays[0]?.dayNumber, 3);
+		assert.deepEqual(plan.itemInserts[0]?.day, { existingId: "d2" });
+		assert.deepEqual(plan.itemInserts[1]?.day, { createDate: "2026-06-03" });
+	});
+
+	it("skips out-of-range days and does not duplicate on re-apply", () => {
+		const plan = planItineraryMerge({
+			action: "generate",
+			existingDays,
+			existingItems,
+			payload: createPayload({
+				days: [
+					makeDay("2026-07-01", [{ title: "Too late" }]),
+					makeDay("2026-06-02", [{ title: "kawasan falls!" }]),
+				],
+			}),
+			trip,
+		});
+
+		assert.equal(plan.skippedOutOfRange, 1);
+		assert.equal(plan.skippedDuplicates, 1);
+		assert.equal(plan.itemInserts.length, 0);
+		assert.equal(plan.newDays.length, 0);
+	});
+
+	it("updates matching items on refine and caps items per day", () => {
+		const refine = planItineraryMerge({
+			action: "refine",
+			existingDays,
+			existingItems,
+			payload: createPayload({
+				days: [
+					makeDay("2026-06-02", [
+						{ startTime: "10:30", title: "Kawasan Falls" },
+					]),
+				],
+			}),
+			trip,
+		});
+
+		assert.equal(refine.itemUpdates[0]?.id, "i1");
+		assert.equal(refine.itemUpdates[0]?.fields.startTime, "10:30");
+		assert.equal(refine.itemInserts.length, 0);
+
+		const capped = planItineraryMerge({
+			action: "generate",
+			existingDays: [],
+			existingItems: [],
+			payload: createPayload({
+				days: [
+					makeDay(
+						"2026-06-01",
+						Array.from({ length: 12 }, (_, index) => ({
+							startTime: `${String(8 + (index % 10)).padStart(2, "0")}:00`,
+							title: `Stop ${index}`,
+						}))
+					),
+				],
+			}),
+			trip,
+		});
+
+		assert.equal(capped.itemInserts.length, 8);
+	});
+
+	it("does not cap the number of days", () => {
+		const records = buildItineraryDayRecords({
+			existingDayCount: 0,
+			payload: createPayload({
+				days: Array.from({ length: 9 }, (_, index) =>
+					makeDay(`2026-06-0${index + 1}`, [])
+				),
+			}),
+			tripId: "t",
+		});
+
+		assert.equal(records.length, 9);
+	});
+});
+
+describe("simple draft dedupe and summaries", () => {
+	it("skips records already in the trip and duplicates in the draft", () => {
+		const records = buildSimpleDraftRecords({
+			existing: { readinessItems: [{ title: "Book flights" }] },
+			now: 1,
+			payload: createPayload({
+				readinessItems: [
+					{
+						category: "bookings",
+						description: "",
+						dueDate: "2026-05-01",
+						priority: "high",
+						title: "book flights.",
+					},
+					{
+						category: "documents",
+						description: "",
+						dueDate: "2026-05-01",
+						priority: "high",
+						title: "Passport",
+					},
+					{
+						category: "documents",
+						description: "",
+						dueDate: "2026-05-01",
+						priority: "high",
+						title: "PASSPORT",
+					},
+				],
+			}),
+			tripId: "t",
+		});
+
+		assert.deepEqual(
+			records.readinessItems.map((item) => item.title),
+			["Passport"]
+		);
+	});
+
+	it("describes budget overwrites, staleness and apply results", () => {
+		assert.equal(
+			describeBudgetChange({ current: 10_000, next: 15_000 }),
+			"10,000 PHP -> 15,000 PHP"
+		);
+		assert.equal(describeBudgetChange({ current: 10_000, next: 10_000 }), null);
+		assert.equal(isDraftStale({ draftCreatedAt: 5, tripUpdatedAt: 9 }), true);
+		assert.equal(
+			isDraftStale({
+				draftCreatedAt: 5,
+				lastDraftAppliedAt: 8000,
+				tripUpdatedAt: 8500,
+			}),
+			false
+		);
+		assert.equal(
+			isDraftStale({
+				draftCreatedAt: 5,
+				lastDraftAppliedAt: 8000,
+				tripUpdatedAt: 20_000,
+			}),
+			true
+		);
+		assert.match(
+			summarizeApply({
+				added: 2,
+				budgetChange: "a -> b",
+				isStale: true,
+				skippedDuplicates: 1,
+				skippedOutOfRange: 0,
+				updated: 0,
+			}),
+			applySummaryPattern
+		);
+	});
+
+	it("rejects bad enums, dates and times", () => {
+		const base = {
+			date: "2026-06-01",
+			estimatedCost: 0,
+			items: [],
+			pace: "",
+			summary: "",
+			theme: "",
+			title: "",
+			weatherNote: "",
+		};
+
+		assert.equal(
+			tripAgentDraftPayloadSchema.safeParse({
+				days: [{ ...base, date: "June 1" }],
+				rationale: "r",
+				title: "t",
+			}).success,
+			false
+		);
+		assert.equal(
+			tripAgentDraftPayloadSchema.safeParse({
+				rationale: "r",
+				risks: [
+					{
+						message: "m",
+						severity: "scary",
+						suggestedAction: "a",
+						title: "t",
+						type: "schedule",
+					},
+				],
+				title: "t",
+			}).success,
+			false
+		);
 	});
 });

@@ -1,3 +1,4 @@
+import { cleanMultilineText, cleanText } from "@viya-app/domain";
 import { ConvexError, v } from "convex/values";
 
 import type { Id } from "./_generated/dataModel";
@@ -38,6 +39,20 @@ const riskTypeValidator = v.union(
 
 const touchTrip = async (ctx: MutationCtx, tripId: Id<"trips">) => {
 	await ctx.db.patch(tripId, { updatedAt: Date.now() });
+};
+
+const getRequiredRiskText = (
+	value: string,
+	code: "INVALID_RISK_MESSAGE" | "INVALID_RISK_TITLE",
+	multiline = false
+) => {
+	const cleaned = multiline ? cleanMultilineText(value) : cleanText(value);
+
+	if (!cleaned) {
+		throw new ConvexError(code);
+	}
+
+	return cleaned;
 };
 
 const getRequiredRisk = async (
@@ -110,15 +125,15 @@ export const createRisk = mutation({
 		const riskId = await ctx.db.insert("risks", {
 			aiReason: "Created by the traveler.",
 			createdAt: Date.now(),
-			message: args.message,
+			message: getRequiredRiskText(args.message, "INVALID_RISK_MESSAGE", true),
 			...getLinkedTripEntityFields({
 				linkedEntityId: args.relatedEntityId,
 				linkedEntityType: args.relatedEntityType,
 			}),
 			severity: args.severity,
 			status: "open",
-			suggestedAction: args.suggestedAction,
-			title: args.title,
+			suggestedAction: cleanMultilineText(args.suggestedAction),
+			title: getRequiredRiskText(args.title, "INVALID_RISK_TITLE"),
 			tripId: args.tripId,
 			type: args.type,
 		});
@@ -152,6 +167,21 @@ export const updateRisk = mutation({
 		const { relatedEntityId, relatedEntityType, riskId, ...patch } = args;
 		await ctx.db.patch(riskId, {
 			...patch,
+			...(args.message === undefined
+				? {}
+				: {
+						message: getRequiredRiskText(
+							args.message,
+							"INVALID_RISK_MESSAGE",
+							true
+						),
+					}),
+			...(args.suggestedAction === undefined
+				? {}
+				: { suggestedAction: cleanMultilineText(args.suggestedAction) }),
+			...(args.title === undefined
+				? {}
+				: { title: getRequiredRiskText(args.title, "INVALID_RISK_TITLE") }),
 			...getLinkedTripEntityUpdatePatch({
 				linkedEntityId: relatedEntityId,
 				linkedEntityType: relatedEntityType,

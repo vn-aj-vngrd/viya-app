@@ -3,6 +3,7 @@
 import { ConvexError, v } from "convex/values";
 
 import { internalMutation, internalQuery } from "../_generated/server";
+import { loadTripContext } from "../lib/tripContext";
 
 const tripAgentModuleValidator = v.union(
 	v.literal("itinerary"),
@@ -29,76 +30,10 @@ export const getTripAgentContext = internalQuery({
 		tripId: v.id("trips"),
 	},
 	handler: async (ctx, args) => {
-		const trip = await ctx.db.get(args.tripId);
-
-		if (!trip || trip.ownerId !== args.ownerId) {
-			throw new ConvexError("TRIP_NOT_FOUND");
-		}
-
-		const [
-			bookings,
-			expenses,
-			itineraryDays,
-			itineraryItems,
-			moments,
-			readinessItems,
-			risks,
-			savedPlaces,
-			vaultItems,
-		] = await Promise.all([
-			ctx.db
-				.query("bookings")
-				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
-				.collect(),
-			ctx.db
-				.query("expenses")
-				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
-				.collect(),
-			ctx.db
-				.query("itineraryDays")
-				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
-				.collect(),
-			ctx.db
-				.query("itineraryItems")
-				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
-				.collect(),
-			ctx.db
-				.query("moments")
-				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
-				.collect(),
-			ctx.db
-				.query("readinessItems")
-				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
-				.collect(),
-			ctx.db
-				.query("risks")
-				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
-				.collect(),
-			ctx.db
-				.query("savedPlaces")
-				.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
-				.collect(),
-			ctx.db
-				.query("vaultItems")
-				.withIndex("by_owner_trip", (q) =>
-					q.eq("ownerId", args.ownerId).eq("tripId", args.tripId)
-				)
-				.collect(),
-		]);
+		const { contextJson, trip } = await loadTripContext(ctx, args);
 
 		return {
-			contextJson: JSON.stringify({
-				bookings,
-				expenses,
-				itineraryDays,
-				itineraryItems,
-				moments,
-				readinessItems,
-				risks,
-				savedPlaces,
-				trip,
-				vaultItems,
-			}),
+			contextJson,
 			trip: {
 				budgetAmount: trip.budgetAmount,
 				budgetCurrency: trip.budgetCurrency,
@@ -118,10 +53,17 @@ export const saveGeneratedTripAgentDraft = internalMutation({
 		ownerId: v.string(),
 		payloadJson: v.string(),
 		rationale: v.string(),
+		source: v.optional(v.union(v.literal("ai"), v.literal("fallback"))),
 		title: v.string(),
 		tripId: v.id("trips"),
 	},
 	handler: async (ctx, args) => {
+		const trip = await ctx.db.get(args.tripId);
+
+		if (!trip || trip.ownerId !== args.ownerId) {
+			throw new ConvexError("TRIP_NOT_FOUND");
+		}
+
 		const now = Date.now();
 		const draftId = await ctx.db.insert("tripAgentDrafts", {
 			action: args.action,
@@ -130,6 +72,7 @@ export const saveGeneratedTripAgentDraft = internalMutation({
 			ownerId: args.ownerId,
 			payloadJson: args.payloadJson,
 			rationale: args.rationale,
+			source: args.source,
 			status: "draft",
 			title: args.title,
 			tripId: args.tripId,

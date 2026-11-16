@@ -1,5 +1,6 @@
 import {
 	calculateReadinessScore,
+	cleanText,
 	getMissingRequiredReadinessCategories,
 	type Priority,
 	type ReadinessCategory,
@@ -141,7 +142,7 @@ const toDomainReadinessItem = (item: Doc<"readinessItems">): ReadinessItem => ({
 	source: item.source as ReadinessItem["source"],
 });
 
-const updateTripReadinessScore = async (
+export const updateTripReadinessScore = async (
 	ctx: MutationCtx,
 	tripId: Doc<"trips">["_id"]
 ) => {
@@ -218,6 +219,12 @@ export const createReadinessItem = mutation({
 	handler: async (ctx, args) => {
 		const identity = await getRequiredIdentity(ctx);
 		await ensureTripAccess(ctx, args.tripId, identity.subject);
+		const title = cleanText(args.title);
+
+		if (!title) {
+			throw new ConvexError("INVALID_READINESS_TITLE");
+		}
+
 		const itemId = await ctx.db.insert("readinessItems", {
 			aiReason: "Created by the traveler.",
 			...(await getReadinessAssigneePatch(
@@ -231,7 +238,7 @@ export const createReadinessItem = mutation({
 			priority: args.priority,
 			source: "user",
 			status: "todo",
-			title: args.title,
+			title,
 			tripId: args.tripId,
 		});
 		await updateTripReadinessScore(ctx, args.tripId);
@@ -273,6 +280,17 @@ export const updateReadinessItemDetails = mutation({
 			"assignedToMemberId"
 		);
 		const { assignedToMemberId, readinessItemId, ...patch } = args;
+
+		if (args.title !== undefined) {
+			const title = cleanText(args.title);
+
+			if (!title) {
+				throw new ConvexError("INVALID_READINESS_TITLE");
+			}
+
+			patch.title = title;
+		}
+
 		const assigneePatch = shouldUpdateAssignee
 			? await getReadinessAssigneePatch(ctx, assignedToMemberId, item.tripId)
 			: {};
@@ -312,6 +330,41 @@ export const deleteReadinessItem = mutation({
 	},
 });
 
+/** Seeds the starter checklist once; call at trip creation, never on screen open. */
+export async function seedBaselineReadinessItems(
+	ctx: MutationCtx,
+	trip: Doc<"trips">
+) {
+	const existingItems = await ctx.db
+		.query("readinessItems")
+		.withIndex("by_trip", (q) => q.eq("tripId", trip._id))
+		.collect();
+	const missingCategories = getMissingRequiredReadinessCategories(
+		existingItems.map(toDomainReadinessItem)
+	);
+
+	for (const category of missingCategories) {
+		const baseline = baselineReadinessItems[category];
+		await ctx.db.insert("readinessItems", {
+			aiReason: "Starter checklist for this trip.",
+			category,
+			description: baseline.description,
+			dueDate: trip.startDate,
+			priority: baseline.priority,
+			source: "system",
+			status: "todo",
+			title: baseline.title,
+			tripId: trip._id,
+		});
+	}
+
+	if (missingCategories.length > 0) {
+		await updateTripReadinessScore(ctx, trip._id);
+	}
+
+	return missingCategories.length;
+}
+
 export const ensureBaselineReadinessItems = mutation({
 	args: {
 		tripId: v.id("trips"),
@@ -319,36 +372,8 @@ export const ensureBaselineReadinessItems = mutation({
 	handler: async (ctx, args) => {
 		const identity = await getRequiredIdentity(ctx);
 		const trip = await ensureTripAccess(ctx, args.tripId, identity.subject);
-		const existingItems = await ctx.db
-			.query("readinessItems")
-			.withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
-			.collect();
-		const missingCategories = getMissingRequiredReadinessCategories(
-			existingItems.map(toDomainReadinessItem)
-		);
-		const now = Date.now();
 
-		for (const category of missingCategories) {
-			const baseline = baselineReadinessItems[category];
-			await ctx.db.insert("readinessItems", {
-				aiReason: "Baseline preparation coverage for this trip.",
-				category,
-				description: baseline.description,
-				dueDate: trip.startDate,
-				priority: baseline.priority,
-				source: "system",
-				status: "todo",
-				title: baseline.title,
-				tripId: args.tripId,
-			});
-		}
-
-		if (missingCategories.length > 0) {
-			await updateTripReadinessScore(ctx, args.tripId);
-			await ctx.db.patch(args.tripId, { updatedAt: now });
-		}
-
-		return { createdCount: missingCategories.length };
+		return { createdCount: await seedBaselineReadinessItems(ctx, trip) };
 	},
 });
 

@@ -95,6 +95,7 @@ export function usePlacesController(tripId: Id<"trips"> | null) {
 		tripId ? { tripId } : "skip"
 	);
 	const assignPlaceToDay = useMutation(api.places.assignPlaceToDay);
+	const addPlaceToItinerary = useMutation(api.itinerary.addPlaceToItinerary);
 	const createSavedPlace = useMutation(api.places.createSavedPlace);
 	const deleteSavedPlace = useMutation(api.places.deleteSavedPlace);
 	const updateSavedPlace = useMutation(api.places.updateSavedPlace);
@@ -237,6 +238,21 @@ export function usePlacesController(tripId: Id<"trips"> | null) {
 		}
 	};
 
+	const addToItinerary = async (
+		place: Doc<"savedPlaces">,
+		dayId: Id<"itineraryDays">
+	) => {
+		setErrorMessage(null);
+		try {
+			await addPlaceToItinerary({ dayId, placeId: place._id });
+			haptic("success");
+			setIsDetailOpen(false);
+		} catch {
+			haptic("error");
+			setErrorMessage("Could not add this place to the itinerary.");
+		}
+	};
+
 	const openMaps = async (target: {
 		address?: string;
 		latitude?: number;
@@ -261,6 +277,7 @@ export function usePlacesController(tripId: Id<"trips"> | null) {
 	};
 
 	return {
+		addToItinerary,
 		assign,
 		closeDetail,
 		closeForm,
@@ -511,6 +528,31 @@ export function PlacesSheets({ controller }: { controller: PlacesController }) {
 								<ListRow showChevron={false} title="No itinerary days yet" />
 							</ListGroup>
 						)}
+						{controller.days.length > 0 ? (
+							<ListGroup
+								footer="Adds a one-hour stop in the next free slot."
+								header="Add to itinerary"
+							>
+								{controller.days.map((day) => (
+									<ListRow
+										accessibilityLabel={`Add ${place.title} to day ${day.dayNumber}`}
+										key={day._id}
+										leading={<Icon name="add-circle-outline" size={20} />}
+										onPress={() => {
+											controller
+												.addToItinerary(place, day._id)
+												.catch(() => undefined);
+										}}
+										showChevron={false}
+										title={
+											day.date
+												? `Day ${day.dayNumber} · ${formatShortDate(day.date)}`
+												: `Day ${day.dayNumber}`
+										}
+									/>
+								))}
+							</ListGroup>
+						) : null}
 						<ListGroup>
 							{hasMapTarget(place) ? (
 								<ListRow

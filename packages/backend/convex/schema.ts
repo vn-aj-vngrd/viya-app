@@ -342,6 +342,8 @@ export default defineSchema({
 		title: v.string(),
 		rationale: v.string(),
 		payloadJson: v.string(),
+		source: v.optional(v.union(v.literal("ai"), v.literal("fallback"))),
+		applySummary: v.optional(v.string()),
 		status: v.union(
 			v.literal("draft"),
 			v.literal("applied"),

@@ -1,3 +1,8 @@
+import {
+	buildPhilippinePlanPrompt,
+	type DestinationSuggestion,
+	rankPhilippineDestinations,
+} from "./ph-destination-suggestions";
 import type {
 	BudgetPreference,
 	FoodPreference,
@@ -45,20 +50,25 @@ export interface PreferenceCountrySuggestion {
 	duration: string;
 	icon: string;
 	prompt: string;
+	/** Entry rule for a Philippine passport holder; absent when unknown. */
+	visa?: PreferenceVisaInfo;
 }
 
-export interface PreferencePlaceSuggestion {
-	accent: string;
-	location: string;
+export interface PreferenceVisaInfo {
+	label: string;
+	tier: "visaFree" | "visaRequired";
+}
+
+export interface PreferencePhilippineSuggestion extends DestinationSuggestion {
 	prompt: string;
-	tag: string;
 }
 
 export interface PreferenceSuggestions {
 	countrySuggestions: PreferenceCountrySuggestion[];
 	exploreIdeas: PreferenceExploreSuggestion[];
 	home: PreferenceHomeSuggestion;
-	placeSuggestions: PreferencePlaceSuggestion[];
+	/** Philippine destinations ranked for the current date and preferences. */
+	philippineSuggestions: PreferencePhilippineSuggestion[];
 	prompts: PreferencePromptSuggestion[];
 }
 
@@ -326,11 +336,27 @@ interface PreferenceRecommendationProfile {
 	groupPreferences?: readonly UserGroupPreference[];
 	interests?: readonly TravelInterest[];
 	pacePreferences?: readonly PacePreference[];
-	place: PreferencePlaceSuggestion;
 	planningStyles?: readonly PlanningStyle[];
 	specialNeeds?: readonly SpecialNeed[];
 	travelStyles?: readonly TravelStyle[];
 }
+
+/**
+ * Entry rules for a Philippine passport, short stays. Rules change, so Viya
+ * prompts always ask for current requirements before booking.
+ */
+const philippinePassportVisa: Record<string, PreferenceVisaInfo> = {
+	Indonesia: { label: "Visa-free", tier: "visaFree" },
+	Japan: { label: "Visa needed", tier: "visaRequired" },
+	"New Zealand": { label: "Visa needed", tier: "visaRequired" },
+	Singapore: { label: "Visa-free", tier: "visaFree" },
+	"South Korea": { label: "Visa needed", tier: "visaRequired" },
+	Taiwan: { label: "Visa-free", tier: "visaFree" },
+	Thailand: { label: "Visa-free", tier: "visaFree" },
+	Vietnam: { label: "Visa-free", tier: "visaFree" },
+};
+
+const VISA_FREE_BOOST = 3;
 
 const preferenceRecommendationProfiles = [
 	{
@@ -353,13 +379,6 @@ const preferenceRecommendationProfiles = [
 		},
 		interests: ["culture", "shopping", "food"],
 		pacePreferences: ["moderate", "fast"],
-		place: {
-			accent: "#0A84FF",
-			location: "Tokyo side streets",
-			prompt:
-				"Build a Tokyo plan around side streets, neighborhood food, design shops, and simple transit hops.",
-			tag: "City wander",
-		},
 		travelStyles: ["balanced", "luxury"],
 	},
 	{
@@ -383,13 +402,6 @@ const preferenceRecommendationProfiles = [
 		foodPreferences: ["localEats"],
 		interests: ["food", "culture", "hiddenGems"],
 		pacePreferences: ["moderate", "fast"],
-		place: {
-			accent: "#059669",
-			location: "Hanoi food lanes",
-			prompt:
-				"Build a Hanoi itinerary around local food lanes, coffee stops, old-quarter walks, and low-friction timing.",
-			tag: "Local eats",
-		},
 		travelStyles: ["adventure", "budget", "balanced"],
 	},
 	{
@@ -412,13 +424,6 @@ const preferenceRecommendationProfiles = [
 			title: "Smart value routes",
 		},
 		interests: ["food", "shopping", "culture"],
-		place: {
-			accent: "#E97816",
-			location: "Taipei night markets",
-			prompt:
-				"Build a Taipei plan around night markets, easy train rides, and budget-aware neighborhood days.",
-			tag: "Value trip",
-		},
 		travelStyles: ["budget", "balanced"],
 	},
 	{
@@ -441,13 +446,6 @@ const preferenceRecommendationProfiles = [
 		},
 		interests: ["beaches", "wellness", "food"],
 		pacePreferences: ["slow", "moderate"],
-		place: {
-			accent: "#DB2777",
-			location: "Koh Samui slow coast",
-			prompt:
-				"Build a Koh Samui route with quiet beaches, wellness mornings, sunset meals, and simple transfers.",
-			tag: "Slow coast",
-		},
 		travelStyles: ["relaxed", "luxury", "balanced"],
 	},
 	{
@@ -471,13 +469,6 @@ const preferenceRecommendationProfiles = [
 		groupPreferences: ["friends", "couple"],
 		interests: ["shopping", "nightlife", "food"],
 		pacePreferences: ["moderate", "fast"],
-		place: {
-			accent: "#7C3AED",
-			location: "Seoul cafe districts",
-			prompt:
-				"Build a Seoul trip around cafe districts, local shopping, culture stops, and calm evening walks.",
-			tag: "City social",
-		},
 		travelStyles: ["balanced", "packed"],
 	},
 	{
@@ -500,13 +491,6 @@ const preferenceRecommendationProfiles = [
 		},
 		groupPreferences: ["family", "friends", "work"],
 		interests: ["food", "culture", "shopping"],
-		place: {
-			accent: "#0F766E",
-			location: "Singapore garden loop",
-			prompt:
-				"Build a Singapore plan with garden time, hawker meals, easy transit, and flexible group breaks.",
-			tag: "Easy logistics",
-		},
 		specialNeeds: ["accessibility", "restBreaks"],
 		travelStyles: ["balanced", "luxury"],
 	},
@@ -530,13 +514,6 @@ const preferenceRecommendationProfiles = [
 		},
 		interests: ["nature", "wellness", "hiddenGems"],
 		pacePreferences: ["slow", "moderate"],
-		place: {
-			accent: "#16A34A",
-			location: "Queenstown scenic base",
-			prompt:
-				"Build a Queenstown plan with scenic drives, light hikes, view-led meals, and buffer time.",
-			tag: "Nature base",
-		},
 		travelStyles: ["adventure", "relaxed", "luxury"],
 	},
 	{
@@ -559,13 +536,6 @@ const preferenceRecommendationProfiles = [
 		},
 		interests: ["wellness", "beaches", "nature"],
 		pacePreferences: ["slow"],
-		place: {
-			accent: "#C2410C",
-			location: "Bali slow coast",
-			prompt:
-				"Build a Bali route with quiet beaches, wellness mornings, local food, and simple logistics.",
-			tag: "Slow travel",
-		},
 		specialNeeds: ["restBreaks"],
 		travelStyles: ["relaxed", "luxury"],
 	},
@@ -575,7 +545,10 @@ const scoreProfile = (
 	preferences: UserPreferences,
 	profile: PreferenceRecommendationProfile
 ) => {
-	let score = 0;
+	let score =
+		philippinePassportVisa[profile.country.country]?.tier === "visaFree"
+			? VISA_FREE_BOOST
+			: 0;
 
 	for (const interest of profile.interests ?? []) {
 		if (preferences.interests.includes(interest)) {
@@ -678,10 +651,7 @@ const createPersonalizedPrompt = (
 
 const getPreferenceHomeRecommendations = (
 	preferences: UserPreferences
-): Pick<
-	PreferenceSuggestions,
-	"countrySuggestions" | "exploreIdeas" | "placeSuggestions"
-> => {
+): Pick<PreferenceSuggestions, "countrySuggestions" | "exploreIdeas"> => {
 	const rankedProfiles = rankPreferenceProfiles(preferences);
 	const exploreIdeas = collectUniqueRecommendations(
 		rankedProfiles,
@@ -699,22 +669,15 @@ const getPreferenceHomeRecommendations = (
 		4
 	).map((country) => ({
 		...country,
-		prompt: createPersonalizedPrompt(preferences, country.prompt),
+		prompt: createPersonalizedPrompt(
+			preferences,
+			`${country.prompt} Include entry requirements for a Philippine passport and current visa rules.`
+		),
+		visa: philippinePassportVisa[country.country],
 	}));
-	const placeSuggestions = collectUniqueRecommendations(
-		rankedProfiles,
-		(profile) => profile.place,
-		(place) => place.location,
-		3
-	).map((place) => ({
-		...place,
-		prompt: createPersonalizedPrompt(preferences, place.prompt),
-	}));
-
 	return {
 		countrySuggestions,
 		exploreIdeas,
-		placeSuggestions,
 	};
 };
 
@@ -794,8 +757,27 @@ const getPrimaryPrompt = (preferences: UserPreferences) => {
 	return "Help me shape a balanced trip plan with options I can compare.";
 };
 
+const PHILIPPINE_SUGGESTION_LIMIT = 8;
+
+const getPhilippineSuggestions = (
+	preferences: UserPreferences,
+	today?: string
+): PreferencePhilippineSuggestion[] =>
+	rankPhilippineDestinations({
+		limit: PHILIPPINE_SUGGESTION_LIMIT,
+		preferences,
+		today,
+	}).map((suggestion) => ({
+		...suggestion,
+		prompt: createPersonalizedPrompt(
+			preferences,
+			buildPhilippinePlanPrompt(suggestion)
+		),
+	}));
+
 export const getPreferenceSuggestions = (
-	preferences: Partial<UserPreferences>
+	preferences: Partial<UserPreferences>,
+	options: { today?: string } = {}
 ): PreferenceSuggestions => {
 	const normalizedPreferences = normalizePreferences(preferences);
 	const home = getHomeSuggestion(normalizedPreferences);
@@ -820,6 +802,10 @@ export const getPreferenceSuggestions = (
 	return {
 		...homeRecommendations,
 		home,
+		philippineSuggestions: getPhilippineSuggestions(
+			normalizedPreferences,
+			options.today
+		),
 		prompts: [
 			{
 				accent: "#0A84FF",

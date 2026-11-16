@@ -4,6 +4,7 @@ import {
 	getBudgetDayCount,
 	getBudgetWalletSummary,
 	getTripDayCount,
+	getTripTodayKey,
 	isBookingSecured,
 } from "@viya-app/domain";
 import { useMutation, useQuery } from "convex/react";
@@ -38,7 +39,6 @@ import {
 	formatDay,
 	formatEnumLabel,
 	formatMoney,
-	toLocalDateKey,
 } from "@/src/lib/format";
 
 import {
@@ -89,7 +89,7 @@ const initialExpenseForm = (): ExpenseFormState => ({
 	bookingId: "",
 	category: "food",
 	notes: "",
-	spentAt: toLocalDateKey(),
+	spentAt: getTripTodayKey(),
 	title: "",
 	vaultItemId: "",
 });
@@ -177,8 +177,10 @@ function BudgetFigure({
 	hasDates,
 	leftAmount,
 	overAmount,
+	plannedCosts,
 	progress,
 	totalTrackedSpend,
+	alertLevel,
 }: {
 	budgetAmount?: number;
 	currency: string;
@@ -187,8 +189,10 @@ function BudgetFigure({
 	hasDates: boolean;
 	leftAmount: number;
 	overAmount: number;
+	plannedCosts: number;
 	progress: number;
 	totalTrackedSpend: number;
+	alertLevel: "none" | "ok" | "near" | "over";
 }) {
 	const isOver = Boolean(budgetAmount) && overAmount > 0;
 
@@ -228,11 +232,21 @@ function BudgetFigure({
 					) : (
 						<AppText tone="secondary" variant="subhead">
 							{formatMoney(leftAmount, currency)} left
+							{plannedCosts > 0
+								? ` after ${formatMoney(plannedCosts, currency)} planned`
+								: ""}
 							{hasDates && dayCount > 0
 								? ` · ${formatMoney(dailySafeSpend, currency)} a day for ${formatCount(dayCount, "day")}`
 								: ""}
 						</AppText>
 					)}
+					{alertLevel === "near" ? (
+						<StatusLabel
+							icon="alert-circle-outline"
+							label="Nearly at your budget"
+							tone="warning"
+						/>
+					) : null}
 				</>
 			) : null}
 		</View>
@@ -584,8 +598,9 @@ export function TripBudgetScreen() {
 			budgetAmount: budget.trip.budgetAmount,
 			budgetCurrency: budget.trip.budgetCurrency,
 			expenses: budget.expenses,
+			itineraryDays: budget.itineraryDays,
 			itineraryItems: budget.itineraryItems,
-			remainingTripDays: getBudgetDayCount(budget.trip, toLocalDateKey()),
+			remainingTripDays: getBudgetDayCount(budget.trip, getTripTodayKey()),
 		});
 	}, [budget]);
 
@@ -649,7 +664,7 @@ export function TripBudgetScreen() {
 		: null;
 	const hasExpenses = budget.expenses.length > 0;
 
-	const budgetDayCount = getBudgetDayCount(budget.trip, toLocalDateKey());
+	const budgetDayCount = getBudgetDayCount(budget.trip, getTripTodayKey());
 	const tripDays = getTripDayCount(budget.trip.startDate, budget.trip.endDate);
 	const emptyCopy = getEmptyCopy(budgetAmount, currency, tripDays);
 	const bookedCount = budget.bookings.filter((booking) =>
@@ -825,6 +840,7 @@ export function TripBudgetScreen() {
 				title="Budget"
 			>
 				<BudgetFigure
+					alertLevel={summary.alert.level}
 					budgetAmount={budgetAmount}
 					currency={currency}
 					dailySafeSpend={summary.dailySafeSpend}
@@ -832,17 +848,20 @@ export function TripBudgetScreen() {
 					hasDates={Boolean(budget.trip.startDate && budget.trip.endDate)}
 					leftAmount={summary.leftAmount}
 					overAmount={summary.overAmount}
+					plannedCosts={summary.plannedCosts}
 					progress={budgetProgress}
 					totalTrackedSpend={summary.totalTrackedSpend}
 				/>
 
-				<ListGroup
-					footer={
-						foreignSpendLabel
-							? `${foreignSpendLabel} tracked separately.`
-							: undefined
-					}
-				>
+				{foreignSpendLabel ? (
+					<StatusLabel
+						icon="alert-circle-outline"
+						label={`${foreignSpendLabel} in another currency is not in these totals`}
+						tone="warning"
+					/>
+				) : null}
+
+				<ListGroup>
 					<ListRow
 						onPress={openBudgetEditor}
 						title="Total budget"
@@ -868,14 +887,37 @@ export function TripBudgetScreen() {
 					tripId={tripId}
 				/>
 
-				{summary.categoryBreakdown.length > 0 ? (
+				{summary.categorySummaries.length > 0 ? (
 					<ListGroup header="By category">
-						{summary.categoryBreakdown.map((entry) => (
+						{summary.categorySummaries.map((entry) => (
 							<ListRow
 								key={entry.category}
 								showChevron={false}
+								subtitle={
+									entry.planned > 0
+										? `${formatMoney(entry.planned, currency)} planned`
+										: undefined
+								}
 								title={formatEnumLabel(entry.category)}
-								value={formatMoney(entry.amount, currency)}
+								value={formatMoney(entry.spent, currency)}
+							/>
+						))}
+					</ListGroup>
+				) : null}
+
+				{summary.daySummaries.length > 0 ? (
+					<ListGroup header="By day">
+						{summary.daySummaries.map((entry) => (
+							<ListRow
+								key={entry.date}
+								showChevron={false}
+								subtitle={
+									entry.planned > 0
+										? `${formatMoney(entry.planned, currency)} planned`
+										: undefined
+								}
+								title={formatDay(entry.date) || entry.date}
+								value={formatMoney(entry.spent, currency)}
 							/>
 						))}
 					</ListGroup>

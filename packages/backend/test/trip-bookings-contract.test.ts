@@ -7,9 +7,9 @@ const rootPath = resolve(import.meta.dirname, "../../..");
 const createBookingSyncPattern =
 	/syncBookingVaultLink\(ctx, undefined, args\.vaultItemId, bookingId\)/;
 const explicitVaultPatchPattern =
-	/const shouldUpdateVaultItem = hasOwnObjectProperty\(args, "vaultItemId"\)/;
+	/const shouldUpdateVaultItem = vaultItemId !== undefined/;
 const conditionalVaultPatchPattern =
-	/\.\.\.\(shouldUpdateVaultItem \? \{ vaultItemId \} : \{\}\)/;
+	/if \(shouldUpdateVaultItem\) \{\s*patch\.vaultItemId = nextVaultItemId/;
 const linkBookingSyncPattern =
 	/syncBookingVaultLink\(\s*ctx,\s*booking\.vaultItemId,\s*args\.vaultItemId,\s*args\.bookingId\s*\)/;
 const sortedBookingsPattern =

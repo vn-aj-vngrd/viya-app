@@ -1,7 +1,7 @@
 import { api } from "@viya-app/backend/convex/_generated/api";
 import { getPreferenceSuggestions, getTripDayCount } from "@viya-app/domain";
 import { useAction, useMutation, useQuery } from "convex/react";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { View } from "react-native";
 
@@ -42,6 +42,11 @@ import {
 	travelerTypeOptions,
 	tripStyleOptions,
 } from "./trip-create-flow-utils";
+import {
+	applyTripPrefill,
+	getTripPrefill,
+	isPrefillComplete,
+} from "./trip-prefill";
 import { TripTextField } from "./trip-text-field";
 
 /** Three screens: where, when, review. Optional detail lives on the review. */
@@ -500,11 +505,15 @@ export function ManualTripCreateScreen() {
 	const runLocationSuggestionSearch = useAction(
 		api.locations.searchLocationSuggestions
 	);
-	const [activeStep, setActiveStep] = useState<FlowStep>("destination");
+	const params = useLocalSearchParams();
+	const [prefill] = useState(() => getTripPrefill(params));
+	const [activeStep, setActiveStep] = useState<FlowStep>(
+		isPrefillComplete(prefill) ? "review" : "destination"
+	);
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [isCreating, setIsCreating] = useState(false);
 	const [state, setState] = useState<TripCreateFlowState>(() =>
-		createInitialTripCreateFlowState()
+		applyTripPrefill(createInitialTripCreateFlowState(), prefill)
 	);
 	const searchLocationSuggestions = useCallback(
 		(text: string) => runLocationSuggestionSearch({ text }),

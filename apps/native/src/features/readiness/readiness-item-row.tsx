@@ -1,5 +1,6 @@
 import type { Doc } from "@viya-app/backend/convex/_generated/dataModel";
 import {
+	getTripTodayKey,
 	PRIORITY_LABELS,
 	type Priority,
 	READINESS_CATEGORY_LABELS,
@@ -18,7 +19,7 @@ import {
 	spacing,
 	useUITheme,
 } from "@/src/components/ui";
-import { formatDay, formatRelativeDay, toLocalDateKey } from "@/src/lib/format";
+import { formatDay, formatRelativeDay } from "@/src/lib/format";
 
 const getInitials = (name: string) =>
 	name
@@ -98,7 +99,7 @@ export const getTaskSubtitle = (
 	>,
 	showCategory = true
 ): string => {
-	const today = toLocalDateKey();
+	const today = getTripTodayKey();
 	let dueText: string | null = null;
 
 	if (item.dueDate) {

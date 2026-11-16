@@ -1,3 +1,4 @@
+import { cleanText, getBookingInputError } from "@viya-app/domain";
 import { ConvexError, v } from "convex/values";
 
 import type { Id } from "./_generated/dataModel";
@@ -22,6 +23,23 @@ const bookingStatusValidator = v.union(
 	v.literal("missing"),
 	v.literal("cancelled")
 );
+
+const nullableString = v.optional(v.union(v.string(), v.null()));
+const nullableNumber = v.optional(v.union(v.number(), v.null()));
+
+/** Blank or null means "clear this field". */
+const toOptionalText = (value: string | null | undefined) =>
+	value === null || value === undefined ? undefined : value.trim() || undefined;
+
+const ensureValidBookingInput = (
+	input: Parameters<typeof getBookingInputError>[0]
+) => {
+	const error = getBookingInputError(input);
+
+	if (error) {
+		throw new ConvexError(error);
+	}
+};
 
 const touchTrip = async (ctx: MutationCtx, tripId: Id<"trips">) => {
 	await ctx.db.patch(tripId, { updatedAt: Date.now() });
@@ -58,11 +76,6 @@ const ensureVaultItemBelongsToTrip = async (
 		throw new ConvexError("VAULT_ITEM_TRIP_MISMATCH");
 	}
 };
-
-const hasOwnObjectProperty = <T extends object>(
-	value: T,
-	key: PropertyKey
-): boolean => key in value;
 
 const syncBookingVaultLink = async (
 	ctx: MutationCtx,
@@ -204,9 +217,17 @@ export const createBookingTarget = mutation({
 		const identity = await getRequiredIdentity(ctx);
 		await ensureTripAccess(ctx, args.tripId, identity.subject);
 		await ensureVaultItemBelongsToTrip(ctx, args.vaultItemId, args.tripId);
+		ensureValidBookingInput(args);
 		const now = Date.now();
 		const bookingId = await ctx.db.insert("bookings", {
 			...args,
+			address: toOptionalText(args.address),
+			confirmationCode: toOptionalText(args.confirmationCode),
+			externalUrl: toOptionalText(args.externalUrl),
+			locationName: toOptionalText(args.locationName),
+			notes: toOptionalText(args.notes),
+			provider: toOptionalText(args.provider),
+			title: cleanText(args.title),
 			createdAt: now,
 			status: args.status ?? "target",
 			updatedAt: now,
@@ -221,21 +242,22 @@ export const createBookingTarget = mutation({
 export const updateBooking = mutation({
 	args: {
 		bookingId: v.id("bookings"),
-		address: v.optional(v.string()),
-		confirmationCode: v.optional(v.string()),
-		cost: v.optional(v.number()),
-		currency: v.optional(v.string()),
-		endDateTime: v.optional(v.string()),
-		externalUrl: v.optional(v.string()),
-		locationName: v.optional(v.string()),
-		notes: v.optional(v.string()),
-		provider: v.optional(v.string()),
-		providerCategory: v.optional(v.string()),
-		startDateTime: v.optional(v.string()),
+		/** For optional fields, null clears the stored value. */
+		address: nullableString,
+		confirmationCode: nullableString,
+		cost: nullableNumber,
+		currency: nullableString,
+		endDateTime: nullableString,
+		externalUrl: nullableString,
+		locationName: nullableString,
+		notes: nullableString,
+		provider: nullableString,
+		providerCategory: nullableString,
+		startDateTime: nullableString,
 		status: v.optional(bookingStatusValidator),
 		title: v.optional(v.string()),
 		type: v.optional(bookingTypeValidator),
-		vaultItemId: v.optional(v.id("vaultItems")),
+		vaultItemId: v.optional(v.union(v.id("vaultItems"), v.null())),
 	},
 	handler: async (ctx, args) => {
 		const identity = await getRequiredIdentity(ctx);
@@ -244,24 +266,65 @@ export const updateBooking = mutation({
 			args.bookingId,
 			identity.subject
 		);
-		const shouldUpdateVaultItem = hasOwnObjectProperty(args, "vaultItemId");
+		const { bookingId, vaultItemId, title, status, type, ...rest } = args;
+		const shouldUpdateVaultItem = vaultItemId !== undefined;
+		const nextVaultItemId = vaultItemId ?? undefined;
+
 		if (shouldUpdateVaultItem) {
-			await ensureVaultItemBelongsToTrip(ctx, args.vaultItemId, booking.tripId);
+			await ensureVaultItemBelongsToTrip(ctx, nextVaultItemId, booking.tripId);
 		}
-		const { bookingId, vaultItemId, ...patch } = args;
-		await ctx.db.patch(bookingId, {
-			...patch,
-			...(shouldUpdateVaultItem ? { vaultItemId } : {}),
-			updatedAt: Date.now(),
+
+		ensureValidBookingInput({
+			cost: "cost" in args ? args.cost : booking.cost,
+			endDateTime:
+				"endDateTime" in args ? args.endDateTime : booking.endDateTime,
+			externalUrl: args.externalUrl,
+			startDateTime:
+				"startDateTime" in args ? args.startDateTime : booking.startDateTime,
+			title,
 		});
+
+		const patch: Record<string, unknown> = { updatedAt: Date.now() };
+
+		for (const [key, value] of Object.entries(rest)) {
+			if (value === undefined) {
+				continue;
+			}
+
+			// null clears the field; Convex removes a field patched with undefined.
+			patch[key] =
+				typeof value === "string"
+					? toOptionalText(value)
+					: (value ?? undefined);
+		}
+
+		if (title !== undefined) {
+			patch.title = cleanText(title);
+		}
+
+		if (status !== undefined) {
+			patch.status = status;
+		}
+
+		if (type !== undefined) {
+			patch.type = type;
+		}
+
+		if (shouldUpdateVaultItem) {
+			patch.vaultItemId = nextVaultItemId;
+		}
+
+		await ctx.db.patch(bookingId, patch);
+
 		if (shouldUpdateVaultItem) {
 			await syncBookingVaultLink(
 				ctx,
 				booking.vaultItemId,
-				vaultItemId,
+				nextVaultItemId,
 				bookingId
 			);
 		}
+
 		await touchTrip(ctx, booking.tripId);
 
 		return ctx.db.get(bookingId);

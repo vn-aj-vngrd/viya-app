@@ -78,6 +78,12 @@ export const getDateKeyInTimeZone = (ms: number, timeZone: string): string =>
 		year: "numeric",
 	}).format(new Date(ms));
 
+/** Single time zone for "today" across backend and app. */
+export const TRIP_TIME_ZONE = "Asia/Manila";
+
+export const getTripTodayKey = (ms: number = Date.now()): string =>
+	getDateKeyInTimeZone(ms, TRIP_TIME_ZONE);
+
 // Bookings
 export const isBookingSecured = (status: string): boolean =>
 	status === "confirmed" || status === "bookedExternally";
@@ -144,6 +150,59 @@ interface ReadinessProgressInput {
 	status: string;
 }
 
+const READINESS_WEIGHT: Record<string, number> = {
+	critical: 4,
+	high: 3,
+	low: 1,
+	medium: 2,
+};
+const READINESS_IN_PROGRESS_CREDIT = 0.5;
+/** Blocked or overdue open work weighs more, so it drags the score harder. */
+const READINESS_ESCALATION = 1.5;
+
+const isReadinessOverdue = (
+	item: ReadinessProgressInput,
+	todayKey: string
+): boolean => Boolean(item.dueDate && item.dueDate < todayKey);
+
+/**
+ * The one readiness formula. Priority-weighted share of active (non-ignored)
+ * items that are done; in-progress earns half credit unless blocked/overdue,
+ * which earn nothing and weigh 1.5x. All done is exactly 100. Null if no items.
+ */
+export const getReadinessPercent = (
+	items: readonly ReadinessProgressInput[],
+	todayKey: string
+): number | null => {
+	let total = 0;
+	let earned = 0;
+
+	for (const item of items) {
+		if (item.status === "ignored") {
+			continue;
+		}
+
+		const base = READINESS_WEIGHT[item.priority] ?? 2;
+
+		if (item.status === "done") {
+			total += base;
+			earned += base;
+			continue;
+		}
+
+		const escalated =
+			item.status === "blocked" || isReadinessOverdue(item, todayKey);
+
+		total += escalated ? base * READINESS_ESCALATION : base;
+
+		if (item.status === "inProgress" && !escalated) {
+			earned += base * READINESS_IN_PROGRESS_CREDIT;
+		}
+	}
+
+	return total === 0 ? null : Math.round((earned / total) * 100);
+};
+
 export const getReadinessProgress = (
 	items: readonly ReadinessProgressInput[],
 	todayKey: string
@@ -169,7 +228,7 @@ export const getReadinessProgress = (
 			highOpen += 1;
 		}
 
-		if (item.dueDate && item.dueDate < todayKey) {
+		if (isReadinessOverdue(item, todayKey)) {
 			overdue += 1;
 		}
 	}
@@ -180,7 +239,7 @@ export const getReadinessProgress = (
 		highOpen,
 		open: active - done,
 		overdue,
-		percent: active === 0 ? null : Math.round((done / active) * 100),
+		percent: getReadinessPercent(items, todayKey),
 	};
 };
 
@@ -254,6 +313,35 @@ export const getTripPhase = (
 	return "during";
 };
 
+export type EffectiveTripStatus =
+	| "planning"
+	| "traveling"
+	| "completed"
+	| "archived";
+
+/**
+ * The one rule for trip status. Archived and manually completed trips keep
+ * that status; otherwise dates decide (Manila "today"): before start is
+ * planning, within the range is traveling, after the end is completed.
+ * Undated trips stay planning.
+ */
+export const getEffectiveTripStatus = (
+	trip: TripDatesInput,
+	todayKey: string
+): EffectiveTripStatus => {
+	const phase = getTripPhase(trip, todayKey);
+
+	if (phase === "archived") {
+		return "archived";
+	}
+
+	if (phase === "completed" || phase === "ended") {
+		return "completed";
+	}
+
+	return phase === "during" ? "traveling" : "planning";
+};
+
 export interface TripCountdown {
 	dayNumber: number | null;
 	daysUntil: number | null;
@@ -314,7 +402,11 @@ export const getTravelerCount = (
 	trip: { groupType: string; travelerCount?: number | null },
 	companions: readonly { role: string }[]
 ): number | null => {
-	if (typeof trip.travelerCount === "number") {
+	if (
+		typeof trip.travelerCount === "number" &&
+		Number.isInteger(trip.travelerCount) &&
+		trip.travelerCount > 0
+	) {
 		return trip.travelerCount;
 	}
 

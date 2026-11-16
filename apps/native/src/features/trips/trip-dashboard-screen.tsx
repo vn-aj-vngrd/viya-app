@@ -1,11 +1,7 @@
 import { api } from "@viya-app/backend/convex/_generated/api";
-import {
-	getMissingRequiredReadinessCategories,
-	toReadinessItem,
-} from "@viya-app/domain";
-import { useMutation, useQuery } from "convex/react";
-import { useRouter } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "convex/react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useMemo, useState } from "react";
 
 import { PrimaryButton, ScreenShell } from "@/src/components/ui";
 import { VIYA_ROUTES } from "@/src/constants/routes";
@@ -24,7 +20,8 @@ import { useTripIdParam } from "./use-trip-id-param";
 
 function TripDashboardContent({ model }: { model: TripDashboardModel }) {
 	const router = useRouter();
-	const [isDraftsOpen, setIsDraftsOpen] = useState(false);
+	const { openDrafts } = useLocalSearchParams<{ openDrafts?: string }>();
+	const [isDraftsOpen, setIsDraftsOpen] = useState(openDrafts === "1");
 	const { actions, openProfileSheet, sheet } = useTripHeaderActions(model);
 	const isTraveling = model.phase === "during";
 
@@ -72,28 +69,6 @@ export function TripDashboardScreen() {
 		api.tripWorkspace.getTripWorkspace,
 		tripId ? { tripId } : "skip"
 	);
-
-	const ensureBaselineReadinessItems = useMutation(
-		api.readiness.ensureBaselineReadinessItems
-	);
-	const baselineRequestedRef = useRef<string | null>(null);
-
-	useEffect(() => {
-		if (!(tripId && workspace) || baselineRequestedRef.current === tripId) {
-			return;
-		}
-
-		const missing = getMissingRequiredReadinessCategories(
-			workspace.readinessItems.map(toReadinessItem)
-		);
-
-		if (missing.length > 0) {
-			baselineRequestedRef.current = tripId;
-			ensureBaselineReadinessItems({ tripId }).catch(() => {
-				baselineRequestedRef.current = null;
-			});
-		}
-	}, [ensureBaselineReadinessItems, tripId, workspace]);
 
 	const model = useMemo(() => {
 		if (!(tripId && workspace)) {

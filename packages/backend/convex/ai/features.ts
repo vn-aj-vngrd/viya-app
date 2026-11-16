@@ -1,36 +1,31 @@
 import {
 	budgetSuggestionSchema,
-	detectedRisksSchema,
-	generatedItinerarySchema,
-	readinessAiOutputSchema,
+	type VaultExtraction,
 	vaultExtractionSchema,
-	wrappedSummarySchema,
 } from "@viya-app/domain";
-import { palawanDemoTrip } from "@viya-app/domain/demo/palawan";
-import { generateObject } from "ai";
-import { v } from "convex/values";
+import { type FilePart, generateObject, type ImagePart } from "ai";
+import { ConvexError, v } from "convex/values";
 import { getSingaporeDemoVaultExtraction } from "../../src/ai/singapore-demo-fixtures";
-import { action } from "../_generated/server";
-import {
-	fallbackItinerary,
-	fallbackReadiness,
-	fallbackRisks,
-	fallbackVaultExtraction,
-	fallbackWrapped,
-} from "./fallbacks";
+import { internal } from "../_generated/api";
+import type { Id } from "../_generated/dataModel";
+import { type ActionCtx, action, internalQuery } from "../_generated/server";
+import { fallbackVaultExtraction } from "./fallbacks";
 import {
 	buildBudgetSuggestionPrompt,
-	buildItineraryPrompt,
-	buildReadinessPrompt,
-	buildRiskPrompt,
 	buildVaultExtractionPrompt,
-	buildWrappedPrompt,
 } from "./prompts";
 
 import { getLanguageModel, hasConfiguredAiProvider } from "./provider";
-import { generateStructuredObject } from "./structured";
 
-const getDemoTripContext = () => JSON.stringify(palawanDemoTrip);
+const maxVaultTextChars = 20_000;
+const maxVaultBinaryBytes = 8 * 1024 * 1024;
+const textMimePattern = /^(text\/|application\/(json|xml|csv))/;
+
+export type VaultExtractionSource = "ai" | "demo" | "fallback";
+export type VaultExtractionResult = VaultExtraction & {
+	/** Whether Viya read this file ("ai"), used a demo fixture, or a template. */
+	source: VaultExtractionSource;
+};
 const budgetRoundingIncrement = 1000;
 const minimumBudgetSuggestion = 3000;
 
@@ -62,7 +57,11 @@ export const generateBudgetSuggestion = action({
 		travelerCount: v.string(),
 		travelerType: v.string(),
 	},
-	handler: async (_ctx, args) => {
+	handler: async (ctx, args) => {
+		if (!(await ctx.auth.getUserIdentity())) {
+			throw new ConvexError("AUTH_REQUIRED");
+		}
+
 		const fallbackSuggestion = {
 			amount: normalizeBudgetSuggestionAmount(
 				args.heuristicAmount,
@@ -110,84 +109,68 @@ export const generateBudgetSuggestion = action({
 	},
 });
 
-export const generateItineraryDraft = action({
-	args: {
-		tripId: v.string(),
-		useFallback: v.optional(v.boolean()),
-	},
-	handler: async (_ctx, args) => {
-		if (args.useFallback) {
-			return fallbackItinerary;
+export const getExtractionTrip = internalQuery({
+	args: { ownerId: v.string(), tripId: v.id("trips") },
+	handler: async (ctx, args) => {
+		const trip = await ctx.db.get(args.tripId);
+
+		if (!trip || trip.ownerId !== args.ownerId) {
+			throw new ConvexError("TRIP_NOT_FOUND");
 		}
 
-		return await generateStructuredObject({
-			fallback: fallbackItinerary,
-			model: getLanguageModel("itinerary"),
-			prompt: buildItineraryPrompt(getDemoTripContext()),
-			schema: generatedItinerarySchema,
-			schemaName: "GeneratedItinerary",
-		});
+		return {
+			destination: trip.destination,
+			endDate: trip.endDate,
+			isDemo: trip.isDemo,
+			startDate: trip.startDate,
+			title: trip.title,
+		};
 	},
 });
 
-export const analyzeReadinessDraft = action({
-	args: {
-		tripId: v.string(),
-		useFallback: v.optional(v.boolean()),
-	},
-	handler: async (_ctx, args) => {
-		if (args.useFallback) {
-			return fallbackReadiness;
-		}
+const readStoredFile = async (
+	ctx: ActionCtx,
+	storageId: Id<"_storage">,
+	fallbackMimeType: string
+): Promise<{
+	content: (ImagePart | FilePart)[];
+	text?: string;
+} | null> => {
+	const blob = await ctx.storage.get(storageId);
 
-		return await generateStructuredObject({
-			fallback: fallbackReadiness,
-			model: getLanguageModel("readiness"),
-			prompt: buildReadinessPrompt(getDemoTripContext()),
-			schema: readinessAiOutputSchema,
-			schemaName: "ReadinessAnalysis",
-		});
-	},
-});
+	if (!blob) {
+		return null;
+	}
 
-export const detectRisksDraft = action({
-	args: {
-		tripId: v.string(),
-		useFallback: v.optional(v.boolean()),
-	},
-	handler: async (_ctx, args) => {
-		if (args.useFallback) {
-			return fallbackRisks;
-		}
+	const mimeType = blob.type || fallbackMimeType;
 
-		return await generateStructuredObject({
-			fallback: fallbackRisks,
-			model: getLanguageModel("risk"),
-			prompt: buildRiskPrompt(getDemoTripContext()),
-			schema: detectedRisksSchema,
-			schemaName: "DetectedRisks",
-		});
-	},
-});
+	if (textMimePattern.test(mimeType)) {
+		return {
+			content: [],
+			text: (await blob.text()).slice(0, maxVaultTextChars),
+		};
+	}
 
-export const generateWrappedDraft = action({
-	args: {
-		tripId: v.string(),
-		useFallback: v.optional(v.boolean()),
-	},
-	handler: async (_ctx, args) => {
-		if (args.useFallback) {
-			return fallbackWrapped;
-		}
+	if (blob.size > maxVaultBinaryBytes) {
+		return null;
+	}
 
-		return await generateStructuredObject({
-			fallback: fallbackWrapped,
-			model: getLanguageModel("wrapped"),
-			prompt: buildWrappedPrompt(getDemoTripContext()),
-			schema: wrappedSummarySchema,
-			schemaName: "WrappedSummary",
-		});
-	},
+	const data = new Uint8Array(await blob.arrayBuffer());
+
+	if (mimeType.startsWith("image/")) {
+		return { content: [{ image: data, mediaType: mimeType, type: "image" }] };
+	}
+
+	if (mimeType === "application/pdf") {
+		return { content: [{ data, mediaType: mimeType, type: "file" }] };
+	}
+
+	return null;
+};
+
+const templateExtraction = (): VaultExtractionResult => ({
+	...fallbackVaultExtraction,
+	source: "fallback",
 });
 
 export const extractVaultItemDraft = action({
@@ -202,34 +185,80 @@ export const extractVaultItemDraft = action({
 		tripId: v.optional(v.id("trips")),
 		useFallback: v.optional(v.boolean()),
 	},
-	handler: async (_ctx, args) => {
-		const fixtureExtraction = getSingaporeDemoVaultExtraction(args.fileName);
+	handler: async (ctx, args): Promise<VaultExtractionResult> => {
+		const identity = await ctx.auth.getUserIdentity();
 
-		if (fixtureExtraction) {
-			return fixtureExtraction;
+		if (!identity) {
+			throw new ConvexError("AUTH_REQUIRED");
 		}
 
-		if (args.useFallback) {
-			return fallbackVaultExtraction;
+		const trip = args.tripId
+			? await ctx.runQuery(internal.ai.features.getExtractionTrip, {
+					ownerId: identity.subject,
+					tripId: args.tripId,
+				})
+			: null;
+
+		// Fixture files are only honoured inside an explicit demo trip.
+		const fixtureExtraction = trip?.isDemo
+			? getSingaporeDemoVaultExtraction(args.fileName)
+			: null;
+
+		if (fixtureExtraction) {
+			return { ...fixtureExtraction, source: "demo" };
+		}
+
+		if (args.useFallback || !hasConfiguredAiProvider()) {
+			return templateExtraction();
+		}
+
+		const pastedText = args.pastedText?.trim().slice(0, maxVaultTextChars);
+		const stored = args.storageId
+			? await readStoredFile(ctx, args.storageId, args.mimeType)
+			: null;
+		const readFile = Boolean(stored);
+		const content: (ImagePart | FilePart)[] = stored?.content ?? [];
+		const fileText = stored?.text;
+
+		if (!(readFile || pastedText)) {
+			return templateExtraction();
 		}
 
 		const vaultContext = JSON.stringify({
 			fileName: args.fileName,
 			fileSize: args.fileSize,
+			fileText,
 			kind: args.kind,
 			mimeType: args.mimeType,
-			pastedText: args.pastedText,
-			storageId: args.storageId,
+			pastedText,
 			title: args.title,
-			tripId: args.tripId,
+			trip,
 		});
 
-		return await generateStructuredObject({
-			fallback: fallbackVaultExtraction,
-			model: getLanguageModel("vault"),
-			prompt: buildVaultExtractionPrompt(vaultContext),
-			schema: vaultExtractionSchema,
-			schemaName: "VaultExtraction",
-		});
+		try {
+			const result = await generateObject({
+				messages: [
+					{
+						content: [
+							{
+								text: buildVaultExtractionPrompt(vaultContext),
+								type: "text",
+							},
+							...content,
+						],
+						role: "user",
+					},
+				],
+				model: getLanguageModel("vault"),
+				schema: vaultExtractionSchema,
+				schemaName: "VaultExtraction",
+			});
+
+			return { ...result.object, source: "ai" };
+		} catch (error) {
+			console.error("Vault extraction failed", error);
+
+			return templateExtraction();
+		}
 	},
 });

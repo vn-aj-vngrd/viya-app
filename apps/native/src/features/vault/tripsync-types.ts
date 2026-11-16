@@ -10,6 +10,6 @@ export interface PendingTripSyncUpload {
 }
 
 export interface PendingTripSyncReview {
-	extraction: VaultExtraction;
+	extraction: VaultExtraction & { source?: "ai" | "demo" | "fallback" };
 	upload: PendingTripSyncUpload;
 }

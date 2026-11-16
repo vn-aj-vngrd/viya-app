@@ -2,14 +2,18 @@ import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
 import {
 	addDaysToKey,
+	findItineraryConflicts,
+	getDurationMinutes,
 	getTripDayCount,
 	type ItineraryItemCategory,
 	type ItineraryItemPriority,
 	type ItineraryItemStatus,
 	type ItineraryPace,
 	isBookingSecured,
+	validateItineraryTiming,
 } from "@viya-app/domain";
 import { useMutation, useQuery } from "convex/react";
+import { ConvexError } from "convex/values";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { Linking, View } from "react-native";
@@ -52,7 +56,6 @@ import {
 	formatTime,
 	formatTimeRange,
 	formatTripRange,
-	getMinutesBetween,
 	toLocalDateKey,
 } from "@/src/lib/format";
 import {
@@ -75,12 +78,12 @@ const formatPickerTripRange = (startDate: Date, endDate: Date) =>
 		year: "auto",
 	});
 
-const timePattern = /^([01]?\d|2[0-3]):[0-5]\d$/;
-
 interface ItineraryItemForm {
 	bookingId: string;
 	category: string;
+	dayId: string;
 	description: string;
+	endsOn: "next-day" | "same-day";
 	endTime: string;
 	estimatedCost: string;
 	locationName: string;
@@ -98,8 +101,10 @@ interface ItineraryDayForm {
 }
 
 const initialItemForm: ItineraryItemForm = {
+	endsOn: "same-day",
 	bookingId: "",
 	category: "activity",
+	dayId: "",
 	description: "",
 	endTime: "10:00",
 	estimatedCost: "",
@@ -209,21 +214,74 @@ const parseDayNumber = (value?: string) => {
 	return Number.isFinite(parsed) ? parsed : 1;
 };
 
+const ITINERARY_ERROR_COPY: Record<string, string> = {
+	BOOKING_ALREADY_IN_ITINERARY: "This booking is already in the itinerary.",
+	END_BEFORE_START: "The end time must be after the start time.",
+	INVALID_END_TIME: "Use 24-hour times, for example 10:00.",
+	INVALID_ITINERARY_COST: "Cost cannot be negative.",
+	INVALID_ITINERARY_TITLE: "Add a title.",
+	INVALID_START_TIME: "Use 24-hour times, for example 09:00.",
+	ITINERARY_DAY_OUTSIDE_TRIP_RANGE: "That day is outside the trip dates.",
+};
+
+const getItineraryErrorMessage = (error: unknown, fallback: string) =>
+	error instanceof ConvexError && typeof error.data === "string"
+		? (ITINERARY_ERROR_COPY[error.data] ?? fallback)
+		: fallback;
+
 const validateItemForm = (form: ItineraryItemForm): string | null => {
 	if (!(form.title.trim() && form.locationName.trim())) {
 		return "Add a title and a location.";
 	}
 
-	if (
-		!(
-			timePattern.test(form.startTime.trim()) &&
-			timePattern.test(form.endTime.trim())
-		)
-	) {
-		return "Use 24-hour times, for example 09:00.";
+	const timing = validateItineraryTiming({
+		endTime: form.endTime,
+		overnight: form.endsOn === "next-day",
+		startTime: form.startTime,
+	});
+
+	if (!timing.ok) {
+		return ITINERARY_ERROR_COPY[timing.error] ?? "Check the times.";
 	}
 
 	return null;
+};
+
+const buildItemPatch = ({
+	editingItem,
+	editingItemId,
+	fallbackDayId,
+	form,
+}: {
+	editingItem: Doc<"itineraryItems"> | null | undefined;
+	editingItemId: Id<"itineraryItems"> | null;
+	fallbackDayId: Id<"itineraryDays">;
+	form: ItineraryItemForm;
+}) => {
+	const locationName = form.locationName.trim();
+	const startTime = form.startTime.trim();
+	const endTime = form.endTime.trim();
+	const estimatedCost = Number(form.estimatedCost.replaceAll(",", ""));
+	const bookingId = form.bookingId.trim();
+
+	return {
+		address: locationName,
+		aiReason:
+			editingItem?.aiReason ?? "Added manually in the itinerary module.",
+		bookingId: bookingId || (editingItemId ? "" : undefined),
+		category: getItineraryItemCategory(form.category),
+		dayId: (form.dayId || fallbackDayId) as Id<"itineraryDays">,
+		description: form.description.trim() || "Planned trip item.",
+		durationMinutes: getDurationMinutes(startTime, endTime),
+		endTime,
+		estimatedCost: Number.isFinite(estimatedCost) ? estimatedCost : 0,
+		locationName,
+		overnight: form.endsOn === "next-day",
+		priority: getItineraryItemPriority(editingItem?.priority),
+		startTime,
+		status: getItineraryItemStatus(editingItem?.status),
+		title: form.title.trim(),
+	} as const;
 };
 
 const toggledStatus = (
@@ -255,7 +313,7 @@ function StopRow({
 	const isCompleted = item.status === "completed";
 	const isSkipped = item.status === "skipped";
 	const duration = formatDuration(
-		getMinutesBetween(item.startTime, item.endTime)
+		getDurationMinutes(item.startTime, item.endTime)
 	);
 	const subtitle = [
 		item.locationName,
@@ -666,6 +724,7 @@ export function TripItineraryScreen({
 function ItineraryItemSheet({
 	bookings,
 	dayLabel,
+	days,
 	errorMessage,
 	form,
 	isOpen,
@@ -681,6 +740,7 @@ function ItineraryItemSheet({
 }: {
 	bookings: Doc<"bookings">[];
 	dayLabel: string;
+	days: Doc<"itineraryDays">[];
 	errorMessage: string | null;
 	form: ItineraryItemForm;
 	isOpen: boolean;
@@ -746,6 +806,17 @@ function ItineraryItemSheet({
 					value={form.endTime}
 				/>
 			</FormGroup>
+			<ChoiceChips
+				label="Ends"
+				onChange={(value) =>
+					onUpdateForm("endsOn", value === "next-day" ? "next-day" : "same-day")
+				}
+				options={[
+					{ label: "Same day", value: "same-day" },
+					{ label: "Next day", value: "next-day" },
+				]}
+				value={form.endsOn}
+			/>
 			<ListGroup>
 				<ListRow
 					onPress={() => setShowMore((current) => !current)}
@@ -763,6 +834,17 @@ function ItineraryItemSheet({
 			</ListGroup>
 			{showMore ? (
 				<>
+					{item && days.length > 1 ? (
+						<ChoiceChips
+							label="Move to day"
+							onChange={(value) => onUpdateForm("dayId", value)}
+							options={days.map((day) => ({
+								label: `Day ${day.dayNumber}`,
+								value: day._id,
+							}))}
+							value={form.dayId}
+						/>
+					) : null}
 					<ChoiceChips
 						formatLabel={formatEnumLabel}
 						label="Category"
@@ -940,10 +1022,38 @@ function PlannedDayContent({
 		selectedDay.weatherNote &&
 		selectedDay.weatherNote !== defaultItineraryDayWeatherNote;
 
+	const titleById = new Map<string, string>(
+		dayItems.map((item) => [item._id, item.title])
+	);
+	const conflicts = findItineraryConflicts(
+		dayItems
+			.filter((item) => item.status !== "skipped")
+			.map((item) => ({
+				endTime: item.endTime,
+				id: item._id,
+				startTime: item.startTime,
+				title: item.title,
+			}))
+	);
+
 	return (
 		<>
 			{hasSummary ? (
 				<AppText tone="secondary">{selectedDay.summary}</AppText>
+			) : null}
+			{conflicts.length > 0 ? (
+				<ListGroup footer="Change a time or skip one of them to clear this.">
+					{conflicts.map((conflict) => (
+						<ListRow
+							accessibilityLabel={`Time conflict: ${titleById.get(conflict.firstId)} overlaps ${titleById.get(conflict.secondId)}`}
+							key={`${conflict.firstId}-${conflict.secondId}`}
+							leading={<Icon name="warning-outline" size={20} tone="warning" />}
+							showChevron={false}
+							subtitle="These stops overlap in time"
+							title={`${titleById.get(conflict.firstId) ?? "Stop"} and ${titleById.get(conflict.secondId) ?? "stop"}`}
+						/>
+					))}
+				</ListGroup>
 			) : null}
 			{dayItems.length === 0 ? (
 				<EmptyPrimary
@@ -1035,6 +1145,8 @@ function showStopActionMenu(
 	handlers: {
 		onDelete: () => void;
 		onEdit: () => void;
+		onMoveNext?: () => void;
+		onMovePrevious?: () => void;
 		onOpenBooking: () => void;
 		onOpenMaps: () => void;
 	}
@@ -1048,6 +1160,12 @@ function showStopActionMenu(
 
 	showRowMenu(item.title, [
 		{ label: "Edit stop", onPress: handlers.onEdit },
+		...(handlers.onMovePrevious
+			? [{ label: "Move to previous day", onPress: handlers.onMovePrevious }]
+			: []),
+		...(handlers.onMoveNext
+			? [{ label: "Move to next day", onPress: handlers.onMoveNext }]
+			: []),
 		...(canOpenMaps
 			? [{ label: "Open Maps", onPress: handlers.onOpenMaps }]
 			: []),
@@ -1111,6 +1229,7 @@ export function TripItineraryDayScreen() {
 	const deleteItineraryItem = useMutation(api.itinerary.deleteItineraryItem);
 	const updateItineraryDay = useMutation(api.itinerary.updateItineraryDay);
 	const updateItineraryItem = useMutation(api.itinerary.updateItineraryItem);
+	const moveItineraryItem = useMutation(api.itinerary.moveItineraryItem);
 	const [itemForm, setItemForm] = useState<ItineraryItemForm>(initialItemForm);
 	const [dayForm, setDayForm] = useState<ItineraryDayForm>(initialDayForm);
 	const [editingItemId, setEditingItemId] =
@@ -1246,9 +1365,11 @@ export function TripItineraryDayScreen() {
 		setItemForm({
 			bookingId: item.bookingId ?? "",
 			category: item.category,
+			dayId: item.dayId,
 			description:
 				item.description === "Planned trip item." ? "" : item.description,
 			endTime: item.endTime,
+			endsOn: item.endTime < item.startTime ? "next-day" : "same-day",
 			estimatedCost:
 				item.estimatedCost > 0 ? item.estimatedCost.toString() : "",
 			locationName: item.locationName,
@@ -1304,45 +1425,35 @@ export function TripItineraryDayScreen() {
 		}
 	};
 	const handleSaveItem = async () => {
-		if (!selectedDay) {
-			setItemErrorMessage("Start this day before adding a stop.");
-			return;
-		}
+		const validationError = selectedDay
+			? validateItemForm(itemForm)
+			: "Start this day before adding a stop.";
 
-		const validationError = validateItemForm(itemForm);
-		if (validationError) {
+		if (!selectedDay || validationError) {
 			setItemErrorMessage(validationError);
 			return;
 		}
 
-		const title = itemForm.title.trim();
-		const locationName = itemForm.locationName.trim();
-		const startTime = itemForm.startTime.trim();
-		const endTime = itemForm.endTime.trim();
-		const estimatedCost = Number(itemForm.estimatedCost.replaceAll(",", ""));
-		const bookingId = itemForm.bookingId.trim();
 		setItemErrorMessage(null);
 		setIsSavingItem(true);
 		try {
-			const itemPatch = {
-				address: locationName,
-				aiReason:
-					editingItem?.aiReason ?? "Added manually in the itinerary module.",
-				bookingId: bookingId || (editingItemId ? "" : undefined),
-				category: getItineraryItemCategory(itemForm.category),
-				dayId: selectedDay._id,
-				description: itemForm.description.trim() || "Planned trip item.",
-				durationMinutes: getMinutesBetween(startTime, endTime),
-				endTime,
-				estimatedCost: Number.isFinite(estimatedCost) ? estimatedCost : 0,
-				locationName,
-				priority: getItineraryItemPriority(editingItem?.priority),
-				startTime,
-				status: getItineraryItemStatus(editingItem?.status),
-				title,
-			} as const;
+			const itemPatch = buildItemPatch({
+				editingItem,
+				editingItemId,
+				fallbackDayId: selectedDay._id,
+				form: itemForm,
+			});
+			const { endTime, startTime } = itemPatch;
 
 			if (editingItemId) {
+				if (editingItem && itemPatch.dayId !== editingItem.dayId) {
+					await moveItineraryItem({
+						dayId: itemPatch.dayId,
+						endTime,
+						itemId: editingItemId,
+						startTime,
+					});
+				}
 				await updateItineraryItem({ ...itemPatch, itemId: editingItemId });
 			} else {
 				await createItineraryItem({ ...itemPatch, tripId });
@@ -1351,9 +1462,11 @@ export function TripItineraryDayScreen() {
 			setIsItemSheetOpen(false);
 			setEditingItemId(null);
 			setItemForm(initialItemForm);
-		} catch {
+		} catch (error) {
 			haptic("error");
-			setItemErrorMessage("Could not save the stop.");
+			setItemErrorMessage(
+				getItineraryErrorMessage(error, "Could not save the stop.")
+			);
 		} finally {
 			setIsSavingItem(false);
 		}
@@ -1437,12 +1550,41 @@ export function TripItineraryDayScreen() {
 			() => undefined
 		);
 	};
+	const moveItemToDay = async (
+		item: Doc<"itineraryItems">,
+		dayId: Id<"itineraryDays">
+	) => {
+		setItineraryErrorMessage(null);
+		try {
+			await moveItineraryItem({ dayId, itemId: item._id });
+			haptic("success");
+		} catch (error) {
+			haptic("error");
+			setItineraryErrorMessage(
+				getItineraryErrorMessage(error, "Could not move the stop.")
+			);
+		}
+	};
+	const adjacentDayHandler = (item: Doc<"itineraryItems">, offset: -1 | 1) => {
+		const currentDay = itineraryDays.find((day) => day._id === item.dayId);
+		const target = currentDay
+			? dayByNumber.get(currentDay.dayNumber + offset)
+			: undefined;
+
+		return target
+			? () => {
+					moveItemToDay(item, target._id).catch(() => undefined);
+				}
+			: undefined;
+	};
 	const showStopMenu = (item: Doc<"itineraryItems">) =>
 		showStopActionMenu(item, {
 			onDelete: () => {
 				handleDeleteItem(item._id).catch(() => undefined);
 			},
 			onEdit: () => openEditItem(item),
+			onMoveNext: adjacentDayHandler(item, 1),
+			onMovePrevious: adjacentDayHandler(item, -1),
 			onOpenBooking: () => router.push(VIYA_ROUTES.tripBookings(tripId)),
 			onOpenMaps: () => {
 				handleOpenMaps(item).catch(() => undefined);
@@ -1525,6 +1667,7 @@ export function TripItineraryDayScreen() {
 			<ItineraryItemSheet
 				bookings={bookings}
 				dayLabel={dayLabel}
+				days={itineraryDays}
 				errorMessage={itemErrorMessage}
 				form={itemForm}
 				isOpen={isItemSheetOpen}

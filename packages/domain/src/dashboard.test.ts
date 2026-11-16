@@ -11,11 +11,10 @@ describe("trip dashboard selectors", () => {
 	it("uses the highest severity open risk as the next best action", () => {
 		const action = getNextBestAction(palawanDemoTrip);
 
-		expect(action.label).toBe("Confirm final night hotel");
+		expect(action.target).toBe("risks");
 		expect(action.reason).toBe(
 			"I do not see confirmed accommodation for the last night of the trip."
 		);
-		expect(action.target).toBe("readiness");
 	});
 
 	it("returns critical open risks first", () => {

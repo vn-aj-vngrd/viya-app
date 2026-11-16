@@ -1,7 +1,9 @@
 // biome-ignore-all lint/style/useFilenamingConvention: Convex module names are public API paths.
 
 import {
+	getReadinessProgress,
 	getTripModuleSummaries,
+	getTripTodayKey,
 	sortReadinessItemsForReview,
 	sortTripCompanionsForCoordination,
 	sortTripExpensesForReview,
@@ -137,6 +139,9 @@ export const getTripWorkspace = query({
 				url: await ctx.storage.getUrl(item.storageId),
 			}))
 		);
+		// Live score from the one readiness formula, so every screen agrees.
+		const readinessScore =
+			getReadinessProgress(readinessItems, getTripTodayKey()).percent ?? 0;
 		const moduleSummaries = getTripModuleSummaries({
 			bookings: sortedBookings,
 			budgetAmount: trip.budgetAmount,
@@ -147,7 +152,7 @@ export const getTripWorkspace = query({
 			moments: sortedMoments,
 			notes: sortedNotes,
 			companions: sortedCompanions,
-			readinessScore: trip.readinessScore,
+			readinessScore,
 			risks: sortedRisks,
 			savedPlaces: sortedSavedPlaces,
 			vaultItems: hydratedVaultItems,
@@ -167,7 +172,7 @@ export const getTripWorkspace = query({
 			readinessItems: sortedReadinessItems,
 			risks: sortedRisks,
 			savedPlaces: sortedSavedPlaces,
-			trip,
+			trip: { ...trip, readinessScore },
 			vaultItems: hydratedVaultItems,
 		};
 	},

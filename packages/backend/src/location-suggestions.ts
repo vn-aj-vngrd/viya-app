@@ -15,14 +15,32 @@ export interface LocationSuggestion {
 
 interface GeoapifyAutocompleteUrlOptions {
 	apiKey: string;
+	/** Restrict results to one country (ISO alpha-2), for example "ph". */
+	countryFilter?: string;
 	limit: number;
 	text: string;
 }
 
 interface FetchGeoapifyLocationSuggestionsOptions
-	extends GeoapifyAutocompleteUrlOptions {
+	extends Omit<GeoapifyAutocompleteUrlOptions, "countryFilter"> {
 	fetcher?: typeof fetch;
+	/**
+	 * Search this country first and fall back to a global search when it
+	 * returns nothing. Results from this country always sort first.
+	 */
+	preferredCountryCode?: string;
 }
+
+/** Lower is better: towns and cities lead, street-level and POI results trail. */
+const resultTypeRank: Record<string, number> = {
+	city: 0,
+	county: 2,
+	district: 1,
+	locality: 0,
+	state: 2,
+	suburb: 1,
+};
+const OTHER_RESULT_TYPE_RANK = 3;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
 	typeof value === "object" && value !== null;
@@ -127,8 +145,62 @@ export const parseGeoapifyAutocompleteResponse = (
 		);
 };
 
+const getResultTypeRank = (feature: unknown) => {
+	if (!(isRecord(feature) && isRecord(feature.properties))) {
+		return OTHER_RESULT_TYPE_RANK;
+	}
+
+	const resultType = getString(feature.properties, "result_type");
+
+	return (
+		(resultType ? resultTypeRank[resultType] : undefined) ??
+		OTHER_RESULT_TYPE_RANK
+	);
+};
+
+/**
+ * Parse and order autocomplete results: preferred country first, then
+ * cities and localities ahead of streets and venues. Keeps API order otherwise.
+ */
+export const parseRankedGeoapifyResponse = (
+	response: unknown,
+	preferredCountryCode?: string
+): LocationSuggestion[] => {
+	if (!(isRecord(response) && Array.isArray(response.features))) {
+		return [];
+	}
+
+	const preferred = preferredCountryCode?.toUpperCase();
+	const ranked: {
+		index: number;
+		rank: number;
+		suggestion: LocationSuggestion;
+	}[] = [];
+
+	for (const [index, feature] of response.features.entries()) {
+		const suggestion = parseGeoapifyFeature(feature);
+
+		if (suggestion) {
+			const countryRank =
+				preferred && suggestion.countryCode !== preferred ? 10 : 0;
+			ranked.push({
+				index,
+				rank: countryRank + getResultTypeRank(feature),
+				suggestion,
+			});
+		}
+	}
+
+	return ranked
+		.sort(
+			(first, second) => first.rank - second.rank || first.index - second.index
+		)
+		.map(({ suggestion }) => suggestion);
+};
+
 export const getGeoapifyAutocompleteUrl = ({
 	apiKey,
+	countryFilter,
 	limit,
 	text,
 }: GeoapifyAutocompleteUrlOptions) => {
@@ -136,15 +208,38 @@ export const getGeoapifyAutocompleteUrl = ({
 	searchParams.append("text", text.trim());
 	searchParams.append("limit", String(limit));
 	searchParams.append("lang", "en");
+	if (countryFilter) {
+		const code = countryFilter.toLowerCase();
+		searchParams.append("filter", `countrycode:${code}`);
+		searchParams.append("bias", `countrycode:${code}`);
+	}
 	searchParams.append("apiKey", apiKey);
 
 	return `${geoapifyAutocompleteBaseUrl}?${searchParams.toString()}`;
+};
+
+const requestGeoapify = async (
+	fetcher: typeof fetch,
+	options: GeoapifyAutocompleteUrlOptions
+) => {
+	const response = await fetcher(getGeoapifyAutocompleteUrl(options), {
+		headers: { Accept: "application/json" },
+	});
+
+	if (!response.ok) {
+		throw new Error(
+			`Geoapify autocomplete request failed with status ${response.status}.`
+		);
+	}
+
+	return await response.json();
 };
 
 export const fetchGeoapifyLocationSuggestions = async ({
 	apiKey,
 	fetcher = fetch,
 	limit,
+	preferredCountryCode,
 	text,
 }: FetchGeoapifyLocationSuggestionsOptions) => {
 	const trimmedText = text.trim();
@@ -156,18 +251,24 @@ export const fetchGeoapifyLocationSuggestions = async ({
 		return [];
 	}
 
-	const response = await fetcher(
-		getGeoapifyAutocompleteUrl({ apiKey, limit, text: trimmedText }),
-		{
-			headers: { Accept: "application/json" },
-		}
-	);
-
-	if (!response.ok) {
-		throw new Error(
-			`Geoapify autocomplete request failed with status ${response.status}.`
+	if (preferredCountryCode) {
+		const local = parseRankedGeoapifyResponse(
+			await requestGeoapify(fetcher, {
+				apiKey,
+				countryFilter: preferredCountryCode,
+				limit,
+				text: trimmedText,
+			}),
+			preferredCountryCode
 		);
+
+		if (local.length > 0) {
+			return local;
+		}
 	}
 
-	return parseGeoapifyAutocompleteResponse(await response.json());
+	return parseRankedGeoapifyResponse(
+		await requestGeoapify(fetcher, { apiKey, limit, text: trimmedText }),
+		preferredCountryCode
+	);
 };

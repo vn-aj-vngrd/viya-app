@@ -3,7 +3,7 @@ import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Id } from "@viya-app/backend/convex/_generated/dataModel";
 import { getPreferenceSuggestions, getTripCountdown } from "@viya-app/domain";
 import { useMutation, useQuery } from "convex/react";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { type Href, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
 	KeyboardAvoidingView,
@@ -709,6 +709,16 @@ export function ViyaChatScreen() {
 		runAsyncTask(persistStoredThreadIdsByContext(nextThreadIds));
 	};
 
+	const handleReviewDrafts = () => {
+		if (!currentTripId) {
+			return;
+		}
+
+		router.push({
+			params: { openDrafts: "1", tripId: currentTripId },
+			pathname: "/(app)/trips/[tripId]",
+		} as Href);
+	};
 	const handleTripContextSelect = (tripId: Id<"trips">) => {
 		setSelectedTripId(tripId);
 		setChatMode("trip");
@@ -946,6 +956,9 @@ export function ViyaChatScreen() {
 									isCreatingTripFromBlueprint={isCreatingTripFromBlueprint}
 									messages={displayedMessages}
 									onCreateTripFromBlueprint={handleCreateTripFromBlueprint}
+									onReviewDrafts={
+										currentTripId ? handleReviewDrafts : undefined
+									}
 									onSubmitBlueprintAction={handleSubmit}
 									pendingPrompt={pendingPrompt}
 									pendingPromptMessageIndex={pendingPromptMessageIndex}

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { getBookingProgress, groupBookingsByType } from "./bookings";
+import {
+	getBookingInputError,
+	getBookingProgress,
+	groupBookingsByType,
+	isBookingEndBeforeStart,
+} from "./bookings";
 
 const bookings = [
 	{ _id: "a", status: "target", type: "flight" },
@@ -23,5 +28,36 @@ describe("booking selectors", () => {
 			"hotel",
 			"activity",
 		]);
+	});
+});
+
+describe("booking end check", () => {
+	it("accepts a same-day end date without a time", () => {
+		expect(isBookingEndBeforeStart("2026-05-01 14:00", "2026-05-01")).toBe(
+			false
+		);
+	});
+
+	it("rejects an end date before the start date", () => {
+		expect(isBookingEndBeforeStart("2026-05-02", "2026-05-01")).toBe(true);
+		expect(
+			isBookingEndBeforeStart("2026-05-01 14:00", "2026-05-01 09:00")
+		).toBe(true);
+	});
+
+	it("handles a T separator", () => {
+		expect(
+			isBookingEndBeforeStart("2026-05-01T09:00", "2026-05-01 10:00")
+		).toBe(false);
+	});
+
+	it("reports the error through getBookingInputError", () => {
+		expect(
+			getBookingInputError({
+				endDateTime: "2026-05-01",
+				startDateTime: "2026-05-01 14:00",
+				title: "Hotel",
+			})
+		).toBeNull();
 	});
 });

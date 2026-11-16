@@ -1,6 +1,12 @@
 import { api } from "@viya-app/backend/convex/_generated/api";
 import type { Doc, Id } from "@viya-app/backend/convex/_generated/dataModel";
-import { getBookingCounts, isBookingSecured } from "@viya-app/domain";
+import {
+	BOOKING_STATUS_OPTIONS,
+	type BookingStatusValue,
+	getBookingCounts,
+	getBookingInputError,
+	isBookingSecured,
+} from "@viya-app/domain";
 import { useMutation, useQuery } from "convex/react";
 import { Link, useRouter } from "expo-router";
 import { useState } from "react";
@@ -58,25 +64,48 @@ type BookingStatus = Doc<"bookings">["status"];
 type BookingFilter = "all" | "booked" | "needs";
 
 interface BookingForm {
+	confirmationCode: string;
 	cost: string;
 	date: string;
+	endDate: string;
+	endTime: string;
+	externalUrl: string;
 	locationName: string;
 	notes: string;
 	provider: string;
+	status: BookingStatus;
 	time: string;
 	title: string;
 	type: string;
 }
 
 const initialBookingForm: BookingForm = {
+	confirmationCode: "",
 	cost: "",
 	date: "",
+	endDate: "",
+	endTime: "",
+	externalUrl: "",
 	locationName: "",
 	notes: "",
 	provider: "",
+	status: "target",
 	time: "",
 	title: "",
 	type: "hotel",
+};
+
+const bookingStatusLabels = Object.fromEntries(
+	BOOKING_STATUS_OPTIONS.map((option) => [option.value, option.label])
+) as Record<BookingStatus, string>;
+const bookingStatusValues = BOOKING_STATUS_OPTIONS.map(
+	(option) => option.value
+) as readonly BookingStatus[];
+const BOOKING_ERROR_COPY: Record<string, string> = {
+	BOOKING_END_BEFORE_START: "The end must be after the start.",
+	INVALID_BOOKING_COST: "Cost cannot be negative.",
+	INVALID_BOOKING_TITLE: "Add a title.",
+	INVALID_BOOKING_URL: "Use a full link that starts with http or https.",
 };
 
 const bookingTypeOptions = [
@@ -150,6 +179,101 @@ const joinDateTime = (date: string, time: string) => {
 	}
 
 	return trimmedTime ? `${trimmedDate} ${trimmedTime}` : trimmedDate;
+};
+
+type ParsedBookingForm =
+	| { message: string; ok: false }
+	| {
+			cost: number;
+			endDateTime: string | undefined;
+			externalUrl: string;
+			hasCost: boolean;
+			ok: true;
+			startDateTime: string | undefined;
+			title: string;
+	  };
+
+/** Validates the booking form and derives the values that get saved. */
+const parseBookingForm = (form: BookingForm): ParsedBookingForm => {
+	const title = form.title.trim();
+
+	if (!title) {
+		return { message: "Add a title.", ok: false };
+	}
+
+	const time = form.time.trim();
+	const endTime = form.endTime.trim();
+
+	if (
+		(time && !TIME_PATTERN.test(time)) ||
+		(endTime && !TIME_PATTERN.test(endTime))
+	) {
+		return { message: TIME_ERROR, ok: false };
+	}
+
+	const cost = Number(form.cost.replaceAll(",", ""));
+	const hasCost = Number.isFinite(cost) && cost > 0;
+	const startDateTime = joinDateTime(form.date, form.time);
+	const endDateTime =
+		form.endDate || form.endTime
+			? joinDateTime(form.endDate || form.date, form.endTime)
+			: undefined;
+	const externalUrl = form.externalUrl.trim();
+	const inputError = getBookingInputError({
+		cost: hasCost ? cost : undefined,
+		endDateTime,
+		externalUrl,
+		startDateTime,
+		title,
+	});
+
+	if (inputError) {
+		return {
+			message: BOOKING_ERROR_COPY[inputError] ?? "Check the booking details.",
+			ok: false,
+		};
+	}
+
+	return {
+		cost,
+		endDateTime: endDateTime ?? undefined,
+		externalUrl,
+		hasCost,
+		ok: true,
+		startDateTime: startDateTime ?? undefined,
+		title,
+	};
+};
+
+const omitNulls = <T extends object>(
+	value: T
+): { [K in keyof T]: Exclude<T[K], null> } =>
+	Object.fromEntries(
+		Object.entries(value).filter(([, entry]) => entry !== null)
+	) as { [K in keyof T]: Exclude<T[K], null> };
+
+/** `null` clears a stored value on update; create drops it with omitNulls. */
+const buildBookingPatch = (
+	form: BookingForm,
+	parsed: Extract<ParsedBookingForm, { ok: true }>,
+	isEditing: boolean
+) => {
+	const empty = isEditing ? null : undefined;
+
+	return {
+		confirmationCode: form.confirmationCode.trim() || empty,
+		cost: parsed.hasCost ? parsed.cost : empty,
+		currency: "PHP",
+		endDateTime: parsed.endDateTime ?? empty,
+		externalUrl: parsed.externalUrl || empty,
+		locationName: form.locationName.trim() || empty,
+		notes: form.notes.trim() || empty,
+		provider: form.provider.trim() || empty,
+		startDateTime: parsed.startDateTime ?? empty,
+		status: form.status as BookingStatusValue,
+		title: parsed.title,
+		type: getBookingType(form.type),
+	};
 };
 
 const getStatusPresentation = (status: BookingStatus) => {
@@ -270,12 +394,12 @@ function BookingSheet({
 	isOpen,
 	isSaving,
 	itineraryHref,
+	onAddToItinerary,
 	onDelete,
 	onOpenChange,
 	onOpenMaps,
 	onOpenProof,
 	onOpenVault,
-	onSetStatus,
 	onSubmit,
 	onUpdateForm,
 	proofMeta,
@@ -286,12 +410,12 @@ function BookingSheet({
 	isOpen: boolean;
 	isSaving: boolean;
 	itineraryHref: ReturnType<typeof VIYA_ROUTES.tripItinerary> | null;
+	onAddToItinerary: () => void;
 	onDelete: () => void;
 	onOpenChange: (isOpen: boolean) => void;
 	onOpenMaps: () => void;
 	onOpenProof: () => void;
 	onOpenVault: () => void;
-	onSetStatus: (status: "bookedExternally" | "target") => void;
 	onSubmit: () => void;
 	onUpdateForm: (key: keyof BookingForm, value: string) => void;
 	proofMeta?: BookingProofMeta;
@@ -314,21 +438,14 @@ function BookingSheet({
 			saveLabel={booking ? "Save" : "Add"}
 			title={booking ? "Booking" : "Add booking"}
 		>
-			{booking ? (
-				<Segmented
-					accessibilityLabel="Booking status"
-					onChange={onSetStatus}
-					options={[
-						{ label: "Not booked", value: "target" },
-						{ label: "Booked", value: "bookedExternally" },
-					]}
-					value={
-						isBookingSecured(booking.status) ? "bookedExternally" : "target"
-					}
-				/>
-			) : null}
-
 			<FieldGroup>
+				<ChoiceRow
+					format={(value: BookingStatus) => bookingStatusLabels[value]}
+					label="Status"
+					onChange={(value) => onUpdateForm("status", value)}
+					options={bookingStatusValues}
+					value={form.status}
+				/>
 				<FieldRow
 					label="Title"
 					onChangeText={(value) => onUpdateForm("title", value)}
@@ -361,6 +478,33 @@ function BookingSheet({
 					onChangeText={(value) => onUpdateForm("time", value)}
 					placeholder="HH:MM"
 					value={form.time}
+				/>
+				<DatePickerField
+					formatDate={(date) => formatDay(formatIsoDate(date))}
+					label="End date"
+					onChangeText={(value) => onUpdateForm("endDate", value)}
+					value={form.endDate}
+				/>
+				<FieldRow
+					autoCapitalize="none"
+					keyboardType="numbers-and-punctuation"
+					label="End time"
+					onChangeText={(value) => onUpdateForm("endTime", value)}
+					placeholder="HH:MM"
+					value={form.endTime}
+				/>
+				<FieldRow
+					label="Confirmation code"
+					onChangeText={(value) => onUpdateForm("confirmationCode", value)}
+					placeholder="Optional"
+					value={form.confirmationCode}
+				/>
+				<FieldRow
+					autoCapitalize="none"
+					label="Booking link"
+					onChangeText={(value) => onUpdateForm("externalUrl", value)}
+					placeholder="https://"
+					value={form.externalUrl}
 				/>
 				<FieldRow
 					keyboardType="decimal-pad"
@@ -410,7 +554,13 @@ function BookingSheet({
 						<Link asChild href={itineraryHref}>
 							<LinkRow icon="calendar-outline" label="Open itinerary" />
 						</Link>
-					) : null}
+					) : (
+						<LinkRow
+							icon="add-circle-outline"
+							label="Add to itinerary"
+							onPress={onAddToItinerary}
+						/>
+					)}
 				</ListGroup>
 			) : null}
 
@@ -444,6 +594,9 @@ export function BookingHubScreen() {
 	const deleteBooking = useMutation(api.bookings.deleteBooking);
 	const updateBooking = useMutation(api.bookings.updateBooking);
 	const updateBookingStatus = useMutation(api.bookings.updateBookingStatus);
+	const addBookingToItinerary = useMutation(
+		api.itinerary.addBookingToItinerary
+	);
 	const [filter, setFilter] = useState<BookingFilter>("all");
 	const [bookingForm, setBookingForm] =
 		useState<BookingForm>(initialBookingForm);
@@ -531,12 +684,18 @@ export function BookingHubScreen() {
 	};
 	const openEditSheet = (booking: Doc<"bookings">) => {
 		const { date, time } = splitDateTime(booking.startDateTime);
+		const end = splitDateTime(booking.endDateTime);
 
 		setBookingErrorMessage(null);
 		setEditingBookingId(booking._id);
 		setBookingForm({
+			confirmationCode: booking.confirmationCode ?? "",
 			cost: booking.cost?.toString() ?? "",
 			date,
+			endDate: end.date,
+			endTime: end.time,
+			externalUrl: booking.externalUrl ?? "",
+			status: booking.status,
 			locationName: booking.locationName ?? "",
 			notes: booking.notes ?? "",
 			provider: booking.provider ?? "",
@@ -574,37 +733,27 @@ export function BookingHubScreen() {
 		}
 	};
 	const saveBooking = async () => {
-		const title = bookingForm.title.trim();
-		if (!title) {
-			setBookingErrorMessage("Add a title.");
+		const parsed = parseBookingForm(bookingForm);
+
+		if (!parsed.ok) {
+			setBookingErrorMessage(parsed.message);
 			return;
 		}
 
-		const time = bookingForm.time.trim();
-		if (time && !TIME_PATTERN.test(time)) {
-			setBookingErrorMessage(TIME_ERROR);
-			return;
-		}
-
-		const cost = Number(bookingForm.cost.replaceAll(",", ""));
 		setBookingErrorMessage(null);
 		setIsCreatingBooking(true);
 		try {
-			const bookingPatch = {
-				cost: Number.isFinite(cost) && cost > 0 ? cost : undefined,
-				currency: "PHP",
-				locationName: bookingForm.locationName.trim() || undefined,
-				notes: bookingForm.notes.trim() || undefined,
-				provider: bookingForm.provider.trim() || undefined,
-				startDateTime: joinDateTime(bookingForm.date, bookingForm.time),
-				title,
-				type: getBookingType(bookingForm.type),
-			};
+			// null clears a stored value on update; create simply omits it.
+			const bookingPatch = buildBookingPatch(
+				bookingForm,
+				parsed,
+				Boolean(editingBookingId)
+			);
 
 			if (editingBookingId) {
 				await updateBooking({ ...bookingPatch, bookingId: editingBookingId });
 			} else {
-				await createBookingTarget({ ...bookingPatch, tripId });
+				await createBookingTarget({ ...omitNulls(bookingPatch), tripId });
 			}
 			haptic("success");
 			closeSheet();
@@ -612,6 +761,18 @@ export function BookingHubScreen() {
 			setBookingErrorMessage("Could not save this booking. Try again.");
 		} finally {
 			setIsCreatingBooking(false);
+		}
+	};
+	const addToItinerary = async (booking: Doc<"bookings">) => {
+		setBookingErrorMessage(null);
+		try {
+			await addBookingToItinerary({ bookingId: booking._id });
+			haptic("success");
+			closeSheet();
+		} catch {
+			setBookingErrorMessage(
+				"Could not add this to the itinerary. Give it a date inside the trip, and plan that day first."
+			);
 		}
 	};
 	const setStatus = async (
@@ -793,6 +954,11 @@ export function BookingHubScreen() {
 						? VIYA_ROUTES.tripItinerary(tripId)
 						: null
 				}
+				onAddToItinerary={() => {
+					if (editingBooking) {
+						addToItinerary(editingBooking).catch(() => undefined);
+					}
+				}}
 				onDelete={() => {
 					if (editingBooking) {
 						removeBooking(editingBooking).catch(() => undefined);
@@ -821,11 +987,6 @@ export function BookingHubScreen() {
 				onOpenVault={() => {
 					closeSheet();
 					router.push(VIYA_ROUTES.tripVault(tripId));
-				}}
-				onSetStatus={(status) => {
-					if (editingBooking) {
-						setStatus(editingBooking, status).catch(() => undefined);
-					}
 				}}
 				onSubmit={() => {
 					saveBooking().catch(() => undefined);

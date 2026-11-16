@@ -1,76 +1,11 @@
-import type { PreferenceCountrySuggestion } from "@viya-app/domain";
-
-const buildPrompt = (name: string, duration: string) =>
-	`Plan a ${duration} trip to ${name}, Philippines that fits my saved travel preferences. Include a day-by-day outline, getting-around tips, and budget guidance in PHP.`;
+import type { PhDestination } from "@viya-app/domain";
 
 /**
- * Curated local Philippine destinations for the home "Closer to home" carousel.
- * `country` doubles as the Wikipedia lookup title for the photo (see
- * useDestinationImages), so names must match a resolvable Wikipedia page.
+ * Philippine destination order, copy and season come from the ranker in
+ * `@viya-app/domain` (`rankPhilippineDestinations`). This file only keeps the
+ * imagery lookup: the Wikipedia title for a destination's photo, with an
+ * override (`imageQuery`) for names that are ambiguous on their own.
  */
-export type PhilippineDestination = Omit<
-	PreferenceCountrySuggestion,
-	"accent"
-> & {
-	imageQuery?: string;
-};
-
-export const philippineDestinations: PhilippineDestination[] = [
-	{
-		country: "Palawan",
-		detail: "Lagoons, limestone cliffs, island hopping",
-		duration: "4-6 days",
-		icon: "boat-outline",
-		prompt: buildPrompt("Palawan", "4-6 day"),
-	},
-	{
-		country: "Siargao",
-		detail: "Surf breaks, palm roads, quiet lagoons",
-		duration: "3-5 days",
-		icon: "sunny-outline",
-		imageQuery: "General Luna, Surigao del Norte",
-		prompt: buildPrompt("Siargao", "3-5 day"),
-	},
-	{
-		country: "Bohol",
-		detail: "Chocolate Hills, tarsiers, white sand",
-		duration: "3-4 days",
-		icon: "leaf-outline",
-		prompt: buildPrompt("Bohol", "3-4 day"),
-	},
-	{
-		country: "Cebu",
-		detail: "City energy, waterfalls, whale sharks",
-		duration: "4-6 days",
-		icon: "business-outline",
-		prompt: buildPrompt("Cebu", "4-6 day"),
-	},
-	{
-		country: "Boracay",
-		detail: "Powder sand, sunsets, easy nightlife",
-		duration: "3-4 days",
-		icon: "umbrella-outline",
-		prompt: buildPrompt("Boracay", "3-4 day"),
-	},
-	{
-		country: "Batanes",
-		detail: "Rolling hills, stone houses, sea cliffs",
-		duration: "3-4 days",
-		icon: "navigate-outline",
-		prompt: buildPrompt("Batanes", "3-4 day"),
-	},
-	{
-		country: "Baguio",
-		detail: "Cool air, pine ridges, market finds",
-		duration: "2-3 days",
-		icon: "pint-outline",
-		prompt: buildPrompt("Baguio", "2-3 day"),
-	},
-	{
-		country: "Vigan",
-		detail: "Heritage streets, food, slow mornings",
-		duration: "2-3 days",
-		icon: "map-outline",
-		prompt: buildPrompt("Vigan", "2-3 day"),
-	},
-];
+export const getDestinationImageKey = (
+	destination: Pick<PhDestination, "imageQuery" | "name">
+) => destination.imageQuery ?? destination.name;
