@@ -146,8 +146,13 @@ const getTravelStyle = (styles: readonly TripStyle[], pace: TripPace) => {
 	return styles.map((style) => labels.style[style].toLowerCase()).join(", ");
 };
 
-const getDefaultTitle = (destination: string) =>
-	destination ? `${destination} Trip` : "New trip";
+// "Cebu City, Central Visayas, Philippines" is too long for a title; keep the
+// place the traveller named.
+const getDefaultTitle = (destination: string) => {
+	const place = destination.split(",")[0]?.trim();
+
+	return place ? `${place} Trip` : "New trip";
+};
 
 const getTravelerTotal = (state: TripCreateFlowState) => {
 	if (state.travelerType === "solo") {

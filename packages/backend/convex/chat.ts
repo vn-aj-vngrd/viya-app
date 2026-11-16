@@ -555,11 +555,18 @@ export const generateResponseAsync = internalAction({
 			? formatPreferenceContext(preferences)
 			: undefined;
 
+		// The AI SDK reports model errors through onError and does not throw, so
+		// capture them here to tell the user instead of leaving a silent spinner.
+		let streamError: unknown;
+
 		try {
 			await getChatAgent().streamText(
 				ctx,
 				{ threadId },
 				{
+					onError: ({ error }: { error: unknown }) => {
+						streamError = error;
+					},
 					promptMessageId,
 					...(mode === "trip" && tripId
 						? {
@@ -578,6 +585,10 @@ export const generateResponseAsync = internalAction({
 				},
 				{ saveStreamDeltas: true }
 			);
+
+			if (streamError) {
+				throw streamError;
+			}
 		} catch (error) {
 			console.error("Viya chat generation failed", error);
 			await saveMessage(ctx, components.agent, {

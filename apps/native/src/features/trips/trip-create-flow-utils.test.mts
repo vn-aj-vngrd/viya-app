@@ -105,6 +105,17 @@ describe("trip create flow payload", () => {
 		});
 	});
 
+	test("titles a trip by the first part of a long address", () => {
+		const state = {
+			...createInitialTripCreateFlowState(),
+			destination: "Cebu City, Central Visayas, Philippines",
+			endDate: "2026-11-30",
+			startDate: "2026-11-27",
+		};
+
+		expect(getCreateTripPayload(state).title).toBe("Cebu City Trip");
+	});
+
 	test("summarizes selected manual setup", () => {
 		const state = {
 			...createInitialTripCreateFlowState(),

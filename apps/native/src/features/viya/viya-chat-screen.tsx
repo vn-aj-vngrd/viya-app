@@ -282,6 +282,7 @@ export function ViyaChatScreen() {
 		composerInputLineHeight
 	);
 	const [isNearBottom, setIsNearBottom] = useState(true);
+	const isNearBottomRef = useRef(true);
 	const [threadIdsByContext, setThreadIdsByContext] =
 		useState<ThreadIdsByContext>({});
 	const initialMode = getInitialChatMode({ requestedMode, routeTripId });
@@ -520,10 +521,12 @@ export function ViyaChatScreen() {
 
 	const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
 		const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-		setIsNearBottom(
+		const nearBottom =
 			contentSize.height - (contentOffset.y + layoutMeasurement.height) <
-				nearBottomThreshold
-		);
+			nearBottomThreshold;
+
+		isNearBottomRef.current = nearBottom;
+		setIsNearBottom(nearBottom);
 	};
 
 	const isActiveChatSession = (requestSessionId: number) =>
@@ -715,7 +718,7 @@ export function ViyaChatScreen() {
 		}
 
 		router.push({
-			params: { openDrafts: "1", tripId: currentTripId },
+			params: { openDrafts: String(Date.now()), tripId: currentTripId },
 			pathname: "/(app)/trips/[tripId]",
 		} as Href);
 	};
@@ -945,6 +948,13 @@ export function ViyaChatScreen() {
 							key={`${threadContextKey}:${threadId ?? "new"}`}
 							keyboardDismissMode="interactive"
 							keyboardShouldPersistTaps="handled"
+							onContentSizeChange={() => {
+								// Streamed text grows the content between scroll events; follow
+								// it right away so the view stays pinned instead of jumping.
+								if (isNearBottomRef.current) {
+									scrollViewRef.current?.scrollToEnd({ animated: false });
+								}
+							}}
 							onScroll={handleScroll}
 							ref={scrollViewRef}
 							scrollEventThrottle={64}

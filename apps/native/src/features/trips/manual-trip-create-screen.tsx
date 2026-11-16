@@ -1,5 +1,5 @@
 import { api } from "@viya-app/backend/convex/_generated/api";
-import { getPreferenceSuggestions, getTripDayCount } from "@viya-app/domain";
+import { getTripDayCount, rankPhilippineDestinations } from "@viya-app/domain";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
@@ -520,14 +520,16 @@ export function ManualTripCreateScreen() {
 		[runLocationSuggestionSearch]
 	);
 	const suggestions = useMemo(() => {
-		const preferred = getPreferenceSuggestions(currentPreferences ?? {});
+		const ranked = rankPhilippineDestinations({
+			preferences: currentPreferences ?? undefined,
+		});
 
 		return getUniqueAvailableDestinationSuggestions({
 			currentDestination: state.destination,
 			existingDestinations: (existingTrips ?? []).map(
 				(trip) => trip.destination
 			),
-			suggestions: preferred.countrySuggestions.map((item) => item.country),
+			suggestions: ranked.map((item) => item.destination.name),
 		}).slice(0, suggestionLimit);
 	}, [currentPreferences, existingTrips, state.destination]);
 

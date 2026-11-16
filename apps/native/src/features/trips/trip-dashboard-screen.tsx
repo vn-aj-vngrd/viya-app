@@ -1,7 +1,7 @@
 import { api } from "@viya-app/backend/convex/_generated/api";
 import { useQuery } from "convex/react";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { PrimaryButton, ScreenShell } from "@/src/components/ui";
 import { VIYA_ROUTES } from "@/src/constants/routes";
@@ -18,10 +18,29 @@ import type { TripDashboardModel, TripWorkspace } from "./trip-dashboard-types";
 import { createTripDashboardModel } from "./trip-dashboard-utils";
 import { useTripIdParam } from "./use-trip-id-param";
 
+const DRAFTS_SHEET_OPEN_DELAY_MS = 450;
+
 function TripDashboardContent({ model }: { model: TripDashboardModel }) {
 	const router = useRouter();
 	const { openDrafts } = useLocalSearchParams<{ openDrafts?: string }>();
-	const [isDraftsOpen, setIsDraftsOpen] = useState(openDrafts === "1");
+	const [isDraftsOpen, setIsDraftsOpen] = useState(false);
+
+	// The dashboard may already be mounted when the chat asks to review drafts;
+	// the param carries a fresh value per request so each one reopens the sheet.
+	useEffect(() => {
+		if (!openDrafts) {
+			return;
+		}
+
+		// Present after the push transition settles; a sheet opened mid-transition
+		// is dropped by the native presenter.
+		const timer = setTimeout(
+			() => setIsDraftsOpen(true),
+			DRAFTS_SHEET_OPEN_DELAY_MS
+		);
+
+		return () => clearTimeout(timer);
+	}, [openDrafts]);
 	const { actions, openProfileSheet, sheet } = useTripHeaderActions(model);
 	const isTraveling = model.phase === "during";
 

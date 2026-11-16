@@ -35,11 +35,13 @@ const splitTableCells = (line: string) => {
 	return trimmedLine.split("|").map((cell) => cell.trim());
 };
 
+// Ids must not depend on the text: while a reply streams, content changes on
+// every tick and a text-based id would remount the block each time (flicker).
 const createMarkdownBlockId = (
 	type: MarkdownBlock["type"],
-	source: string,
+	_source: string,
 	blockCount: number
-) => `${type}-${blockCount}-${source.slice(0, 32)}`;
+) => `${type}-${blockCount}`;
 
 const shouldStartNewMarkdownBlock = (line: string, nextLine: string) =>
 	!line ||

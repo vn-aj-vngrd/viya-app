@@ -78,9 +78,9 @@ function MarkdownTable({
 			}}
 		>
 			<View style={{ backgroundColor: palette.fill, flexDirection: "row" }}>
-				{headers.map((header) => (
+				{headers.map((header, headerIndex) => (
 					<View
-						key={header}
+						key={positionKey("header", headerIndex)}
 						style={{
 							flex: 1,
 							paddingHorizontal: spacing.md,
@@ -97,18 +97,18 @@ function MarkdownTable({
 					</View>
 				))}
 			</View>
-			{rows.map((row) => (
+			{rows.map((row, rowIndex) => (
 				<View
-					key={row.join("-")}
+					key={positionKey("row", rowIndex)}
 					style={{
 						borderTopColor: palette.separator,
 						borderTopWidth: 1,
 						flexDirection: "row",
 					}}
 				>
-					{headers.map((header, headerIndex) => (
+					{headers.map((_header, headerIndex) => (
 						<View
-							key={header}
+							key={positionKey("cell", headerIndex)}
 							style={{
 								flex: 1,
 								paddingHorizontal: spacing.md,
@@ -129,6 +129,12 @@ function MarkdownTable({
 		</View>
 	);
 }
+
+/**
+ * Rows, cells and items are keyed by position. Their text changes on every
+ * streamed token, so a text key would remount them each tick and flicker.
+ */
+const positionKey = (prefix: string, index: number) => `${prefix}-${index}`;
 
 export function MarkdownContent({ text }: { text: string }) {
 	const { palette } = useUITheme();
@@ -176,7 +182,7 @@ export function MarkdownContent({ text }: { text: string }) {
 						<View key={block.id} style={{ gap: spacing.sm }}>
 							{block.items.map((item, itemIndex) => (
 								<View
-									key={item}
+									key={positionKey(block.id, itemIndex)}
 									style={{ flexDirection: "row", gap: spacing.sm }}
 								>
 									<NativeText

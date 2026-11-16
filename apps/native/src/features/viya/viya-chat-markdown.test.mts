@@ -89,3 +89,14 @@ describe("parseMarkdownBlocks", () => {
 		]);
 	});
 });
+
+describe("streaming markdown ids", () => {
+	test("block ids stay the same while a reply streams in", () => {
+		const idsFor = (text: string) =>
+			parseMarkdownBlocks(text).map((block) => block.id);
+		const partial = "## Day plan\n\n1. Breakfast at a bakery";
+		const longer = "## Day plan with extras\n\n1. Breakfast at a bakery near Ayala";
+
+		expect(idsFor(partial)).toEqual(idsFor(longer));
+	});
+});

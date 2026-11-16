@@ -928,6 +928,23 @@ function UserMessage({ text }: { text: string }) {
 	);
 }
 
+/**
+ * Tool-using replies create assistant messages that have no text yet. Show one
+ * trailing "Thinking" row for them instead of one row per empty message, which
+ * popped in and out as the steps changed.
+ */
+const isLastMessageAwaitingText = (messages: UiChatMessages) => {
+	const last = messages.at(-1);
+
+	return Boolean(
+		last &&
+			last.role !== "user" &&
+			last.status === "streaming" &&
+			!getUiMessageText(last) &&
+			getDraftReadyCount(last) === 0
+	);
+};
+
 export function ViyaMessageList({
 	hasPersistedPendingPrompt,
 	isCreatingTripFromBlueprint,
@@ -999,8 +1016,6 @@ export function ViyaMessageList({
 							text={messageText}
 						/>
 					);
-				} else if (draftCount === 0) {
-					body = <ThinkingRow />;
 				}
 
 				return (
@@ -1018,7 +1033,9 @@ export function ViyaMessageList({
 			{pendingPromptInsertionIndex === messages.length && pendingPrompt ? (
 				<UserMessage text={pendingPrompt} />
 			) : null}
-			{shouldShowThinking ? <ThinkingRow /> : null}
+			{shouldShowThinking || isLastMessageAwaitingText(messages) ? (
+				<ThinkingRow />
+			) : null}
 		</View>
 	);
 }
