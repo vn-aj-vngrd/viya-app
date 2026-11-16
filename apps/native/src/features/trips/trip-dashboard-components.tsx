@@ -1326,6 +1326,7 @@ export function TripDraftsSheet({
 		onOpenChange(false);
 		router.push({
 			params: {
+				autoSend: "1",
 				mode: "trip",
 				newThread: "1",
 				prompt: buildWorkspaceAutopilotPrompt(model),

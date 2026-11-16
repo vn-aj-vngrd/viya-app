@@ -52,6 +52,7 @@ import {
 	getSingleQuestionDisplayText,
 	getTripBlueprintActionPrompt,
 	getUiMessageText,
+	stripPendingQuestionText,
 } from "./viya-chat-utils";
 
 const SHEET_LIST_MAX_HEIGHT = 440;
@@ -880,12 +881,14 @@ function DraftReadyCard({
 }
 
 function AssistantMessage({
+	hiddenQuestion,
 	isCreatingTripFromBlueprint,
 	isStreaming,
 	onCreateTripFromBlueprint,
 	onSubmitBlueprintAction,
 	text,
 }: {
+	hiddenQuestion?: string;
 	isCreatingTripFromBlueprint: boolean;
 	isStreaming: boolean;
 	onCreateTripFromBlueprint: (blueprint: TripBlueprint) => void;
@@ -893,7 +896,11 @@ function AssistantMessage({
 	text: string;
 }) {
 	const [visibleText] = useSmoothText(text, { startStreaming: isStreaming });
-	const displayText = getSingleQuestionDisplayText(visibleText);
+	const displayText = getSingleQuestionDisplayText(
+		hiddenQuestion
+			? stripPendingQuestionText(visibleText, hiddenQuestion)
+			: visibleText
+	);
 	const blueprint = extractTripBlueprint(displayText);
 
 	return (
@@ -943,6 +950,7 @@ export function ViyaMessageList({
 	onSubmitBlueprintAction,
 	pendingPrompt,
 	pendingPromptMessageIndex,
+	pendingQuestion,
 	shouldShowThinking,
 }: {
 	hasPersistedPendingPrompt: boolean;
@@ -953,6 +961,8 @@ export function ViyaMessageList({
 	onSubmitBlueprintAction: (prompt: string) => void;
 	pendingPrompt: string | null;
 	pendingPromptMessageIndex?: number | null;
+	/** Question already shown in the option dock; hidden from the reply text. */
+	pendingQuestion?: { assistantMessageId?: string; question: string } | null;
 	shouldShowThinking: boolean;
 }) {
 	// One trailing activity row for the whole reply ("Thinking" or what Viya is
@@ -977,6 +987,10 @@ export function ViyaMessageList({
 				? null
 				: persistedPendingPromptMessageIndex,
 	});
+
+	const lastAssistantIndex = messages.findLastIndex(
+		(message) => message.role !== "user"
+	);
 
 	return (
 		<View style={{ gap: spacing.section }}>
@@ -1004,6 +1018,13 @@ export function ViyaMessageList({
 				} else if (messageText) {
 					body = (
 						<AssistantMessage
+							hiddenQuestion={
+								pendingQuestion &&
+								(pendingQuestion.assistantMessageId === message.id ||
+									messageIndex === lastAssistantIndex)
+									? pendingQuestion.question
+									: undefined
+							}
 							isCreatingTripFromBlueprint={isCreatingTripFromBlueprint}
 							isStreaming={message.status === "streaming"}
 							onCreateTripFromBlueprint={onCreateTripFromBlueprint}

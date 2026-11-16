@@ -400,6 +400,17 @@ export const getNormalizedChatInput = (value: string) =>
 export const getChatInputLineCount = (value: string) =>
 	value ? value.split(lineBreakPattern).length : 0;
 
+/**
+ * The option dock already shows the pending question and its choices, so the
+ * reply text drops them instead of repeating the same question twice.
+ */
+export const stripPendingQuestionText = (text: string, question: string) => {
+	const needle = question.trim();
+	const index = needle ? text.lastIndexOf(needle) : -1;
+
+	return index > 0 ? text.slice(0, index).trimEnd() : text;
+};
+
 export const getSingleQuestionDisplayText = (text: string) => {
 	const questionMatches = Array.from(
 		text.matchAll(planningQuestionMarkerPattern)

@@ -261,18 +261,29 @@ const createBlueprintTripHandler =
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Chat screen coordinates streaming, modes, question docks, and blueprint creation until the flow is split into containers.
 export function ViyaChatScreen() {
 	const router = useRouter();
-	const { fromTab, mode, newThread, prompt, returnTo, tripId, workspaceTab } =
-		useLocalSearchParams<{
-			fromTab?: string | string[];
-			mode?: string | string[];
-			newThread?: string | string[];
-			prompt?: string | string[];
-			returnTo?: string | string[];
-			tripId?: string | string[];
-			workspaceTab?: string | string[];
-		}>();
+	const {
+		autoSend,
+		fromTab,
+		mode,
+		newThread,
+		prompt,
+		returnTo,
+		tripId,
+		workspaceTab,
+	} = useLocalSearchParams<{
+		autoSend?: string | string[];
+		fromTab?: string | string[];
+		mode?: string | string[];
+		newThread?: string | string[];
+		prompt?: string | string[];
+		returnTo?: string | string[];
+		tripId?: string | string[];
+		workspaceTab?: string | string[];
+	}>();
 	const requestedMode = getSearchParamValue(mode);
 	const shouldStartNewThread = getSearchParamValue(newThread) === "1";
+	const shouldAutoSend = getSearchParamValue(autoSend) === "1";
+	const hasAutoSentRef = useRef(false);
 	const routePrompt = getSearchParamValue(prompt) ?? "";
 	const routeTripId = getSearchParamValue(tripId) as Id<"trips"> | undefined;
 	const routeWorkspaceTab = getSearchParamValue(workspaceTab);
@@ -637,6 +648,20 @@ export function ViyaChatScreen() {
 		return await sendChatPrompt({ requestSessionId, value });
 	};
 
+	// A call-to-action such as "Complete this trip" opens the chat with its
+	// prompt already written; send it once so the agent starts without a tap.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: send once when the chat is ready; handleSubmit changes every render.
+	useEffect(() => {
+		const isReady = chatMode !== "trip" || Boolean(currentTripId);
+
+		if (!(shouldAutoSend && routePrompt && isReady) || hasAutoSentRef.current) {
+			return;
+		}
+
+		hasAutoSentRef.current = true;
+		runAsyncTask(handleSubmit(routePrompt));
+	}, [chatMode, currentTripId, routePrompt, shouldAutoSend]);
+
 	const handleBackPress = () => {
 		if (
 			shouldPopViyaBackRoute({
@@ -986,6 +1011,9 @@ export function ViyaChatScreen() {
 									onSubmitBlueprintAction={handleSubmit}
 									pendingPrompt={pendingPrompt}
 									pendingPromptMessageIndex={pendingPromptMessageIndex}
+									pendingQuestion={
+										shouldShowQuestionCard ? pendingQuestion : null
+									}
 									shouldShowThinking={shouldShowThinking}
 								/>
 							) : (

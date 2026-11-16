@@ -5,6 +5,7 @@ import {
 	getDraftReadyCount,
 	getReviewDraftsNavigation,
 	getToolActivityLabel,
+	stripPendingQuestionText,
 } from "./viya-chat-utils";
 
 const savedDraft = (draftId: string) => ({
@@ -125,5 +126,25 @@ describe("review drafts navigation", () => {
 				tripId: "trip_1",
 			})
 		).toBe("push");
+	});
+});
+
+describe("stripPendingQuestionText", () => {
+	test("removes the question and its options once the dock shows them", () => {
+		const text =
+			"Draft saved.\n\nWhich backup do you want?\n\n1. Swap day\n2. Rebooking checklist";
+
+		expect(stripPendingQuestionText(text, "Which backup do you want?")).toBe(
+			"Draft saved."
+		);
+	});
+
+	test("keeps the text when the question is not found or is the whole reply", () => {
+		expect(stripPendingQuestionText("Draft saved.", "Which one?")).toBe(
+			"Draft saved."
+		);
+		expect(stripPendingQuestionText("Which one?", "Which one?")).toBe(
+			"Which one?"
+		);
 	});
 });
