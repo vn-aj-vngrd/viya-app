@@ -5,6 +5,7 @@ import {
 	getDraftReadyCount,
 	getReviewDraftsNavigation,
 	getToolActivityLabel,
+	getUiMessageText,
 	stripPendingQuestionText,
 } from "./viya-chat-utils";
 
@@ -146,5 +147,19 @@ describe("stripPendingQuestionText", () => {
 		expect(stripPendingQuestionText("Which one?", "Which one?")).toBe(
 			"Which one?"
 		);
+	});
+});
+
+describe("getUiMessageText", () => {
+	test("keeps text written around a tool call in separate paragraphs", () => {
+		expect(
+			getUiMessageText({
+				parts: [
+					{ text: "I'll check Day 4 before drafting.", type: "text" },
+					{ type: "tool-getItinerary" },
+					{ text: "Weather outlook: moderate.", type: "text" },
+				],
+			})
+		).toBe("I'll check Day 4 before drafting.\n\nWeather outlook: moderate.");
 	});
 });

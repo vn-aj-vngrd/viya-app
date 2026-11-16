@@ -8,12 +8,21 @@ import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { HeroUINativeProvider } from "heroui-native";
-import { View } from "react-native";
+import { LogBox, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 
 import { AppThemeProvider } from "@/contexts/app-theme-context";
 import { FeedbackProvider, useUITheme } from "@/src/components/ui";
+
+// Capture builds set this so the development warnings toast stays out of
+// screenshots; normal development keeps every warning visible.
+if (
+	process.env.NODE_ENV !== "production" &&
+	process.env.EXPO_PUBLIC_SCREENSHOT_MODE === "1"
+) {
+	LogBox.ignoreAllLogs();
+}
 
 export const unstable_settings = {
 	initialRouteName: "(app)",

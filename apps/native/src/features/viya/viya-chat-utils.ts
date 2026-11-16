@@ -277,10 +277,12 @@ export const getMessageQueryArgs = (threadId: string | null) =>
 export const getUiMessageText = (message: {
 	parts?: Array<{ text?: string; type: string }>;
 }) =>
+	// Text written before and after a tool call arrives as separate parts; keep
+	// them as separate paragraphs instead of running the sentences together.
 	(message.parts ?? [])
-		.map((part) => (part.type === "text" ? (part.text ?? "") : ""))
-		.join("")
-		.trim();
+		.map((part) => (part.type === "text" ? (part.text ?? "").trim() : ""))
+		.filter(Boolean)
+		.join("\n\n");
 
 const draftToolPartPattern = /^tool-propose/;
 const toolPartPrefix = "tool-";
