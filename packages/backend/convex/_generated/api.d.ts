@@ -21,6 +21,7 @@ import type * as ai_tripAgentInternals from "../ai/tripAgentInternals.js";
 import type * as bookings from "../bookings.js";
 import type * as chat from "../chat.js";
 import type * as companions from "../companions.js";
+import type * as demoSeed from "../demoSeed.js";
 import type * as healthCheck from "../healthCheck.js";
 import type * as itinerary from "../itinerary.js";
 import type * as lib_auth from "../lib/auth.js";
@@ -61,6 +62,7 @@ declare const fullApi: ApiFromModules<{
   bookings: typeof bookings;
   chat: typeof chat;
   companions: typeof companions;
+  demoSeed: typeof demoSeed;
   healthCheck: typeof healthCheck;
   itinerary: typeof itinerary;
   "lib/auth": typeof lib_auth;
