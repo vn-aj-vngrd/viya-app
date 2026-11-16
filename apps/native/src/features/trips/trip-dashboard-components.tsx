@@ -1017,7 +1017,7 @@ function PeopleGroup({ model }: { model: TripDashboardModel }) {
 				icon="folder-open-outline"
 				subtitle={
 					vault.missingDocuments > 0
-						? `${vault.missingDocuments} documents missing`
+						? `${formatCount(vault.missingDocuments, "document")} missing`
 						: undefined
 				}
 				title="Vault"

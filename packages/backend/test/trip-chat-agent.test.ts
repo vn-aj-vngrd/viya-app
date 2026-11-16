@@ -37,7 +37,7 @@ const noAnswerPattern = /couldn't finish an answer/;
 const removedPattern = /removed 1/;
 const missingPattern = /skipped 1 no longer in the trip/;
 const profileSummaryPattern = /^Updated start date, travelers\./;
-const dayLabelPattern = /^Tue, Dec 1$/;
+const dayLabelPattern = /^Tue 1 Dec$/;
 const notForecastPattern = /Not a live forecast/;
 
 const createPayload = (
@@ -461,7 +461,7 @@ describe("draft previews", () => {
 		});
 
 		assert.deepEqual(describeDraftPayload({ module: "itinerary", payload }), [
-			"Tue, Dec 1: 08:00 Breakfast, 10:00 Tour (1 changed)",
+			"Tue 1 Dec: 08:00 Breakfast, 10:00 Tour (1 changed)",
 			"Removes 1 stop",
 		]);
 		assert.deepEqual(

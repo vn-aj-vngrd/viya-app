@@ -368,7 +368,7 @@ function getVaultSummary(
 		formatCount(counts.files, "file"),
 		counts.linked > 0 ? `${counts.linked} linked` : null,
 		counts.missingDocuments > 0
-			? `${counts.missingDocuments} documents missing`
+			? `${formatCount(counts.missingDocuments, "document")} missing`
 			: null,
 	]
 		.filter(Boolean)

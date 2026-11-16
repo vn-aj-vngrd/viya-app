@@ -558,7 +558,8 @@ export function TripTravelModeScreen() {
 	const openItinerary = () => router.push(VIYA_ROUTES.tripItinerary(tripId));
 	const heroEmpty = ((): TravelEmptyState => {
 		if (countdown.phase === "upcoming") {
-			const firstStop = upcoming.at(0)?.item ?? now?.item;
+			// `upcoming` starts after the next stop, so the hero is the first stop.
+			const firstStop = now?.item ?? upcoming.at(0)?.item;
 
 			return {
 				actionLabel: "Open itinerary",

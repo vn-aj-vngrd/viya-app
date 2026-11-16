@@ -8,14 +8,14 @@ const maxPreviewLines = 6;
 const maxStopsListed = 3;
 const isoDateLength = 10;
 
-const dayLabelFormatter = new Intl.DateTimeFormat("en-US", {
+const dayLabelFormatter = new Intl.DateTimeFormat("en-GB", {
 	day: "numeric",
 	month: "short",
 	timeZone: "UTC",
 	weekday: "short",
 });
 
-/** "Tue, Dec 2" for a YYYY-MM-DD key; the key itself when it is not a date. */
+/** "Tue 2 Dec" (the app's date style) for a YYYY-MM-DD key; the key itself when it is not a date. */
 export const formatDayLabel = (dateKey: string) => {
 	const date = new Date(`${dateKey.slice(0, isoDateLength)}T12:00:00Z`);
 
@@ -126,12 +126,14 @@ const describeBudget = (
 
 const describeLists = (payload: TripAgentDraftPayload) => [
 	...payload.bookingTargets.map((target) => {
-		const when = target.startDateTime ? ` on ${target.startDateTime}` : "";
+		const when = target.startDateTime
+			? ` on ${formatDayLabel(target.startDateTime)}`
+			: "";
 
 		return `To book: ${target.title} (${target.type})${when}`;
 	}),
 	...payload.readinessItems.map(
-		(item) => `To do: ${item.title} (due ${item.dueDate})`
+		(item) => `To do: ${item.title} (due ${formatDayLabel(item.dueDate)})`
 	),
 	...payload.places.map((place) => `Place: ${place.title}`),
 	...payload.risks.map((risk) => `Risk: ${risk.title} (${risk.severity})`),
