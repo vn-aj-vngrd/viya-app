@@ -148,7 +148,7 @@ const getTravelStyle = (styles: readonly TripStyle[], pace: TripPace) => {
 
 // "Cebu City, Central Visayas, Philippines" is too long for a title; keep the
 // place the traveller named.
-const getDefaultTitle = (destination: string) => {
+export const getDefaultTitle = (destination: string) => {
 	const place = destination.split(",")[0]?.trim();
 
 	return place ? `${place} Trip` : "New trip";

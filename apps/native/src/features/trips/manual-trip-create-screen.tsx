@@ -31,6 +31,7 @@ import {
 	createInitialTripCreateFlowState,
 	durationPreferenceOptions,
 	getCreateTripPayload,
+	getDefaultTitle,
 	getStepError,
 	getTripCreateOptionLabel,
 	paceOptions,
@@ -419,7 +420,7 @@ function ReviewStep({
 				}
 				label="Trip name"
 				onChangeText={(value) => onUpdate("title", value)}
-				placeholder="Siargao with friends"
+				placeholder={getDefaultTitle(state.destination)}
 				value={state.title}
 			/>
 			<Block title="Travelers">
