@@ -1,4 +1,10 @@
+import { getDateKeyInTimeZone } from "@viya-app/domain";
+
 export const TRIP_CONTEXT_TIME_ZONE = "Asia/Manila";
+
+/** Today as YYYY-MM-DD in Manila, the date every chat tool reasons in. */
+export const getChatTodayKey = (ms: number = Date.now()) =>
+	getDateKeyInTimeZone(ms, TRIP_CONTEXT_TIME_ZONE);
 
 const maxContextChars = 24_000;
 const maxNoteChars = 300;

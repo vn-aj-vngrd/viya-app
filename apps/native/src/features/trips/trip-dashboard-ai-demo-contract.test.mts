@@ -13,7 +13,10 @@ describe("trip dashboard AI demo entry contract", () => {
 		expect(source).toContain("Complete this trip");
 		expect(source).toContain("Trip is ready");
 		expect(source).toContain("visibleDrafts");
-		expect(source).toContain("isWorkspaceReady ? [] : pendingDrafts");
+		// Chat drafts must stay reviewable even when every section is filled.
+		expect(source).toContain("const visibleDrafts = pendingDrafts;");
+		expect(source).not.toContain("isWorkspaceReady ? [] : pendingDrafts");
+		expect(source).toContain("draft.previewLines");
 		expect(source).toContain("buildWorkspaceAutopilotPrompt");
 		expect(source).toContain("api.ai.tripAgent.generateTripAgentDraft");
 		expect(source).toContain("api.ai.tripAgent.applyTripAgentDraft");

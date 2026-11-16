@@ -54,7 +54,11 @@ import {
 	formatTimeRange,
 	formatTripRange,
 } from "@/src/lib/format";
-import type { TripDashboardModel } from "./trip-dashboard-types";
+import type {
+	TripAgentDraftForReview,
+	TripDashboardModel,
+} from "./trip-dashboard-types";
+import { getDraftActionErrorMessage } from "./trip-dashboard-utils";
 import { TripStatusText } from "./trip-status-pill";
 import { TripTextField } from "./trip-text-field";
 
@@ -1129,6 +1133,7 @@ const tripAgentModuleLabels = {
 	documents: "Vault",
 	itinerary: "Itinerary",
 	places: "Places",
+	profile: "Trip profile",
 	readiness: "Readiness",
 	recap: "Recap",
 	risks: "Risks",
@@ -1193,13 +1198,29 @@ function DraftActionButton({
 	);
 }
 
+function DraftPreviewLines({ lines }: { lines: readonly string[] }) {
+	if (lines.length === 0) {
+		return null;
+	}
+
+	return (
+		<View accessibilityLabel={`Draft changes: ${lines.join(". ")}`}>
+			{lines.map((line) => (
+				<AppText key={line} tone="secondary" variant="footnote">
+					{`\u2022 ${line}`}
+				</AppText>
+			))}
+		</View>
+	);
+}
+
 function TripAgentDraftRow({
 	draft,
 	isPending,
 	onApply,
 	onDismiss,
 }: {
-	draft: Doc<"tripAgentDrafts">;
+	draft: TripAgentDraftForReview;
 	isPending: boolean;
 	onApply: (draftId: Id<"tripAgentDrafts">) => void;
 	onDismiss: (draftId: Id<"tripAgentDrafts">) => void;
@@ -1224,7 +1245,8 @@ function TripAgentDraftRow({
 					it.
 				</AppText>
 			) : null}
-			<AppText numberOfLines={3} tone="secondary" variant="subhead">
+			<DraftPreviewLines lines={draft.previewLines ?? []} />
+			<AppText numberOfLines={2} tone="secondary" variant="subhead">
 				{draft.rationale}
 			</AppText>
 			<View
@@ -1285,12 +1307,17 @@ export function TripDraftsSheet({
 		(config) => !pendingDraftModules.has(config.module)
 	);
 	const isWorkspaceReady = getWorkspaceGaps(model).length === 0;
-	const visibleDrafts = isWorkspaceReady ? [] : pendingDrafts;
+	// Drafts from chat stay reviewable even when every section is filled.
+	const visibleDrafts = pendingDrafts;
 	const autopilotTitle = isWorkspaceReady
 		? "Trip is ready"
 		: "Complete this trip";
+	const readyDescription =
+		visibleDrafts.length > 0
+			? "Itinerary, Vault, bookings, budget and readiness are in place. Review Viya's drafts below; nothing changes until you apply one."
+			: "Itinerary, Vault, bookings, budget and readiness are all in place.";
 	const autopilotDescription = isWorkspaceReady
-		? "Itinerary, Vault, bookings, budget and readiness are all in place."
+		? readyDescription
 		: `Still missing: ${getWorkspaceGaps(model).join(", ")}. Viya drafts them for you. Nothing changes until you apply a draft.`;
 	const primaryActionLabel = isWorkspaceReady
 		? "Ask Viya"
@@ -1360,9 +1387,8 @@ export function TripDraftsSheet({
 			haptic("success");
 			setAgentMessage(applied?.applySummary ?? "Draft applied.");
 		} catch (error) {
-			setAgentErrorMessage(
-				error instanceof Error ? error.message : "Could not apply the draft."
-			);
+			haptic("error");
+			setAgentErrorMessage(getDraftActionErrorMessage(error, "apply"));
 		} finally {
 			setPendingDraftId(null);
 		}
@@ -1375,9 +1401,7 @@ export function TripDraftsSheet({
 			await dismissTripAgentDraft({ draftId });
 			setAgentMessage("Draft dismissed.");
 		} catch (error) {
-			setAgentErrorMessage(
-				error instanceof Error ? error.message : "Could not dismiss the draft."
-			);
+			setAgentErrorMessage(getDraftActionErrorMessage(error, "dismiss"));
 		} finally {
 			setPendingDraftId(null);
 		}

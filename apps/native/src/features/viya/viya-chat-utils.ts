@@ -147,6 +147,25 @@ export const shouldPopViyaBackRoute = ({
 	return Boolean(canGoBack && launchRoute && isAppReturnRoute(launchRoute));
 };
 
+/**
+ * How "Review drafts" reaches the trip's Drafts sheet. When the chat was
+ * opened from that trip's dashboard, go back to it (the dashboard reopens the
+ * sheet from the fresh openDrafts param) instead of stacking a second copy of
+ * the dashboard above the chat.
+ */
+export const getReviewDraftsNavigation = ({
+	canGoBack,
+	returnTo,
+	tripId,
+}: {
+	canGoBack: boolean;
+	returnTo?: string | string[];
+	tripId: string;
+}): "dismissTo" | "push" =>
+	canGoBack && getFirstSearchParamValue(returnTo) === `/(app)/trips/${tripId}`
+		? "dismissTo"
+		: "push";
+
 export const isCurrentChatRequest = ({
 	activeSessionId,
 	requestSessionId,
@@ -264,23 +283,116 @@ export const getUiMessageText = (message: {
 		.trim();
 
 const draftToolPartPattern = /^tool-propose/;
+const toolPartPrefix = "tool-";
 
-/** Number of Viya drafts a message's tool calls saved for review. */
-export const getDraftReadyCount = (message: {
-	parts?: Array<{ output?: unknown; state?: string; type: string }>;
-}) =>
-	(message.parts ?? []).filter((part) => {
-		if (
-			!draftToolPartPattern.test(part.type) ||
-			part.state !== "output-available"
-		) {
-			return false;
-		}
+interface ToolPartLike {
+	output?: unknown;
+	state?: string;
+	text?: string;
+	type: string;
+}
 
-		const output = part.output as { draftId?: unknown } | null | undefined;
+const getSavedDraftId = (part: ToolPartLike) => {
+	if (
+		!draftToolPartPattern.test(part.type) ||
+		part.state !== "output-available"
+	) {
+		return null;
+	}
 
-		return typeof output?.draftId === "string";
-	}).length;
+	const { output } = part;
+
+	if (
+		typeof output !== "object" ||
+		output === null ||
+		!("draftId" in output) ||
+		typeof output.draftId !== "string"
+	) {
+		return null;
+	}
+
+	return "ok" in output && output.ok === false ? null : output.draftId;
+};
+
+/** Number of distinct Viya drafts a message's tool calls saved for review. */
+export const getDraftReadyCount = (message: { parts?: ToolPartLike[] }) =>
+	new Set(
+		(message.parts ?? [])
+			.map(getSavedDraftId)
+			.filter((draftId): draftId is string => draftId !== null)
+	).size;
+
+const toolActivityLabels: Record<string, string> = {
+	getBookings: "Checking your bookings",
+	getBudgetSummary: "Checking your budget",
+	getCompanions: "Checking who's coming",
+	getItinerary: "Checking your itinerary",
+	getNotesAndVault: "Checking notes and Vault",
+	getReadiness: "Checking your checklist",
+	getRisks: "Checking trip risks",
+	getSavedPlaces: "Checking saved places",
+	getSeasonAndDestinationInfo: "Checking the season",
+	getTripOverview: "Checking your trip",
+};
+
+export const defaultActivityLabel = "Thinking";
+
+/** Plain label for a tool call, e.g. "Checking your itinerary". */
+export const getToolActivityLabel = (partType: string) => {
+	const toolName = partType.slice(toolPartPrefix.length);
+
+	if (toolName.startsWith("propose")) {
+		return "Drafting changes";
+	}
+
+	return toolActivityLabels[toolName] ?? defaultActivityLabel;
+};
+
+interface ActivityMessage {
+	parts?: ToolPartLike[];
+	role: string;
+	status?: string;
+}
+
+/**
+ * The one activity row under the chat: null when nothing is in progress,
+ * otherwise "Thinking" or what Viya is checking right now. A streaming reply
+ * whose latest part is a tool call shows the tool label even after earlier
+ * text, so the reply never looks stalled between steps.
+ */
+export const getAssistantActivityLabel = ({
+	isAwaitingReply,
+	messages,
+}: {
+	isAwaitingReply: boolean;
+	messages: readonly ActivityMessage[];
+}): string | null => {
+	const last = messages.at(-1);
+	const isAssistantStreaming =
+		last !== undefined && last.role !== "user" && last.status === "streaming";
+
+	if (!(isAwaitingReply || isAssistantStreaming)) {
+		return null;
+	}
+
+	if (!(last && isAssistantStreaming)) {
+		return defaultActivityLabel;
+	}
+
+	const lastPart = (last.parts ?? []).at(-1);
+
+	if (lastPart?.type.startsWith(toolPartPrefix)) {
+		return getToolActivityLabel(lastPart.type);
+	}
+
+	const hasText = Boolean(getUiMessageText(last));
+
+	if (hasText || getDraftReadyCount(last) > 0) {
+		return isAwaitingReply ? defaultActivityLabel : null;
+	}
+
+	return defaultActivityLabel;
+};
 
 export const getNormalizedChatInput = (value: string) =>
 	value.replace(whitespacePattern, " ").trim();

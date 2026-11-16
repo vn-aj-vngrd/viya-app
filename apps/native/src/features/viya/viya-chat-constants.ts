@@ -141,18 +141,18 @@ export const planPromptSuggestions = [
 
 export const tripPromptSuggestions = [
 	{
-		icon: "folder-open-outline",
-		prompt:
-			"Find passport, booking, ticket, and document gaps in this trip. Tell me what is already in the vault and what still needs to be uploaded or linked.",
-		summary: "Tickets, IDs and confirmations.",
-		title: "Find missing documents",
-	},
-	{
 		icon: "calendar-outline",
 		prompt:
-			"Generate a simple itinerary draft for this trip with days, time blocks, places, meals, transfers, and realistic pacing.",
+			"Draft a day-by-day itinerary for this trip. Check what is already planned first, fit our pace and the season, keep stops from overlapping, and include meals and transfers.",
 		summary: "Days, times and places.",
 		title: "Draft the itinerary",
+	},
+	{
+		icon: "rainy-outline",
+		prompt:
+			"What is the season and typhoon risk for my trip dates? If it matters, draft a backup plan and the readiness tasks I need.",
+		summary: "Rain, typhoons and backups.",
+		title: "Check the weather risk",
 	},
 	{
 		icon: "wallet-outline",
@@ -229,6 +229,49 @@ export const SLASH_COMMAND_OPTIONS = [
 		mode: "trip",
 		prompt:
 			"Based on the current trip status, what is the readiness state and what should Viya fix first?",
+		requiresTrip: true,
+	},
+	{
+		description: "Season, rain and typhoon risk for the dates.",
+		icon: "rainy-outline",
+		id: "weather",
+		keywords: ["season", "typhoon", "rain", "pagasa", "backup"],
+		label: "/weather",
+		mode: "trip",
+		prompt:
+			"What is the season and typhoon risk for my trip dates? If it matters, draft a backup plan and the readiness tasks I need.",
+		requiresTrip: true,
+	},
+	{
+		description: "Find overlapping or unrealistic stops and fix them.",
+		icon: "git-merge-outline",
+		id: "conflicts",
+		keywords: ["overlap", "clash", "fix", "timing", "schedule"],
+		label: "/fix-schedule",
+		mode: "trip",
+		prompt:
+			"Check my itinerary for overlapping stops, missing travel time and days that are too packed. Draft the fixes for me to review.",
+		requiresTrip: true,
+	},
+	{
+		description: "List what still needs booking.",
+		icon: "bed-outline",
+		id: "book",
+		keywords: ["hotel", "flight", "ferry", "tour", "reserve"],
+		label: "/book",
+		mode: "trip",
+		prompt:
+			"Check my bookings and itinerary, then draft booking targets for anything I still need to book, with estimated costs only when you have a basis.",
+		requiresTrip: true,
+	},
+	{
+		description: "Change dates, times or who is coming.",
+		icon: "calendar-number-outline",
+		id: "dates",
+		keywords: ["dates", "move", "travelers", "arrival", "departure"],
+		label: "/trip-details",
+		mode: "trip",
+		prompt: "Change this trip's details: ",
 		requiresTrip: true,
 	},
 	{

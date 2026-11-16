@@ -331,7 +331,8 @@ export default defineSchema({
 			v.literal("readiness"),
 			v.literal("risks"),
 			v.literal("travel"),
-			v.literal("recap")
+			v.literal("recap"),
+			v.literal("profile")
 		),
 		action: v.union(
 			v.literal("generate"),

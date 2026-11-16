@@ -381,3 +381,35 @@ export const createTripDashboardModel = ({
 		},
 	};
 };
+
+const draftErrorMessages: Record<string, string> = {
+	INVALID_TRIP_DATE_RANGE:
+		"The trip dates changed since Viya made this draft, so it can't be applied. Dismiss it and ask Viya again.",
+	INVALID_TRAVELER_COUNT:
+		"This draft has a traveler count the trip can't use. Dismiss it and ask Viya again.",
+	INVALID_TRIP_AGENT_DRAFT_PAYLOAD:
+		"This draft is damaged and can't be applied. Dismiss it and ask Viya again.",
+	TRIP_AGENT_DRAFT_ALREADY_REVIEWED:
+		"This draft was already applied or dismissed.",
+	TRIP_AGENT_DRAFT_NOT_FOUND: "This draft no longer exists.",
+	TRIP_NOT_FOUND: "This trip is no longer available.",
+};
+
+/** Plain message for a failed Apply or Dismiss; nothing in the trip changed. */
+export const getDraftActionErrorMessage = (
+	error: unknown,
+	action: "apply" | "dismiss"
+) => {
+	const text = error instanceof Error ? error.message : String(error ?? "");
+	const code = Object.keys(draftErrorMessages).find((key) =>
+		text.includes(key)
+	);
+
+	if (code) {
+		return draftErrorMessages[code];
+	}
+
+	return action === "apply"
+		? "Couldn't apply the draft. Nothing in the trip changed. Try again."
+		: "Couldn't dismiss the draft. Try again.";
+};

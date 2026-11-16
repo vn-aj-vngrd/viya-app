@@ -78,6 +78,7 @@ import {
 	getNextTrip,
 	getNormalizedChatInput,
 	getPromptSuggestions,
+	getReviewDraftsNavigation,
 	getSelectableTripContexts,
 	getSelectedTripContext,
 	getStoredThreadIdsByContext,
@@ -717,10 +718,23 @@ export function ViyaChatScreen() {
 			return;
 		}
 
-		router.push({
+		const href = {
 			params: { openDrafts: String(Date.now()), tripId: currentTripId },
 			pathname: "/(app)/trips/[tripId]",
-		} as Href);
+		} as Href;
+
+		if (
+			getReviewDraftsNavigation({
+				canGoBack: router.canGoBack(),
+				returnTo,
+				tripId: currentTripId,
+			}) === "dismissTo"
+		) {
+			router.dismissTo(href);
+			return;
+		}
+
+		router.push(href);
 	};
 	const handleTripContextSelect = (tripId: Id<"trips">) => {
 		setSelectedTripId(tripId);

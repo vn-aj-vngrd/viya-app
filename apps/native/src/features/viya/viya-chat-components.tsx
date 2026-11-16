@@ -44,7 +44,9 @@ import type {
 	UiChatMessages,
 } from "./viya-chat-types";
 import {
+	defaultActivityLabel,
 	extractTripBlueprint,
+	getAssistantActivityLabel,
 	getDraftReadyCount,
 	getPendingPromptInsertionIndex,
 	getSingleQuestionDisplayText,
@@ -788,10 +790,14 @@ export function ViyaChatEmptyContent({
 	);
 }
 
-function ThinkingRow() {
+function ThinkingRow({ label }: { label: string }) {
 	return (
 		<Animated.View
-			accessibilityLabel="Viya is thinking"
+			accessibilityLabel={
+				label === defaultActivityLabel
+					? "Viya is thinking"
+					: `Viya is ${label.toLowerCase()}`
+			}
 			accessibilityLiveRegion="polite"
 			entering={fadeIn}
 			style={{
@@ -803,7 +809,7 @@ function ThinkingRow() {
 		>
 			<ActivityIndicator size="small" />
 			<AppText tone="secondary" variant="subhead">
-				Thinking
+				{label}
 			</AppText>
 		</Animated.View>
 	);
@@ -928,23 +934,6 @@ function UserMessage({ text }: { text: string }) {
 	);
 }
 
-/**
- * Tool-using replies create assistant messages that have no text yet. Show one
- * trailing "Thinking" row for them instead of one row per empty message, which
- * popped in and out as the steps changed.
- */
-const isLastMessageAwaitingText = (messages: UiChatMessages) => {
-	const last = messages.at(-1);
-
-	return Boolean(
-		last &&
-			last.role !== "user" &&
-			last.status === "streaming" &&
-			!getUiMessageText(last) &&
-			getDraftReadyCount(last) === 0
-	);
-};
-
 export function ViyaMessageList({
 	hasPersistedPendingPrompt,
 	isCreatingTripFromBlueprint,
@@ -966,6 +955,12 @@ export function ViyaMessageList({
 	pendingPromptMessageIndex?: number | null;
 	shouldShowThinking: boolean;
 }) {
+	// One trailing activity row for the whole reply ("Thinking" or what Viya is
+	// checking), never one per tool step, so it does not pop in and out.
+	const activityLabel = getAssistantActivityLabel({
+		isAwaitingReply: shouldShowThinking,
+		messages,
+	});
 	const persistedPendingPromptMessageIndex = pendingPrompt
 		? messages.findIndex(
 				(message) =>
@@ -1033,9 +1028,7 @@ export function ViyaMessageList({
 			{pendingPromptInsertionIndex === messages.length && pendingPrompt ? (
 				<UserMessage text={pendingPrompt} />
 			) : null}
-			{shouldShowThinking || isLastMessageAwaitingText(messages) ? (
-				<ThinkingRow />
-			) : null}
+			{activityLabel ? <ThinkingRow label={activityLabel} /> : null}
 		</View>
 	);
 }

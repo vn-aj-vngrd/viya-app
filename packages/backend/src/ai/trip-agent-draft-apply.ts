@@ -81,7 +81,7 @@ const changeSchema = z.object({
 	type: changeTypeEnum,
 });
 
-const itineraryItemSchema = z.object({
+const generatedItineraryItemSchema = z.object({
 	aiReason: z.string(),
 	category: itineraryCategoryEnum,
 	description: z.string(),
@@ -94,15 +94,64 @@ const itineraryItemSchema = z.object({
 	title: z.string(),
 });
 
-export const tripAgentDraftPayloadSchema = z.object({
+const itineraryItemSchema = generatedItineraryItemSchema.extend({
+	/** Existing stop to change or move; omitted for a new stop. */
+	stopId: z.string().optional(),
+});
+
+const buildDaySchema = <Item extends z.ZodType>(item: Item) =>
+	z.object({
+		date: isoDateSchema,
+		estimatedCost: z.number(),
+		items: z.array(item).default([]),
+		pace: z.string(),
+		summary: z.string(),
+		theme: z.string(),
+		title: z.string(),
+		weatherNote: z.string(),
+	});
+
+export const tripGroupTypeEnum = z.enum([
+	"solo",
+	"couple",
+	"family",
+	"friends",
+	"work",
+]);
+export const tripPaceEnum = z.enum(["light", "balanced", "packed"]);
+
+/** Trip profile fields a "profile" draft may change. All optional. */
+export const tripProfileChangeSchema = z.object({
+	arrivalTime: timeSchema.optional(),
+	departureTime: timeSchema.optional(),
+	destination: z.string().optional(),
+	endDate: isoDateSchema.optional(),
+	groupType: tripGroupTypeEnum.optional(),
+	pace: tripPaceEnum.optional(),
+	startDate: isoDateSchema.optional(),
+	summary: z.string().optional(),
+	title: z.string().optional(),
+	travelerCount: z.number().int().optional(),
+});
+
+export type TripProfileChange = z.infer<typeof tripProfileChangeSchema>;
+
+/**
+ * What the one-shot module generator (generateTripAgentDraft) may return: no
+ * stop ids, removals or profile changes, because it never sees record ids and
+ * those edits are only validated on the chat path.
+ */
+export const generatedTripAgentDraftPayloadSchema = z.object({
 	bookingTargets: z
 		.array(
 			z.object({
 				cost: z.number().optional(),
 				currency: z.string().optional(),
+				endDateTime: z.string().optional(),
 				locationName: z.string().optional(),
 				notes: z.string().optional(),
 				provider: z.string().optional(),
+				startDateTime: z.string().optional(),
 				title: z.string(),
 				type: bookingTypeEnum,
 			})
@@ -110,20 +159,7 @@ export const tripAgentDraftPayloadSchema = z.object({
 		.default([]),
 	budgetAmount: z.number().optional(),
 	changes: z.array(changeSchema).default([]),
-	days: z
-		.array(
-			z.object({
-				date: isoDateSchema,
-				estimatedCost: z.number(),
-				items: z.array(itineraryItemSchema).default([]),
-				pace: z.string(),
-				summary: z.string(),
-				theme: z.string(),
-				title: z.string(),
-				weatherNote: z.string(),
-			})
-		)
-		.default([]),
+	days: z.array(buildDaySchema(generatedItineraryItemSchema)).default([]),
 	moments: z
 		.array(
 			z.object({
@@ -170,6 +206,15 @@ export const tripAgentDraftPayloadSchema = z.object({
 		.default([]),
 	title: z.string(),
 });
+
+/** Stored draft payload: the generated shape plus chat-only edits. */
+export const tripAgentDraftPayloadSchema =
+	generatedTripAgentDraftPayloadSchema.extend({
+		days: z.array(buildDaySchema(itineraryItemSchema)).default([]),
+		profile: tripProfileChangeSchema.optional(),
+		/** Existing stop ids an itinerary draft removes. */
+		removeStopIds: z.array(z.string()).optional(),
+	});
 
 export type TripAgentDraftPayload = z.infer<typeof tripAgentDraftPayloadSchema>;
 
@@ -283,14 +328,19 @@ export const buildItineraryDayRecords = <TripId>({
 
 export type ItineraryMergeAction = "generate" | "refine" | "audit" | "explain";
 
+type MergeDayTarget<DayId> = { existingId: DayId } | { createDate: string };
+
 export interface ItineraryMergePlan<DayId, ItemId> {
 	/** New items; `day` points at an existing day or a day to create. */
 	itemInserts: {
-		day: { existingId: DayId } | { createDate: string };
+		day: MergeDayTarget<DayId>;
 		fields: ReturnType<typeof buildItemFields>;
 	}[];
-	/** Items already present that a refine draft changes. */
+	/** Existing stops the draft removes. */
+	itemRemovals: ItemId[];
+	/** Items already present that the draft changes; `day` is set when it moves. */
 	itemUpdates: {
+		day?: MergeDayTarget<DayId>;
 		fields: ReturnType<typeof buildItemFields>;
 		id: ItemId;
 	}[];
@@ -306,17 +356,163 @@ export interface ItineraryMergePlan<DayId, ItemId> {
 		weatherNote: string;
 	}[];
 	skippedDuplicates: number;
+	/** Stops the draft referenced by id that are no longer in the trip. */
+	skippedMissing: number;
 	skippedOutOfRange: number;
 }
+
+interface MergeState<DayId, ItemId> {
+	action: ItineraryMergeAction;
+	claimedItemIds: Set<ItemId>;
+	dayByDate: Map<string, ExistingDayRef<DayId>>;
+	existingItems: readonly ExistingItemRef<ItemId, DayId>[];
+	plan: ItineraryMergePlan<DayId, ItemId>;
+	plannedNewDates: Set<string>;
+	seenInsertKeys: Set<string>;
+	trip: { endDate: string; startDate: string };
+}
+
+const planNewDay = <DayId, ItemId>(
+	state: MergeState<DayId, ItemId>,
+	day: DraftDay
+) => {
+	if (state.dayByDate.has(day.date) || state.plannedNewDates.has(day.date)) {
+		return;
+	}
+
+	const dayNumber = getTripDayCount(state.trip.startDate, day.date) ?? 1;
+
+	state.plannedNewDates.add(day.date);
+	state.plan.newDays.push({
+		date: day.date,
+		dayNumber,
+		estimatedCost: Math.max(0, day.estimatedCost),
+		pace: cleanString(day.pace, "balanced"),
+		summary: cleanString(day.summary, "Draft itinerary day."),
+		theme: cleanString(day.theme, "Trip day"),
+		title: cleanString(day.title, `Day ${dayNumber}`),
+		weatherNote: day.weatherNote,
+	});
+};
+
+/** A stop the draft names by id: update it in place, or move it to this day. */
+const planStopIdUpdate = <DayId, ItemId>(
+	state: MergeState<DayId, ItemId>,
+	item: DraftItem,
+	target: MergeDayTarget<DayId>
+) => {
+	const existing = state.existingItems.find(
+		(candidate) => candidate.id === item.stopId
+	);
+
+	if (!existing || state.claimedItemIds.has(existing.id)) {
+		state.plan.skippedMissing += 1;
+		return;
+	}
+
+	state.claimedItemIds.add(existing.id);
+	const isSameDay =
+		"existingId" in target && target.existingId === existing.dayId;
+
+	state.plan.itemUpdates.push({
+		...(isSameDay ? {} : { day: target }),
+		fields: buildItemFields(item),
+		id: existing.id,
+	});
+};
+
+const findTitleMatch = <DayId, ItemId>(
+	state: MergeState<DayId, ItemId>,
+	dayItems: readonly ExistingItemRef<ItemId, DayId>[],
+	fields: ReturnType<typeof buildItemFields>
+) => {
+	const titleKey = normalizeTitleKey(fields.title);
+	const isFree = (existing: ExistingItemRef<ItemId, DayId>) =>
+		!state.claimedItemIds.has(existing.id) &&
+		normalizeTitleKey(existing.title) === titleKey;
+	const exactMatch = dayItems.find(
+		(existing) =>
+			isFree(existing) &&
+			normalizeTimeKey(existing.startTime) === fields.startTime
+	);
+
+	if (exactMatch || state.action !== "refine") {
+		return exactMatch;
+	}
+
+	return dayItems.find(isFree);
+};
+
+const planDayItem = <DayId, ItemId>(
+	state: MergeState<DayId, ItemId>,
+	day: DraftDay,
+	item: DraftItem,
+	dayItems: readonly ExistingItemRef<ItemId, DayId>[]
+) => {
+	const existingDay = state.dayByDate.get(day.date);
+	const target: MergeDayTarget<DayId> = existingDay
+		? { existingId: existingDay.id }
+		: { createDate: day.date };
+
+	if (item.stopId) {
+		planStopIdUpdate(state, item, target);
+		return;
+	}
+
+	const fields = buildItemFields(item);
+	const match = findTitleMatch(state, dayItems, fields);
+
+	if (match) {
+		state.claimedItemIds.add(match.id);
+
+		if (state.action === "refine") {
+			state.plan.itemUpdates.push({ fields, id: match.id });
+		} else {
+			state.plan.skippedDuplicates += 1;
+		}
+
+		return;
+	}
+
+	const insertKey = `${day.date}|${normalizeTitleKey(fields.title)}|${fields.startTime}`;
+
+	if (state.seenInsertKeys.has(insertKey)) {
+		state.plan.skippedDuplicates += 1;
+		return;
+	}
+
+	state.seenInsertKeys.add(insertKey);
+	state.plan.itemInserts.push({ day: target, fields });
+};
+
+const planRemovals = <DayId, ItemId>(
+	state: MergeState<DayId, ItemId>,
+	removeStopIds: readonly string[]
+) => {
+	for (const stopId of new Set(removeStopIds)) {
+		const existing = state.existingItems.find(
+			(candidate) => candidate.id === stopId
+		);
+
+		if (!existing || state.claimedItemIds.has(existing.id)) {
+			state.plan.skippedMissing += 1;
+			continue;
+		}
+
+		state.claimedItemIds.add(existing.id);
+		state.plan.itemRemovals.push(existing.id);
+	}
+};
 
 /**
  * Plans how a draft's itinerary merges into the trip: days are matched by
  * date, days outside the trip are skipped, and items already present (same
  * title and start time on the same day) are not added again. A refine draft
- * updates the matching item instead of skipping it.
+ * updates the matching item instead of skipping it. A stop with a `stopId`
+ * updates (or moves) that exact stop, and `removeStopIds` deletes stops; ids
+ * that are no longer in the trip are skipped, never guessed.
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one pass keeps day, duplicate and refine matching together.
-export function planItineraryMerge<
+export const planItineraryMerge = <
 	DayId extends string,
 	ItemId extends string,
 >({
@@ -331,100 +527,49 @@ export function planItineraryMerge<
 	existingItems: readonly ExistingItemRef<ItemId, DayId>[];
 	payload: TripAgentDraftPayload;
 	trip: { endDate: string; startDate: string };
-}): ItineraryMergePlan<DayId, ItemId> {
-	const plan: ItineraryMergePlan<DayId, ItemId> = {
-		itemInserts: [],
-		itemUpdates: [],
-		newDays: [],
-		skippedDuplicates: 0,
-		skippedOutOfRange: 0,
+}): ItineraryMergePlan<DayId, ItemId> => {
+	const state: MergeState<DayId, ItemId> = {
+		action,
+		claimedItemIds: new Set<ItemId>(),
+		dayByDate: new Map(existingDays.map((day) => [day.date, day])),
+		existingItems,
+		plan: {
+			itemInserts: [],
+			itemRemovals: [],
+			itemUpdates: [],
+			newDays: [],
+			skippedDuplicates: 0,
+			skippedMissing: 0,
+			skippedOutOfRange: 0,
+		},
+		plannedNewDates: new Set<string>(),
+		seenInsertKeys: new Set<string>(),
+		trip,
 	};
-	const dayByDate = new Map(existingDays.map((day) => [day.date, day]));
-	const plannedNewDates = new Set<string>();
-	const claimedItemIds = new Set<ItemId>();
-	const seenInsertKeys = new Set<string>();
 
 	for (const day of payload.days) {
 		const items = day.items.slice(0, maxItemsPerDay);
 
 		if (day.date < trip.startDate || day.date > trip.endDate) {
-			plan.skippedOutOfRange += items.length;
+			state.plan.skippedOutOfRange += items.length;
 			continue;
 		}
 
-		const existingDay = dayByDate.get(day.date);
-
-		if (!(existingDay || plannedNewDates.has(day.date))) {
-			const dayNumber = getTripDayCount(trip.startDate, day.date) ?? 1;
-
-			plannedNewDates.add(day.date);
-			plan.newDays.push({
-				date: day.date,
-				dayNumber,
-				estimatedCost: Math.max(0, day.estimatedCost),
-				pace: cleanString(day.pace, "balanced"),
-				summary: cleanString(day.summary, "Draft itinerary day."),
-				theme: cleanString(day.theme, "Trip day"),
-				title: cleanString(day.title, `Day ${dayNumber}`),
-				weatherNote: day.weatherNote,
-			});
-		}
-
+		planNewDay(state, day);
+		const existingDay = state.dayByDate.get(day.date);
 		const dayItems = existingDay
 			? existingItems.filter((item) => item.dayId === existingDay.id)
 			: [];
 
 		for (const item of items) {
-			const fields = buildItemFields(item);
-			const titleKey = normalizeTitleKey(fields.title);
-			const exactMatch = dayItems.find(
-				(existing) =>
-					!claimedItemIds.has(existing.id) &&
-					normalizeTitleKey(existing.title) === titleKey &&
-					normalizeTimeKey(existing.startTime) === fields.startTime
-			);
-			const refineMatch =
-				action === "refine"
-					? (exactMatch ??
-						dayItems.find(
-							(existing) =>
-								!claimedItemIds.has(existing.id) &&
-								normalizeTitleKey(existing.title) === titleKey
-						))
-					: undefined;
-			const match = exactMatch ?? refineMatch;
-
-			if (match) {
-				claimedItemIds.add(match.id);
-
-				if (action === "refine") {
-					plan.itemUpdates.push({ fields, id: match.id });
-				} else {
-					plan.skippedDuplicates += 1;
-				}
-
-				continue;
-			}
-
-			const insertKey = `${day.date}|${titleKey}|${fields.startTime}`;
-
-			if (seenInsertKeys.has(insertKey)) {
-				plan.skippedDuplicates += 1;
-				continue;
-			}
-
-			seenInsertKeys.add(insertKey);
-			plan.itemInserts.push({
-				day: existingDay
-					? { existingId: existingDay.id }
-					: { createDate: day.date },
-				fields,
-			});
+			planDayItem(state, day, item, dayItems);
 		}
 	}
 
-	return plan;
-}
+	planRemovals(state, payload.removeStopIds ?? []);
+
+	return state.plan;
+};
 
 export interface ExistingSimpleRecords {
 	bookings?: readonly { title: string; type?: string }[];
@@ -475,9 +620,11 @@ export const buildSimpleDraftRecords = <TripId>({
 			cost: item.cost,
 			createdAt: now,
 			currency: item.currency,
+			endDateTime: item.endDateTime?.trim() || undefined,
 			locationName: item.locationName,
 			notes: item.notes,
 			provider: item.provider,
+			startDateTime: item.startDateTime?.trim() || undefined,
 			status: "target" as const,
 			title: cleanString(item.title, "Booking target"),
 			tripId,
@@ -623,21 +770,38 @@ export const summarizeApply = ({
 	added,
 	budgetChange,
 	isStale,
+	profileChanges = [],
+	removed = 0,
 	skippedDuplicates,
+	skippedMissing = 0,
 	skippedOutOfRange,
 	updated,
 }: {
 	added: number;
 	budgetChange: string | null;
 	isStale: boolean;
+	profileChanges?: readonly string[];
+	removed?: number;
 	skippedDuplicates: number;
+	skippedMissing?: number;
 	skippedOutOfRange: number;
 	updated: number;
 }) => {
-	const parts = [`Added ${pluralize(added, "item")}`];
+	const parts =
+		profileChanges.length > 0 && added === 0
+			? [`Updated ${profileChanges.join(", ")}`]
+			: [`Added ${pluralize(added, "item")}`];
 
 	if (updated > 0) {
 		parts.push(`updated ${updated}`);
+	}
+
+	if (removed > 0) {
+		parts.push(`removed ${removed}`);
+	}
+
+	if (skippedMissing > 0) {
+		parts.push(`skipped ${skippedMissing} no longer in the trip`);
 	}
 
 	if (skippedDuplicates > 0) {
@@ -657,4 +821,91 @@ export const summarizeApply = ({
 	return isStale
 		? `${summary} The trip changed after this draft was made, so duplicates were checked.`
 		: summary;
+};
+
+interface TripProfileFields {
+	arrivalTime?: string;
+	departureTime?: string;
+	destination: string;
+	endDate: string;
+	groupType: string;
+	pace: string;
+	startDate: string;
+	summary: string;
+	title: string;
+	travelerCount?: number;
+}
+
+const profileFieldLabels: Record<keyof TripProfileChange, string> = {
+	arrivalTime: "arrival time",
+	departureTime: "departure time",
+	destination: "destination",
+	endDate: "end date",
+	groupType: "group",
+	pace: "pace",
+	startDate: "start date",
+	summary: "summary",
+	title: "title",
+	travelerCount: "travelers",
+};
+
+type TextProfileField = Exclude<keyof TripProfileChange, "travelerCount">;
+
+const textProfileFields: TextProfileField[] = [
+	"title",
+	"destination",
+	"startDate",
+	"endDate",
+	"arrivalTime",
+	"departureTime",
+	"groupType",
+	"pace",
+	"summary",
+];
+
+export type TripProfilePatch = Partial<
+	Record<TextProfileField, string> & { travelerCount: number }
+>;
+
+const cleanProfileText = (key: TextProfileField, value: string | undefined) => {
+	if (value === undefined) {
+		return;
+	}
+
+	if (key === "arrivalTime" || key === "departureTime") {
+		return normalizeTimeOfDay(value) ?? undefined;
+	}
+
+	return value.replace(/\s+/g, " ").trim() || undefined;
+};
+
+/**
+ * The patch a profile draft makes against the trip as it is now: only fields
+ * that differ are kept, so re-applying an old draft changes nothing twice.
+ */
+export const buildTripProfilePatch = (
+	change: TripProfileChange | undefined,
+	trip: TripProfileFields
+): { labels: string[]; patch: TripProfilePatch } => {
+	const patch: TripProfilePatch = {};
+	const labels: string[] = [];
+
+	for (const key of textProfileFields) {
+		const value = cleanProfileText(key, change?.[key]);
+
+		if (value !== undefined && value !== trip[key]) {
+			patch[key] = value;
+			labels.push(profileFieldLabels[key]);
+		}
+	}
+
+	if (
+		change?.travelerCount !== undefined &&
+		change.travelerCount !== trip.travelerCount
+	) {
+		patch.travelerCount = change.travelerCount;
+		labels.push(profileFieldLabels.travelerCount);
+	}
+
+	return { labels, patch };
 };

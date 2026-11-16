@@ -10,8 +10,13 @@ import type { ComponentProps } from "react";
 
 export type IoniconName = ComponentProps<typeof Ionicons>["name"];
 
+/** A pending Viya draft with plain lines saying what applying it changes. */
+export type TripAgentDraftForReview = Doc<"tripAgentDrafts"> & {
+	previewLines?: string[];
+};
+
 export interface TripWorkspace {
-	agentDrafts: Doc<"tripAgentDrafts">[];
+	agentDrafts: TripAgentDraftForReview[];
 	bookings: Doc<"bookings">[];
 	companions: Doc<"tripCompanions">[];
 	documents: Doc<"travelDocuments">[];

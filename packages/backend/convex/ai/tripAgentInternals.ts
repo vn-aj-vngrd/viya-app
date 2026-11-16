@@ -14,7 +14,8 @@ const tripAgentModuleValidator = v.union(
 	v.literal("readiness"),
 	v.literal("risks"),
 	v.literal("travel"),
-	v.literal("recap")
+	v.literal("recap"),
+	v.literal("profile")
 );
 
 const tripAgentActionValidator = v.union(
@@ -79,8 +80,8 @@ export const saveGeneratedTripAgentDraft = internalMutation({
 			updatedAt: now,
 		});
 
-		await ctx.db.patch(args.tripId, { updatedAt: now });
-
+		// The trip is not touched: a new draft is not a trip edit, and touching it
+		// made every older pending draft look stale on apply.
 		return ctx.db.get(draftId);
 	},
 });

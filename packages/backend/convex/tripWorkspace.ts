@@ -13,8 +13,34 @@ import {
 } from "@viya-app/domain";
 import { v } from "convex/values";
 
+import { tripAgentDraftPayloadSchema } from "../src/ai/trip-agent-draft-apply";
+import { describeDraftPayload } from "../src/ai/trip-agent-draft-preview";
+import type { Doc } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 import { getRequiredIdentity } from "./lib/auth";
+
+/** What a pending draft would change, so the Drafts sheet can show it. */
+const withDraftPreview = (
+	draft: Doc<"tripAgentDrafts">,
+	trip: Doc<"trips">
+) => {
+	try {
+		const payload = tripAgentDraftPayloadSchema.parse(
+			JSON.parse(draft.payloadJson)
+		);
+
+		return {
+			...draft,
+			previewLines: describeDraftPayload({
+				module: draft.module,
+				payload,
+				trip,
+			}),
+		};
+	} catch {
+		return { ...draft, previewLines: [] };
+	}
+};
 
 export const getTripWorkspace = query({
 	args: { tripId: v.id("trips") },
@@ -158,8 +184,15 @@ export const getTripWorkspace = query({
 			vaultItems: hydratedVaultItems,
 		});
 
+		const reviewDrafts = [...agentDrafts]
+			.sort(
+				(firstDraft, secondDraft) =>
+					secondDraft.createdAt - firstDraft.createdAt
+			)
+			.map((draft) => withDraftPreview(draft, trip));
+
 		return {
-			agentDrafts,
+			agentDrafts: reviewDrafts,
 			bookings: sortedBookings,
 			documents,
 			expenses: sortedExpenses,

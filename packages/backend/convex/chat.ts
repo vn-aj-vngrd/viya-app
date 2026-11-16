@@ -10,7 +10,10 @@ import { formatPreferenceContext } from "@viya-app/domain";
 import { stepCountIs } from "ai";
 import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
-
+import {
+	buildMissingReplyText,
+	getFinalStepSettings,
+} from "../src/ai/trip-chat-reply";
 import { components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import {
@@ -558,9 +561,11 @@ export const generateResponseAsync = internalAction({
 		// The AI SDK reports model errors through onError and does not throw, so
 		// capture them here to tell the user instead of leaving a silent spinner.
 		let streamError: unknown;
+		let missingReplyText: string | null = null;
+		const isTripChat = mode === "trip" && Boolean(tripId);
 
 		try {
-			await getChatAgent().streamText(
+			const result = await getChatAgent().streamText(
 				ctx,
 				{ threadId },
 				{
@@ -568,8 +573,11 @@ export const generateResponseAsync = internalAction({
 						streamError = error;
 					},
 					promptMessageId,
-					...(mode === "trip" && tripId
+					...(isTripChat && tripId
 						? {
+								// The last step answers in text instead of calling more tools.
+								prepareStep: ({ stepNumber }: { stepNumber: number }) =>
+									getFinalStepSettings(stepNumber, CHAT_MAX_STEPS),
 								stopWhen: stepCountIs(CHAT_MAX_STEPS),
 								tools: buildTripChatTools({ ownerId, tripId }),
 							}
@@ -589,6 +597,8 @@ export const generateResponseAsync = internalAction({
 			if (streamError) {
 				throw streamError;
 			}
+
+			missingReplyText = buildMissingReplyText(await result.steps);
 		} catch (error) {
 			console.error("Viya chat generation failed", error);
 			await saveMessage(ctx, components.agent, {
@@ -602,15 +612,27 @@ export const generateResponseAsync = internalAction({
 			return;
 		}
 
+		// Every step went to tools and none wrote text: say what happened rather
+		// than leave the user with a silent reply.
+		if (missingReplyText) {
+			await saveMessage(ctx, components.agent, {
+				message: { content: missingReplyText, role: "assistant" },
+				threadId,
+			});
+			return;
+		}
+
 		const messages = await listUIMessages(ctx, components.agent, {
 			paginationOpts: { cursor: null, numItems: recentMessageLookupCount },
 			threadId,
 		});
+		// Only this reply's message counts; an older reply's question must not be
+		// re-raised when this one has no text.
 		const latestAssistantMessage = messages.page
-			.filter((message) => message.role === "assistant" && message.text.trim())
+			.filter((message) => message.role === "assistant")
 			.sort((first, second) => second._creationTime - first._creationTime)[0];
 
-		if (!latestAssistantMessage) {
+		if (!latestAssistantMessage?.text.trim()) {
 			return;
 		}
 

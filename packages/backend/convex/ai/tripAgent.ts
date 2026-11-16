@@ -1,10 +1,13 @@
 // biome-ignore-all lint/style/useFilenamingConvention: Convex module names are public API paths.
 
+import { getTripDayCount } from "@viya-app/domain";
 import { ConvexError, v } from "convex/values";
 import {
 	buildSimpleDraftRecords,
+	buildTripProfilePatch,
 	cleanString,
 	describeBudgetChange,
+	generatedTripAgentDraftPayloadSchema,
 	isDraftStale,
 	planItineraryMerge,
 	summarizeApply,
@@ -21,6 +24,9 @@ import {
 	mutation,
 	query,
 } from "../_generated/server";
+import { syncItineraryDaysToTripRange } from "../lib/tripdays";
+import { clearDeletedTripEntityReferences } from "../lib/tripLinks";
+import { updateTripReadinessScore } from "../readiness";
 import {
 	type AiModelPurpose,
 	getLanguageModel,
@@ -37,7 +43,8 @@ const tripAgentModuleValidator = v.union(
 	v.literal("readiness"),
 	v.literal("risks"),
 	v.literal("travel"),
-	v.literal("recap")
+	v.literal("recap"),
+	v.literal("profile")
 );
 
 const tripAgentActionValidator = v.union(
@@ -65,6 +72,7 @@ const modulePurpose = {
 	documents: "vault",
 	itinerary: "itinerary",
 	places: "itinerary",
+	profile: "itinerary",
 	readiness: "readiness",
 	recap: "wrapped",
 	risks: "risk",
@@ -359,6 +367,11 @@ export const generateTripAgentDraft = action({
 			throw new ConvexError("AUTH_REQUIRED");
 		}
 
+		if (args.module === "profile") {
+			// Profile drafts come only from chat, where they are validated first.
+			throw new ConvexError("TRIP_AGENT_MODULE_NOT_GENERATED");
+		}
+
 		const context: TripAgentContext = await ctx.runQuery(
 			internal.ai.tripAgentInternals.getTripAgentContext,
 			{
@@ -388,7 +401,7 @@ export const generateTripAgentDraft = action({
 						module: args.module,
 						prompt: args.prompt,
 					}),
-					schema: tripAgentDraftPayloadSchema,
+					schema: generatedTripAgentDraftPayloadSchema,
 					schemaName: "TripAgentDraftPayload",
 					strict: true,
 				});
@@ -455,7 +468,9 @@ const parseDraftPayload = (payloadJson: string): TripAgentDraftPayload => {
 
 interface ApplyCounts {
 	added: number;
+	removed: number;
 	skippedDuplicates: number;
+	skippedMissing: number;
 	skippedOutOfRange: number;
 	updated: number;
 }
@@ -502,11 +517,12 @@ const applyItineraryDraft = async (
 		);
 	}
 
+	const resolveDayId = (
+		day: { existingId: Id<"itineraryDays"> } | { createDate: string }
+	) => ("existingId" in day ? day.existingId : newDayIds.get(day.createDate));
+
 	for (const insert of plan.itemInserts) {
-		const dayId =
-			"existingId" in insert.day
-				? insert.day.existingId
-				: newDayIds.get(insert.day.createDate);
+		const dayId = resolveDayId(insert.day);
 
 		if (!dayId) {
 			continue;
@@ -522,22 +538,98 @@ const applyItineraryDraft = async (
 	}
 
 	for (const update of plan.itemUpdates) {
-		await ctx.db.patch(update.id, update.fields);
+		const dayId = update.day ? resolveDayId(update.day) : undefined;
+
+		await ctx.db.patch(
+			update.id,
+			dayId ? { ...update.fields, dayId } : update.fields
+		);
+	}
+
+	for (const itemId of plan.itemRemovals) {
+		await clearDeletedTripEntityReferences({
+			ctx,
+			linkedEntityId: itemId,
+			linkedEntityType: "itineraryItem",
+			tripId,
+		});
+		await ctx.db.delete(itemId);
 	}
 
 	return {
 		added: plan.itemInserts.length,
+		removed: plan.itemRemovals.length,
 		skippedDuplicates: plan.skippedDuplicates,
+		skippedMissing: plan.skippedMissing,
 		skippedOutOfRange: plan.skippedOutOfRange,
 		updated: plan.itemUpdates.length,
 	};
 };
 
+const maxTravelerCount = 99;
+
+/**
+ * Applies a profile draft against the trip as it is now. Values that already
+ * match are skipped; invalid dates (for example after the user edited the
+ * trip) stop the apply instead of writing a broken range.
+ */
+const applyProfileDraft = async (
+	ctx: MutationCtx,
+	trip: Doc<"trips">,
+	payload: TripAgentDraftPayload
+): Promise<string[]> => {
+	const { labels, patch } = buildTripProfilePatch(payload.profile, trip);
+	const startDate = patch.startDate ?? trip.startDate;
+	const endDate = patch.endDate ?? trip.endDate;
+	const datesChanged =
+		patch.startDate !== undefined || patch.endDate !== undefined;
+
+	if (
+		datesChanged &&
+		(getTripDayCount(startDate, endDate) === null || startDate > endDate)
+	) {
+		throw new ConvexError("INVALID_TRIP_DATE_RANGE");
+	}
+
+	if (
+		patch.travelerCount !== undefined &&
+		!(
+			Number.isInteger(patch.travelerCount) &&
+			patch.travelerCount >= 1 &&
+			patch.travelerCount <= maxTravelerCount
+		)
+	) {
+		throw new ConvexError("INVALID_TRAVELER_COUNT");
+	}
+
+	if (labels.length === 0) {
+		return [];
+	}
+
+	await ctx.db.patch(trip._id, { ...patch, updatedAt: Date.now() });
+
+	if (datesChanged) {
+		await syncItineraryDaysToTripRange(ctx, trip._id, {
+			endDate,
+			previousStartDate: trip.startDate,
+			startDate,
+		});
+	}
+
+	return labels;
+};
+
+interface SimpleApplyCounts {
+	added: number;
+	budgetChange: string | null;
+	skipped: number;
+}
+
 const applySimpleModuleDraft = async (
 	ctx: MutationCtx,
 	trip: Doc<"trips">,
 	payload: TripAgentDraftPayload
-): Promise<{ added: number; budgetChange: string | null; skipped: number }> => {
+): Promise<SimpleApplyCounts> => {
 	const tripId = trip._id;
 	const [bookings, places, readinessItems, risks, moments] = await Promise.all([
 		ctx.db
@@ -580,6 +672,11 @@ const applySimpleModuleDraft = async (
 		await ctx.db.insert("readinessItems", readinessItem);
 	}
 
+	if (records.readinessItems.length > 0) {
+		// Keep the stored score in step with the checklist the draft changed.
+		await updateTripReadinessScore(ctx, tripId);
+	}
+
 	for (const risk of records.risks) {
 		await ctx.db.insert("risks", risk);
 	}
@@ -615,6 +712,51 @@ const applySimpleModuleDraft = async (
 		records.moments.length;
 
 	return { added, budgetChange, skipped: Math.max(0, requested - added) };
+};
+
+const noItineraryCounts: ApplyCounts = {
+	added: 0,
+	removed: 0,
+	skippedDuplicates: 0,
+	skippedMissing: 0,
+	skippedOutOfRange: 0,
+	updated: 0,
+};
+
+/**
+ * Each draft only writes its own module: an itinerary draft changes the
+ * itinerary, a profile draft the trip profile, and the list modules (bookings,
+ * places, readiness, risks, budget, recap) their own records.
+ */
+const applyDraftForModule = async (
+	ctx: MutationCtx,
+	trip: Doc<"trips">,
+	draft: Doc<"tripAgentDrafts">,
+	payload: TripAgentDraftPayload
+) => {
+	if (draft.module === "itinerary") {
+		return {
+			...(await applyItineraryDraft(ctx, trip, draft.action, payload)),
+			budgetChange: null,
+		};
+	}
+
+	if (draft.module === "profile") {
+		return {
+			...noItineraryCounts,
+			budgetChange: null,
+			profileChanges: await applyProfileDraft(ctx, trip, payload),
+		};
+	}
+
+	const simple = await applySimpleModuleDraft(ctx, trip, payload);
+
+	return {
+		...noItineraryCounts,
+		added: simple.added,
+		budgetChange: simple.budgetChange,
+		skippedDuplicates: simple.skipped,
+	};
 };
 
 export const applyTripAgentDraft = mutation({
@@ -654,29 +796,16 @@ export const applyTripAgentDraft = mutation({
 					: latest,
 			undefined
 		);
-		const itineraryCounts: ApplyCounts =
-			draft.module === "itinerary"
-				? await applyItineraryDraft(ctx, trip, draft.action, payload)
-				: { added: 0, skippedDuplicates: 0, skippedOutOfRange: 0, updated: 0 };
-		// An itinerary draft only changes the itinerary; other records it might
-		// carry are ignored so one module's draft can't write into another's.
-		const simple =
-			draft.module === "itinerary"
-				? { added: 0, budgetChange: null, skipped: 0 }
-				: await applySimpleModuleDraft(ctx, trip, payload);
+		const summary = await applyDraftForModule(ctx, trip, draft, payload);
 
 		await ctx.db.patch(args.draftId, {
 			applySummary: summarizeApply({
-				added: itineraryCounts.added + simple.added,
-				budgetChange: simple.budgetChange,
+				...summary,
 				isStale: isDraftStale({
 					draftCreatedAt: draft.createdAt,
 					lastDraftAppliedAt,
 					tripUpdatedAt: trip.updatedAt,
 				}),
-				skippedDuplicates: itineraryCounts.skippedDuplicates + simple.skipped,
-				skippedOutOfRange: itineraryCounts.skippedOutOfRange,
-				updated: itineraryCounts.updated,
 			}),
 			status: "applied",
 			updatedAt: Date.now(),
@@ -698,7 +827,12 @@ export const dismissTripAgentDraft = mutation({
 			throw new ConvexError("AUTH_REQUIRED");
 		}
 
-		await getRequiredDraft(ctx, args.draftId, identity.subject);
+		const draft = await getRequiredDraft(ctx, args.draftId, identity.subject);
+
+		// Dismissing twice is a no-op; an applied draft keeps its record.
+		if (draft.status !== "draft") {
+			return draft;
+		}
 
 		await ctx.db.patch(args.draftId, {
 			status: "dismissed",
