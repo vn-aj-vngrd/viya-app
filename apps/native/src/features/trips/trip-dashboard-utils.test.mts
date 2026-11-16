@@ -398,6 +398,14 @@ describe("trip dashboard next action rules", () => {
 		expect(model.nextAction.title).toBe("Mark this trip complete");
 	});
 
+	test("sends a completed trip to its recap", () => {
+		const workspace = withDates(-12, -6);
+		workspace.trip = { ...workspace.trip, status: "completed" };
+		const model = createTripDashboardModel({ tripId, workspace });
+
+		expect(model.nextAction.title).toBe("Relive this trip");
+	});
+
 	test("surfaces the top urgent risk first", () => {
 		const workspace = withDates(30, 35);
 		workspace.risks = createWorkspace().risks;

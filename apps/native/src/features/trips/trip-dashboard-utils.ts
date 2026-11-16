@@ -102,6 +102,45 @@ const phaseStatus = {
 
 const DEPARTURE_SOON_DAYS = 7;
 
+const getLifecycleAction = ({
+	countdown,
+	trip,
+	tripId,
+}: {
+	countdown: TripCountdown;
+	trip: Doc<"trips">;
+	tripId: Id<"trips">;
+}): NextAction | null => {
+	if (countdown.phase === "ended") {
+		return {
+			description: `Ended ${formatShortDate(trip.endDate)}. Completing it unlocks the recap.`,
+			href: VIYA_ROUTES.tripWrapped(tripId),
+			icon: "flag-outline",
+			title: "Mark this trip complete",
+		};
+	}
+
+	if (countdown.phase === "completed") {
+		return {
+			description: "Highlights, places, spending and moments in one recap.",
+			href: VIYA_ROUTES.tripWrapped(tripId),
+			icon: "sparkles-outline",
+			title: "Relive this trip",
+		};
+	}
+
+	if (!trip.startDate) {
+		return {
+			description: "Days, countdown and daily budget need dates.",
+			href: VIYA_ROUTES.tripItinerary(tripId),
+			icon: "calendar-outline",
+			title: "Set trip dates",
+		};
+	}
+
+	return null;
+};
+
 const getNextAction = ({
 	budgetAlert,
 	countdown,
@@ -123,22 +162,10 @@ const getNextAction = ({
 	trip: Doc<"trips">;
 	tripId: Id<"trips">;
 }): NextAction => {
-	if (countdown.phase === "ended") {
-		return {
-			description: `Ended ${formatShortDate(trip.endDate)}. Completing it unlocks the recap.`,
-			href: VIYA_ROUTES.tripWrapped(tripId),
-			icon: "flag-outline",
-			title: "Mark this trip complete",
-		};
-	}
+	const lifecycleAction = getLifecycleAction({ countdown, trip, tripId });
 
-	if (!trip.startDate) {
-		return {
-			description: "Days, countdown and daily budget need dates.",
-			href: VIYA_ROUTES.tripItinerary(tripId),
-			icon: "calendar-outline",
-			title: "Set trip dates",
-		};
+	if (lifecycleAction) {
+		return lifecycleAction;
 	}
 
 	if (topUrgentRisk) {
